@@ -1,0 +1,246 @@
+:root {
+  --bg: #f4efe6;
+  --panel: #f8f5ef;
+  --ink: #1b2b38;
+  --muted: #5c6e7a;
+  --brand: #0f7c86;
+  --brand-soft: #d8f0ec;
+  --accent: #f18f4e;
+  --line: #d9d2c4;
+  --radius: 16px;
+  --shadow: 0 10px 24px rgba(15, 30, 46, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(241, 143, 78, 0.2), transparent 35%),
+    radial-gradient(circle at 100% 20%, rgba(15, 124, 134, 0.15), transparent 40%),
+    linear-gradient(160deg, #f7f2e9 0%, #efe7da 100%);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.site-shell {
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+  padding: 1.25rem 0 3rem;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.logo {
+  font-size: clamp(1.1rem, 2vw, 1.3rem);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.nav-link {
+  display: inline-block;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 0.92rem;
+  transition: transform 220ms ease, border-color 220ms ease, background 220ms ease;
+}
+
+.nav-link:hover,
+.nav-link:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--brand);
+}
+
+.nav-link.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: #0a4f55;
+}
+
+main {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero,
+.panel {
+  background: rgba(250, 247, 241, 0.9);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.hero {
+  padding: clamp(1.4rem, 4vw, 2.6rem);
+  display: grid;
+  gap: 0.85rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  right: -70px;
+  top: -70px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(15, 124, 134, 0.16), rgba(241, 143, 78, 0.16));
+}
+
+.kicker {
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.15;
+}
+
+h1 {
+  font-family: "Bitter", Georgia, serif;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  max-width: 22ch;
+}
+
+.hero p,
+.panel p,
+.panel li {
+  margin: 0;
+  color: #243947;
+  line-height: 1.6;
+}
+
+.panel {
+  padding: clamp(1rem, 3vw, 1.6rem);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+.interest-card {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.card-kicker {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.inline-link {
+  font-weight: 700;
+}
+
+.inline-link::after {
+  content: " ->";
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+footer {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.reveal {
+  animation: riseIn 500ms ease both;
+}
+
+.reveal:nth-child(2) {
+  animation-delay: 90ms;
+}
+
+.reveal:nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.reveal:nth-child(4) {
+  animation-delay: 190ms;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 800px) {
+  .site-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  nav ul {
+    justify-content: flex-start;
+  }
+}

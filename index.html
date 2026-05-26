@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trevor | About</title>
+    <meta
+      name="description"
+      content="Personal site for Trevor Spinosa: applied ML, digital forensics, publications, projects, and experience."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <script src="assets/js/site-data.js" defer></script>
+    <script src="assets/js/site.js" defer></script>
+  </head>
+  <body data-page="home" id="top">
+    <div class="site-shell">
+      <header class="site-header reveal">
+        <a class="logo" href="index.html" data-site-name>Trevor's Website</a>
+        <nav aria-label="Primary">
+          <ul data-nav></ul>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero reveal" aria-labelledby="hero-title">
+          <p class="kicker">About Me</p>
+          <h1 id="hero-title">Hi, I am <span data-owner>Trevor</span>.</h1>
+          <p data-about-intro>
+            I am Trevor. This is my personal corner of the internet where I share what I
+            am working on and what I care about.
+          </p>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="snapshot-title">
+          <h2 id="snapshot-title">Quick Snapshot</h2>
+          <p data-tagline>Builder, learner, and curious human.</p>
+          <ul class="about-list" data-about-details>
+            <li>This homepage should feel like a quick snapshot of who you are.</li>
+          </ul>
+          <p>
+            Reach me at <a data-email href="mailto:you@example.com">you@example.com</a>, visit
+            <a data-github href="https://github.com/yourusername" target="_blank" rel="noreferrer"
+              >my GitHub</a
+            >, or connect on
+            <a data-linkedin href="https://www.linkedin.com" target="_blank" rel="noreferrer"
+              >LinkedIn</a
+            >.
+          </p>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="interest-title">
+          <h2 id="interest-title">Explore My Pages</h2>
+          <p>
+            Add, remove, or reorder pages by editing
+            <strong>assets/js/site-data.js</strong>.
+          </p>
+          <div class="page-grid" data-page-cards></div>
+        </section>
+      </main>
+
+      <footer>
+        <p>&copy; <span data-year></span> <span data-owner>Trevor</span>. All rights reserved.</p>
+      </footer>
+    </div>
+  </body>
+</html>

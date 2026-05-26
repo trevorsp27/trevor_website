@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trevor | Projects</title>
+    <meta name="description" content="Trevor's software and research projects." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../assets/css/styles.css" />
+    <script src="../assets/js/site-data.js" defer></script>
+    <script src="../assets/js/site.js" defer></script>
+  </head>
+  <body data-page="projects">
+    <div class="site-shell">
+      <header class="site-header reveal">
+        <a class="logo" href="../index.html" data-site-name>Trevor's Website</a>
+        <nav aria-label="Primary">
+          <ul data-nav></ul>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero reveal" aria-labelledby="title">
+          <p class="kicker">Projects</p>
+          <h1 id="title">Tools built from real forensic and data problems.</h1>
+          <p>
+            These projects reflect how I move from investigation questions to working
+            software that can be tested, repeated, and used in practice.
+          </p>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="project-list">
+          <h2 id="project-list">Featured Projects</h2>
+          <ol class="list">
+            <li>
+              <strong>PyMent</strong> - A forensic analysis tool for Venmo artifacts and API
+              session handling. Developed to evaluate practical vulnerabilities and recovery
+              pathways. <a href="https://link.springer.com/chapter/10.1007/978-3-032-00635-6_4" target="_blank" rel="noreferrer">Read publication</a>.
+            </li>
+            <li>
+              <strong>PyShot</strong> - Python tooling for extracting and validating Progressive
+              Snapshot app evidence, including speed and location artifacts.
+              <a href="https://www.sciencedirect.com/science/article/pii/S2666281724000817" target="_blank" rel="noreferrer">Read publication</a>.
+            </li>
+            <li>
+              <strong>Ex Machina Analysis Pipeline</strong> - Cross-application forensic
+              evaluation workflow for AI companion platforms, including artifact profiling and
+              evidentiary interpretation.
+              <a href="https://dfrws.org/presentation/ex-machina-a-forensic-evaluation-of-ai-companion-applications-and-their-evidentiary-value/" target="_blank" rel="noreferrer">View presentation</a>.
+            </li>
+          </ol>
+        </section>
+      </main>
+
+      <footer>
+        <p>&copy; <span data-year></span> <span data-owner>Trevor</span>. All rights reserved.</p>
+      </footer>
+    </div>
+  </body>
+</html>
