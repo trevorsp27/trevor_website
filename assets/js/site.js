@@ -6,6 +6,58 @@
 
   const isHome = document.body.dataset.page === "home";
   const currentPage = document.body.dataset.page || "";
+  const assetPrefix = isHome ? "assets" : "../assets";
+
+  function findProfileImagePath() {
+    const configured = config.profileImageFile ? [config.profileImageFile] : [];
+    const candidates = [...configured, ...(config.profileImageCandidates || [])];
+    const unique = [...new Set(candidates)];
+
+    return unique.reduce((promise, fileName) => {
+      return promise.catch(() => {
+        const path = `${assetPrefix}/${fileName}`;
+        return new Promise((resolve, reject) => {
+          const testImage = new Image();
+          testImage.onload = () => resolve(path);
+          testImage.onerror = reject;
+          testImage.src = path;
+        });
+      });
+    }, Promise.reject());
+  }
+
+  function setCircularFavicon(imagePath) {
+    const source = new Image();
+    source.onload = () => {
+      const size = 256;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return;
+      }
+
+      context.clearRect(0, 0, size, size);
+      context.beginPath();
+      context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      context.closePath();
+      context.clip();
+      context.drawImage(source, 0, 0, size, size);
+
+      const faviconHref = canvas.toDataURL("image/png");
+      const existingIcons = document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon']");
+      existingIcons.forEach((icon) => icon.remove());
+
+      const icon = document.createElement("link");
+      icon.rel = "icon";
+      icon.type = "image/png";
+      icon.href = faviconHref;
+      document.head.appendChild(icon);
+    };
+    source.src = imagePath;
+  }
 
   const yearTarget = document.querySelector("[data-year]");
   if (yearTarget) {
@@ -91,4 +143,17 @@
   if (linkedInLink && config.linkedInUrl) {
     linkedInLink.href = config.linkedInUrl;
   }
+
+  findProfileImagePath()
+    .then((imagePath) => {
+      const profileTargets = document.querySelectorAll("[data-profile-image]");
+      profileTargets.forEach((img) => {
+        img.src = imagePath;
+      });
+
+      setCircularFavicon(imagePath);
+    })
+    .catch(() => {
+      // If no profile image exists yet, keep the layout functional without failing.
+    });
 })();

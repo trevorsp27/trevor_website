@@ -5,6 +5,16 @@ window.SITE_CONFIG = {
   email: "trevsp27@gmail.com",
   githubUrl: "https://github.com/trevorsp27",
   linkedInUrl: "https://www.linkedin.com/in/trevor-spinosa-a65b00102/",
+  profileImageFile: "profile.jpg",
+  profileImageCandidates: [
+    "profile.jpg",
+    "profile.jpeg",
+    "profile.png",
+    "profile.webp",
+    "profile_pic.jpg",
+    "profile_pic.jpeg",
+    "profile_pic.png"
+  ],
   about: {
     intro:
       "I build machine learning tooling and data pipelines that turn complex, messy data into practical results.",

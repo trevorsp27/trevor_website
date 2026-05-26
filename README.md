@@ -62,3 +62,13 @@ git push -u origin main
   - `about` text
 - Replace placeholder content in each page.
 - Optional: swap colors in `assets/css/styles.css` variables.
+
+## Profile photo setup
+
+1. Add your photo in the `assets/` folder.
+2. Recommended filename: `profile.jpg`.
+3. The site will automatically:
+  - show it on the About page hero section
+  - generate a circular browser/tab icon from the same image
+
+Supported filenames by default: `profile.jpg`, `profile.jpeg`, `profile.png`, `profile.webp`.
