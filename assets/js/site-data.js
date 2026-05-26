@@ -5,7 +5,7 @@ window.SITE_CONFIG = {
   email: "trevsp27@gmail.com",
   githubUrl: "https://github.com/trevorsp27",
   linkedInUrl: "https://www.linkedin.com/in/trevor-spinosa-a65b00102/",
-  profileImageFile: "profile.jpg",
+  profileImageFile: "profile_pic.jpeg",
   profileImageCandidates: [
     "profile.jpg",
     "profile.jpeg",
