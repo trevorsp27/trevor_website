@@ -1,4 +1,13 @@
 (function () {
+  if (
+    window.location.protocol.startsWith("http") &&
+    window.location.pathname.endsWith("/index.html")
+  ) {
+    const cleanPath = window.location.pathname.replace(/index\.html$/, "");
+    window.location.replace(`${cleanPath}${window.location.search}${window.location.hash}`);
+    return;
+  }
+
   const config = window.SITE_CONFIG;
   if (!config) {
     return;
@@ -52,7 +61,7 @@
       {
         id: "home",
         title: "About",
-        path: isHome ? "#top" : "../index.html"
+        path: "/"
       },
       ...config.pages
     ];

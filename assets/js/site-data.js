@@ -1,5 +1,5 @@
 window.SITE_CONFIG = {
-  siteName: "Trevor's Website",
+  siteName: "Trevor's Room",
   ownerName: "Trevor Spinosa",
   tagline: "Machine Learning Software Engineer and Applied Researcher",
   email: "trevsp27@gmail.com",
@@ -28,35 +28,35 @@ window.SITE_CONFIG = {
     {
       id: "publications",
       title: "Publications",
-      path: "pages/publications.html",
+      path: "/pages/publications.html",
       summary: "Articles, papers, posts, and writing projects.",
       icon: "Publications"
     },
     {
       id: "music",
       title: "Music",
-      path: "pages/music.html",
+      path: "/pages/music.html",
       summary: "Songs, playlists, performances, and what I am listening to.",
       icon: "Music"
     },
     {
       id: "experience",
       title: "Work Experience",
-      path: "pages/experience.html",
+      path: "/pages/experience.html",
       summary: "Roles, projects, skills, and professional highlights.",
       icon: "Experience"
     },
     {
       id: "interests",
       title: "Interests",
-      path: "pages/interests.html",
+      path: "/pages/interests.html",
       summary: "Research themes, side explorations, and technical curiosity.",
       icon: "Interests"
     },
     {
       id: "projects",
       title: "Projects",
-      path: "pages/projects.html",
+      path: "/pages/projects.html",
       summary: "Tools and systems I have built in research and engineering.",
       icon: "Projects"
     }

@@ -12,14 +12,14 @@
       rel="stylesheet"
     />
     <link rel="icon" type="image/png" href="../assets/profile-favicon.png?v=20260526e" />
-    <link rel="stylesheet" href="../assets/css/styles.css?v=20260526d" />
-    <script src="../assets/js/site-data.js?v=20260526d" defer></script>
-    <script src="../assets/js/site.js?v=20260526d" defer></script>
+    <link rel="stylesheet" href="../assets/css/styles.css?v=20260527a" />
+    <script src="../assets/js/site-data.js?v=20260527a" defer></script>
+    <script src="../assets/js/site.js?v=20260527a" defer></script>
   </head>
   <body data-page="publications">
     <div class="site-shell">
       <header class="site-header reveal">
-        <a class="logo" href="../index.html" data-site-name>Trevor's Website</a>
+        <a class="logo" href="/" data-site-name>Trevor's Room</a>
         <nav aria-label="Primary">
           <ul data-nav></ul>
         </nav>
@@ -37,29 +37,57 @@
 
         <section class="panel reveal" aria-labelledby="pub-list">
           <h2 id="pub-list">Selected Publications</h2>
-          <ol class="list">
-            <li>
-              <strong>PyMent: Venmo Forensic Analysis Tool</strong> - Springer, 2025.
-              Analyzes vulnerabilities in Venmo through network traffic inspection and
-              logical acquisition, including MFA bypass pathways and API session-token
-              abuse for transaction recovery.
-              <a href="https://link.springer.com/chapter/10.1007/978-3-032-00635-6_4" target="_blank" rel="noreferrer">Read publication</a>.
-            </li>
-            <li>
-              <strong>PyShot: Progressive Snapshot Forensic Analysis Tool</strong> -
-              Forensic Science International: Digital Investigation, 2024. Presents a
-              Python-based tool to extract and validate Progressive Snapshot artifacts,
-              including driving behavior evidence not fully exposed in the mobile UI.
-              <a href="https://www.sciencedirect.com/science/article/pii/S2666281724000817" target="_blank" rel="noreferrer">Read publication</a>.
-            </li>
-            <li>
-              <strong>Ex Machina: A Forensic Evaluation of AI Companion Applications</strong>
-              - DFRWS presentation. First cross-application forensic study of AI companion
-              platforms (25M+ downloads), with artifact-based user profiling and
-              evidentiary analysis.
-              <a href="https://dfrws.org/presentation/ex-machina-a-forensic-evaluation-of-ai-companion-applications-and-their-evidentiary-value/" target="_blank" rel="noreferrer">View talk details</a>.
-            </li>
-          </ol>
+          <div class="publication-grid">
+            <article class="publication-card">
+              <p class="card-kicker">2025 • Springer</p>
+              <h3>PyMent: Venmo Forensic Analysis Tool</h3>
+              <p>
+                Analyzes vulnerabilities in Venmo through network traffic inspection and
+                logical acquisition, including MFA bypass pathways and API session-token
+                abuse for transaction recovery.
+              </p>
+              <a
+                href="https://link.springer.com/chapter/10.1007/978-3-032-00635-6_4"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-link"
+                >Read publication</a
+              >
+            </article>
+
+            <article class="publication-card">
+              <p class="card-kicker">2024 • FSI Digital Investigation</p>
+              <h3>PyShot: Progressive Snapshot Forensic Analysis Tool</h3>
+              <p>
+                Presents a Python-based tool to extract and validate Progressive Snapshot
+                artifacts, including driving behavior evidence not fully exposed in the
+                mobile UI.
+              </p>
+              <a
+                href="https://www.sciencedirect.com/science/article/pii/S2666281724000817"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-link"
+                >Read publication</a
+              >
+            </article>
+
+            <article class="publication-card">
+              <p class="card-kicker">DFRWS Presentation</p>
+              <h3>Ex Machina: A Forensic Evaluation of AI Companion Applications</h3>
+              <p>
+                First cross-application forensic study of AI companion platforms (25M+
+                downloads), with artifact-based user profiling and evidentiary analysis.
+              </p>
+              <a
+                href="https://dfrws.org/presentation/ex-machina-a-forensic-evaluation-of-ai-companion-applications-and-their-evidentiary-value/"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-link"
+                >View talk details</a
+              >
+            </article>
+          </div>
         </section>
       </main>
 
@@ -69,3 +97,4 @@
     </div>
   </body>
 </html>
+
