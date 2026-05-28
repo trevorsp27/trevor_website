@@ -17,7 +17,7 @@ window.SITE_CONFIG = {
   ],
   about: {
     intro:
-      "I build machine learning tooling and data pipelines that turn complex, messy data into practical results.",
+      "I enjoy learning new skills",
     details: [
       "Published researcher focused on digital forensics, cybersecurity, and applied machine learning.",
       "M.S. in Computer Science from Louisiana State University with hands-on work across Python, cloud systems, and full-stack tooling.",
