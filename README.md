@@ -6,10 +6,8 @@ This is a GitHub Pages-ready personal website starter.
 
 - `index.html` - Main About page
 - `pages/publications.html` - Publications page
-- `pages/music.html` - Music page
 - `pages/experience.html` - Work experience page
-- `pages/interests.html` - Interests page
-- `pages/projects.html` - Projects page
+- `pages/music.html` - Music page
 - `pages/_template.html` - Copy this to create a new page quickly
 - `assets/js/site-data.js` - Single source of truth for site name, intro text, nav links, and homepage cards
 - `assets/css/styles.css` - Shared design system
@@ -22,11 +20,11 @@ This is a GitHub Pages-ready personal website starter.
 
 ```js
 {
-  id: "projects",
-  title: "Projects",
-  path: "pages/projects.html",
-  summary: "A showcase of things I have built.",
-  icon: "Projects"
+  id: "new-page",
+  title: "New Page",
+  path: "/pages/new-page.html",
+  summary: "A short description of this page.",
+  icon: "Page"
 }
 ```
 
