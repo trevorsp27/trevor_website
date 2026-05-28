@@ -33,13 +33,6 @@ window.SITE_CONFIG = {
       icon: "Publications"
     },
     {
-      id: "music",
-      title: "Music",
-      path: "/pages/music.html",
-      summary: "Songs, playlists, performances, and what I am listening to.",
-      icon: "Music"
-    },
-    {
       id: "experience",
       title: "Work Experience",
       path: "/pages/experience.html",
@@ -47,18 +40,11 @@ window.SITE_CONFIG = {
       icon: "Experience"
     },
     {
-      id: "interests",
-      title: "Interests",
-      path: "/pages/interests.html",
-      summary: "Research themes, side explorations, and technical curiosity.",
-      icon: "Interests"
-    },
-    {
-      id: "projects",
-      title: "Projects",
-      path: "/pages/projects.html",
-      summary: "Tools and systems I have built in research and engineering.",
-      icon: "Projects"
+      id: "music",
+      title: "Music",
+      path: "/pages/music.html",
+      summary: "Songs, playlists, performances, and what I am listening to.",
+      icon: "Music"
     }
   ]
 };
