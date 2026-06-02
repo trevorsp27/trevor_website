@@ -237,6 +237,130 @@ h1 {
   gap: 0.55rem;
 }
 
+.birds-source-note {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.birds-loading,
+.birds-error {
+  color: var(--muted);
+}
+
+.birds-error {
+  color: #ff9f9f;
+}
+
+.birds-root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.bird-family {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #0d0d0d;
+  overflow: hidden;
+}
+
+.bird-family > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  font-weight: 700;
+}
+
+.bird-family > summary::-webkit-details-marker {
+  display: none;
+}
+
+.bird-family[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.bird-family-count {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.bird-species-list {
+  margin: 0;
+  padding: 0.8rem 1rem 1rem;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bird-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.bird-status {
+  width: 1rem;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bird-status.missing {
+  color: #c8c8c8;
+}
+
+.bird-status.ready {
+  color: #37d26a;
+}
+
+.bird-link,
+.bird-name {
+  font-size: 0.96rem;
+}
+
+.bird-link:hover,
+.bird-link:focus-visible {
+  text-decoration: underline;
+}
+
+.dot-inline {
+  color: #37d26a;
+}
+
+.bird-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.bird-photo-card {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+.bird-photo-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+.bird-photo-card figcaption {
+  padding: 0.55rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
 footer {
   margin-top: 1rem;
   color: var(--muted);

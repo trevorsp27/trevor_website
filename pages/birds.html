@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Trevor | New Page</title>
-    <meta name="description" content="Describe this page." />
+    <title>Trevor | Birds</title>
+    <meta name="description" content="Louisiana birds grouped by family, with photo tracking by species." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,8 +15,10 @@
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
     <script src="../assets/js/site-data.js?v=20260602a" defer></script>
     <script src="../assets/js/site.js?v=20260602a" defer></script>
+    <script src="../assets/js/bird-photos.js?v=20260602a" defer></script>
+    <script src="../assets/js/birds.js?v=20260602a" defer></script>
   </head>
-  <body data-page="new-page-id">
+  <body data-page="birds">
     <div class="site-shell">
       <header class="site-header reveal">
         <a class="logo" href="/" data-site-name>Trevor's Room</a>
@@ -27,20 +29,24 @@
 
       <main>
         <section class="hero reveal" aria-labelledby="title">
-          <p class="kicker">New Section</p>
-          <h1 id="title">Page headline goes here.</h1>
+          <p class="kicker">Birds</p>
+          <h1 id="title">Louisiana species list by family.</h1>
           <p>
-            Introduce what this page is about in two or three sentences.
+            Click a family dropdown to browse species. A <strong>?</strong> means no photos yet.
+            A <strong class="dot-inline">green dot</strong> means photos are available.
           </p>
         </section>
 
-        <section class="panel reveal" aria-labelledby="content-title">
-          <h2 id="content-title">Main Content</h2>
-          <ul class="list">
-            <li>Point one</li>
-            <li>Point two</li>
-            <li>Point three</li>
-          </ul>
+        <section class="panel reveal" aria-labelledby="birds-list-title">
+          <h2 id="birds-list-title">Species Catalog</h2>
+          <p class="birds-source-note">
+            Source taxonomy and species names: <a href="https://en.wikipedia.org/wiki/List_of_birds_of_Louisiana" target="_blank" rel="noreferrer">Wikipedia list of birds of Louisiana</a>.
+          </p>
+          <p id="birds-loading" class="birds-loading">Loading bird families and species...</p>
+          <p id="birds-error" class="birds-error" hidden>
+            Could not load the bird list right now. Please refresh and try again.
+          </p>
+          <div id="birds-root" class="birds-root" hidden></div>
         </section>
       </main>
 
@@ -50,4 +56,3 @@
     </div>
   </body>
 </html>
-

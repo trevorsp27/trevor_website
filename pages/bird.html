@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Trevor | Music</title>
-    <meta name="description" content="Trevor's music, playlists, and performances." />
+    <title>Trevor | Bird Photos</title>
+    <meta name="description" content="Photo gallery for a Louisiana bird species." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,8 +15,10 @@
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
     <script src="../assets/js/site-data.js?v=20260602a" defer></script>
     <script src="../assets/js/site.js?v=20260602a" defer></script>
+    <script src="../assets/js/bird-photos.js?v=20260602a" defer></script>
+    <script src="../assets/js/bird-gallery.js?v=20260602a" defer></script>
   </head>
-  <body data-page="music">
+  <body data-page="birds">
     <div class="site-shell">
       <header class="site-header reveal">
         <a class="logo" href="/" data-site-name>Trevor's Room</a>
@@ -26,8 +28,16 @@
       </header>
 
       <main>
-        <section class="hero reveal" aria-labelledby="title">
-          <h1 id="title">Coming soon</h1>
+        <section class="hero reveal" aria-labelledby="bird-title">
+          <p class="kicker">Bird Gallery</p>
+          <h1 id="bird-title">Bird photos</h1>
+          <p><a class="inline-link" href="/pages/birds.html">Back to Birds list</a></p>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="photos-title">
+          <h2 id="photos-title">Photos</h2>
+          <p id="bird-gallery-empty" class="birds-loading" hidden>No photos have been added for this species yet.</p>
+          <div id="bird-gallery-grid" class="bird-gallery-grid"></div>
         </section>
       </main>
 
@@ -37,4 +47,3 @@
     </div>
   </body>
 </html>
-

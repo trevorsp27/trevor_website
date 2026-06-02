@@ -45,6 +45,13 @@ window.SITE_CONFIG = {
       path: "/pages/music.html",
       summary: "Coming soon",
       icon: "Music"
+    },
+    {
+      id: "birds",
+      title: "Birds",
+      path: "/pages/birds.html",
+      summary: "Louisiana bird species grouped by family.",
+      icon: "Birds"
     }
   ]
 };
