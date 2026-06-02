@@ -47,6 +47,7 @@
     rootEl.innerHTML = catalog.families
       .map((family, index) => {
         const familyId = `family-${index + 1}`;
+        const familyName = family.name || family.family || "Unknown family";
         const speciesMarkup = family.species
           .map((species) => renderSpeciesItem(species, manifest))
           .join("");
@@ -54,7 +55,7 @@
         return `
           <details class="bird-family" id="${familyId}">
             <summary>
-              <span>${family.family}</span>
+              <span>${familyName}</span>
               <span class="bird-family-count">${family.species.length} species</span>
             </summary>
             <ul class="bird-species-list">
