@@ -2,6 +2,12 @@
   const loadingEl = document.getElementById("birds-loading");
   const errorEl = document.getElementById("birds-error");
   const rootEl = document.getElementById("birds-root");
+  const featuredRootEl = document.getElementById("featured-bird");
+  const featuredEmptyEl = document.getElementById("featured-bird-empty");
+  const featuredImageEl = document.getElementById("featured-bird-image");
+  const featuredNameEl = document.getElementById("featured-bird-name");
+  const featuredLinkEl = document.getElementById("featured-bird-link");
+  const featuredOpenEl = document.getElementById("featured-bird-open");
 
   if (!loadingEl || !errorEl || !rootEl) {
     return;
@@ -9,6 +15,58 @@
 
   const CATALOG_URL = "../assets/birds/birds-catalog.json";
   const MANIFEST_URL = "../assets/birds/photo-manifest.json";
+
+  function buildGalleryHref(speciesId) {
+    return `/pages/bird.html?id=${encodeURIComponent(speciesId)}`;
+  }
+
+  function renderFeaturedBird(catalog, manifest) {
+    if (
+      !featuredRootEl ||
+      !featuredEmptyEl ||
+      !featuredImageEl ||
+      !featuredNameEl ||
+      !featuredLinkEl ||
+      !featuredOpenEl
+    ) {
+      return;
+    }
+
+    const allSpecies = (catalog.families || []).flatMap((family) => family.species || []);
+    const withPhotos = allSpecies
+      .filter(
+        (species) =>
+          manifest &&
+          manifest.speciesPhotos &&
+          Array.isArray(manifest.speciesPhotos[species.id]) &&
+          manifest.speciesPhotos[species.id].length > 0
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    if (!withPhotos.length) {
+      featuredEmptyEl.hidden = false;
+      featuredRootEl.hidden = true;
+      return;
+    }
+
+    const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+    const speciesIndex = daySeed % withPhotos.length;
+    const species = withPhotos[speciesIndex];
+    const files = manifest.speciesPhotos[species.id];
+    const fileIndex = daySeed % files.length;
+    const fileName = files[fileIndex];
+    const photoSrc = `../assets/birds/photos/${species.familySlug}/${species.slug}/${fileName}`;
+    const galleryHref = buildGalleryHref(species.id);
+
+    featuredImageEl.src = photoSrc;
+    featuredImageEl.alt = `${species.name} featured photo`;
+    featuredNameEl.textContent = species.name;
+    featuredLinkEl.href = galleryHref;
+    featuredOpenEl.href = galleryHref;
+
+    featuredEmptyEl.hidden = true;
+    featuredRootEl.hidden = false;
+  }
 
   function hasPhotosForSpecies(speciesId, manifest) {
     return (
@@ -26,7 +84,7 @@
     const markerLabel = hasPhotos ? "Photos available" : "No photos yet";
 
     if (hasPhotos) {
-      const href = `/pages/bird.html?id=${encodeURIComponent(species.id)}`;
+      const href = buildGalleryHref(species.id);
       return `
         <li class="bird-item">
           <span class="${markerClass}" aria-label="${markerLabel}" title="${markerLabel}">${markerSymbol}</span>
@@ -73,7 +131,10 @@
       .join("");
   }
 
-  Promise.all([fetch(CATALOG_URL), fetch(MANIFEST_URL)])
+  Promise.all([
+    fetch(CATALOG_URL, { cache: "no-store" }),
+    fetch(MANIFEST_URL, { cache: "no-store" })
+  ])
     .then(async ([catalogResponse, manifestResponse]) => {
       if (!catalogResponse.ok) {
         throw new Error("Catalog request failed");
@@ -89,6 +150,7 @@
         throw new Error("Local bird catalog is missing or invalid");
       }
 
+      renderFeaturedBird(catalog, manifest);
       renderFamilies(catalog, manifest);
       rootEl.hidden = false;
       loadingEl.hidden = true;

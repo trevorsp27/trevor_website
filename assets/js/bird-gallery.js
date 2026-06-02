@@ -17,8 +17,8 @@
   }
 
   Promise.all([
-    fetch("../assets/birds/birds-catalog.json"),
-    fetch("../assets/birds/photo-manifest.json")
+    fetch("../assets/birds/birds-catalog.json", { cache: "no-store" }),
+    fetch("../assets/birds/photo-manifest.json", { cache: "no-store" })
   ])
     .then(async ([catalogResponse, manifestResponse]) => {
       if (!catalogResponse.ok || !manifestResponse.ok) {
