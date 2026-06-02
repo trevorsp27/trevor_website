@@ -1,38 +1,27 @@
 # Bird Photos Structure
 
-Use this structure to keep bird photos organized and make them show up automatically in the Birds page.
+This directory is fully localized.
 
-## 1) Add photos to species folders
+The Birds page reads local files only:
 
-Put photos in:
+- `assets/birds/birds-catalog.json`
+- `assets/birds/photo-manifest.json`
+- `assets/birds/photos/<family-slug>/<species-slug>/...`
 
-- `assets/birds/photos/<species-slug>/photo-file.jpg`
+## Add photos
 
-Example:
+1. Find the species folder in `assets/birds/photos/<family-slug>/<species-slug>/`.
+2. Drop photo files into that species folder.
+3. Run `./scripts/sync-birds.ps1` from the repository root.
+4. Commit and push.
 
-- `assets/birds/photos/brown-pelican/brown-pelican-01.jpg`
-- `assets/birds/photos/brown-pelican/brown-pelican-02.jpg`
+That script refreshes:
 
-## 2) Register the photos in the manifest
-
-Open `assets/js/bird-photos.js` and add entries like:
-
-```js
-window.BIRD_PHOTO_MANIFEST = {
-  "brown-pelican": ["brown-pelican-01.jpg", "brown-pelican-02.jpg"],
-  "northern-cardinal": ["cardinal-yard-01.jpg"]
-};
-```
-
-## 3) Species slug format
-
-Slug format is lowercase words joined by hyphens:
-
-- `Brown pelican` -> `brown-pelican`
-- `Black-bellied whistling-duck` -> `black-bellied-whistling-duck`
+- `assets/birds/photo-manifest.json` (used for green dots and gallery links)
+- `assets/birds/birds-catalog.json` (catalog snapshot)
 
 ## Status logic on the Birds page
 
-- `?` means no photos registered in `bird-photos.js`
-- Green dot means photos are registered
+- `?` means no photo files were found for that species folder
+- Green dot means photo files exist for that species folder
 - Clicking a species with a green dot opens its gallery page
