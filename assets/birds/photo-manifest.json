@@ -1,7 +1,52 @@
 ﻿{
     "speciesPhotos":  {
+                          "ducks-geese-and-waterfowl--mallard":  [
+                                                                     "IMG_0410.JPG"
+                                                                 ],
+                          "pigeons-and-doves--rock-pigeon":  [
+                                                                 "IMG_0411.JPG",
+                                                                 "IMG_0414.JPG"
+                                                             ],
+                          "stilts-and-avocets--black-necked-stilt":  [
+                                                                         "IMG_0445.JPG"
+                                                                     ],
+                          "plovers-and-lapwings--black-bellied-plover":  [
+                                                                             "IMG_0433.JPG"
+                                                                         ],
+                          "sandpipers-and-allies--willet":  [
+                                                                "IMG_0438.JPG",
+                                                                "IMG_0449.JPG"
+                                                            ],
+                          "gulls-terns-and-skimmers--laughing-gull":  [
+                                                                          "IMG_0473.JPG",
+                                                                          "IMG_0474.JPG"
+                                                                      ],
+                          "pelicans--brown-pelican":  [
+                                                          "IMG_0439.JPG"
+                                                      ],
+                          "herons-egrets-and-bitterns--great-egret":  [
+                                                                          "IMG_0412.JPG"
+                                                                      ],
+                          "herons-egrets-and-bitterns--snowy-egret":  [
+                                                                          "IMG_0456.JPG"
+                                                                      ],
+                          "herons-egrets-and-bitterns--tricolored-heron":  [
+                                                                               "IMG_0457.JPG"
+                                                                           ],
                           "herons-egrets-and-bitterns--cattle-egret":  [
                                                                            "IMG_0458.JPG"
-                                                                       ]
+                                                                       ],
+                          "ibises-and-spoonbills--white-ibis":  [
+                                                                    "IMG_0409.JPG"
+                                                                ],
+                          "osprey--osprey":  [
+                                                 "IMG_0461.JPG"
+                                             ],
+                          "troupials-and-allies--red-winged-blackbird":  [
+                                                                             "IMG_0423.JPG"
+                                                                         ],
+                          "troupials-and-allies--great-tailed-grackle":  [
+                                                                             "IMG_0442.JPG"
+                                                                         ]
                       }
 }
