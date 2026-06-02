@@ -43,7 +43,7 @@ window.SITE_CONFIG = {
       id: "music",
       title: "Music",
       path: "/pages/music.html",
-      summary: "Songs, playlists, performances, and what I am listening to.",
+      summary: "Coming soon",
       icon: "Music"
     }
   ]
