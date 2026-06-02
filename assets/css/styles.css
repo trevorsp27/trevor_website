@@ -288,6 +288,16 @@ h1 {
   font-weight: 500;
 }
 
+.bird-family-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.bird-family-dot {
+  font-size: 0.95rem;
+}
+
 .bird-species-list {
   margin: 0;
   padding: 0.8rem 1rem 1rem;

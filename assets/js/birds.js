@@ -48,6 +48,12 @@
       .map((family, index) => {
         const familyId = `family-${index + 1}`;
         const familyName = family.name || family.family || "Unknown family";
+        const familyHasPhotos = family.species.some((species) =>
+          hasPhotosForSpecies(species.id, manifest)
+        );
+        const familyDot = familyHasPhotos
+          ? '<span class="bird-status ready bird-family-dot" aria-label="Family has photos" title="Family has photos">●</span>'
+          : "";
         const speciesMarkup = family.species
           .map((species) => renderSpeciesItem(species, manifest))
           .join("");
@@ -55,7 +61,7 @@
         return `
           <details class="bird-family" id="${familyId}">
             <summary>
-              <span>${familyName}</span>
+              <span class="bird-family-title">${familyDot}<span>${familyName}</span></span>
               <span class="bird-family-count">${family.species.length} species</span>
             </summary>
             <ul class="bird-species-list">
