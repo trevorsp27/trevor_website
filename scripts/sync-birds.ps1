@@ -105,7 +105,7 @@ $photosRoot = Join-Path $repoRoot "assets/birds/photos"
 New-Item -Path $photosRoot -ItemType Directory -Force | Out-Null
 
 $manifest = [ordered]@{}
-$extensions = @("*.jpg", "*.jpeg", "*.png", "*.webp", "*.gif", "*.avif")
+$validExtensions = @(".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
 
 foreach ($family in $families) {
   $familyPath = Join-Path $photosRoot $family.slug
@@ -120,7 +120,9 @@ foreach ($family in $families) {
       New-Item -Path $gitkeepPath -ItemType File | Out-Null
     }
 
-    $photoFiles = Get-ChildItem -Path $speciesPath -File -Include $extensions | Sort-Object Name
+    $photoFiles = Get-ChildItem -Path $speciesPath -File |
+      Where-Object { $validExtensions -contains $_.Extension.ToLowerInvariant() } |
+      Sort-Object Name
     $photoNames = @($photoFiles | ForEach-Object { $_.Name })
 
     if ($photoNames.Count -gt 0) {
