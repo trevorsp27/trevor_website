@@ -121,12 +121,22 @@
       .map((family, index) => {
         const familyId = `family-${index + 1}`;
         const familyName = family.name || family.family || "Unknown family";
-        const familyHasPhotos = family.species.some((species) =>
+        const photographedCount = family.species.filter((species) =>
           hasPhotosForSpecies(species.id, manifest)
-        );
-        const familyDot = familyHasPhotos
-          ? '<span class="bird-status ready bird-family-dot" aria-label="Family has photos" title="Family has photos">●</span>'
-          : "";
+        ).length;
+        const totalCount = family.species.length;
+
+        let familyDot = "";
+        if (photographedCount > 0 && photographedCount < totalCount) {
+          familyDot =
+            '<span class="bird-status partial bird-family-dot" aria-label="Family partially photographed" title="Family partially photographed">●</span>';
+        }
+
+        if (photographedCount > 0 && photographedCount === totalCount) {
+          familyDot =
+            '<span class="bird-status ready bird-family-dot" aria-label="Family fully photographed" title="Family fully photographed">●</span>';
+        }
+
         const speciesMarkup = family.species
           .map((species) => renderSpeciesItem(species, manifest))
           .join("");

@@ -170,7 +170,27 @@ foreach ($family in $families) {
 
     $photoFiles = Get-ChildItem -Path $speciesPath -File |
       Where-Object { $validExtensions -contains $_.Extension.ToLowerInvariant() } |
-      Sort-Object Name
+      Sort-Object `
+        @{ Expression = {
+            $baseName = $_.BaseName.ToLowerInvariant()
+            $slugUnderscore = $species.slug.Replace("-", "_").ToLowerInvariant()
+            $slugHyphen = $species.slug.ToLowerInvariant()
+
+            if (
+              $baseName.StartsWith("main_") -or
+              $baseName.StartsWith("main-") -or
+              $baseName -eq "main_speciesname" -or
+              $baseName -eq ("main_" + $slugUnderscore) -or
+              $baseName -eq ("main_" + $slugHyphen) -or
+              $baseName -eq ("main-" + $slugHyphen)
+            ) {
+              return 0
+            }
+
+            return 1
+          }
+        },
+        @{ Expression = { $_.Name.ToLowerInvariant() } }
     $photoNames = @($photoFiles | ForEach-Object { $_.Name })
 
     if ($photoNames.Count -gt 0) {

@@ -329,6 +329,10 @@ h1 {
   color: #37d26a;
 }
 
+.bird-status.partial {
+  color: #f2c94c;
+}
+
 .bird-link,
 .bird-name {
   font-size: 0.96rem;
