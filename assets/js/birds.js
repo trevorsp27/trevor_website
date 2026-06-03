@@ -95,7 +95,7 @@
   function renderSpeciesItem(species, manifest) {
     const hasPhotos = hasPhotosForSpecies(species.id, manifest);
     const markerClass = hasPhotos ? "bird-status ready" : "bird-status missing";
-    const markerSymbol = hasPhotos ? "●" : "?";
+    const markerSymbol = "●";
     const markerLabel = hasPhotos ? "Photos available" : "No photos yet";
 
     if (hasPhotos) {
@@ -127,6 +127,11 @@
         const totalCount = family.species.length;
 
         let familyDot = "";
+        if (photographedCount === 0) {
+          familyDot =
+            '<span class="bird-status missing bird-family-dot" aria-label="Family has no photos" title="Family has no photos">●</span>';
+        }
+
         if (photographedCount > 0 && photographedCount < totalCount) {
           familyDot =
             '<span class="bird-status partial bird-family-dot" aria-label="Family partially photographed" title="Family partially photographed">●</span>';
