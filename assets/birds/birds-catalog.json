@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-06-02T11:35:39-05:00",
+    "generatedAt":  "2026-06-03T10:46:59-05:00",
     "source":  "Wikipedia List of birds of Louisiana (localized snapshot)",
     "families":  [
                      {
@@ -245,6 +245,18 @@
                                              "name":  "Ruddy duck",
                                              "slug":  "ruddy-duck",
                                              "familySlug":  "ducks-geese-and-waterfowl"
+                                         },
+                                         {
+                                             "id":  "ducks-geese-and-waterfowl--domestic-duck",
+                                             "name":  "Domestic Duck",
+                                             "slug":  "domestic-duck",
+                                             "familySlug":  "ducks-geese-and-waterfowl"
+                                         },
+                                         {
+                                             "id":  "ducks-geese-and-waterfowl--muscovy-duck",
+                                             "name":  "Muscovy Duck",
+                                             "slug":  "muscovy-duck",
+                                             "familySlug":  "ducks-geese-and-waterfowl"
                                          }
                                      ]
                      },
@@ -274,6 +286,12 @@
                                              "id":  "pheasants-grouse-and-allies--greater-prairie-chicken",
                                              "name":  "Greater prairie-chicken",
                                              "slug":  "greater-prairie-chicken",
+                                             "familySlug":  "pheasants-grouse-and-allies"
+                                         },
+                                         {
+                                             "id":  "pheasants-grouse-and-allies--domestic-chicken",
+                                             "name":  "Domestic Chicken",
+                                             "slug":  "domestic-chicken",
                                              "familySlug":  "pheasants-grouse-and-allies"
                                          }
                                      ]

@@ -23,6 +23,25 @@ function Clean-Text {
   return $text
 }
 
+function From-Slug {
+  param([string]$Slug)
+
+  if ([string]::IsNullOrWhiteSpace($Slug)) {
+    return "Unknown"
+  }
+
+  $parts = $Slug -split "-"
+  $words = $parts | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
+    if ($_.Length -eq 1) {
+      $_.ToUpperInvariant()
+    } else {
+      $_.Substring(0, 1).ToUpperInvariant() + $_.Substring(1)
+    }
+  }
+
+  return ($words -join " ")
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
@@ -104,12 +123,41 @@ $families = $families | Where-Object { $_.species.Count -gt 0 }
 $photosRoot = Join-Path $repoRoot "assets/birds/photos"
 New-Item -Path $photosRoot -ItemType Directory -Force | Out-Null
 
+$knownFamilySlugs = @($families | ForEach-Object { $_.slug })
+$existingFamilyDirs = Get-ChildItem -Path $photosRoot -Directory
+foreach ($familyDir in $existingFamilyDirs) {
+  if ($knownFamilySlugs -contains $familyDir.Name) {
+    continue
+  }
+
+  $families.Add([PSCustomObject]@{
+    name = From-Slug -Slug $familyDir.Name
+    slug = $familyDir.Name
+    species = New-Object System.Collections.Generic.List[object]
+  })
+}
+
 $manifest = [ordered]@{}
-$validExtensions = @(".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
+$validExtensions = @(".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".heic", ".heif")
 
 foreach ($family in $families) {
   $familyPath = Join-Path $photosRoot $family.slug
   New-Item -Path $familyPath -ItemType Directory -Force | Out-Null
+
+  $knownSpeciesSlugs = @($family.species | ForEach-Object { $_.slug })
+  $existingSpeciesDirs = Get-ChildItem -Path $familyPath -Directory
+  foreach ($speciesDir in $existingSpeciesDirs) {
+    if ($knownSpeciesSlugs -contains $speciesDir.Name) {
+      continue
+    }
+
+    $family.species.Add([PSCustomObject]@{
+      id = ("{0}--{1}" -f $family.slug, $speciesDir.Name)
+      name = From-Slug -Slug $speciesDir.Name
+      slug = $speciesDir.Name
+      familySlug = $family.slug
+    })
+  }
 
   foreach ($species in $family.species) {
     $speciesPath = Join-Path $familyPath $species.slug

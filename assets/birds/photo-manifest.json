@@ -1,18 +1,51 @@
 ﻿{
     "speciesPhotos":  {
+                          "ducks-geese-and-waterfowl--black-bellied-whistling-duck":  [
+                                                                                          "IMG_9152.JPEG",
+                                                                                          "IMG_9189.JPEG"
+                                                                                      ],
+                          "ducks-geese-and-waterfowl--canada-goose":  [
+                                                                          "IMG_9174.JPEG"
+                                                                      ],
+                          "ducks-geese-and-waterfowl--wood-duck":  [
+                                                                       "IMG_9498.JPEG"
+                                                                   ],
                           "ducks-geese-and-waterfowl--mallard":  [
                                                                      "IMG_0410.JPG"
                                                                  ],
+                          "ducks-geese-and-waterfowl--lesser-scaup":  [
+                                                                          "IMG_9446.JPEG"
+                                                                      ],
+                          "ducks-geese-and-waterfowl--domestic-duck":  [
+                                                                           "IMG_9182.JPEG"
+                                                                       ],
+                          "ducks-geese-and-waterfowl--muscovy-duck":  [
+                                                                          "IMG_3528.JPG",
+                                                                          "IMG_9181.JPEG"
+                                                                      ],
+                          "pheasants-grouse-and-allies--domestic-chicken":  [
+                                                                                "IMG_7270.JPEG"
+                                                                            ],
                           "pigeons-and-doves--rock-pigeon":  [
                                                                  "IMG_0411.JPG",
                                                                  "IMG_0414.JPG"
                                                              ],
+                          "pigeons-and-doves--mourning-dove":  [
+                                                                   "IMG_9330.JPEG",
+                                                                   "IMG_9338.JPEG"
+                                                               ],
                           "stilts-and-avocets--black-necked-stilt":  [
                                                                          "IMG_0445.JPG"
                                                                      ],
                           "plovers-and-lapwings--black-bellied-plover":  [
                                                                              "IMG_0433.JPG"
                                                                          ],
+                          "plovers-and-lapwings--killdeer":  [
+                                                                 "IMG_9545.JPEG"
+                                                             ],
+                          "sandpipers-and-allies--sanderling":  [
+                                                                    "IMG_9732.JPEG"
+                                                                ],
                           "sandpipers-and-allies--willet":  [
                                                                 "IMG_0438.JPG",
                                                                 "IMG_0449.JPG"
@@ -21,32 +54,141 @@
                                                                           "IMG_0473.JPG",
                                                                           "IMG_0474.JPG"
                                                                       ],
+                          "anhingas--anhinga":  [
+                                                    "IMG_2400.JPEG"
+                                                ],
+                          "cormorants-and-shags--double-crested-cormorant":  [
+                                                                                 "IMG_9190.JPEG"
+                                                                             ],
                           "pelicans--brown-pelican":  [
-                                                          "IMG_0439.JPG"
+                                                          "IMG_0439.JPG",
+                                                          "IMG_6629.JPEG"
                                                       ],
+                          "herons-egrets-and-bitterns--great-blue-heron":  [
+                                                                               "IMG_9595.JPEG"
+                                                                           ],
                           "herons-egrets-and-bitterns--great-egret":  [
-                                                                          "IMG_0412.JPG"
+                                                                          "IMG_0412.JPG",
+                                                                          "IMG_8966.JPEG",
+                                                                          "IMG_9196.JPEG"
                                                                       ],
                           "herons-egrets-and-bitterns--snowy-egret":  [
                                                                           "IMG_0456.JPG"
                                                                       ],
                           "herons-egrets-and-bitterns--tricolored-heron":  [
-                                                                               "IMG_0457.JPG"
+                                                                               "IMG_0457.JPG",
+                                                                               "IMG_9643.JPEG"
                                                                            ],
                           "herons-egrets-and-bitterns--cattle-egret":  [
-                                                                           "IMG_0458.JPG"
+                                                                           "IMG_0458.JPG",
+                                                                           "IMG_9129.JPEG"
                                                                        ],
+                          "herons-egrets-and-bitterns--black-crowned-night-heron":  [
+                                                                                        "IMG_9622.JPEG",
+                                                                                        "IMG_9624.JPEG"
+                                                                                    ],
                           "ibises-and-spoonbills--white-ibis":  [
                                                                     "IMG_0409.JPG"
                                                                 ],
+                          "ibises-and-spoonbills--roseate-spoonbill":  [
+                                                                           "IMG_8375.JPEG",
+                                                                           "IMG_9829.JPEG",
+                                                                           "IMG_9831.JPEG",
+                                                                           "IMG_9838.JPEG"
+                                                                       ],
                           "osprey--osprey":  [
                                                  "IMG_0461.JPG"
                                              ],
-                          "troupials-and-allies--red-winged-blackbird":  [
-                                                                             "IMG_0423.JPG"
+                          "hawks-eagles-and-kites--mississippi-kite":  [
+                                                                           "IMG_9549.JPEG"
+                                                                       ],
+                          "hawks-eagles-and-kites--red-shouldered-hawk":  [
+                                                                              "IMG_9676.JPEG"
+                                                                          ],
+                          "hawks-eagles-and-kites--red-tailed-hawk":  [
+                                                                          "IMG_9819.JPEG",
+                                                                          "IMG_9823.JPEG",
+                                                                          "IMG_9824.JPEG"
+                                                                      ],
+                          "woodpeckers--red-headed-woodpecker":  [
+                                                                     "IMG_9694.JPEG"
+                                                                 ],
+                          "woodpeckers--downy-woodpecker":  [
+                                                                "IMG_9246.JPEG"
+                                                            ],
+                          "tyrant-flycatchers--eastern-kingbird":  [
+                                                                       "IMG_9288.JPEG",
+                                                                       "IMG_9725.JPEG"
+                                                                   ],
+                          "vireos-shrike-babblers-and-erpornis--white-eyed-vireo":  [
+                                                                                        "IMG_9219.JPEG"
+                                                                                    ],
+                          "crows-jays-and-magpies--blue-jay":  [
+                                                                   "IMG_9320.JPEG",
+                                                                   "IMG_9672.JPEG"
+                                                               ],
+                          "crows-jays-and-magpies--american-crow":  [
+                                                                        "IMG_9345.JPEG"
+                                                                    ],
+                          "tits-chickadees-and-titmice--carolina-chickadee":  [
+                                                                                  "IMG_9437.JPEG"
+                                                                              ],
+                          "tits-chickadees-and-titmice--tufted-titmouse":  [
+                                                                               "IMG_9217.JPEG"
+                                                                           ],
+                          "swallows--barn-swallow":  [
+                                                         "IMG_9668.JPEG"
+                                                     ],
+                          "waxwings--cedar-waxwing":  [
+                                                          "IMG_9283.JPEG"
+                                                      ],
+                          "wrens--carolina-wren":  [
+                                                       "IMG_9210.JPEG"
+                                                   ],
+                          "mockingbirds-and-thrashers--brown-thrasher":  [
+                                                                             "IMG_9706.JPEG"
                                                                          ],
+                          "mockingbirds-and-thrashers--northern-mockingbird":  [
+                                                                                   "IMG_9154.JPEG"
+                                                                               ],
+                          "starlings--european-starling":  [
+                                                               "IMG_9144.JPEG",
+                                                               "IMG_9147.JPEG"
+                                                           ],
+                          "thrushes-and-allies--eastern-bluebird":  [
+                                                                        "IMG_9275.JPEG",
+                                                                        "IMG_9276.HEIC"
+                                                                    ],
+                          "thrushes-and-allies--american-robin":  [
+                                                                      "IMG_9172.JPEG"
+                                                                  ],
+                          "old-world-sparrows--house-sparrow":  [
+                                                                    "IMG_9305.JPEG",
+                                                                    "IMG_9312.JPEG"
+                                                                ],
+                          "finches-euphonias-and-allies--house-finch":  [
+                                                                            "IMG_9711.JPEG"
+                                                                        ],
+                          "troupials-and-allies--red-winged-blackbird":  [
+                                                                             "IMG_0423.JPG",
+                                                                             "IMG_9166.JPEG"
+                                                                         ],
+                          "troupials-and-allies--brown-headed-cowbird":  [
+                                                                             "IMG_9237.JPEG",
+                                                                             "IMG_9262.JPEG"
+                                                                         ],
+                          "troupials-and-allies--boat-tailed-grackle":  [
+                                                                            "IMG_9178.JPEG"
+                                                                        ],
                           "troupials-and-allies--great-tailed-grackle":  [
                                                                              "IMG_0442.JPG"
-                                                                         ]
+                                                                         ],
+                          "new-world-warblers--prothonotary-warbler":  [
+                                                                           "IMG_9377.JPEG",
+                                                                           "IMG_9394.JPEG"
+                                                                       ],
+                          "cardinals-and-allies--northern-cardinal":  [
+                                                                          "IMG_9203.JPEG"
+                                                                      ]
                       }
 }
