@@ -343,6 +343,11 @@ h1 {
   color: #37d26a;
 }
 
+.species-progress {
+  font-weight: 700;
+  color: #dff8e8;
+}
+
 .featured-panel {
   align-items: start;
 }
@@ -380,13 +385,14 @@ h1 {
   font-size: 1.35rem;
 }
 
-.bird-gallery-grid {
+.bird-viewer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
 }
 
-.bird-photo-card {
+.bird-photo-stage {
   margin: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -394,18 +400,28 @@ h1 {
   background: #0d0d0d;
 }
 
-.bird-photo-card img {
+.bird-photo-stage img {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+  max-height: min(70vh, 760px);
+  object-fit: contain;
   display: block;
 }
 
-.bird-photo-card figcaption {
-  padding: 0.55rem 0.65rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-  border-top: 1px solid var(--line);
+.bird-nav {
+  border: 1px solid var(--line);
+  background: #151515;
+  color: var(--ink);
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.bird-nav:hover,
+.bird-nav:focus-visible {
+  border-color: var(--brand);
+  background: #1d1d1d;
 }
 
 footer {
@@ -461,5 +477,13 @@ footer {
 
   .featured-bird {
     grid-template-columns: 1fr;
+  }
+
+  .bird-viewer {
+    grid-template-columns: 1fr;
+  }
+
+  .bird-nav {
+    justify-self: center;
   }
 }

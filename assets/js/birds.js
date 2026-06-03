@@ -8,6 +8,7 @@
   const featuredNameEl = document.getElementById("featured-bird-name");
   const featuredLinkEl = document.getElementById("featured-bird-link");
   const featuredOpenEl = document.getElementById("featured-bird-open");
+  const speciesProgressEl = document.getElementById("species-progress");
 
   if (!loadingEl || !errorEl || !rootEl) {
     return;
@@ -66,6 +67,20 @@
 
     featuredEmptyEl.hidden = true;
     featuredRootEl.hidden = false;
+  }
+
+  function renderSpeciesProgress(catalog, manifest) {
+    if (!speciesProgressEl) {
+      return;
+    }
+
+    const allSpecies = (catalog.families || []).flatMap((family) => family.species || []);
+    const totalSpecies = allSpecies.length;
+    const photographedSpecies = allSpecies.filter((species) =>
+      hasPhotosForSpecies(species.id, manifest)
+    ).length;
+
+    speciesProgressEl.textContent = `Species photographed: ${photographedSpecies} / ${totalSpecies}`;
   }
 
   function hasPhotosForSpecies(speciesId, manifest) {
@@ -151,6 +166,7 @@
       }
 
       renderFeaturedBird(catalog, manifest);
+      renderSpeciesProgress(catalog, manifest);
       renderFamilies(catalog, manifest);
       rootEl.hidden = false;
       loadingEl.hidden = true;

@@ -12,10 +12,10 @@
       rel="stylesheet"
     />
     <link rel="icon" type="image/png" href="../assets/profile-favicon.png?v=20260526e" />
-    <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
+    <link rel="stylesheet" href="../assets/css/styles.css?v=20260603a" />
     <script src="../assets/js/site-data.js?v=20260602a" defer></script>
     <script src="../assets/js/site.js?v=20260602a" defer></script>
-    <script src="../assets/js/bird-gallery.js?v=20260602b" defer></script>
+    <script src="../assets/js/bird-gallery.js?v=20260603a" defer></script>
   </head>
   <body data-page="birds">
     <div class="site-shell">
@@ -36,7 +36,20 @@
         <section class="panel reveal" aria-labelledby="photos-title">
           <h2 id="photos-title">Photos</h2>
           <p id="bird-gallery-empty" class="birds-loading" hidden>No photos have been added for this species yet.</p>
-          <div id="bird-gallery-grid" class="bird-gallery-grid"></div>
+          <div id="bird-viewer" class="bird-viewer" hidden>
+            <button id="bird-prev" class="bird-nav" type="button" aria-label="Previous photo">&larr;</button>
+            <figure class="bird-photo-stage">
+              <img
+                id="bird-viewer-image"
+                src=""
+                alt="Bird photo"
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
+            <button id="bird-next" class="bird-nav" type="button" aria-label="Next photo">&rarr;</button>
+          </div>
+          <p id="bird-viewer-count" class="birds-loading" hidden></p>
         </section>
       </main>
 
