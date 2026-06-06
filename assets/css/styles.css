@@ -428,6 +428,23 @@ h1 {
   background: #1d1d1d;
 }
 
+.bird-note {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bird-note h3 {
+  font-size: 1rem;
+}
+
+.bird-note-text {
+  color: #dddddd;
+  white-space: pre-line;
+}
+
 footer {
   margin-top: 1rem;
   color: var(--muted);

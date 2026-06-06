@@ -6,8 +6,20 @@
   const nextButtonEl = document.getElementById("bird-next");
   const countEl = document.getElementById("bird-viewer-count");
   const emptyEl = document.getElementById("bird-gallery-empty");
+  const noteEl = document.getElementById("bird-note");
+  const noteTextEl = document.getElementById("bird-note-text");
 
-  if (!titleEl || !viewerEl || !imageEl || !prevButtonEl || !nextButtonEl || !countEl || !emptyEl) {
+  if (
+    !titleEl ||
+    !viewerEl ||
+    !imageEl ||
+    !prevButtonEl ||
+    !nextButtonEl ||
+    !countEl ||
+    !emptyEl ||
+    !noteEl ||
+    !noteTextEl
+  ) {
     return;
   }
 
@@ -45,6 +57,15 @@
         manifest && manifest.speciesPhotos && Array.isArray(manifest.speciesPhotos[species.id])
           ? manifest.speciesPhotos[species.id]
           : [];
+      const note =
+        manifest && manifest.speciesNotes && typeof manifest.speciesNotes[species.id] === "string"
+          ? manifest.speciesNotes[species.id].trim()
+          : "";
+
+      if (note) {
+        noteTextEl.textContent = note;
+        noteEl.hidden = false;
+      }
 
       if (!files.length) {
         emptyEl.hidden = false;

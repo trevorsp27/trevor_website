@@ -138,6 +138,7 @@ foreach ($familyDir in $existingFamilyDirs) {
 }
 
 $manifest = [ordered]@{}
+$notesManifest = [ordered]@{}
 $validExtensions = @(".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".heic", ".heif")
 
 foreach ($family in $families) {
@@ -196,6 +197,21 @@ foreach ($family in $families) {
     if ($photoNames.Count -gt 0) {
       $manifest[$species.id] = $photoNames
     }
+
+    $snippetFiles = Get-ChildItem -Path $speciesPath -File -Filter "*.txt" | Sort-Object Name
+    if ($snippetFiles.Count -gt 0) {
+      $snippetParts = $snippetFiles |
+        ForEach-Object {
+          $content = (Get-Content -Path $_.FullName -Raw -Encoding UTF8).Trim()
+          if (-not [string]::IsNullOrWhiteSpace($content)) {
+            $content
+          }
+        }
+
+      if ($snippetParts.Count -gt 0) {
+        $notesManifest[$species.id] = ($snippetParts -join "`r`n`r`n")
+      }
+    }
   }
 }
 
@@ -209,7 +225,7 @@ $catalogPath = Join-Path $repoRoot "assets/birds/birds-catalog.json"
 $manifestPath = Join-Path $repoRoot "assets/birds/photo-manifest.json"
 
 $catalogOutput | ConvertTo-Json -Depth 8 | Set-Content -Path $catalogPath -Encoding utf8
-([ordered]@{ speciesPhotos = $manifest }) | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding utf8
+([ordered]@{ speciesPhotos = $manifest; speciesNotes = $notesManifest }) | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding utf8
 
 Write-Host "Bird catalog synced. Families:" $families.Count
 Write-Host "Photo manifest entries:" $manifest.Count
