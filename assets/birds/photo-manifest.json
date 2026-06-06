@@ -68,9 +68,11 @@
                                                     "IMG_2400.JPEG"
                                                 ],
                           "cormorants-and-shags--double-crested-cormorant":  [
+                                                                                 "main_double-crested-cormorant.JPG",
                                                                                  "IMG_9190.JPEG"
                                                                              ],
                           "cormorants-and-shags--neotropic-cormorant":  [
+                                                                            "main_neotropic-cormorant.JPG",
                                                                             "IMG_9856.JPEG"
                                                                         ],
                           "pelicans--brown-pelican":  [
@@ -120,6 +122,7 @@
                                                  "IMG_0461.JPG"
                                              ],
                           "hawks-eagles-and-kites--mississippi-kite":  [
+                                                                           "main_mississippi-kite.JPG",
                                                                            "IMG_9549.JPEG"
                                                                        ],
                           "hawks-eagles-and-kites--red-shouldered-hawk":  [
@@ -134,8 +137,14 @@
                                                                      "IMG_9694.JPEG"
                                                                  ],
                           "woodpeckers--downy-woodpecker":  [
+                                                                "main_downy-woodpecker.JPG",
                                                                 "IMG_9246.JPEG"
                                                             ],
+                          "tyrant-flycatchers--great-crested-flycatcher":  [
+                                                                               "main_great-crested-flycatcher.JPG",
+                                                                               "IMG_0610.JPG",
+                                                                               "IMG_0614.JPG"
+                                                                           ],
                           "tyrant-flycatchers--eastern-kingbird":  [
                                                                        "IMG_9288.JPEG",
                                                                        "IMG_9725.JPEG"
@@ -164,6 +173,7 @@
                                                           "IMG_9283.JPEG"
                                                       ],
                           "wrens--carolina-wren":  [
+                                                       "main_carolina-wren.JPG",
                                                        "IMG_9210.JPEG"
                                                    ],
                           "mockingbirds-and-thrashers--brown-thrasher":  [
@@ -192,6 +202,7 @@
                                                                             "IMG_9711.JPEG"
                                                                         ],
                           "troupials-and-allies--red-winged-blackbird":  [
+                                                                             "main_red-winged-blackbird.JPG",
                                                                              "IMG_0423.JPG",
                                                                              "IMG_9166.JPEG"
                                                                          ],
@@ -209,6 +220,17 @@
                                                                            "IMG_9377.JPEG",
                                                                            "IMG_9394.JPEG"
                                                                        ],
+                          "new-world-warblers--pine-warbler":  [
+                                                                   "main_pine-warbler.JPG",
+                                                                   "IMG_0581.JPG"
+                                                               ],
+                          "cardinals-and-allies--summer-tanager":  [
+                                                                       "main_summer-tanager.JPG",
+                                                                       "IMG_0600.JPG",
+                                                                       "IMG_0601.JPG",
+                                                                       "IMG_0602.JPG",
+                                                                       "IMG_0605.JPG"
+                                                                   ],
                           "cardinals-and-allies--scarlet-tanager":  [
                                                                         "main-scarlet-tanager.JPG",
                                                                         "IMG_0502.JPG"

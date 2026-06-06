@@ -117,7 +117,13 @@
   }
 
   function renderFamilies(catalog, manifest) {
-    rootEl.innerHTML = catalog.families
+    const sortedFamilies = [...catalog.families].sort((a, b) => {
+      const nameA = (a.name || a.family || "Unknown family").toLowerCase();
+      const nameB = (b.name || b.family || "Unknown family").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    rootEl.innerHTML = sortedFamilies
       .map((family, index) => {
         const familyId = `family-${index + 1}`;
         const familyName = family.name || family.family || "Unknown family";
