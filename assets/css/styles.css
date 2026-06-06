@@ -436,10 +436,6 @@ h1 {
   gap: 0.45rem;
 }
 
-.bird-note h3 {
-  font-size: 1rem;
-}
-
 .bird-note-text {
   color: #dddddd;
   white-space: pre-line;
