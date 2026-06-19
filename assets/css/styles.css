@@ -415,8 +415,7 @@ h1 {
   max-height: min(70vh, 760px);
   object-fit: contain;
   display: block;
-  transition: transform 0.1s ease-out;
-  transform-origin: center;
+  transition: width 120ms ease-out;
 }
 
 .bird-nav {

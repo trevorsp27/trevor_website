@@ -79,9 +79,11 @@
 
       function resetZoom() {
         currentZoom = 1;
-        imageEl.style.transform = "scale(1)";
+        imageEl.style.width = '100%';
+        imageEl.style.height = 'auto';
+        imageEl.style.transform = '';
         const photoStage = imageEl.parentElement;
-        photoStage.classList.remove("zoomed");
+        photoStage.classList.remove('zoomed');
         photoStage.scrollLeft = 0;
         photoStage.scrollTop = 0;
       }
@@ -110,10 +112,9 @@
         currentIndex = (currentIndex + 1) % files.length;
         renderCurrentPhoto();
       }
-function handleZoom(event) {
+      function handleZoom(event) {
         event.preventDefault();
         const photoStage = imageEl.parentElement;
-      imageEl.parentElement.addEventListener("wheel", handleZoom, { passive: false });
         const rect = photoStage.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
@@ -125,27 +126,36 @@ function handleZoom(event) {
           return;
         }
 
+        const prevZoom = currentZoom;
         currentZoom = newZoom;
-        imageEl.style.transform = `scale(${currentZoom})`;
+
+        // Use width to adjust layout so scrollbars work reliably
+        const newWidthPercent = currentZoom * 100;
+        imageEl.style.width = `${newWidthPercent}%`;
+        imageEl.style.height = 'auto';
 
         if (currentZoom > 1) {
-          photoStage.classList.add("zoomed");
+          photoStage.classList.add('zoomed');
           setTimeout(() => {
-            const scrollX = (x / rect.width) * (imageEl.width * currentZoom - rect.width);
-            const scrollY = (y / rect.height) * (imageEl.height * currentZoom - rect.height);
+            const imgClientWidth = imageEl.clientWidth;
+            const imgClientHeight = imageEl.clientHeight;
+            const scrollX = (x / rect.width) * (imgClientWidth - rect.width);
+            const scrollY = (y / rect.height) * (imgClientHeight - rect.height);
             photoStage.scrollLeft = Math.max(0, scrollX - x);
             photoStage.scrollTop = Math.max(0, scrollY - y);
           }, 0);
         } else {
-          photoStage.classList.remove("zoomed");
+          photoStage.classList.remove('zoomed');
           photoStage.scrollLeft = 0;
           photoStage.scrollTop = 0;
+          imageEl.style.width = '100%';
         }
       }
 
       
       prevButtonEl.addEventListener("click", showPrevious);
       nextButtonEl.addEventListener("click", showNext);
+      imageEl.parentElement.addEventListener("wheel", handleZoom, { passive: false });
 
       document.addEventListener("keydown", (event) => {
         if (event.key === "ArrowLeft") {
