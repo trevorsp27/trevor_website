@@ -74,13 +74,20 @@
 
       let currentIndex = 0;
       let currentZoom = 1;
+      let currentTx = 0;
+      let currentTy = 0;
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragStartTx = 0;
+      let dragStartTy = 0;
       const minZoom = 1;
       const maxZoom = 5;
 
       function resetZoom() {
         currentZoom = 1;
-        imageEl.style.width = '100%';
-        imageEl.style.height = 'auto';
+        currentTx = 0;
+        currentTy = 0;
         imageEl.style.transform = '';
         const photoStage = imageEl.parentElement;
         photoStage.classList.remove('zoomed');
@@ -112,6 +119,10 @@
         currentIndex = (currentIndex + 1) % files.length;
         renderCurrentPhoto();
       }
+      function applyTransform() {
+        imageEl.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentZoom})`;
+      }
+
       function handleZoom(event) {
         event.preventDefault();
         const photoStage = imageEl.parentElement;
@@ -126,37 +137,72 @@
           return;
         }
 
+        // set transform-origin so scaling centers at cursor
+        imageEl.style.transformOrigin = `${(x / rect.width) * 100}% ${(y / rect.height) * 100}%`;
+
+        // adjust translate so the point under cursor stays roughly fixed
         const prevZoom = currentZoom;
         currentZoom = newZoom;
 
-        // Use width to adjust layout so scrollbars work reliably
-        const newWidthPercent = currentZoom * 100;
-        imageEl.style.width = `${newWidthPercent}%`;
-        imageEl.style.height = 'auto';
+        // When zooming, scale current translation proportionally
+        currentTx = currentTx * (currentZoom / prevZoom);
+        currentTy = currentTy * (currentZoom / prevZoom);
+
+        // small nudge so the cursor-centered point stays nearer the cursor
+        const dx = (x - rect.width / 2) * (1 - currentZoom / prevZoom) * 0.2;
+        const dy = (y - rect.height / 2) * (1 - currentZoom / prevZoom) * 0.2;
+        currentTx += dx;
+        currentTy += dy;
+
+        applyTransform();
 
         if (currentZoom > 1) {
           photoStage.classList.add('zoomed');
-          setTimeout(() => {
-            const imgClientWidth = imageEl.clientWidth;
-            const imgClientHeight = imageEl.clientHeight;
-            const scrollX = (x / rect.width) * (imgClientWidth - rect.width);
-            const scrollY = (y / rect.height) * (imgClientHeight - rect.height);
-            photoStage.scrollLeft = Math.max(0, scrollX - x);
-            photoStage.scrollTop = Math.max(0, scrollY - y);
-          }, 0);
         } else {
           photoStage.classList.remove('zoomed');
-          photoStage.scrollLeft = 0;
-          photoStage.scrollTop = 0;
-          imageEl.style.width = '100%';
+          currentTx = 0;
+          currentTy = 0;
+          applyTransform();
         }
       }
 
       
       prevButtonEl.addEventListener("click", showPrevious);
       nextButtonEl.addEventListener("click", showNext);
-      imageEl.parentElement.addEventListener("wheel", handleZoom, { passive: false });
+      const photoStage = imageEl.parentElement;
+      photoStage.addEventListener("wheel", handleZoom, { passive: false });
       imageEl.addEventListener("wheel", handleZoom, { passive: false });
+
+      // pointer-based panning when zoomed
+      photoStage.addEventListener('pointerdown', (e) => {
+        if (currentZoom <= 1) return;
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        dragStartTx = currentTx;
+        dragStartTy = currentTy;
+        photoStage.classList.add('dragging');
+        photoStage.setPointerCapture(e.pointerId);
+      });
+
+      photoStage.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        currentTx = dragStartTx + dx;
+        currentTy = dragStartTy + dy;
+        applyTransform();
+      });
+
+      const endDrag = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        photoStage.classList.remove('dragging');
+        try { photoStage.releasePointerCapture(e.pointerId); } catch (err) {}
+      };
+
+      photoStage.addEventListener('pointerup', endDrag);
+      photoStage.addEventListener('pointercancel', endDrag);
 
       document.addEventListener("keydown", (event) => {
         if (event.key === "ArrowLeft") {

@@ -410,6 +410,14 @@ h1 {
   cursor: zoom-out;
 }
 
+.bird-photo-stage.zoomed img {
+  cursor: grab;
+}
+
+.bird-photo-stage.zoomed.dragging img {
+  cursor: grabbing;
+}
+
 .bird-photo-stage img {
   width: 100%;
   max-height: min(70vh, 760px);
