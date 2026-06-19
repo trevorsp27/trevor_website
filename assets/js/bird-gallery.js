@@ -156,6 +156,7 @@
       prevButtonEl.addEventListener("click", showPrevious);
       nextButtonEl.addEventListener("click", showNext);
       imageEl.parentElement.addEventListener("wheel", handleZoom, { passive: false });
+      imageEl.addEventListener("wheel", handleZoom, { passive: false });
 
       document.addEventListener("keydown", (event) => {
         if (event.key === "ArrowLeft") {
