@@ -400,8 +400,14 @@ h1 {
   margin: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow: auto;
   background: #0d0d0d;
+  position: relative;
+  cursor: zoom-in;
+}
+
+.bird-photo-stage.zoomed {
+  cursor: zoom-out;
 }
 
 .bird-photo-stage img {
@@ -409,6 +415,8 @@ h1 {
   max-height: min(70vh, 760px);
   object-fit: contain;
   display: block;
+  transition: transform 0.1s ease-out;
+  transform-origin: center;
 }
 
 .bird-nav {

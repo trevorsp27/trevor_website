@@ -73,6 +73,18 @@
       }
 
       let currentIndex = 0;
+      let currentZoom = 1;
+      const minZoom = 1;
+      const maxZoom = 5;
+
+      function resetZoom() {
+        currentZoom = 1;
+        imageEl.style.transform = "scale(1)";
+        const photoStage = imageEl.parentElement;
+        photoStage.classList.remove("zoomed");
+        photoStage.scrollLeft = 0;
+        photoStage.scrollTop = 0;
+      }
 
       function renderCurrentPhoto() {
         const fileName = files[currentIndex];
@@ -86,6 +98,7 @@
         const hasMultiplePhotos = files.length > 1;
         prevButtonEl.hidden = !hasMultiplePhotos;
         nextButtonEl.hidden = !hasMultiplePhotos;
+        resetZoom();
       }
 
       function showPrevious() {
@@ -97,7 +110,40 @@
         currentIndex = (currentIndex + 1) % files.length;
         renderCurrentPhoto();
       }
+function handleZoom(event) {
+        event.preventDefault();
+        const photoStage = imageEl.parentElement;
+      imageEl.parentElement.addEventListener("wheel", handleZoom, { passive: false });
+        const rect = photoStage.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
 
+        const zoomDelta = event.deltaY > 0 ? 0.85 : 1.15;
+        const newZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom * zoomDelta));
+
+        if (newZoom === currentZoom) {
+          return;
+        }
+
+        currentZoom = newZoom;
+        imageEl.style.transform = `scale(${currentZoom})`;
+
+        if (currentZoom > 1) {
+          photoStage.classList.add("zoomed");
+          setTimeout(() => {
+            const scrollX = (x / rect.width) * (imageEl.width * currentZoom - rect.width);
+            const scrollY = (y / rect.height) * (imageEl.height * currentZoom - rect.height);
+            photoStage.scrollLeft = Math.max(0, scrollX - x);
+            photoStage.scrollTop = Math.max(0, scrollY - y);
+          }, 0);
+        } else {
+          photoStage.classList.remove("zoomed");
+          photoStage.scrollLeft = 0;
+          photoStage.scrollTop = 0;
+        }
+      }
+
+      
       prevButtonEl.addEventListener("click", showPrevious);
       nextButtonEl.addEventListener("click", showNext);
 
