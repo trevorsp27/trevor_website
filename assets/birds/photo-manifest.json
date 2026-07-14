@@ -23,6 +23,9 @@
                                                                           "IMG_3528.JPG",
                                                                           "IMG_9181.JPEG"
                                                                       ],
+                          "pheasants-grouse-and-allies--wild-turkey":  [
+                                                                           "IMG_0213.JPEG"
+                                                                       ],
                           "pheasants-grouse-and-allies--domestic-chicken":  [
                                                                                 "IMG_7270.JPEG"
                                                                             ],
@@ -47,6 +50,9 @@
                                                                                "main_gallinule.JPG",
                                                                                "IMG_0683.JPG"
                                                                            ],
+                          "cranes--sandhill-crane":  [
+                                                         "IMG_0202.JPEG"
+                                                     ],
                           "stilts-and-avocets--black-necked-stilt":  [
                                                                          "IMG_0445.JPG"
                                                                      ],
@@ -67,6 +73,10 @@
                                                                           "IMG_0473.JPG",
                                                                           "IMG_0474.JPG"
                                                                       ],
+                          "gulls-terns-and-skimmers--ring-billed-gull":  [
+                                                                             "IMG_0058.JPEG",
+                                                                             "IMG_0070.JPEG"
+                                                                         ],
                           "anhingas--anhinga":  [
                                                     "main_anhina.JPEG",
                                                     "IMG_0734.JPG",
@@ -143,8 +153,9 @@
                                                                            "IMG_9959.JPEG"
                                                                        ],
                           "hawks-eagles-and-kites--red-shouldered-hawk":  [
-                                                                              "main_redshoulderedhawk.JPG",
+                                                                              "main_redshoulderedhawk.JPEG",
                                                                               "IMG_0648.JPG",
+                                                                              "IMG_12345.JPG",
                                                                               "IMG_9676.JPEG"
                                                                           ],
                           "hawks-eagles-and-kites--red-tailed-hawk":  [
@@ -162,6 +173,10 @@
                                                                 "main_downy-woodpecker.JPG",
                                                                 "IMG_9246.JPEG"
                                                             ],
+                          "falcons-and-caracaras--american-kestrel":  [
+                                                                          "IMG_0554.JPEG",
+                                                                          "IMG_2068.JPEG"
+                                                                      ],
                           "tyrant-flycatchers--great-crested-flycatcher":  [
                                                                                "main_great-crested-flycatcher.JPG",
                                                                                "IMG_0610.JPG",
@@ -171,6 +186,10 @@
                                                                        "IMG_9288.JPEG",
                                                                        "IMG_9725.JPEG"
                                                                    ],
+                          "tyrant-flycatchers--eastern-phoebe":  [
+                                                                     "IMG_0139.JPEG",
+                                                                     "IMG_0140.JPEG"
+                                                                 ],
                           "vireos-shrike-babblers-and-erpornis--white-eyed-vireo":  [
                                                                                         "IMG_9219.JPEG"
                                                                                     ],
@@ -179,6 +198,10 @@
                                                                    "IMG_9320.JPEG",
                                                                    "IMG_9672.JPEG"
                                                                ],
+                          "crows-jays-and-magpies--clark-s-nutcracker":  [
+                                                                             "IMG_0335.JPEG",
+                                                                             "IMG_0363.JPEG"
+                                                                         ],
                           "crows-jays-and-magpies--american-crow":  [
                                                                         "IMG_9345.JPEG"
                                                                     ],
@@ -192,6 +215,8 @@
                                                           "IMG_0735.JPG"
                                                       ],
                           "swallows--barn-swallow":  [
+                                                         "main_barnswallow.JPEG",
+                                                         "IMG_0144.JPEG",
                                                          "IMG_9668.JPEG"
                                                      ],
                           "waxwings--cedar-waxwing":  [
@@ -229,6 +254,14 @@
                                                                             "main_housefinch.JPEG",
                                                                             "IMG_9711.JPEG"
                                                                         ],
+                          "new-world-sparrows--chipping-sparrow":  [
+                                                                       "IMG_0073.JPEG"
+                                                                   ],
+                          "new-world-sparrows--song-sparrow":  [
+                                                                   "IMG_0085.JPEG",
+                                                                   "IMG_0088.JPEG",
+                                                                   "IMG_0116.JPEG"
+                                                               ],
                           "troupials-and-allies--red-winged-blackbird":  [
                                                                              "main_red-winged-blackbird.JPG",
                                                                              "IMG_0423.JPG",
@@ -268,10 +301,15 @@
                                                                       ]
                       },
     "speciesNotes":  {
+                         "cranes--sandhill-crane":  "SANDHILL CRANE!! Saw it in some random prairie in Montana while on road trip with Rory. We were freaking out. There were around 5 of them in the flock.",
+                         "gulls-terns-and-skimmers--ring-billed-gull":  "Spotted these guys near Lake Michigan after Electric Forest. Pretty birds.",
                          "herons-egrets-and-bitterns--yellow-crowned-night-heron":  "Alise took these photos, we were walking the nature trails in Bayou Sauvage :)",
                          "ibises-and-spoonbills--roseate-spoonbill":  "Taken at the LSU lakes behind Blake Hall near Laville. These are my favorite birds I love them!",
                          "osprey--osprey":  "There are so many Osprey nests at Lake Martin. It\u0027s magnificent. Their calls are so interesting. They mate for life, and I saw so many cute couples. Lovely birds.",
+                         "hawks-eagles-and-kites--red-shouldered-hawk":  "Indiana marsh on side of interstate on way to visit Kammy Wammy in Chicago.",
+                         "falcons-and-caracaras--american-kestrel":  "Washington Prairie. These things are so cool they hover in place like a hummingbird and their tail split is awesome.",
                          "tyrant-flycatchers--great-crested-flycatcher":  "Laban, Nathan, and I went birding after watching Listers documentary in Burden in Baton Rouge and saw this awesome bird. We were so excited",
+                         "crows-jays-and-magpies--clark-s-nutcracker":  "Mirror Lake in Banff. So many of these guys crackin nuts.",
                          "cardinals-and-allies--summer-tanager":  "Laban, Nathan, and I were birding in Burden. We think this is a summer tanager, but aren\u0027t positive."
                      }
 }
