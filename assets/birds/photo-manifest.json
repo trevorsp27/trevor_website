@@ -16,6 +16,12 @@
                           "ducks-geese-and-waterfowl--lesser-scaup":  [
                                                                           "IMG_9446.JPEG"
                                                                       ],
+                          "ducks-geese-and-waterfowl--bufflehead":  [
+                                                                        "IMG_0530.JPEG"
+                                                                    ],
+                          "ducks-geese-and-waterfowl--common-goldeneye":  [
+                                                                              "IMG_0519.JPEG"
+                                                                          ],
                           "ducks-geese-and-waterfowl--domestic-duck":  [
                                                                            "IMG_9182.JPEG"
                                                                        ],
@@ -77,6 +83,9 @@
                                                                              "IMG_0058.JPEG",
                                                                              "IMG_0070.JPEG"
                                                                          ],
+                          "loons--common-loon":  [
+                                                     "main_loon.png"
+                                                 ],
                           "anhingas--anhinga":  [
                                                     "main_anhina.JPEG",
                                                     "IMG_0734.JPG",
@@ -211,6 +220,11 @@
                           "tits-chickadees-and-titmice--tufted-titmouse":  [
                                                                                "IMG_9217.JPEG"
                                                                            ],
+                          "swallows--tree-swallow":  [
+                                                         "IMG_0191.JPEG",
+                                                         "IMG_0192.JPEG",
+                                                         "IMG_0193.JPEG"
+                                                     ],
                           "swallows--purple-martin":  [
                                                           "IMG_0735.JPG"
                                                       ],
@@ -254,6 +268,10 @@
                                                                             "main_housefinch.JPEG",
                                                                             "IMG_9711.JPEG"
                                                                         ],
+                          "finches-euphonias-and-allies--american-goldfinch":  [
+                                                                                   "main_americangoldfinch.JPEG",
+                                                                                   "IMG_0172.JPEG"
+                                                                               ],
                           "new-world-sparrows--chipping-sparrow":  [
                                                                        "IMG_0073.JPEG"
                                                                    ],
@@ -262,6 +280,9 @@
                                                                    "IMG_0088.JPEG",
                                                                    "IMG_0116.JPEG"
                                                                ],
+                          "new-world-sparrows--spotted-towhee":  [
+                                                                     "main_spottedtowhee.png"
+                                                                 ],
                           "troupials-and-allies--red-winged-blackbird":  [
                                                                              "main_red-winged-blackbird.JPG",
                                                                              "IMG_0423.JPG",
@@ -281,10 +302,16 @@
                                                                            "IMG_9377.JPEG",
                                                                            "IMG_9394.JPEG"
                                                                        ],
+                          "new-world-warblers--yellow-warbler":  [
+                                                                     "IMG_0180.JPEG"
+                                                                 ],
                           "new-world-warblers--pine-warbler":  [
                                                                    "main_pine-warbler.JPG",
                                                                    "IMG_0581.JPG"
                                                                ],
+                          "new-world-warblers--yellow-rumped-warbler":  [
+                                                                            "IMG_0316.JPEG"
+                                                                        ],
                           "cardinals-and-allies--summer-tanager":  [
                                                                        "main_summer-tanager.JPG",
                                                                        "IMG_0600.JPG",
@@ -301,6 +328,7 @@
                                                                       ]
                       },
     "speciesNotes":  {
+                         "ducks-geese-and-waterfowl--common-goldeneye":  "Rob and Janet helped me identify these Goldeneye\u0027s at Whiteswan Lake near Cranbrook. Fun times.",
                          "cranes--sandhill-crane":  "SANDHILL CRANE!! Saw it in some random prairie in Montana while on road trip with Rory. We were freaking out. There were around 5 of them in the flock.",
                          "gulls-terns-and-skimmers--ring-billed-gull":  "Spotted these guys near Lake Michigan after Electric Forest. Pretty birds.",
                          "herons-egrets-and-bitterns--yellow-crowned-night-heron":  "Alise took these photos, we were walking the nature trails in Bayou Sauvage :)",
@@ -310,6 +338,8 @@
                          "falcons-and-caracaras--american-kestrel":  "Washington Prairie. These things are so cool they hover in place like a hummingbird and their tail split is awesome.",
                          "tyrant-flycatchers--great-crested-flycatcher":  "Laban, Nathan, and I went birding after watching Listers documentary in Burden in Baton Rouge and saw this awesome bird. We were so excited",
                          "crows-jays-and-magpies--clark-s-nutcracker":  "Mirror Lake in Banff. So many of these guys crackin nuts.",
+                         "new-world-sparrows--spotted-towhee":  "Kept hearing this guy near our campsite in Washing in that weird prairie. The same night we got destroyed by those mosquitos.",
+                         "new-world-warblers--yellow-rumped-warbler":  "Spotted this lil guy at Banff in Canada.",
                          "cardinals-and-allies--summer-tanager":  "Laban, Nathan, and I were birding in Burden. We think this is a summer tanager, but aren\u0027t positive."
                      }
 }
