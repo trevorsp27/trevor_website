@@ -8,6 +8,7 @@ This is a GitHub Pages-ready personal website starter.
 - `pages/publications.html` - Publications page
 - `pages/experience.html` - Work experience page
 - `pages/music.html` - Music page
+- `pages/bounce-bots.html` - Bounce Bots, a live multiplayer puzzle game
 - `pages/_template.html` - Copy this to create a new page quickly
 - `assets/js/site-data.js` - Single source of truth for site name, intro text, nav links, and homepage cards
 - `assets/css/styles.css` - Shared design system
@@ -29,6 +30,47 @@ This is a GitHub Pages-ready personal website starter.
 ```
 
 4. Save. The nav and home page cards update automatically.
+
+## Bounce Bots
+
+A live multiplayer puzzle game at `pages/bounce-bots.html`. Robots slide until they hit
+something; players race to find the shortest route to the target, bid a move count, then
+prove it.
+
+The site stays fully static. There is no game server: the lobby leader's browser is the
+authority and other players connect straight to it over WebRTC via PeerJS. Boards are
+generated deterministically from the four-character lobby code, so every player builds an
+identical board from a shared seed rather than downloading one.
+
+Source lives in `assets/js/bounce-bots/`:
+
+- `constants.js` - board vocabulary shared by every other module
+- `rng.js` - seeded PRNG, so a lobby code always yields the same board
+- `board.js` - wall, target, and diagonal generation
+- `rules.js` - movement simulation (pure, no DOM)
+- `solver.js` - BFS used to guarantee each round is solvable and not a one-move gimme
+- `game.js` - authoritative round state machine, run only by the host
+- `net.js` - PeerJS wrapper
+- `ui.js` - canvas renderer
+- `main.js` - page wiring and input
+
+### Running the tests
+
+The game logic has no DOM or network dependencies, so it runs under Node directly:
+
+```bash
+npm test
+```
+
+### Working on it locally
+
+ES modules will not load over `file://`. Serve the folder over HTTP:
+
+```bash
+python -m http.server 8765
+```
+
+Then open `http://localhost:8765/pages/bounce-bots.html`.
 
 ## Publish with GitHub Pages
 

@@ -1,0 +1,361 @@
+/* Bounce Bots. Everything here is prefixed .bb-* and scoped to its own page,
+   so the shared design system in styles.css stays untouched. Colours come from
+   the site's existing custom properties. */
+
+.bb-status {
+  min-height: 1.2rem;
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* ---- forms ------------------------------------------------------------- */
+
+.bb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.bb-field label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bb-field input,
+.bb-field select {
+  padding: 0.5rem 0.65rem;
+  background: var(--brand-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.bb-field input:focus-visible,
+.bb-field select:focus-visible {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.bb-modes {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.bb-mode,
+.bb-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.bb-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 1rem;
+  align-items: end;
+}
+
+.bb-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0.6rem 0 0;
+}
+
+kbd {
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--brand-soft);
+  font-family: inherit;
+  font-size: 0.85em;
+}
+
+/* ---- buttons ----------------------------------------------------------- */
+
+.bb-btn {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.bb-btn:hover,
+.bb-btn:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.bb-btn-primary {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.bb-btn-primary:hover,
+.bb-btn-primary:focus-visible {
+  background: var(--brand);
+  color: var(--bg);
+}
+
+.bb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+/* ---- layout ------------------------------------------------------------ */
+
+.bb-game {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
+
+.bb-board-wrap {
+  position: sticky;
+  top: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem;
+}
+
+#bb-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bb-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.bb-panel {
+  margin: 0;
+  padding: 0.9rem 1rem;
+}
+
+.bb-panel h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- status readout ---------------------------------------------------- */
+
+.bb-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.bb-round {
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bb-timer {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-timer.is-urgent {
+  color: #e5484d;
+}
+
+.bb-phase {
+  margin: 0.4rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.4;
+}
+
+.bb-target {
+  margin: 0.5rem 0 0;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.bb-note,
+.bb-moves {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-code {
+  font-family: "Bitter", serif;
+  letter-spacing: 0.22em;
+  color: var(--ink);
+}
+
+/* ---- robot picker ------------------------------------------------------ */
+
+.bb-robots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.bb-robot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.bb-robot-btn .bb-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--bb-robot, #fff);
+}
+
+.bb-robot-btn.is-active {
+  border-color: var(--bb-robot, #fff);
+  background: var(--brand-soft);
+}
+
+/* ---- bidding ----------------------------------------------------------- */
+
+.bb-bid {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.bb-bid label {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.bb-bid input {
+  width: 4.5rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--brand-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+/* ---- players ----------------------------------------------------------- */
+
+.bb-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.bb-player {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  font-size: 0.92rem;
+}
+
+.bb-player.is-you {
+  border-color: var(--line);
+}
+
+.bb-player.is-offline {
+  opacity: 0.45;
+}
+
+.bb-player-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-bid-chip {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.bb-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-tags {
+  grid-column: 1 / -1;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- narrow screens ---------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .bb-game {
+    grid-template-columns: 1fr;
+  }
+
+  .bb-board-wrap {
+    position: static;
+  }
+}

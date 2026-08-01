@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trevor | Bounce Bots</title>
+    <meta
+      name="description"
+      content="Bounce Bots: a browser puzzle race where robots slide until they hit something. Play live with friends in a shared lobby."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="../assets/profile-favicon.png?v=20260526e" />
+    <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
+    <link rel="stylesheet" href="../assets/css/bounce-bots.css?v=20260801a" />
+    <script src="../assets/js/site-data.js?v=20260801a" defer></script>
+    <script src="../assets/js/site.js?v=20260602a" defer></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script type="module" src="../assets/js/bounce-bots/main.js?v=20260801a"></script>
+  </head>
+  <body data-page="bounce-bots">
+    <div class="site-shell">
+      <header class="site-header reveal">
+        <a class="logo" href="/" data-site-name>Trevor's Room</a>
+        <nav aria-label="Primary">
+          <ul data-nav></ul>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero reveal" aria-labelledby="bb-title">
+          <p class="kicker">Game</p>
+          <h1 id="bb-title">Bounce Bots</h1>
+          <p>
+            Five robots slide until they crash into something. Find the shortest route to the
+            target, bid the number of moves out loud, and prove it. Everyone plays the same board
+            at the same time.
+          </p>
+        </section>
+
+        <p class="bb-status" id="bb-status" role="status" aria-live="polite"></p>
+
+        <!-- Lobby setup -->
+        <section class="panel reveal" id="bb-setup" aria-labelledby="bb-setup-title">
+          <h2 id="bb-setup-title">Start or join a lobby</h2>
+
+          <div class="bb-field">
+            <label for="bb-name">Your name</label>
+            <input id="bb-name" type="text" maxlength="18" placeholder="Trevor" />
+          </div>
+
+          <div class="bb-modes" role="radiogroup" aria-label="Lobby mode">
+            <label class="bb-mode">
+              <input type="radio" name="bb-mode" id="bb-mode-host" checked />
+              <span>Create a lobby</span>
+            </label>
+            <label class="bb-mode">
+              <input type="radio" name="bb-mode" id="bb-mode-join" />
+              <span>Join a lobby</span>
+            </label>
+          </div>
+
+          <div id="bb-host-fields">
+            <div class="bb-settings">
+              <div class="bb-field">
+                <label for="bb-difficulty">Board difficulty</label>
+                <select id="bb-difficulty">
+                  <option value="easy">Easy — dense walls</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="hard">Hard — sparse walls</option>
+                </select>
+              </div>
+
+              <div class="bb-field">
+                <label for="bb-rounds">Rounds</label>
+                <input id="bb-rounds" type="number" min="1" max="25" value="10" />
+              </div>
+
+              <div class="bb-field">
+                <label for="bb-bid-seconds">Bid clock (seconds)</label>
+                <input id="bb-bid-seconds" type="number" min="15" max="180" value="60" />
+              </div>
+
+              <label class="bb-check">
+                <input type="checkbox" id="bb-diagonals" />
+                <span>Include diagonal deflectors</span>
+              </label>
+            </div>
+
+            <p class="bb-hint">
+              Walls are generated once per lobby and stay put all game. Robots and the target
+              re-roll every round.
+            </p>
+
+            <button class="bb-btn bb-btn-primary" id="bb-create" type="button">
+              Create lobby
+            </button>
+          </div>
+
+          <div id="bb-join-fields" hidden>
+            <div class="bb-field">
+              <label for="bb-join-code">Lobby code</label>
+              <input
+                id="bb-join-code"
+                type="text"
+                maxlength="4"
+                placeholder="K4TQ"
+                autocapitalize="characters"
+                spellcheck="false"
+              />
+            </div>
+            <button class="bb-btn bb-btn-primary" id="bb-join" type="button">Join lobby</button>
+          </div>
+        </section>
+
+        <!-- Game -->
+        <section class="bb-game" id="bb-game" hidden aria-labelledby="bb-phase">
+          <div class="bb-board-wrap">
+            <canvas id="bb-canvas" width="640" height="640" aria-label="Game board"></canvas>
+          </div>
+
+          <aside class="bb-side">
+            <div class="panel bb-panel">
+              <div class="bb-headline">
+                <span class="bb-round" id="bb-round">Lobby</span>
+                <span class="bb-timer" id="bb-timer"></span>
+              </div>
+              <p class="bb-phase" id="bb-phase">Waiting in the lobby</p>
+              <p class="bb-target" id="bb-target">—</p>
+              <p class="bb-note" id="bb-note"></p>
+            </div>
+
+            <div class="panel bb-panel">
+              <h3>Robots</h3>
+              <div class="bb-robots" id="bb-robots"></div>
+              <p class="bb-moves" id="bb-moves"></p>
+              <p class="bb-hint">
+                Press <kbd>1</kbd>–<kbd>5</kbd> or click a robot to select it. Arrow keys move it.
+              </p>
+
+              <form class="bb-bid" id="bb-bid-form" hidden>
+                <label for="bb-bid-input">I can solve it in</label>
+                <input id="bb-bid-input" type="number" min="1" max="99" placeholder="5" />
+                <button class="bb-btn bb-btn-primary" type="submit">Bid</button>
+              </form>
+
+              <div class="bb-actions">
+                <button class="bb-btn" id="bb-reset" type="button" hidden>Reset board</button>
+                <button class="bb-btn" id="bb-pass" type="button" hidden>Pass</button>
+              </div>
+            </div>
+
+            <div class="panel bb-panel">
+              <h3>Players</h3>
+              <ul class="bb-players" id="bb-players"></ul>
+            </div>
+
+            <div class="panel bb-panel">
+              <h3>Lobby <span class="bb-code" id="bb-code"></span></h3>
+              <div class="bb-actions">
+                <button class="bb-btn" id="bb-copy" type="button">Copy invite link</button>
+              </div>
+              <div class="bb-actions" id="bb-host-controls" hidden>
+                <button class="bb-btn bb-btn-primary" id="bb-start" type="button">
+                  Start game
+                </button>
+                <button class="bb-btn" id="bb-lock" type="button" hidden>Lock bids</button>
+                <button class="bb-btn" id="bb-skip" type="button" hidden>Skip round</button>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="bb-rules-title">
+          <h2 id="bb-rules-title">How it works</h2>
+          <ul class="list">
+            <li>A robot slides in a straight line until a wall, the centre block, or another robot stops it. There is no stopping halfway.</li>
+            <li>Get the robot matching the target's colour onto the target. Star targets accept any robot.</li>
+            <li>While you are thinking, the board is your private sandbox — move whatever you like, nobody sees it.</li>
+            <li>The first bid starts a shared countdown. You can keep lowering your own bid until it runs out.</li>
+            <li>Lowest bid demonstrates first. Miss it, and the next-lowest bidder gets their shot.</li>
+            <li>Diagonal deflectors, when enabled, turn a robot ninety degrees and let it keep going — unless the robot matches the deflector's colour, in which case it passes straight through.</li>
+          </ul>
+          <p class="bb-hint">
+            An independent implementation, written from scratch and inspired by Alex Randolph's
+            board game Ricochet Robots. Not affiliated with or endorsed by its publishers.
+          </p>
+        </section>
+      </main>
+
+      <footer>
+        <p>&copy; <span data-year></span> <span data-owner>Trevor</span>. All rights reserved.</p>
+      </footer>
+    </div>
+  </body>
+</html>

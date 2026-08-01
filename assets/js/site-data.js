@@ -52,6 +52,13 @@ window.SITE_CONFIG = {
       path: "/pages/birds.html",
       summary: "Louisiana bird species grouped by family.",
       icon: "Birds"
+    },
+    {
+      id: "bounce-bots",
+      title: "Bounce Bots",
+      path: "/pages/bounce-bots.html",
+      summary: "A live multiplayer puzzle race. Create a lobby and play with friends.",
+      icon: "Game"
     }
   ]
 };
