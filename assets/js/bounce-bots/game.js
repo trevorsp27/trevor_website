@@ -32,6 +32,12 @@ const MIN_MOVES = 2;
 const SEARCH_DEPTH = 6;
 const ROUND_ATTEMPTS = 60;
 
+// WebRTC gives no reliable signal when a peer's tab is closed abruptly -- a
+// graceful close sends a teardown, but a killed tab sends nothing at all. So
+// clients report in on a timer and the host drops anyone who goes quiet.
+export const HEARTBEAT_MS = 3000;
+const PLAYER_TIMEOUT_MS = 10000;
+
 export class HostGame {
   constructor({ code, hostId, hostName, settings, onChange }) {
     this.code = code;
@@ -74,16 +80,44 @@ export class HostGame {
     const existing = this.players.get(id);
     if (existing) {
       existing.connected = true;
+      existing.lastSeen = Date.now();
       if (name) existing.name = name;
     } else {
       this.players.set(id, {
         id,
         name: name || "Player",
         score: 0,
-        connected: true
+        connected: true,
+        lastSeen: Date.now()
       });
     }
     this.changed();
+  }
+
+  // Called on every client ping. Deliberately does not emit a snapshot: with
+  // several players reporting in every few seconds, that would broadcast the
+  // whole game state constantly for no reason.
+  heartbeat(playerId) {
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    player.lastSeen = Date.now();
+    if (!player.connected) {
+      // Someone who went quiet and came back is playing again.
+      player.connected = true;
+      this.changed();
+    }
+  }
+
+  dropStalePlayers() {
+    const now = Date.now();
+    this.players.forEach((player) => {
+      // The host is running this loop, so it is by definition present.
+      if (player.id === this.hostId) return;
+      if (!player.connected) return;
+      if (now - player.lastSeen <= PLAYER_TIMEOUT_MS) return;
+      this.removePlayer(player.id);
+    });
   }
 
   removePlayer(id) {
@@ -355,6 +389,10 @@ export class HostGame {
   // ---- clock -------------------------------------------------------------
 
   tick() {
+    // Runs first: dropping a vanished demonstrator hands the turn on
+    // immediately instead of burning their whole demo clock.
+    this.dropStalePlayers();
+
     const now = Date.now();
 
     if (this.phase === PHASES.BIDDING && now >= this.bidDeadline) {

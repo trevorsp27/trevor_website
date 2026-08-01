@@ -54,6 +54,19 @@ Source lives in `assets/js/bounce-bots/`:
 - `ui.js` - canvas renderer
 - `main.js` - page wiring and input
 
+Clients ping the host every few seconds. WebRTC gives no reliable signal when a peer's
+tab is closed abruptly, so the host drops anyone who goes quiet for ten seconds rather
+than waiting on the transport to notice.
+
+### A note on caching
+
+GitHub Pages serves everything with `Cache-Control: max-age=600`, so edits go live within
+ten minutes on their own. The `?v=<date>` tokens on script and stylesheet tags make a
+change appear immediately instead. When you edit a *shared* file such as
+`assets/js/site-data.js`, bump its token in **every** page that loads it, or most of the
+site will keep reading a cached copy for up to ten minutes. The game's ES module imports
+carry no tokens and rely on the ten-minute expiry.
+
 ### Running the tests
 
 The game logic has no DOM or network dependencies, so it runs under Node directly:

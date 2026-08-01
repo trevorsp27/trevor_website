@@ -283,6 +283,70 @@ test("disconnected players are skipped in the demo order", () => {
   assert.equal(game.currentDemoId(), "bob");
 });
 
+test("a player who stops reporting in is dropped", () => {
+  const game = newGame();
+  game.addPlayer("ghost", "Ghost");
+
+  // Backdate the last heartbeat past the timeout.
+  game.players.get("ghost").lastSeen = Date.now() - 60000;
+  game.tick();
+
+  assert.equal(game.players.get("ghost").connected, false);
+  assert.equal(game.players.get("alice").connected, true, "live players stay");
+});
+
+test("a heartbeat keeps a player alive", () => {
+  const game = newGame();
+  game.players.get("alice").lastSeen = Date.now() - 60000;
+
+  game.heartbeat("alice");
+  game.tick();
+
+  assert.equal(game.players.get("alice").connected, true);
+});
+
+test("a returning player is marked connected again", () => {
+  const game = newGame();
+  game.players.get("alice").lastSeen = Date.now() - 60000;
+  game.tick();
+  assert.equal(game.players.get("alice").connected, false);
+
+  game.heartbeat("alice");
+  assert.equal(game.players.get("alice").connected, true);
+});
+
+test("the host is never dropped for silence", () => {
+  const game = newGame();
+  // The host never sends itself pings, so its lastSeen goes stale by design.
+  game.players.get("host").lastSeen = Date.now() - 600000;
+  game.tick();
+  assert.equal(game.players.get("host").connected, true);
+});
+
+test("a vanished demonstrator is dropped without burning the demo clock", () => {
+  const game = newGame();
+  game.start("host");
+
+  game.bid("alice", 3);
+  game.bids.get("alice").at = 1000;
+  game.bid("bob", 5);
+  game.bids.get("bob").at = 2000;
+  game.lockBids("host");
+  assert.equal(game.currentDemoId(), "alice");
+
+  // Alice's tab dies. Her demo deadline is still ~45s away.
+  game.players.get("alice").lastSeen = Date.now() - 60000;
+  game.tick();
+
+  assert.equal(game.currentDemoId(), "bob", "turn passes without waiting for the timeout");
+});
+
+test("heartbeats from an unknown peer are ignored", () => {
+  const game = newGame();
+  game.heartbeat("nobody");
+  assert.equal(game.players.has("nobody"), false);
+});
+
 test("the bidding clock expiring opens the demo phase", () => {
   const game = newGame();
   game.start("host");

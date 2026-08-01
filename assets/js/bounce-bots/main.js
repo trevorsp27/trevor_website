@@ -6,7 +6,7 @@
 
 import { generateBoard, makeLobbyCode } from "./board.js";
 import { applyMove } from "./rules.js";
-import { HostGame, PHASES, DEFAULT_SETTINGS } from "./game.js";
+import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js";
 import { createHost, createClient } from "./net.js";
 import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js";
 import { COLORS, ROBOT_COUNT } from "./constants.js";
@@ -30,7 +30,8 @@ const state = {
   // solution without anyone else seeing it.
   scratch: null,
   scratchMoves: 0,
-  scratchRound: -1
+  scratchRound: -1,
+  heartbeat: null
 };
 
 // ---------------------------------------------------------------------------
@@ -176,6 +177,10 @@ function startJoining() {
       state.net.send({ type: "join", name: state.name });
       showGame();
       setStatus(`Connected to ${code}. Waiting for the leader to start.`);
+
+      // Report in regularly so the host can tell a closed tab from a quiet one.
+      clearInterval(state.heartbeat);
+      state.heartbeat = setInterval(() => state.net?.send({ type: "ping" }), HEARTBEAT_MS);
     },
     onMessage: (message) => {
       if (message?.type === "state") {
@@ -197,6 +202,9 @@ function handleHostMessage(peerId, message) {
   if (!game || !message) return;
 
   switch (message.type) {
+    case "ping":
+      game.heartbeat(peerId);
+      break;
     case "join":
       game.addPlayer(peerId, String(message.name || "Player").slice(0, 18));
       // Tell the newcomer which player they are.
