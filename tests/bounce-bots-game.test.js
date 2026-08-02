@@ -189,6 +189,50 @@ test("solving within the bid scores a point and reveals the round", () => {
   assert.equal(game.lastRound.used, par);
 });
 
+test("a win leaves the solved arrangement on the board to celebrate", () => {
+  const game = newGame();
+  game.start("host");
+
+  const par = game.optimal.moves;
+  game.bid("alice", par);
+  game.lockBids("host");
+  playOptimal(game, "alice");
+
+  assert.equal(game.phase, PHASES.REVEAL);
+  assert.ok(isSolved(game.target, game.positions), "the winning position must survive the reveal");
+  assert.notDeepEqual(game.positions, game.startPositions, "it must not snap back to the start");
+  assert.ok(game.celebrateUntil > Date.now(), "a celebration window should be open");
+});
+
+test("an unsolved round resets the board and does not celebrate", () => {
+  const game = newGame();
+  game.start("host");
+
+  game.bid("alice", 3);
+  game.lockBids("host");
+  game.passDemo("alice");
+
+  assert.equal(game.phase, PHASES.REVEAL);
+  assert.deepEqual(game.positions, game.startPositions, "the board returns to the start");
+  assert.equal(game.celebrateUntil, 0, "nothing to celebrate");
+});
+
+test("the celebration fits inside the reveal window", () => {
+  const game = newGame();
+  game.start("host");
+
+  const par = game.optimal.moves;
+  game.bid("alice", par);
+  game.lockBids("host");
+  playOptimal(game, "alice");
+
+  // Otherwise the next round would start mid-animation.
+  assert.ok(
+    game.celebrateUntil <= game.revealDeadline,
+    "the celebration must finish before the round turns over"
+  );
+});
+
 test("running past the bid costs a point and ends the round", () => {
   const game = newGame();
   game.start("host");

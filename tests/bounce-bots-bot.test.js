@@ -195,6 +195,42 @@ test("the bot only releases the clock when it actually has a vote", () => {
   assert.ok(game.resignVotes.has("bot-1"), "with nobody searching, the bot agrees to move on");
 });
 
+test("bot moves are slow enough to follow", () => {
+  // The host ticks every 250ms, so anything faster than about a second reads
+  // as the board rearranging itself rather than a robot being moved.
+  Object.values(BOT_LEVELS).forEach((level) => {
+    assert.ok(
+      level.moveDelay >= 1000,
+      `${level.name} moves every ${level.moveDelay}ms, too fast to watch`
+    );
+  });
+});
+
+test("a bot pauses before its first move", () => {
+  const game = soloGame({ botLevel: 3 });
+  game.start("host");
+  runFor(game, 15000);
+  game.voteResign("host");
+
+  assert.equal(game.phase, PHASES.DEMO);
+  const before = game.positions.slice();
+
+  // One tick into its turn the bot should still be sizing up the board.
+  shiftDeadlines(game, 250);
+  game.tick();
+  assert.deepEqual(game.positions, before, "the bot should not move instantly");
+});
+
+test("even a long demonstration fits inside the demo clock", () => {
+  const slowest = BOT_LEVELS[1];
+  // Worst case: a padded bid played out one wrong move at a time.
+  const worstCaseMs = (12 + 1) * slowest.moveDelay;
+  assert.ok(
+    worstCaseMs < 45000,
+    `a full demonstration could take ${worstCaseMs}ms against a 45s clock`
+  );
+});
+
 test("every level is fully specified", () => {
   Object.values(BOT_LEVELS).forEach((level) => {
     assert.equal(typeof level.name, "string");

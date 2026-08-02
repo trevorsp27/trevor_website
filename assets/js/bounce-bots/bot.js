@@ -12,10 +12,14 @@
 //
 // Without the speed dial a hard bot is unbeatable and an easy one is trivial;
 // with it, difficulty is really "how much time do I get to think".
+//
+// moveDelay is deliberately NOT a difficulty dial -- it only controls how
+// watchable the demonstration is. Note the host ticks every 250ms, so any
+// delay is quantised to a multiple of that.
 
-import { Rng } from "./rng.js";
-import { applyMove } from "./rules.js";
-import { COLORS } from "./constants.js";
+import { Rng } from "./rng.js?v=20260802d";
+import { applyMove } from "./rules.js?v=20260802d";
+import { COLORS } from "./constants.js?v=20260802d";
 
 export const BOT_LEVELS = {
   1: {
@@ -25,7 +29,7 @@ export const BOT_LEVELS = {
     think: [16000, 30000],
     padding: [2, 4],
     fumble: 0.35,
-    moveDelay: 950
+    moveDelay: 1400
   },
   2: {
     id: 2,
@@ -34,7 +38,7 @@ export const BOT_LEVELS = {
     think: [8000, 17000],
     padding: [0, 2],
     fumble: 0.15,
-    moveDelay: 700
+    moveDelay: 1250
   },
   3: {
     id: 3,
@@ -43,7 +47,7 @@ export const BOT_LEVELS = {
     think: [3500, 9000],
     padding: [0, 0],
     fumble: 0,
-    moveDelay: 450
+    moveDelay: 1100
   }
 };
 
@@ -69,6 +73,7 @@ export class BotPlayer {
     this.plan = [];
     this.planStep = 0;
     this.nextMoveAt = 0;
+    this.demoStarted = false;
     this.hasResigned = false;
   }
 
@@ -122,6 +127,15 @@ export class BotPlayer {
   }
 
   demonstrate(game, now) {
+    // A beat before the first move, so viewers can read the starting position
+    // instead of watching a robot fly off the moment the turn hands over.
+    // An explicit flag rather than a sentinel value, since nextMoveAt is only
+    // meaningful once the turn has actually begun.
+    if (!this.demoStarted) {
+      this.demoStarted = true;
+      this.nextMoveAt = now + this.level.moveDelay;
+      return;
+    }
     if (now < this.nextMoveAt) return;
     this.nextMoveAt = now + this.level.moveDelay;
 

@@ -40,6 +40,10 @@ export const WILD = "wild";
 
 export const DIFFICULTIES = ["easy", "medium", "hard"];
 
+// How long the winning arrangement is celebrated before the reveal settles.
+// Shared so the host's timing and the renderer's animation cannot drift apart.
+export const CELEBRATE_MS = 2400;
+
 export function idx(x, y) {
   return y * SIZE + x;
 }

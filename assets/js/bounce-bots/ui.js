@@ -4,8 +4,8 @@
 // 400-odd edge segments as elements would mean a wrapper per cell and a lot of
 // fighting with border collapse; here it is a handful of stroked lines.
 
-import { SIZE, DIRS, N, E, S, W, COLORS, xOf, yOf } from "./constants.js";
-import { slide } from "./rules.js";
+import { SIZE, DIRS, N, E, S, W, COLORS, CELEBRATE_MS, xOf, yOf } from "./constants.js?v=20260802d";
+import { slide } from "./rules.js?v=20260802d";
 
 export const ROBOT_COLORS = {
   red: "#e5484d",
@@ -34,6 +34,8 @@ export class BoardView {
     this.target = null;
     this.selected = 0;
     this.dim = false;
+    this.celebrateUntil = 0;
+    this.celebrating = false;
 
     // Animation state: which robot is sliding, along what path, since when.
     this.anim = null;
@@ -58,14 +60,38 @@ export class BoardView {
   }
 
   // `dim` greys the board out when the viewer is watching rather than playing.
-  setState({ positions, target, dim = false }) {
+  setState({ positions, target, dim = false, celebrateUntil = 0 }) {
     if (positions && this.positions && this.board) {
       this.startAnimation(this.positions, positions);
     }
     this.positions = positions ? positions.slice() : null;
     this.target = target;
     this.dim = dim;
+
+    if (celebrateUntil !== this.celebrateUntil) {
+      this.celebrateUntil = celebrateUntil;
+      if (celebrateUntil > Date.now()) this.runCelebration();
+    }
     this.draw();
+  }
+
+  // Rings expanding out of the solved square. Drives its own frame loop rather
+  // than piggy-backing on the move animation, since the two can overlap: the
+  // winning robot is still sliding into place when the celebration starts.
+  runCelebration() {
+    if (this.celebrating) return;
+    this.celebrating = true;
+
+    const step = () => {
+      if (Date.now() >= this.celebrateUntil) {
+        this.celebrating = false;
+        this.draw();
+        return;
+      }
+      this.draw();
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   // Recover the slide path so the animation bends correctly around diagonals.
@@ -151,8 +177,48 @@ export class BoardView {
     this.drawTarget();
     this.drawWalls();
     this.drawRobots();
+    this.drawCelebration();
 
     ctx.restore();
+  }
+
+  drawCelebration() {
+    const remaining = this.celebrateUntil - Date.now();
+    if (!this.target || remaining <= 0) return;
+
+    const { ctx } = this;
+    const elapsed = CELEBRATE_MS - remaining;
+    const cx = this.cx(xOf(this.target.cell)) + this.cell / 2;
+    const cy = this.cy(yOf(this.target.cell)) + this.cell / 2;
+    const color = colorFor(this.target.color);
+
+    // Three rings staggered so they read as a pulse rather than one blob.
+    const RING_MS = 1000;
+    const STAGGER = 320;
+
+    for (let i = 0; i < 3; i += 1) {
+      const t = (elapsed - i * STAGGER) / RING_MS;
+      if (t < 0 || t > 1) continue;
+
+      ctx.globalAlpha = (1 - t) * 0.85;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, this.cell * 0.12 * (1 - t));
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.cell * (0.3 + t * 1.6), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // A brief bloom on the square itself, fading over the first half.
+    const bloom = Math.max(0, 1 - elapsed / (CELEBRATE_MS * 0.5));
+    if (bloom > 0) {
+      ctx.globalAlpha = bloom * 0.4;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.cell * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
   }
 
   drawGrid() {

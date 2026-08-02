@@ -4,12 +4,12 @@
 // Nothing here touches the DOM or the network. The host wires it to both, which
 // keeps the rules testable and stops UI bugs from corrupting game state.
 
-import { Rng } from "./rng.js";
-import { generateBoard, randomRobotPositions } from "./board.js";
-import { applyMove, isSolved } from "./rules.js";
-import { isPlayableRound } from "./solver.js";
-import { COLORS } from "./constants.js";
-import { BotPlayer, botLevel } from "./bot.js";
+import { Rng } from "./rng.js?v=20260802d";
+import { generateBoard, randomRobotPositions } from "./board.js?v=20260802d";
+import { applyMove, isSolved } from "./rules.js?v=20260802d";
+import { isPlayableRound } from "./solver.js?v=20260802d";
+import { COLORS, CELEBRATE_MS } from "./constants.js?v=20260802d";
+import { BotPlayer, botLevel } from "./bot.js?v=20260802d";
 
 export const PHASES = {
   LOBBY: "lobby",
@@ -72,6 +72,7 @@ export class HostGame {
     this.bidDeadline = 0;
     this.demoDeadline = 0;
     this.revealDeadline = 0;
+    this.celebrateUntil = 0;
     this.lastRound = null;
     this.notice = "";
 
@@ -517,7 +518,16 @@ export class HostGame {
       failures: this.roundFailures.slice()
     };
 
-    this.positions = this.startPositions.slice();
+    if (result.winnerId) {
+      // Leave the winning arrangement standing. Resetting here used to wipe the
+      // solved board on the very frame it was earned, so nobody ever saw the
+      // robot land on the target.
+      this.celebrateUntil = Date.now() + CELEBRATE_MS;
+    } else {
+      this.positions = this.startPositions.slice();
+      this.celebrateUntil = 0;
+    }
+
     this.revealDeadline = Date.now() + this.settings.revealSeconds * 1000;
     this.changed();
   }
@@ -573,6 +583,7 @@ export class HostGame {
       bidDeadline: this.bidDeadline,
       demoDeadline: this.demoDeadline,
       revealDeadline: this.revealDeadline,
+      celebrateUntil: this.celebrateUntil,
       players: [...this.players.values()].map((p) => ({ ...p })),
       lastRound: this.lastRound,
       notice: this.notice

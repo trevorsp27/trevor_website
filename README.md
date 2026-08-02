@@ -64,8 +64,19 @@ GitHub Pages serves everything with `Cache-Control: max-age=600`, so edits go li
 ten minutes on their own. The `?v=<date>` tokens on script and stylesheet tags make a
 change appear immediately instead. When you edit a *shared* file such as
 `assets/js/site-data.js`, bump its token in **every** page that loads it, or most of the
-site will keep reading a cached copy for up to ten minutes. The game's ES module imports
-carry no tokens and rely on the ten-minute expiry.
+site will keep reading a cached copy for up to ten minutes.
+
+The Bounce Bots ES modules carry the token on **every internal import**
+(`from "./constants.js?v=..."`), and all of them plus the `<script type="module">` tag in
+`pages/bounce-bots.html` must be bumped together. Without that, a freshly fetched
+`main.js` can be linked against a cached `constants.js`: the module graph fails to
+resolve, nothing boots, and the page renders normally while doing nothing at all. Tests
+in `tests/bounce-bots-modules.test.js` enforce that the tokens stay in sync. To bump
+them:
+
+```bash
+sed -i -E 's|\?v=[0-9a-z]+|?v=NEWTOKEN|g' assets/js/bounce-bots/*.js
+```
 
 ### Running the tests
 

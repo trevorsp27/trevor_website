@@ -4,13 +4,13 @@
 // `send()`. On the host that calls the game directly; on a client it posts to
 // the host. Nothing else in the UI needs to know which role it is running.
 
-import { generateBoard, makeLobbyCode } from "./board.js";
-import { applyMove } from "./rules.js";
-import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js";
-import { createHost, createClient } from "./net.js";
-import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js";
-import { botLevel } from "./bot.js";
-import { COLORS, ROBOT_COUNT } from "./constants.js";
+import { generateBoard, makeLobbyCode } from "./board.js?v=20260802d";
+import { applyMove } from "./rules.js?v=20260802d";
+import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260802d";
+import { createHost, createClient } from "./net.js?v=20260802d";
+import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260802d";
+import { botLevel } from "./bot.js?v=20260802d";
+import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260802d";
 
 const $ = (id) => document.getElementById(id);
 
@@ -434,7 +434,8 @@ function render() {
     positions,
     target: snap.target,
     // Grey the board while someone else demonstrates: you are watching, not playing.
-    dim: snap.phase === PHASES.DEMO && !amDemonstrating()
+    dim: snap.phase === PHASES.DEMO && !amDemonstrating(),
+    celebrateUntil: snap.celebrateUntil || 0
   });
 
   $("bb-code").textContent = snap.code;
@@ -564,6 +565,11 @@ function renderControls(snap, showScratch) {
   const counter = $("bb-moves");
   if (amDemonstrating()) {
     counter.textContent = `${snap.demoMoveCount} / ${snap.currentBid} moves used`;
+  } else if (snap.phase === PHASES.DEMO) {
+    // Spectators need the running count too, or a slow demonstration reads as
+    // nothing happening.
+    const who = snap.players.find((p) => p.id === snap.currentDemo);
+    counter.textContent = `${who?.name || "They"}: ${snap.demoMoveCount} / ${snap.currentBid} moves`;
   } else if (showScratch) {
     counter.textContent = `${state.scratchMoves} moves tried (private)`;
   } else {
