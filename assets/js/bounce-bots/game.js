@@ -58,7 +58,7 @@ export class HostGame {
     this.optimal = null;
 
     this.bids = new Map(); // playerId -> { moves, at }
-    this.skipVotes = new Set();
+    this.resignVotes = new Set();
     this.demoOrder = [];
     this.demoIndex = -1;
     this.demoMoveCount = 0;
@@ -125,20 +125,18 @@ export class HostGame {
     const player = this.players.get(id);
     if (!player) return;
     player.connected = false;
-    this.skipVotes.delete(id);
+    this.resignVotes.delete(id);
 
-    // A disconnect during someone's demo should not stall the round.
+    // A disconnect during someone's demo should not stall the round. No
+    // penalty: a dropped connection is not a failed claim.
     if (this.phase === PHASES.DEMO && this.currentDemoId() === id) {
-      this.failDemo("disconnected");
+      this.failDemo("disconnected", { penalise: false });
       return;
     }
 
-    // Losing a player lowers the bar, which may settle a pending skip vote.
-    if (this.phase === PHASES.BIDDING && this.skipVotes.size >= this.skipVotesNeeded()) {
-      this.notice = "Clock cut short by vote";
-      this.beginDemos();
-      return;
-    }
+    // Losing a player shrinks the voter list, which may settle a pending
+    // resignation.
+    if (this.checkResign()) return;
     this.changed();
   }
 
@@ -193,7 +191,7 @@ export class HostGame {
 
     this.phase = PHASES.THINKING;
     this.bids.clear();
-    this.skipVotes.clear();
+    this.resignVotes.clear();
     this.demoOrder = [];
     this.demoIndex = -1;
     this.demoMoveCount = 0;
@@ -250,6 +248,10 @@ export class HostGame {
       this.phase = PHASES.BIDDING;
       this.bidDeadline = Date.now() + this.settings.bidSeconds * 1000;
     }
+
+    // Bidding narrows the voter list to the players still searching, so a
+    // resignation that was one short may now carry.
+    if (this.checkResign()) return;
     this.changed();
   }
 
@@ -259,68 +261,80 @@ export class HostGame {
     this.beginDemos();
   }
 
-  // How many connected players it takes to cut the clock short: a strict
-  // majority, so one idle player cannot hold everyone hostage.
-  skipVotesNeeded() {
-    const connected = [...this.players.values()].filter((p) => p.connected).length;
-    return Math.floor(connected / 2) + 1;
+  // Who gets a say in resigning.
+  //
+  // Before anyone has bid, the whole table decides whether the round is a
+  // write-off. Once a bid is on the table, the bidders have something to prove
+  // and it is the players still searching who decide whether to keep looking --
+  // so with two players and one bid, the other can end it alone.
+  resignVoters() {
+    const connected = [...this.players.values()].filter((p) => p.connected);
+    if (this.phase !== PHASES.BIDDING) return connected.map((p) => p.id);
+
+    const searching = connected.filter((p) => !this.bids.has(p.id));
+    // If everyone has bid there is nobody left searching, so it takes the
+    // whole table to agree.
+    return (searching.length ? searching : connected).map((p) => p.id);
   }
 
-  // Once someone has bid, the rest of the clock only matters to players still
-  // hunting for something shorter. If most have given up, move on.
-  voteSkip(playerId) {
-    if (this.phase !== PHASES.BIDDING) return;
+  voteResign(playerId) {
+    if (this.phase !== PHASES.THINKING && this.phase !== PHASES.BIDDING) return;
     if (!this.players.get(playerId)?.connected) return;
+    if (!this.resignVoters().includes(playerId)) return;
 
-    // Toggle, so a player can change their mind if they spot something.
-    if (this.skipVotes.has(playerId)) this.skipVotes.delete(playerId);
-    else this.skipVotes.add(playerId);
+    // Toggle, so a player can take it back if they spot something.
+    if (this.resignVotes.has(playerId)) this.resignVotes.delete(playerId);
+    else this.resignVotes.add(playerId);
 
-    if (this.skipVotes.size >= this.skipVotesNeeded()) {
-      this.notice = "Clock cut short by vote";
-      this.beginDemos();
-      return;
-    }
+    if (this.checkResign()) return;
     this.changed();
+  }
+
+  // Carries only when every current voter has agreed. Votes from players who
+  // are no longer voters (someone who resigned and then bid) simply stop
+  // counting, because the tally is always taken over the live voter list.
+  checkResign() {
+    const voters = this.resignVoters();
+    if (!voters.length) return false;
+    if (!voters.every((id) => this.resignVotes.has(id))) return false;
+
+    if (this.phase === PHASES.BIDDING) {
+      this.notice = "Nobody else was looking — clock cut short";
+      this.beginDemos();
+    } else {
+      this.notice = "Everyone resigned — no points this round";
+      this.enterReveal(this.unsolvedResult());
+    }
+    return true;
   }
 
   skipRound(playerId) {
     if (playerId !== this.hostId) return;
     if (this.phase === PHASES.LOBBY || this.phase === PHASES.OVER) return;
     this.notice = "Round skipped";
-    this.enterReveal(null);
+    this.enterReveal(this.unsolvedResult());
   }
 
   // ---- demonstrations ----------------------------------------------------
 
   beginDemos() {
-    this.skipVotes.clear();
+    this.resignVotes.clear();
 
-    // Lowest bid first; ties break toward whoever committed earlier.
+    // Lowest bid first; ties break toward whoever committed earlier. Only the
+    // lowest bidder ever demonstrates -- a failure ends the round rather than
+    // passing down the list -- but the full order is kept so the UI can show
+    // where everyone stood.
     this.demoOrder = [...this.bids.entries()]
       .sort((a, b) => a[1].moves - b[1].moves || a[1].at - b[1].at)
-      .map(([id]) => id);
+      .map(([id]) => id)
+      .filter((id) => this.players.get(id)?.connected);
 
-    this.demoIndex = -1;
-    this.advanceDemo();
-  }
-
-  advanceDemo() {
-    this.demoIndex += 1;
-
-    // Skip anyone who dropped out while waiting their turn.
-    while (
-      this.demoIndex < this.demoOrder.length &&
-      !this.players.get(this.demoOrder[this.demoIndex])?.connected
-    ) {
-      this.demoIndex += 1;
-    }
-
-    if (this.demoIndex >= this.demoOrder.length) {
-      this.enterReveal(null);
+    if (!this.demoOrder.length) {
+      this.enterReveal(this.unsolvedResult());
       return;
     }
 
+    this.demoIndex = 0;
     this.phase = PHASES.DEMO;
     this.positions = this.startPositions.slice();
     this.demoMoveCount = 0;
@@ -390,6 +404,7 @@ export class HostGame {
     if (player) player.score += 1;
 
     this.enterReveal({
+      ...this.unsolvedResult(),
       winnerId: id,
       winnerName: player?.name || "Someone",
       bid: this.currentBid(),
@@ -398,25 +413,46 @@ export class HostGame {
     });
   }
 
-  failDemo(reason) {
-    const player = this.players.get(this.currentDemoId());
+  // Claiming a solution you cannot show costs a point, and the round is over --
+  // it does not pass to the next bidder. A disconnect is not penalised: a
+  // dropped connection is not a failed claim.
+  failDemo(reason, { penalise = true } = {}) {
+    const id = this.currentDemoId();
+    const player = this.players.get(id);
+    if (player && penalise) player.score -= 1;
+
     this.notice = `${player?.name || "Player"} ${reason}`;
-    this.advanceDemo();
+    this.enterReveal({
+      ...this.unsolvedResult(),
+      failedId: id,
+      failedName: player?.name || "Player",
+      penalty: player && penalise ? -1 : 0,
+      bid: this.currentBid(),
+      used: this.demoMoveCount,
+      reason
+    });
+  }
+
+  // A round nobody won. Shows the machine's answer so players can see what
+  // they missed.
+  unsolvedResult() {
+    return {
+      winnerId: null,
+      winnerName: null,
+      failedId: null,
+      failedName: null,
+      penalty: 0,
+      bid: null,
+      used: null,
+      reason: null,
+      solution: this.optimal?.solution ?? []
+    };
   }
 
   enterReveal(result) {
     this.phase = PHASES.REVEAL;
-    this.lastRound = result
-      ? { ...result, optimal: this.optimal?.moves ?? null }
-      : {
-          winnerId: null,
-          winnerName: null,
-          bid: null,
-          used: null,
-          // Nobody solved it, so show the machine's answer instead.
-          solution: this.optimal?.solution ?? [],
-          optimal: this.optimal?.moves ?? null
-        };
+    this.resignVotes.clear();
+    this.lastRound = { ...result, optimal: this.optimal?.moves ?? null };
 
     this.positions = this.startPositions.slice();
     this.revealDeadline = Date.now() + this.settings.revealSeconds * 1000;
@@ -464,8 +500,8 @@ export class HostGame {
       startPositions: this.startPositions,
       positions: this.positions,
       bids: [...this.bids.entries()].map(([id, b]) => ({ id, moves: b.moves })),
-      skipVotes: [...this.skipVotes],
-      skipVotesNeeded: this.skipVotesNeeded(),
+      resignVotes: [...this.resignVotes],
+      resignVoters: this.resignVoters(),
       demoOrder: this.demoOrder,
       currentDemo: this.currentDemoId(),
       currentBid: this.currentBid(),

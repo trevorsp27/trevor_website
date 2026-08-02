@@ -65,7 +65,7 @@ function boot() {
 
   $("bb-reset").addEventListener("click", resetBoardForMe);
   $("bb-pass").addEventListener("click", () => send({ type: "demo-pass" }));
-  $("bb-vote-skip").addEventListener("click", () => send({ type: "vote-skip" }));
+  $("bb-resign").addEventListener("click", () => send({ type: "vote-skip" }));
   $("bb-start").addEventListener("click", () => send({ type: "start" }));
   $("bb-lock").addEventListener("click", () => send({ type: "lock" }));
   $("bb-skip").addEventListener("click", () => send({ type: "skip" }));
@@ -227,7 +227,7 @@ function handleHostMessage(peerId, message) {
       game.passDemo(peerId);
       break;
     case "vote-skip":
-      game.voteSkip(peerId);
+      game.voteResign(peerId);
       break;
     default:
       break;
@@ -262,7 +262,7 @@ function send(action) {
         game.passDemo(HOST_ID);
         break;
       case "vote-skip":
-        game.voteSkip(HOST_ID);
+        game.voteResign(HOST_ID);
         break;
       default:
         break;
@@ -454,10 +454,16 @@ function phaseLabel(snap) {
         ? `Your turn — solve it in ${snap.currentBid}`
         : `${who?.name || "Someone"} is demonstrating (${snap.currentBid})`;
     }
-    case PHASES.REVEAL:
-      return snap.lastRound?.winnerId
-        ? `${snap.lastRound.winnerName} solved it in ${snap.lastRound.used}`
-        : "Nobody solved it";
+    case PHASES.REVEAL: {
+      const last = snap.lastRound;
+      if (last?.winnerId) return `${last.winnerName} solved it in ${last.used}`;
+      if (last?.failedId) {
+        return last.penalty
+          ? `${last.failedName} bid ${last.bid} and could not show it — ${last.penalty} point`
+          : `${last.failedName} dropped out`;
+      }
+      return "Nobody solved it";
+    }
     case PHASES.OVER:
       return "Game over";
     default:
@@ -489,7 +495,11 @@ function renderPlayers(snap) {
       const marks = [];
       if (player.id === snap.hostId) marks.push("leader");
       if (!player.connected) marks.push("offline");
-      if (player.id === snap.currentDemo) marks.push("demonstrating");
+      // Only while they actually are: currentDemo still points at them during
+      // the reveal that follows.
+      if (snap.phase === PHASES.DEMO && player.id === snap.currentDemo) {
+        marks.push("demonstrating");
+      }
 
       const bid = bids.get(player.id);
       // Bids are public: underbidding is the whole game.
@@ -523,16 +533,24 @@ function renderControls(snap, showScratch) {
   $("bb-pass").hidden = !amDemonstrating();
   $("bb-reset").hidden = !(showScratch || amDemonstrating());
 
-  // Cutting the clock short only makes sense once it is actually running.
-  const vote = $("bb-vote-skip");
-  vote.hidden = snap.phase !== PHASES.BIDDING;
+  // You only get a vote if you are one of the players the decision rests on:
+  // everyone before a bid, and only the players still searching after one.
+  const vote = $("bb-resign");
+  const voters = snap.resignVoters || [];
+  vote.hidden = !canBid || !voters.includes(state.me);
+
   if (!vote.hidden) {
-    const votes = snap.skipVotes || [];
+    const votes = (snap.resignVotes || []).filter((id) => voters.includes(id));
     const mine = votes.includes(state.me);
-    vote.textContent = mine
-      ? `Gave up (${votes.length}/${snap.skipVotesNeeded})`
-      : `Give up on the clock (${votes.length}/${snap.skipVotesNeeded})`;
+    const tally = `${votes.length}/${voters.length}`;
+    const label =
+      snap.phase === PHASES.BIDDING ? "Stop the clock" : "Resign the round";
+    vote.textContent = mine ? `Resigned (${tally})` : `${label} (${tally})`;
     vote.classList.toggle("is-active", mine);
+    vote.title =
+      snap.phase === PHASES.BIDDING
+        ? "Everyone who has not bid must agree to end the clock early."
+        : "Everyone must agree to throw the round away. Nobody scores.";
   }
 
   // The move counter means different things in each phase, so label it.

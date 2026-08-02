@@ -189,7 +189,7 @@ test("solving within the bid scores a point and reveals the round", () => {
   assert.equal(game.lastRound.used, par);
 });
 
-test("running past the bid hands the round to the next bidder", () => {
+test("running past the bid costs a point and ends the round", () => {
   const game = newGame();
   game.start("host");
 
@@ -214,12 +214,14 @@ test("running past the bid hands the round to the next bidder", () => {
     }
   }
 
-  assert.equal(game.players.get("alice").score, 0);
-  assert.equal(game.currentDemoId(), "bob", "turn should pass to the next bidder");
-  assert.equal(game.demoMoveCount, 0, "the board resets for the next demonstrator");
+  assert.equal(game.players.get("alice").score, -1, "a failed claim costs a point");
+  assert.equal(game.phase, PHASES.REVEAL, "the round ends rather than passing on");
+  assert.equal(game.lastRound.failedId, "alice");
+  assert.equal(game.lastRound.penalty, -1);
+  assert.equal(game.players.get("bob").score, 0, "the next bidder gets no turn");
 });
 
-test("passing hands off, and exhausting all bidders ends the round unsolved", () => {
+test("passing costs a point and ends the round", () => {
   const game = newGame();
   game.start("host");
 
@@ -230,12 +232,25 @@ test("passing hands off, and exhausting all bidders ends the round unsolved", ()
   game.lockBids("host");
 
   game.passDemo("alice");
-  assert.equal(game.currentDemoId(), "bob");
-
-  game.passDemo("bob");
   assert.equal(game.phase, PHASES.REVEAL);
-  assert.equal(game.lastRound.winnerId, null);
+  assert.equal(game.players.get("alice").score, -1);
+  assert.equal(game.players.get("bob").score, 0);
   assert.ok(game.lastRound.solution.length >= 2, "unsolved rounds reveal the optimal line");
+});
+
+test("scores can go negative across rounds", () => {
+  const game = newGame({ rounds: 3 });
+  game.start("host");
+
+  for (let round = 0; round < 2; round += 1) {
+    game.bid("alice", 3);
+    game.lockBids("host");
+    game.passDemo("alice");
+    game.revealDeadline = 0;
+    game.tick();
+  }
+
+  assert.equal(game.players.get("alice").score, -2);
 });
 
 test("reset restores the round's starting position", () => {
@@ -254,7 +269,7 @@ test("reset restores the round's starting position", () => {
   assert.equal(game.demoMoveCount, 0);
 });
 
-test("a disconnect during a demo passes the turn on", () => {
+test("a disconnect during a demo ends the round without a penalty", () => {
   const game = newGame();
   game.start("host");
 
@@ -266,7 +281,9 @@ test("a disconnect during a demo passes the turn on", () => {
   assert.equal(game.currentDemoId(), "alice");
 
   game.removePlayer("alice");
-  assert.equal(game.currentDemoId(), "bob");
+  assert.equal(game.phase, PHASES.REVEAL);
+  assert.equal(game.players.get("alice").score, 0, "a dropped connection is not a failed claim");
+  assert.equal(game.lastRound.penalty, 0);
 });
 
 test("disconnected players are skipped in the demo order", () => {
@@ -283,89 +300,128 @@ test("disconnected players are skipped in the demo order", () => {
   assert.equal(game.currentDemoId(), "bob");
 });
 
-test("a majority vote cuts the bidding clock short", () => {
-  const game = newGame(); // host, alice, bob -> majority is 2
+test("after a bid, only the players who have not bid get a vote", () => {
+  const game = newGame(); // host, alice, bob
   game.start("host");
   game.bid("alice", 5);
-  assert.equal(game.phase, PHASES.BIDDING);
-  assert.equal(game.skipVotesNeeded(), 2);
 
-  game.voteSkip("bob");
-  assert.equal(game.phase, PHASES.BIDDING, "one vote is not enough");
+  assert.deepEqual(game.resignVoters().sort(), ["bob", "host"], "the bidder is excluded");
 
-  game.voteSkip("host");
-  assert.equal(game.phase, PHASES.DEMO, "a majority ends the clock");
-  assert.equal(game.currentDemoId(), "alice", "the low bid still demonstrates");
+  game.voteResign("alice");
+  assert.equal(game.resignVotes.size, 0, "a bidder cannot resign");
 });
 
-test("a skip vote can be taken back", () => {
+test("with two players, the one who did not bid can end the clock alone", () => {
+  const game = new HostGame({
+    code: "TEST",
+    hostId: "host",
+    hostName: "Host",
+    settings: { rounds: 3 }
+  });
+  game.addPlayer("alice", "Alice");
+  game.start("host");
+
+  game.bid("alice", 4);
+  assert.deepEqual(game.resignVoters(), ["host"]);
+
+  game.voteResign("host");
+  assert.equal(game.phase, PHASES.DEMO, "one non-bidder is enough");
+  assert.equal(game.currentDemoId(), "alice");
+});
+
+test("every non-bidder must agree, not just most of them", () => {
   const game = newGame();
   game.start("host");
   game.bid("alice", 5);
 
-  game.voteSkip("bob");
-  assert.equal(game.skipVotes.size, 1);
+  game.voteResign("bob");
+  assert.equal(game.phase, PHASES.BIDDING, "one of two non-bidders is not enough");
 
-  game.voteSkip("bob");
-  assert.equal(game.skipVotes.size, 0, "voting again withdraws the vote");
-  assert.equal(game.phase, PHASES.BIDDING);
-});
-
-test("skip votes are ignored outside the bidding phase", () => {
-  const game = newGame();
-
-  game.voteSkip("alice"); // still in the lobby
-  assert.equal(game.skipVotes.size, 0);
-
-  game.start("host");
-  game.voteSkip("alice"); // thinking: no clock to cut
-  assert.equal(game.skipVotes.size, 0);
-  assert.equal(game.phase, PHASES.THINKING);
-});
-
-test("disconnected players cannot vote and their votes are released", () => {
-  const game = newGame();
-  game.addPlayer("carol", "Carol");
-  game.start("host");
-  game.bid("alice", 5);
-
-  game.voteSkip("bob"); // 1 of 3 needed (4 connected)
-  assert.equal(game.skipVotesNeeded(), 3);
-
-  game.removePlayer("bob");
-  assert.equal(game.skipVotes.has("bob"), false, "a leaver's vote is released");
-
-  game.voteSkip("bob");
-  assert.equal(game.skipVotes.size, 0, "a disconnected player cannot vote");
-});
-
-test("a disconnect can settle a pending skip vote", () => {
-  const game = newGame();
-  game.addPlayer("carol", "Carol");
-  game.start("host");
-  game.bid("alice", 5);
-
-  // Four connected, so three votes are needed.
-  game.voteSkip("host");
-  game.voteSkip("bob");
-  assert.equal(game.phase, PHASES.BIDDING);
-
-  // Carol leaves: three connected, so two votes now carry it.
-  game.removePlayer("carol");
+  game.voteResign("host");
   assert.equal(game.phase, PHASES.DEMO);
 });
 
-test("skip votes reset between rounds", () => {
+test("everyone resigning before any bid throws the round away with no points", () => {
   const game = newGame();
   game.start("host");
+  assert.equal(game.phase, PHASES.THINKING);
+  assert.deepEqual(game.resignVoters().sort(), ["alice", "bob", "host"]);
+
+  game.voteResign("alice");
+  game.voteResign("bob");
+  assert.equal(game.phase, PHASES.THINKING, "not everyone has agreed yet");
+
+  game.voteResign("host");
+  assert.equal(game.phase, PHASES.REVEAL);
+  assert.equal(game.lastRound.winnerId, null);
+  assert.equal(game.lastRound.penalty, 0);
+  [...game.players.values()].forEach((p) => assert.equal(p.score, 0, "nobody scores"));
+});
+
+test("a resignation can be taken back", () => {
+  const game = newGame();
+  game.start("host");
+
+  game.voteResign("bob");
+  assert.equal(game.resignVotes.size, 1);
+
+  game.voteResign("bob");
+  assert.equal(game.resignVotes.size, 0, "voting again withdraws it");
+  assert.equal(game.phase, PHASES.THINKING);
+});
+
+test("bidding can itself settle a pending resignation", () => {
+  const game = newGame();
+  game.start("host");
+
+  // Both others give up while still in the thinking phase.
+  game.voteResign("bob");
+  game.voteResign("host");
+  assert.equal(game.phase, PHASES.THINKING, "alice has not resigned");
+
+  // Alice bids, so the voter list shrinks to the two who already resigned.
+  game.bid("alice", 4);
+  assert.equal(game.phase, PHASES.DEMO, "the clock never had to run");
+  assert.equal(game.currentDemoId(), "alice");
+});
+
+test("resign votes are ignored once demos begin", () => {
+  const game = newGame();
+  game.start("host");
+  game.bid("alice", 4);
+  game.lockBids("host");
+
+  game.voteResign("bob");
+  assert.equal(game.resignVotes.size, 0);
+  assert.equal(game.phase, PHASES.DEMO);
+});
+
+test("a disconnect releases the vote and can settle a resignation", () => {
+  const game = newGame();
+  game.addPlayer("carol", "Carol");
+  game.start("host");
   game.bid("alice", 5);
-  game.voteSkip("bob");
-  assert.equal(game.skipVotes.size, 1);
+
+  // Non-bidders: host, bob, carol.
+  game.voteResign("host");
+  game.voteResign("bob");
+  assert.equal(game.phase, PHASES.BIDDING);
+
+  game.removePlayer("carol");
+  assert.equal(game.resignVotes.has("carol"), false);
+  assert.equal(game.phase, PHASES.DEMO, "carol leaving settles it");
+});
+
+test("resign votes reset between rounds", () => {
+  const game = newGame();
+  game.start("host");
+  game.voteResign("bob");
+  assert.equal(game.resignVotes.size, 1);
 
   game.skipRound("host");
   game.revealDeadline = 0;
   game.tick();
-  assert.equal(game.skipVotes.size, 0);
+  assert.equal(game.resignVotes.size, 0);
 });
 
 test("a player who stops reporting in is dropped", () => {
@@ -408,7 +464,7 @@ test("the host is never dropped for silence", () => {
   assert.equal(game.players.get("host").connected, true);
 });
 
-test("a vanished demonstrator is dropped without burning the demo clock", () => {
+test("a vanished demonstrator resolves without burning the demo clock", () => {
   const game = newGame();
   game.start("host");
 
@@ -420,10 +476,13 @@ test("a vanished demonstrator is dropped without burning the demo clock", () => 
   assert.equal(game.currentDemoId(), "alice");
 
   // Alice's tab dies. Her demo deadline is still ~45s away.
+  const deadline = game.demoDeadline;
   game.players.get("alice").lastSeen = Date.now() - 60000;
   game.tick();
 
-  assert.equal(game.currentDemoId(), "bob", "turn passes without waiting for the timeout");
+  assert.ok(deadline - Date.now() > 30000, "the demo clock had plenty left");
+  assert.equal(game.phase, PHASES.REVEAL, "resolves without waiting for the timeout");
+  assert.equal(game.players.get("alice").score, 0, "a disconnect is not penalised");
 });
 
 test("heartbeats from an unknown peer are ignored", () => {
@@ -442,7 +501,7 @@ test("the bidding clock expiring opens the demo phase", () => {
   assert.equal(game.phase, PHASES.DEMO);
 });
 
-test("a demo timing out passes the turn on", () => {
+test("a demo timing out costs a point and ends the round", () => {
   const game = newGame();
   game.start("host");
   game.bid("alice", 3);
@@ -453,7 +512,8 @@ test("a demo timing out passes the turn on", () => {
 
   game.demoDeadline = Date.now() - 1;
   game.tick();
-  assert.equal(game.currentDemoId(), "bob");
+  assert.equal(game.phase, PHASES.REVEAL);
+  assert.equal(game.players.get("alice").score, -1);
 });
 
 test("a round with no bids at all resolves instead of hanging", () => {

@@ -20,7 +20,7 @@
     <script src="../assets/js/site-data.js?v=20260801a" defer></script>
     <script src="../assets/js/site.js?v=20260602a" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script type="module" src="../assets/js/bounce-bots/main.js?v=20260802a"></script>
+    <script type="module" src="../assets/js/bounce-bots/main.js?v=20260802b"></script>
   </head>
   <body data-page="bounce-bots">
     <div class="site-shell">
@@ -151,9 +151,7 @@
               <div class="bb-actions">
                 <button class="bb-btn" id="bb-reset" type="button" hidden>Reset board</button>
                 <button class="bb-btn" id="bb-pass" type="button" hidden>Pass</button>
-                <button class="bb-btn" id="bb-vote-skip" type="button" hidden>
-                  Give up on the clock
-                </button>
+                <button class="bb-btn" id="bb-resign" type="button" hidden>Resign the round</button>
               </div>
             </div>
 
@@ -185,8 +183,9 @@
             <li>Only one marker shows at a time — the bracketed square with a hollow centre. Get the robot matching its colour onto it. A purple marker accepts any robot.</li>
             <li>While you are thinking, the board is your private sandbox — move whatever you like, nobody sees it.</li>
             <li>The first bid starts a shared countdown. You can keep lowering your own bid until it runs out.</li>
-            <li>If nobody is going to beat the standing bid, a majority can vote to cut the clock short and get on with it.</li>
-            <li>Lowest bid demonstrates first. Miss it, and the next-lowest bidder gets their shot.</li>
+            <li>Lowest bid has to prove it. Land the robot within your bid and you score a point.</li>
+            <li>Bid something you cannot show and it costs you a point, and the round is over — so do not bid what you have not found.</li>
+            <li>Once a bid is in, everyone who has not bid can resign to stop the clock early. Before anyone bids, the whole table can resign to throw the round away with nobody scoring.</li>
             <li>Diagonal deflectors, when enabled, turn a robot ninety degrees and let it keep going — unless the robot matches the deflector's colour, in which case it passes straight through.</li>
           </ul>
           <p class="bb-hint">
