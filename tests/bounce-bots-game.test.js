@@ -215,13 +215,12 @@ test("running past the bid costs a point and ends the round", () => {
   }
 
   assert.equal(game.players.get("alice").score, -1, "a failed claim costs a point");
-  assert.equal(game.phase, PHASES.REVEAL, "the round ends rather than passing on");
-  assert.equal(game.lastRound.failedId, "alice");
-  assert.equal(game.lastRound.penalty, -1);
-  assert.equal(game.players.get("bob").score, 0, "the next bidder gets no turn");
+  assert.equal(game.phase, PHASES.DEMO, "the chain continues");
+  assert.equal(game.currentDemoId(), "bob", "the next lowest bid gets its turn");
+  assert.equal(game.demoMoveCount, 0, "the board resets for the next demonstrator");
 });
 
-test("passing costs a point and ends the round", () => {
+test("passing costs a point and hands on to the next bidder", () => {
   const game = newGame();
   game.start("host");
 
@@ -232,10 +231,55 @@ test("passing costs a point and ends the round", () => {
   game.lockBids("host");
 
   game.passDemo("alice");
-  assert.equal(game.phase, PHASES.REVEAL);
   assert.equal(game.players.get("alice").score, -1);
-  assert.equal(game.players.get("bob").score, 0);
+  assert.equal(game.currentDemoId(), "bob");
+});
+
+test("every bidder who fails is penalised as the chain unwinds", () => {
+  const game = newGame();
+  game.start("host");
+
+  game.bid("alice", 3);
+  game.bids.get("alice").at = 1000;
+  game.bid("bob", 4);
+  game.bids.get("bob").at = 2000;
+  game.bid("host", 5);
+  game.bids.get("host").at = 3000;
+  game.lockBids("host");
+
+  game.passDemo("alice");
+  game.passDemo("bob");
+  game.passDemo("host");
+
+  assert.equal(game.phase, PHASES.REVEAL, "the round ends once the list runs out");
+  assert.equal(game.players.get("alice").score, -1);
+  assert.equal(game.players.get("bob").score, -1);
+  assert.equal(game.players.get("host").score, -1);
+  assert.equal(game.lastRound.failures.length, 3);
   assert.ok(game.lastRound.solution.length >= 2, "unsolved rounds reveal the optimal line");
+});
+
+test("a later bidder can still win after earlier ones fail", () => {
+  const game = newGame();
+  game.start("host");
+
+  const par = game.optimal.moves;
+  game.bid("alice", 2); // too low to be real
+  game.bids.get("alice").at = 1000;
+  game.bid("bob", par);
+  game.bids.get("bob").at = 2000;
+  game.lockBids("host");
+
+  game.passDemo("alice");
+  assert.equal(game.currentDemoId(), "bob");
+
+  game.optimal.solution.forEach((m) => game.demoMove("bob", m.robot, m.dir));
+
+  assert.equal(game.phase, PHASES.REVEAL);
+  assert.equal(game.players.get("alice").score, -1, "the failed bid still costs");
+  assert.equal(game.players.get("bob").score, 1, "the solver still scores");
+  assert.equal(game.lastRound.winnerId, "bob");
+  assert.equal(game.lastRound.failures.length, 1);
 });
 
 test("scores can go negative across rounds", () => {
@@ -281,9 +325,8 @@ test("a disconnect during a demo ends the round without a penalty", () => {
   assert.equal(game.currentDemoId(), "alice");
 
   game.removePlayer("alice");
-  assert.equal(game.phase, PHASES.REVEAL);
   assert.equal(game.players.get("alice").score, 0, "a dropped connection is not a failed claim");
-  assert.equal(game.lastRound.penalty, 0);
+  assert.equal(game.currentDemoId(), "bob", "the chain still moves on");
 });
 
 test("disconnected players are skipped in the demo order", () => {
@@ -354,7 +397,7 @@ test("everyone resigning before any bid throws the round away with no points", (
   game.voteResign("host");
   assert.equal(game.phase, PHASES.REVEAL);
   assert.equal(game.lastRound.winnerId, null);
-  assert.equal(game.lastRound.penalty, 0);
+  assert.equal(game.lastRound.failures.length, 0, "resigning is not a failed bid");
   [...game.players.values()].forEach((p) => assert.equal(p.score, 0, "nobody scores"));
 });
 
@@ -481,7 +524,7 @@ test("a vanished demonstrator resolves without burning the demo clock", () => {
   game.tick();
 
   assert.ok(deadline - Date.now() > 30000, "the demo clock had plenty left");
-  assert.equal(game.phase, PHASES.REVEAL, "resolves without waiting for the timeout");
+  assert.equal(game.currentDemoId(), "bob", "hands on without waiting for the timeout");
   assert.equal(game.players.get("alice").score, 0, "a disconnect is not penalised");
 });
 
@@ -501,7 +544,7 @@ test("the bidding clock expiring opens the demo phase", () => {
   assert.equal(game.phase, PHASES.DEMO);
 });
 
-test("a demo timing out costs a point and ends the round", () => {
+test("a demo timing out costs a point and hands on", () => {
   const game = newGame();
   game.start("host");
   game.bid("alice", 3);
@@ -512,8 +555,8 @@ test("a demo timing out costs a point and ends the round", () => {
 
   game.demoDeadline = Date.now() - 1;
   game.tick();
-  assert.equal(game.phase, PHASES.REVEAL);
   assert.equal(game.players.get("alice").score, -1);
+  assert.equal(game.currentDemoId(), "bob");
 });
 
 test("a round with no bids at all resolves instead of hanging", () => {

@@ -9,6 +9,7 @@ import { applyMove } from "./rules.js";
 import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js";
 import { createHost, createClient } from "./net.js";
 import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js";
+import { botLevel } from "./bot.js";
 import { COLORS, ROBOT_COUNT } from "./constants.js";
 
 const $ = (id) => document.getElementById(id);
@@ -55,6 +56,8 @@ function boot() {
 
   $("bb-mode-host").addEventListener("change", syncModePanels);
   $("bb-mode-join").addEventListener("change", syncModePanels);
+  $("bb-bot-level").addEventListener("input", syncBotLevelLabel);
+  syncBotLevelLabel();
   $("bb-create").addEventListener("click", startHosting);
   $("bb-join").addEventListener("click", startJoining);
 
@@ -76,6 +79,12 @@ function boot() {
   setInterval(renderClock, 250);
 
   syncModePanels();
+}
+
+function syncBotLevelLabel() {
+  const level = botLevel(Number($("bb-bot-level").value));
+  $("bb-bot-level-name").textContent = level.name;
+  $("bb-bot-level-blurb").textContent = level.blurb;
 }
 
 function syncModePanels() {
@@ -120,7 +129,9 @@ function startHosting() {
     difficulty: $("bb-difficulty").value,
     useDiagonals: $("bb-diagonals").checked,
     rounds: Number($("bb-rounds").value),
-    bidSeconds: Number($("bb-bid-seconds").value)
+    bidSeconds: Number($("bb-bid-seconds").value),
+    botCount: Number($("bb-bot-count").value),
+    botLevel: Number($("bb-bot-level").value)
   };
 
   openLobby(makeLobbyCode(), settings);
@@ -457,11 +468,6 @@ function phaseLabel(snap) {
     case PHASES.REVEAL: {
       const last = snap.lastRound;
       if (last?.winnerId) return `${last.winnerName} solved it in ${last.used}`;
-      if (last?.failedId) {
-        return last.penalty
-          ? `${last.failedName} bid ${last.bid} and could not show it — ${last.penalty} point`
-          : `${last.failedName} dropped out`;
-      }
       return "Nobody solved it";
     }
     case PHASES.OVER:
@@ -494,7 +500,8 @@ function renderPlayers(snap) {
     .map((player) => {
       const marks = [];
       if (player.id === snap.hostId) marks.push("leader");
-      if (!player.connected) marks.push("offline");
+      if (player.isBot) marks.push("bot");
+      if (!player.connected && !player.isBot) marks.push("offline");
       // Only while they actually are: currentDemo still points at them during
       // the reveal that follows.
       if (snap.phase === PHASES.DEMO && player.id === snap.currentDemo) {
@@ -566,9 +573,19 @@ function renderControls(snap, showScratch) {
   const note = $("bb-note");
   if (snap.phase === PHASES.REVEAL && snap.lastRound) {
     const optimal = snap.lastRound.optimal;
-    note.textContent = snap.lastRound.winnerId
-      ? `Best possible was ${optimal ?? "?"} moves.`
-      : `The optimal solution was ${optimal ?? "?"} moves.`;
+    const parts = [];
+
+    // Everyone who claimed a line and could not show it.
+    const charged = (snap.lastRound.failures || []).filter((f) => f.penalty);
+    if (charged.length) {
+      parts.push(charged.map((f) => `${f.name} bid ${f.bid}, −1`).join(" · "));
+    }
+    parts.push(
+      snap.lastRound.winnerId
+        ? `Best possible was ${optimal ?? "?"}.`
+        : `The optimal solution was ${optimal ?? "?"} moves.`
+    );
+    note.textContent = parts.join("  ");
   } else if (snap.notice) {
     note.textContent = snap.notice;
   } else {

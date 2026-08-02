@@ -9,6 +9,7 @@ import { generateBoard, randomRobotPositions } from "./board.js";
 import { applyMove, isSolved } from "./rules.js";
 import { isPlayableRound } from "./solver.js";
 import { COLORS } from "./constants.js";
+import { BotPlayer, botLevel } from "./bot.js";
 
 export const PHASES = {
   LOBBY: "lobby",
@@ -25,7 +26,9 @@ export const DEFAULT_SETTINGS = {
   rounds: 10,
   bidSeconds: 60,
   demoSeconds: 45,
-  revealSeconds: 8
+  revealSeconds: 8,
+  botCount: 0,
+  botLevel: 2
 };
 
 const MIN_MOVES = 2;
@@ -46,6 +49,7 @@ export class HostGame {
     this.onChange = onChange || (() => {});
 
     this.players = new Map();
+    this.bots = [];
 
     this.phase = PHASES.LOBBY;
     this.round = 0;
@@ -63,6 +67,7 @@ export class HostGame {
     this.demoIndex = -1;
     this.demoMoveCount = 0;
     this.demoTrail = [];
+    this.roundFailures = [];
 
     this.bidDeadline = 0;
     this.demoDeadline = 0;
@@ -73,6 +78,7 @@ export class HostGame {
     // Added last: addPlayer() emits a snapshot, so every field it reads must
     // already exist.
     this.addPlayer(hostId, hostName);
+    this.syncBots();
   }
 
   // ---- players -----------------------------------------------------------
@@ -115,6 +121,8 @@ export class HostGame {
     this.players.forEach((player) => {
       // The host is running this loop, so it is by definition present.
       if (player.id === this.hostId) return;
+      // Bots live inside the host and never send pings.
+      if (player.isBot) return;
       if (!player.connected) return;
       if (now - player.lastSeen <= PLAYER_TIMEOUT_MS) return;
       this.removePlayer(player.id);
@@ -150,8 +158,34 @@ export class HostGame {
     next.rounds = clamp(Math.round(next.rounds), 1, 25);
     next.bidSeconds = clamp(Math.round(next.bidSeconds), 15, 180);
     next.demoSeconds = clamp(Math.round(next.demoSeconds), 15, 180);
+    next.botCount = clamp(Math.round(next.botCount), 0, 3);
+    next.botLevel = clamp(Math.round(next.botLevel), 1, 3);
     this.settings = next;
+
+    this.syncBots();
     this.changed();
+  }
+
+  // Bots are ordinary players with a controller attached. Rebuilt whenever the
+  // lobby settings change so the roster always matches what the leader picked.
+  syncBots() {
+    this.bots.forEach((bot) => this.players.delete(bot.id));
+    this.bots = [];
+
+    const level = botLevel(this.settings.botLevel);
+    for (let i = 0; i < this.settings.botCount; i += 1) {
+      const id = `bot-${i + 1}`;
+      const name = this.settings.botCount > 1 ? `${level.name} ${i + 1}` : level.name;
+      this.bots.push(new BotPlayer(id, name, this.settings.botLevel, `${this.code}|${id}`));
+      this.players.set(id, {
+        id,
+        name,
+        score: 0,
+        connected: true,
+        isBot: true,
+        lastSeen: Date.now()
+      });
+    }
   }
 
   start(playerId) {
@@ -196,10 +230,23 @@ export class HostGame {
     this.demoIndex = -1;
     this.demoMoveCount = 0;
     this.demoTrail = [];
+    this.roundFailures = [];
     this.bidDeadline = 0;
     this.demoDeadline = 0;
     this.notice = "";
+
+    // Bots plan against the answer the solver just found for this round.
+    const now = Date.now();
+    this.bots.forEach((bot) => bot.planRound(this, now));
+
     this.changed();
+  }
+
+  updateBots() {
+    if (!this.bots.length) return;
+    const now = Date.now();
+    // A bot action can change the phase, so re-check before each one acts.
+    this.bots.forEach((bot) => bot.update(this, now));
   }
 
   // Re-rolls robots and target until the solver confirms a round worth playing.
@@ -320,21 +367,34 @@ export class HostGame {
   beginDemos() {
     this.resignVotes.clear();
 
-    // Lowest bid first; ties break toward whoever committed earlier. Only the
-    // lowest bidder ever demonstrates -- a failure ends the round rather than
-    // passing down the list -- but the full order is kept so the UI can show
-    // where everyone stood.
+    // Lowest bid first; ties break toward whoever committed earlier.
     this.demoOrder = [...this.bids.entries()]
       .sort((a, b) => a[1].moves - b[1].moves || a[1].at - b[1].at)
-      .map(([id]) => id)
-      .filter((id) => this.players.get(id)?.connected);
+      .map(([id]) => id);
 
-    if (!this.demoOrder.length) {
+    this.demoIndex = -1;
+    this.advanceDemo();
+  }
+
+  // Each failure costs its bidder a point and hands the board to the next
+  // lowest bid. The round ends when someone proves their claim or the list
+  // runs out.
+  advanceDemo() {
+    this.demoIndex += 1;
+
+    // Skip anyone who dropped out while waiting their turn.
+    while (
+      this.demoIndex < this.demoOrder.length &&
+      !this.players.get(this.demoOrder[this.demoIndex])?.connected
+    ) {
+      this.demoIndex += 1;
+    }
+
+    if (this.demoIndex >= this.demoOrder.length) {
       this.enterReveal(this.unsolvedResult());
       return;
     }
 
-    this.demoIndex = 0;
     this.phase = PHASES.DEMO;
     this.positions = this.startPositions.slice();
     this.demoMoveCount = 0;
@@ -413,24 +473,27 @@ export class HostGame {
     });
   }
 
-  // Claiming a solution you cannot show costs a point, and the round is over --
-  // it does not pass to the next bidder. A disconnect is not penalised: a
-  // dropped connection is not a failed claim.
+  // Claiming a solution you cannot show costs a point, and the board passes to
+  // the next lowest bid. A disconnect is not penalised: a dropped connection is
+  // not a failed claim.
   failDemo(reason, { penalise = true } = {}) {
     const id = this.currentDemoId();
     const player = this.players.get(id);
-    if (player && penalise) player.score -= 1;
+    const penalty = player && penalise ? -1 : 0;
+    if (player) player.score += penalty;
 
-    this.notice = `${player?.name || "Player"} ${reason}`;
-    this.enterReveal({
-      ...this.unsolvedResult(),
-      failedId: id,
-      failedName: player?.name || "Player",
-      penalty: player && penalise ? -1 : 0,
+    this.roundFailures.push({
+      id,
+      name: player?.name || "Player",
       bid: this.currentBid(),
-      used: this.demoMoveCount,
+      penalty,
       reason
     });
+
+    this.notice = penalty
+      ? `${player?.name || "Player"} ${reason} (-1)`
+      : `${player?.name || "Player"} ${reason}`;
+    this.advanceDemo();
   }
 
   // A round nobody won. Shows the machine's answer so players can see what
@@ -439,12 +502,8 @@ export class HostGame {
     return {
       winnerId: null,
       winnerName: null,
-      failedId: null,
-      failedName: null,
-      penalty: 0,
       bid: null,
       used: null,
-      reason: null,
       solution: this.optimal?.solution ?? []
     };
   }
@@ -452,7 +511,11 @@ export class HostGame {
   enterReveal(result) {
     this.phase = PHASES.REVEAL;
     this.resignVotes.clear();
-    this.lastRound = { ...result, optimal: this.optimal?.moves ?? null };
+    this.lastRound = {
+      ...result,
+      optimal: this.optimal?.moves ?? null,
+      failures: this.roundFailures.slice()
+    };
 
     this.positions = this.startPositions.slice();
     this.revealDeadline = Date.now() + this.settings.revealSeconds * 1000;
@@ -465,6 +528,7 @@ export class HostGame {
     // Runs first: dropping a vanished demonstrator hands the turn on
     // immediately instead of burning their whole demo clock.
     this.dropStalePlayers();
+    this.updateBots();
 
     const now = Date.now();
 
