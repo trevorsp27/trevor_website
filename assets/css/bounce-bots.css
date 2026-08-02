@@ -105,6 +105,12 @@ kbd {
   background: var(--brand-soft);
 }
 
+.bb-btn.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  font-weight: 700;
+}
+
 .bb-btn-primary {
   background: var(--ink);
   color: var(--bg);

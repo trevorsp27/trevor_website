@@ -148,7 +148,7 @@ export class BoardView {
     this.drawGrid();
     this.drawCenter();
     this.drawDiagonals();
-    this.drawTargets();
+    this.drawTarget();
     this.drawWalls();
     this.drawRobots();
 
@@ -205,62 +205,52 @@ export class BoardView {
     });
   }
 
-  drawTargets() {
-    const { ctx, board } = this;
-
-    board.targets.forEach((target) => {
-      const active = this.target && target.cell === this.target.cell;
-      // Inactive targets stay faint so the live one is unmistakable.
-      ctx.globalAlpha = active ? 1 : 0.16;
-      this.drawShape(target, active);
-      ctx.globalAlpha = this.dim ? 0.45 : 1;
-    });
-  }
-
-  drawShape(target, active) {
+  // Only the live target is drawn. Robots are solid filled discs, so the
+  // target is deliberately the opposite: an open reticle with corner brackets
+  // and a hollow centre. Different silhouette, different fill, no overlap in
+  // how the two read at a glance.
+  drawTarget() {
     const { ctx } = this;
-    const x = this.cx(xOf(target.cell));
-    const y = this.cy(yOf(target.cell));
-    const mid = this.cell / 2;
-    const r = this.cell * (active ? 0.31 : 0.26);
-    const color = colorFor(target.color);
+    if (!this.target) return;
 
-    if (active) {
-      ctx.fillStyle = color;
-      ctx.globalAlpha = 0.16;
-      ctx.fillRect(x + 1, y + 1, this.cell - 2, this.cell - 2);
-      ctx.globalAlpha = 1;
-    }
+    const x = this.cx(xOf(this.target.cell));
+    const y = this.cy(yOf(this.target.cell));
+    const size = this.cell;
+    const color = colorFor(this.target.color);
+    const arm = size * 0.3;
+    const inset = size * 0.1;
+    const weight = Math.max(2, size * 0.09);
 
+    // Faint wash so the destination square itself is obvious.
     ctx.fillStyle = color;
+    ctx.globalAlpha = 0.14;
+    ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
+    ctx.globalAlpha = this.dim ? 0.45 : 1;
+
+    // Corner brackets.
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = weight;
+    ctx.lineCap = "square";
     ctx.beginPath();
 
-    if (target.shape === "circle") {
-      ctx.arc(x + mid, y + mid, r, 0, Math.PI * 2);
-    } else if (target.shape === "square") {
-      ctx.rect(x + mid - r, y + mid - r, r * 2, r * 2);
-    } else if (target.shape === "triangle") {
-      ctx.moveTo(x + mid, y + mid - r);
-      ctx.lineTo(x + mid + r, y + mid + r);
-      ctx.lineTo(x + mid - r, y + mid + r);
-      ctx.closePath();
-    } else {
-      // Wild: a four-point star.
-      for (let i = 0; i < 8; i += 1) {
-        const angle = (Math.PI / 4) * i - Math.PI / 2;
-        const radius = i % 2 === 0 ? r : r * 0.42;
-        const px = x + mid + Math.cos(angle) * radius;
-        const py = y + mid + Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-    }
+    const corners = [
+      [x + inset, y + inset, 1, 1],
+      [x + size - inset, y + inset, -1, 1],
+      [x + inset, y + size - inset, 1, -1],
+      [x + size - inset, y + size - inset, -1, -1]
+    ];
+    corners.forEach(([px, py, sx, sy]) => {
+      ctx.moveTo(px + sx * arm, py);
+      ctx.lineTo(px, py);
+      ctx.lineTo(px, py + sy * arm);
+    });
+    ctx.stroke();
 
-    if (active) ctx.fill();
-    else ctx.stroke();
+    // Hollow centre ring, so it never reads as a filled robot.
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size * 0.15, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1.5, size * 0.06);
+    ctx.stroke();
   }
 
   drawWalls() {

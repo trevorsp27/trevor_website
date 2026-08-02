@@ -58,6 +58,7 @@ export class HostGame {
     this.optimal = null;
 
     this.bids = new Map(); // playerId -> { moves, at }
+    this.skipVotes = new Set();
     this.demoOrder = [];
     this.demoIndex = -1;
     this.demoMoveCount = 0;
@@ -124,10 +125,18 @@ export class HostGame {
     const player = this.players.get(id);
     if (!player) return;
     player.connected = false;
+    this.skipVotes.delete(id);
 
     // A disconnect during someone's demo should not stall the round.
     if (this.phase === PHASES.DEMO && this.currentDemoId() === id) {
       this.failDemo("disconnected");
+      return;
+    }
+
+    // Losing a player lowers the bar, which may settle a pending skip vote.
+    if (this.phase === PHASES.BIDDING && this.skipVotes.size >= this.skipVotesNeeded()) {
+      this.notice = "Clock cut short by vote";
+      this.beginDemos();
       return;
     }
     this.changed();
@@ -184,6 +193,7 @@ export class HostGame {
 
     this.phase = PHASES.THINKING;
     this.bids.clear();
+    this.skipVotes.clear();
     this.demoOrder = [];
     this.demoIndex = -1;
     this.demoMoveCount = 0;
@@ -249,6 +259,31 @@ export class HostGame {
     this.beginDemos();
   }
 
+  // How many connected players it takes to cut the clock short: a strict
+  // majority, so one idle player cannot hold everyone hostage.
+  skipVotesNeeded() {
+    const connected = [...this.players.values()].filter((p) => p.connected).length;
+    return Math.floor(connected / 2) + 1;
+  }
+
+  // Once someone has bid, the rest of the clock only matters to players still
+  // hunting for something shorter. If most have given up, move on.
+  voteSkip(playerId) {
+    if (this.phase !== PHASES.BIDDING) return;
+    if (!this.players.get(playerId)?.connected) return;
+
+    // Toggle, so a player can change their mind if they spot something.
+    if (this.skipVotes.has(playerId)) this.skipVotes.delete(playerId);
+    else this.skipVotes.add(playerId);
+
+    if (this.skipVotes.size >= this.skipVotesNeeded()) {
+      this.notice = "Clock cut short by vote";
+      this.beginDemos();
+      return;
+    }
+    this.changed();
+  }
+
   skipRound(playerId) {
     if (playerId !== this.hostId) return;
     if (this.phase === PHASES.LOBBY || this.phase === PHASES.OVER) return;
@@ -259,6 +294,8 @@ export class HostGame {
   // ---- demonstrations ----------------------------------------------------
 
   beginDemos() {
+    this.skipVotes.clear();
+
     // Lowest bid first; ties break toward whoever committed earlier.
     this.demoOrder = [...this.bids.entries()]
       .sort((a, b) => a[1].moves - b[1].moves || a[1].at - b[1].at)
@@ -427,6 +464,8 @@ export class HostGame {
       startPositions: this.startPositions,
       positions: this.positions,
       bids: [...this.bids.entries()].map(([id, b]) => ({ id, moves: b.moves })),
+      skipVotes: [...this.skipVotes],
+      skipVotesNeeded: this.skipVotesNeeded(),
       demoOrder: this.demoOrder,
       currentDemo: this.currentDemoId(),
       currentBid: this.currentBid(),

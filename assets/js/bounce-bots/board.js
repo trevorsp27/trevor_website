@@ -88,6 +88,41 @@ function addCorner(board, rng, x, y) {
   if (!wouldSeal(board, x, y, horizontal)) addWall(board, x, y, horizontal);
 }
 
+// Wall stubs sticking inward from the outer ring. Without these a robot
+// travelling along an edge row runs the full width of the board every time,
+// which makes the borders useless. The physical board has a couple per side.
+function addPerimeterWalls(board, rng) {
+  const perSide = 2;
+
+  // Each side gets walls *perpendicular* to it, so they stop robots sliding
+  // along that edge. Corners are excluded: a wall there does nothing.
+  const sides = [
+    { fixed: 0, axis: "row", bits: [E, W] },
+    { fixed: SIZE - 1, axis: "row", bits: [E, W] },
+    { fixed: 0, axis: "col", bits: [N, S] },
+    { fixed: SIZE - 1, axis: "col", bits: [N, S] }
+  ];
+
+  sides.forEach((side) => {
+    const used = [];
+    for (let i = 0; i < perSide; i += 1) {
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const along = rng.range(2, SIZE - 3);
+        if (used.some((prev) => Math.abs(prev - along) < 3)) continue;
+
+        const x = side.axis === "row" ? along : side.fixed;
+        const y = side.axis === "row" ? side.fixed : along;
+        const bit = rng.pick(side.bits);
+
+        if (wouldSeal(board, x, y, bit)) continue;
+        addWall(board, x, y, bit);
+        used.push(along);
+        break;
+      }
+    }
+  });
+}
+
 function isCenter(board, cell) {
   return board.blocked[cell] === 1;
 }
@@ -141,6 +176,8 @@ export function generateBoard({ code, difficulty = "medium", useDiagonals = fals
       }
     });
   });
+
+  addPerimeterWalls(board, rng);
 
   // Target squares, each with its own corner walls.
   const palette = [];

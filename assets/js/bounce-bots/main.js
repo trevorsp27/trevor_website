@@ -65,6 +65,7 @@ function boot() {
 
   $("bb-reset").addEventListener("click", resetBoardForMe);
   $("bb-pass").addEventListener("click", () => send({ type: "demo-pass" }));
+  $("bb-vote-skip").addEventListener("click", () => send({ type: "vote-skip" }));
   $("bb-start").addEventListener("click", () => send({ type: "start" }));
   $("bb-lock").addEventListener("click", () => send({ type: "lock" }));
   $("bb-skip").addEventListener("click", () => send({ type: "skip" }));
@@ -225,6 +226,9 @@ function handleHostMessage(peerId, message) {
     case "demo-pass":
       game.passDemo(peerId);
       break;
+    case "vote-skip":
+      game.voteSkip(peerId);
+      break;
     default:
       break;
   }
@@ -256,6 +260,9 @@ function send(action) {
         break;
       case "demo-pass":
         game.passDemo(HOST_ID);
+        break;
+      case "vote-skip":
+        game.voteSkip(HOST_ID);
         break;
       default:
         break;
@@ -465,8 +472,12 @@ function renderTarget(snap) {
     box.style.color = "";
     return;
   }
-  const label = snap.target.color === "wild" ? "Any robot" : `${snap.target.color} robot`;
-  box.textContent = `${label} → ${snap.target.shape}`;
+  // The shape is no longer drawn on the board, so naming it would only confuse.
+  const label =
+    snap.target.color === "wild"
+      ? "Get any robot to the marker"
+      : `Get the ${snap.target.color} robot to the marker`;
+  box.textContent = label;
   box.style.color = colorFor(snap.target.color);
 }
 
@@ -511,6 +522,18 @@ function renderControls(snap, showScratch) {
   $("bb-bid-form").hidden = !canBid;
   $("bb-pass").hidden = !amDemonstrating();
   $("bb-reset").hidden = !(showScratch || amDemonstrating());
+
+  // Cutting the clock short only makes sense once it is actually running.
+  const vote = $("bb-vote-skip");
+  vote.hidden = snap.phase !== PHASES.BIDDING;
+  if (!vote.hidden) {
+    const votes = snap.skipVotes || [];
+    const mine = votes.includes(state.me);
+    vote.textContent = mine
+      ? `Gave up (${votes.length}/${snap.skipVotesNeeded})`
+      : `Give up on the clock (${votes.length}/${snap.skipVotesNeeded})`;
+    vote.classList.toggle("is-active", mine);
+  }
 
   // The move counter means different things in each phase, so label it.
   const counter = $("bb-moves");

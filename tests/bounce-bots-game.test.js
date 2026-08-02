@@ -283,6 +283,91 @@ test("disconnected players are skipped in the demo order", () => {
   assert.equal(game.currentDemoId(), "bob");
 });
 
+test("a majority vote cuts the bidding clock short", () => {
+  const game = newGame(); // host, alice, bob -> majority is 2
+  game.start("host");
+  game.bid("alice", 5);
+  assert.equal(game.phase, PHASES.BIDDING);
+  assert.equal(game.skipVotesNeeded(), 2);
+
+  game.voteSkip("bob");
+  assert.equal(game.phase, PHASES.BIDDING, "one vote is not enough");
+
+  game.voteSkip("host");
+  assert.equal(game.phase, PHASES.DEMO, "a majority ends the clock");
+  assert.equal(game.currentDemoId(), "alice", "the low bid still demonstrates");
+});
+
+test("a skip vote can be taken back", () => {
+  const game = newGame();
+  game.start("host");
+  game.bid("alice", 5);
+
+  game.voteSkip("bob");
+  assert.equal(game.skipVotes.size, 1);
+
+  game.voteSkip("bob");
+  assert.equal(game.skipVotes.size, 0, "voting again withdraws the vote");
+  assert.equal(game.phase, PHASES.BIDDING);
+});
+
+test("skip votes are ignored outside the bidding phase", () => {
+  const game = newGame();
+
+  game.voteSkip("alice"); // still in the lobby
+  assert.equal(game.skipVotes.size, 0);
+
+  game.start("host");
+  game.voteSkip("alice"); // thinking: no clock to cut
+  assert.equal(game.skipVotes.size, 0);
+  assert.equal(game.phase, PHASES.THINKING);
+});
+
+test("disconnected players cannot vote and their votes are released", () => {
+  const game = newGame();
+  game.addPlayer("carol", "Carol");
+  game.start("host");
+  game.bid("alice", 5);
+
+  game.voteSkip("bob"); // 1 of 3 needed (4 connected)
+  assert.equal(game.skipVotesNeeded(), 3);
+
+  game.removePlayer("bob");
+  assert.equal(game.skipVotes.has("bob"), false, "a leaver's vote is released");
+
+  game.voteSkip("bob");
+  assert.equal(game.skipVotes.size, 0, "a disconnected player cannot vote");
+});
+
+test("a disconnect can settle a pending skip vote", () => {
+  const game = newGame();
+  game.addPlayer("carol", "Carol");
+  game.start("host");
+  game.bid("alice", 5);
+
+  // Four connected, so three votes are needed.
+  game.voteSkip("host");
+  game.voteSkip("bob");
+  assert.equal(game.phase, PHASES.BIDDING);
+
+  // Carol leaves: three connected, so two votes now carry it.
+  game.removePlayer("carol");
+  assert.equal(game.phase, PHASES.DEMO);
+});
+
+test("skip votes reset between rounds", () => {
+  const game = newGame();
+  game.start("host");
+  game.bid("alice", 5);
+  game.voteSkip("bob");
+  assert.equal(game.skipVotes.size, 1);
+
+  game.skipRound("host");
+  game.revealDeadline = 0;
+  game.tick();
+  assert.equal(game.skipVotes.size, 0);
+});
+
 test("a player who stops reporting in is dropped", () => {
   const game = newGame();
   game.addPlayer("ghost", "Ghost");

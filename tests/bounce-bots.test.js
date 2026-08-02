@@ -111,6 +111,32 @@ test("easy boards carry more walls than hard boards", () => {
   assert.ok(total(easy) > total(hard), "easy should be denser than hard");
 });
 
+test("the perimeter carries inward-facing wall stubs", () => {
+  const board = generateBoard({ code: "EDGE", difficulty: "medium" });
+
+  // A wall perpendicular to an edge, i.e. one that actually stops a robot
+  // sliding along that edge. Border walls themselves do not count.
+  let topStubs = 0;
+  let leftStubs = 0;
+  for (let i = 1; i < SIZE - 1; i += 1) {
+    if (board.walls[idx(i, 0)] & (E | W)) topStubs += 1;
+    if (board.walls[idx(0, i)] & (N | S)) leftStubs += 1;
+  }
+
+  assert.ok(topStubs > 0, "top edge should have wall stubs");
+  assert.ok(leftStubs > 0, "left edge should have wall stubs");
+});
+
+test("a robot sliding along an edge can be stopped short", () => {
+  const board = generateBoard({ code: "EDGE", difficulty: "medium" });
+  const positions = [idx(0, 0), idx(5, 8), idx(6, 8), idx(7, 8), idx(9, 8)];
+
+  // With perimeter stubs in place, the top-left robot should no longer run
+  // the full width of the board.
+  const { to } = slide(board, positions, 0, 1);
+  assert.ok(to < idx(SIZE - 1, 0), `expected a stop before the far corner, got ${to}`);
+});
+
 test("board always produces the full target set", () => {
   const board = generateBoard({ code: "TGTS", difficulty: "medium" });
   assert.equal(board.targets.length, 17);
