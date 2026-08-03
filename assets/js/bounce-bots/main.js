@@ -4,12 +4,12 @@
 // `send()`. On the host that calls the game directly; on a client it posts to
 // the host. Nothing else in the UI needs to know which role it is running.
 
-import { generateBoard, makeLobbyCode } from "./board.js?v=20260803a";
-import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260803a";
-import { createHost, createClient } from "./net.js?v=20260803a";
-import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260803a";
-import { botLevel } from "./bot.js?v=20260803a";
-import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260803a";
+import { generateBoard, makeLobbyCode } from "./board.js?v=20260803b";
+import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260803b";
+import { createHost, createClient } from "./net.js?v=20260803b";
+import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260803b";
+import { botLevel } from "./bot.js?v=20260803b";
+import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260803b";
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,9 +26,9 @@ const state = {
   boardKey: "",
   view: null,
   selected: 0,
-  // The board is read-only until it is your turn to prove a path. Working the
-  // solution out in your head is the game.
-  lastPhase: null,
+  // Tracked so the clock pulse is only re-aligned when the deadline actually
+  // changes, rather than on every snapshot.
+  bidDeadline: 0,
   round: -1,
   heartbeat: null
 };
@@ -306,22 +306,28 @@ function applySnapshot(snapshot) {
     $("bb-bid-input").value = "";
   }
 
-  // The moment the first bid lands, everyone else is suddenly on a clock. That
-  // transition is easy to miss, so the board flashes when it happens.
-  if (snapshot.phase === PHASES.BIDDING && state.lastPhase === PHASES.THINKING) {
-    flashClockStart();
-  }
-  state.lastPhase = snapshot.phase;
-
   render();
 }
 
-function flashClockStart() {
+// The board pulses once per second while the clock runs, so the passing time is
+// visible without looking away from the board.
+function syncClockPulse(snapshot) {
   const wrap = $("bb-board-wrap");
-  wrap.classList.remove("is-clock-started");
-  // Force a reflow so the animation restarts even if it is already playing.
-  void wrap.offsetWidth;
-  wrap.classList.add("is-clock-started");
+  const running = snapshot.phase === PHASES.BIDDING && snapshot.bidDeadline > 0;
+
+  wrap.classList.toggle("is-bidding", running);
+  if (!running) {
+    state.bidDeadline = 0;
+    return;
+  }
+  if (snapshot.bidDeadline === state.bidDeadline) return;
+  state.bidDeadline = snapshot.bidDeadline;
+
+  // A CSS animation starts when its class is applied, which is a fraction of a
+  // second off from where the countdown happens to be. A negative delay shifts
+  // the cycle so each flash lands on the same beat as the number changing.
+  const offset = (((Date.now() - snapshot.bidDeadline) % 1000) + 1000) % 1000;
+  wrap.style.setProperty("--bb-tick-delay", `-${offset}ms`);
 }
 
 function amDemonstrating() {
@@ -436,7 +442,7 @@ function render() {
   renderClock();
 
   // A live clock is worth showing on the board itself, not just in the panel.
-  $("bb-board-wrap").classList.toggle("is-bidding", snap.phase === PHASES.BIDDING);
+  syncClockPulse(snap);
 
   document.querySelectorAll(".bb-robot-btn").forEach((btn) => {
     btn.classList.toggle("is-active", Number(btn.dataset.robot) === state.selected);

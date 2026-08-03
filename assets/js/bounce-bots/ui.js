@@ -4,8 +4,8 @@
 // 400-odd edge segments as elements would mean a wrapper per cell and a lot of
 // fighting with border collapse; here it is a handful of stroked lines.
 
-import { SIZE, DIRS, N, E, S, W, COLORS, CELEBRATE_MS, xOf, yOf } from "./constants.js?v=20260803a";
-import { slide } from "./rules.js?v=20260803a";
+import { SIZE, DIRS, N, E, S, W, COLORS, CELEBRATE_MS, xOf, yOf } from "./constants.js?v=20260803b";
+import { slide } from "./rules.js?v=20260803b";
 
 export const ROBOT_COLORS = {
   red: "#e5484d",

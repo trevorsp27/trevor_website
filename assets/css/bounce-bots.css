@@ -176,25 +176,18 @@ kbd {
 /* The first bid puts everyone on a clock. That is easy to miss when you are
    staring at the board, so the border flashes once and then holds a muted
    red for as long as the clock is running. */
-/* Every keyframe rests on the same red the clock holds afterwards, including
-   0%. A CSS animation does not advance in a backgrounded tab, so a frame that
-   differed from the resting state would strand the border on the wrong colour. */
-@keyframes bb-clock-start {
+/* One pulse per second of the bid clock: the flash is at 0% and decays fast,
+   leaving most of the cycle at the resting red. That ordering matters -- a CSS
+   animation does not advance in a backgrounded tab, so freezing anywhere in the
+   long tail leaves the border on the colour it should be showing anyway. */
+@keyframes bb-clock-tick {
   0% {
+    border-color: #e5484d;
+    box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.32);
+  }
+  22% {
     border-color: rgba(229, 72, 77, 0.45);
     box-shadow: none;
-  }
-  15% {
-    border-color: #e5484d;
-    box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.35);
-  }
-  40% {
-    border-color: rgba(229, 72, 77, 0.45);
-    box-shadow: none;
-  }
-  60% {
-    border-color: #e5484d;
-    box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.28);
   }
   100% {
     border-color: rgba(229, 72, 77, 0.45);
@@ -204,14 +197,13 @@ kbd {
 
 .bb-board-wrap.is-bidding {
   border-color: rgba(229, 72, 77, 0.45);
-}
-
-.bb-board-wrap.is-clock-started {
-  animation: bb-clock-start 1100ms ease-in-out 1;
+  /* The negative delay is set from JS to align the flash with the countdown. */
+  animation: bb-clock-tick 1000ms ease-out infinite;
+  animation-delay: var(--bb-tick-delay, 0ms);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bb-board-wrap.is-clock-started {
+  .bb-board-wrap.is-bidding {
     animation: none;
   }
 }
