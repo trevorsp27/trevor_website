@@ -17,9 +17,9 @@
 // watchable the demonstration is. Note the host ticks every 250ms, so any
 // delay is quantised to a multiple of that.
 
-import { Rng } from "./rng.js?v=20260802d";
-import { applyMove } from "./rules.js?v=20260802d";
-import { COLORS } from "./constants.js?v=20260802d";
+import { Rng } from "./rng.js?v=20260803a";
+import { applyMove } from "./rules.js?v=20260803a";
+import { COLORS } from "./constants.js?v=20260803a";
 
 export const BOT_LEVELS = {
   1: {

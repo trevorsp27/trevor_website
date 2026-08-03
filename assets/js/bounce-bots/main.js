@@ -4,13 +4,12 @@
 // `send()`. On the host that calls the game directly; on a client it posts to
 // the host. Nothing else in the UI needs to know which role it is running.
 
-import { generateBoard, makeLobbyCode } from "./board.js?v=20260802d";
-import { applyMove } from "./rules.js?v=20260802d";
-import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260802d";
-import { createHost, createClient } from "./net.js?v=20260802d";
-import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260802d";
-import { botLevel } from "./bot.js?v=20260802d";
-import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260802d";
+import { generateBoard, makeLobbyCode } from "./board.js?v=20260803a";
+import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260803a";
+import { createHost, createClient } from "./net.js?v=20260803a";
+import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260803a";
+import { botLevel } from "./bot.js?v=20260803a";
+import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260803a";
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,11 +26,10 @@ const state = {
   boardKey: "",
   view: null,
   selected: 0,
-  // Local sandbox used while thinking and bidding, so players can count a
-  // solution without anyone else seeing it.
-  scratch: null,
-  scratchMoves: 0,
-  scratchRound: -1,
+  // The board is read-only until it is your turn to prove a path. Working the
+  // solution out in your head is the game.
+  lastPhase: null,
+  round: -1,
   heartbeat: null
 };
 
@@ -68,7 +66,7 @@ function boot() {
 
   $("bb-reset").addEventListener("click", resetBoardForMe);
   $("bb-pass").addEventListener("click", () => send({ type: "demo-pass" }));
-  $("bb-resign").addEventListener("click", () => send({ type: "vote-skip" }));
+  $("bb-resign").addEventListener("click", () => send({ type: "vote-resign" }));
   $("bb-start").addEventListener("click", () => send({ type: "start" }));
   $("bb-lock").addEventListener("click", () => send({ type: "lock" }));
   $("bb-skip").addEventListener("click", () => send({ type: "skip" }));
@@ -237,7 +235,7 @@ function handleHostMessage(peerId, message) {
     case "demo-pass":
       game.passDemo(peerId);
       break;
-    case "vote-skip":
+    case "vote-resign":
       game.voteResign(peerId);
       break;
     default:
@@ -272,7 +270,7 @@ function send(action) {
       case "demo-pass":
         game.passDemo(HOST_ID);
         break;
-      case "vote-skip":
+      case "vote-resign":
         game.voteResign(HOST_ID);
         break;
       default:
@@ -303,20 +301,27 @@ function applySnapshot(snapshot) {
     state.view.setBoard(state.board);
   }
 
-  // A new round resets the private sandbox.
-  if (snapshot.round !== state.scratchRound) {
-    state.scratchRound = snapshot.round;
-    state.scratch = snapshot.startPositions ? snapshot.startPositions.slice() : null;
-    state.scratchMoves = 0;
+  if (snapshot.round !== state.round) {
+    state.round = snapshot.round;
     $("bb-bid-input").value = "";
   }
+
+  // The moment the first bid lands, everyone else is suddenly on a clock. That
+  // transition is easy to miss, so the board flashes when it happens.
+  if (snapshot.phase === PHASES.BIDDING && state.lastPhase === PHASES.THINKING) {
+    flashClockStart();
+  }
+  state.lastPhase = snapshot.phase;
 
   render();
 }
 
-function isScratchPhase() {
-  const phase = state.snapshot?.phase;
-  return phase === PHASES.THINKING || phase === PHASES.BIDDING;
+function flashClockStart() {
+  const wrap = $("bb-board-wrap");
+  wrap.classList.remove("is-clock-started");
+  // Force a reflow so the animation restarts even if it is already playing.
+  void wrap.offsetWidth;
+  wrap.classList.add("is-clock-started");
 }
 
 function amDemonstrating() {
@@ -363,31 +368,17 @@ function handleKey(event) {
   moveSelected(dir);
 }
 
+// Robots only ever move during your own demonstration. The host enforces this
+// too -- this is just so the board does not pretend otherwise.
 function moveSelected(dir) {
-  if (amDemonstrating()) {
-    // Authoritative: the host validates and echoes the result back.
-    send({ type: "demo-move", robot: state.selected, dir });
-    return;
-  }
-
-  if (!isScratchPhase() || !state.scratch || !state.board) return;
-
-  const next = applyMove(state.board, state.scratch, state.selected, dir);
-  if (!next) return;
-  state.scratch = next;
-  state.scratchMoves += 1;
-  render();
+  if (!amDemonstrating()) return;
+  // Authoritative: the host validates and echoes the result back.
+  send({ type: "demo-move", robot: state.selected, dir });
 }
 
 function resetBoardForMe() {
-  if (amDemonstrating()) {
-    send({ type: "demo-reset" });
-    return;
-  }
-  if (!state.snapshot?.startPositions) return;
-  state.scratch = state.snapshot.startPositions.slice();
-  state.scratchMoves = 0;
-  render();
+  if (!amDemonstrating()) return;
+  send({ type: "demo-reset" });
 }
 
 function submitBid() {
@@ -427,11 +418,8 @@ function render() {
   const snap = state.snapshot;
   if (!snap) return;
 
-  const showScratch = isScratchPhase();
-  const positions = showScratch ? state.scratch : snap.positions;
-
   state.view.setState({
-    positions,
+    positions: snap.positions,
     target: snap.target,
     // Grey the board while someone else demonstrates: you are watching, not playing.
     dim: snap.phase === PHASES.DEMO && !amDemonstrating(),
@@ -444,8 +432,11 @@ function render() {
 
   renderTarget(snap);
   renderPlayers(snap);
-  renderControls(snap, showScratch);
+  renderControls(snap);
   renderClock();
+
+  // A live clock is worth showing on the board itself, not just in the panel.
+  $("bb-board-wrap").classList.toggle("is-bidding", snap.phase === PHASES.BIDDING);
 
   document.querySelectorAll(".bb-robot-btn").forEach((btn) => {
     btn.classList.toggle("is-active", Number(btn.dataset.robot) === state.selected);
@@ -526,7 +517,7 @@ function renderPlayers(snap) {
   $("bb-players").innerHTML = rows;
 }
 
-function renderControls(snap, showScratch) {
+function renderControls(snap) {
   const isHost = state.me === snap.hostId;
   const inPlay = snap.phase !== PHASES.LOBBY && snap.phase !== PHASES.OVER;
 
@@ -539,7 +530,7 @@ function renderControls(snap, showScratch) {
   const canBid = snap.phase === PHASES.THINKING || snap.phase === PHASES.BIDDING;
   $("bb-bid-form").hidden = !canBid;
   $("bb-pass").hidden = !amDemonstrating();
-  $("bb-reset").hidden = !(showScratch || amDemonstrating());
+  $("bb-reset").hidden = !amDemonstrating();
 
   // You only get a vote if you are one of the players the decision rests on:
   // everyone before a bid, and only the players still searching after one.
@@ -570,8 +561,8 @@ function renderControls(snap, showScratch) {
     // nothing happening.
     const who = snap.players.find((p) => p.id === snap.currentDemo);
     counter.textContent = `${who?.name || "They"}: ${snap.demoMoveCount} / ${snap.currentBid} moves`;
-  } else if (showScratch) {
-    counter.textContent = `${state.scratchMoves} moves tried (private)`;
+  } else if (canBid) {
+    counter.textContent = "Work it out in your head — the board is locked.";
   } else {
     counter.textContent = "";
   }

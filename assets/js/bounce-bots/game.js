@@ -4,12 +4,12 @@
 // Nothing here touches the DOM or the network. The host wires it to both, which
 // keeps the rules testable and stops UI bugs from corrupting game state.
 
-import { Rng } from "./rng.js?v=20260802d";
-import { generateBoard, randomRobotPositions } from "./board.js?v=20260802d";
-import { applyMove, isSolved } from "./rules.js?v=20260802d";
-import { isPlayableRound } from "./solver.js?v=20260802d";
-import { COLORS, CELEBRATE_MS } from "./constants.js?v=20260802d";
-import { BotPlayer, botLevel } from "./bot.js?v=20260802d";
+import { Rng } from "./rng.js?v=20260803a";
+import { generateBoard, randomRobotPositions } from "./board.js?v=20260803a";
+import { applyMove, isSolved } from "./rules.js?v=20260803a";
+import { isPlayableRound } from "./solver.js?v=20260803a";
+import { COLORS, CELEBRATE_MS } from "./constants.js?v=20260803a";
+import { BotPlayer, botLevel } from "./bot.js?v=20260803a";
 
 export const PHASES = {
   LOBBY: "lobby",

@@ -2,7 +2,7 @@
 // The host re-runs these to validate a demonstrated solution, and the solver
 // runs them a few hundred thousand times per round, so they stay allocation-light.
 
-import { SIZE, DIRS, DEFLECT, COLORS, inBounds, xOf, yOf } from "./constants.js?v=20260802d";
+import { SIZE, DIRS, DEFLECT, COLORS, inBounds, xOf, yOf } from "./constants.js?v=20260803a";
 
 // A robot slides until something stops it. Diagonals do not stop it -- they
 // turn it 90 degrees and it keeps going, which is what makes them interesting.

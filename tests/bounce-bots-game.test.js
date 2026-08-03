@@ -126,6 +126,31 @@ test("demo order is lowest bid first, ties to the earlier bidder", () => {
   assert.equal(game.currentDemo ?? game.currentDemoId(), "host");
 });
 
+test("robots cannot be moved before the proving stage", () => {
+  const game = newGame();
+  game.start("host");
+
+  // Thinking: the board is locked for everyone, including the host.
+  const start = game.positions.slice();
+  ["host", "alice", "bob"].forEach((id) => {
+    for (let robot = 0; robot < COLORS.length; robot += 1) {
+      for (let dir = 0; dir < 4; dir += 1) game.demoMove(id, robot, dir);
+    }
+  });
+  assert.deepEqual(game.positions, start, "nothing moves while people are thinking");
+
+  // Bidding: still locked.
+  game.bid("alice", 5);
+  assert.equal(game.phase, PHASES.BIDDING);
+  ["host", "alice", "bob"].forEach((id) => {
+    for (let robot = 0; robot < COLORS.length; robot += 1) {
+      for (let dir = 0; dir < 4; dir += 1) game.demoMove(id, robot, dir);
+    }
+  });
+  assert.deepEqual(game.positions, start, "nothing moves while the clock runs");
+  assert.equal(game.demoMoveCount, 0);
+});
+
 test("only the current demonstrator can move robots", () => {
   const game = newGame();
   game.start("host");
