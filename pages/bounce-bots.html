@@ -16,11 +16,11 @@
     />
     <link rel="icon" type="image/png" href="../assets/profile-favicon.png?v=20260526e" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/bounce-bots.css?v=20260803b" />
+    <link rel="stylesheet" href="../assets/css/bounce-bots.css?v=20260804b" />
     <script src="../assets/js/site-data.js?v=20260801a" defer></script>
     <script src="../assets/js/site.js?v=20260602a" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script type="module" src="../assets/js/bounce-bots/main.js?v=20260803b"></script>
+    <script type="module" src="../assets/js/bounce-bots/main.js?v=20260804b"></script>
   </head>
   <body data-page="bounce-bots">
     <div class="site-shell">
@@ -142,8 +142,61 @@
 
         <!-- Game -->
         <section class="bb-game" id="bb-game" hidden aria-labelledby="bb-phase">
-          <div class="bb-board-wrap" id="bb-board-wrap">
-            <canvas id="bb-canvas" width="640" height="640" aria-label="Game board"></canvas>
+          <div class="bb-stage">
+            <!-- Teaches the loop at a glance: the current step lights up. -->
+            <ol class="bb-steps" id="bb-steps">
+              <li data-step="think"><span>1</span>Find a route</li>
+              <li data-step="bid"><span>2</span>Bid your move count</li>
+              <li data-step="prove"><span>3</span>Prove it</li>
+            </ol>
+
+            <div class="bb-board-wrap" id="bb-board-wrap">
+              <canvas id="bb-canvas" width="640" height="640" aria-label="Game board"></canvas>
+            </div>
+
+            <!-- The bid bar is the main event: it is the only thing you
+                 actually do, and it is on a clock. -->
+            <section class="bb-bidbar" id="bb-bidbar" hidden aria-labelledby="bb-bidbar-title">
+              <div class="bb-bidbar-head">
+                <h2 id="bb-bidbar-title">How many moves do you need?</h2>
+                <span class="bb-bidbar-clock" id="bb-bidbar-clock"></span>
+              </div>
+
+              <div class="bb-numpad" id="bb-numpad" role="group" aria-label="Bid a move count"></div>
+
+              <form class="bb-bid-more" id="bb-bid-form">
+                <label for="bb-bid-input">or type it</label>
+                <input
+                  id="bb-bid-input"
+                  type="number"
+                  min="1"
+                  max="99"
+                  inputmode="numeric"
+                  placeholder="12"
+                />
+                <button class="bb-btn" type="submit">Bid</button>
+              </form>
+
+              <p class="bb-bidbar-state" id="bb-bidbar-state"></p>
+
+              <div class="bb-actions">
+                <button class="bb-btn" id="bb-resign" type="button" hidden>Resign the round</button>
+              </div>
+            </section>
+
+            <!-- Shown in place of the bid bar while a proof is being played. -->
+            <section class="bb-proofbar" id="bb-proofbar" hidden>
+              <div class="bb-bidbar-head">
+                <h2 id="bb-proof-title">Proving the path</h2>
+                <span class="bb-bidbar-clock" id="bb-proof-clock"></span>
+              </div>
+              <p class="bb-proof-count" id="bb-moves"></p>
+              <p class="bb-hint" id="bb-proof-hint"></p>
+              <div class="bb-actions">
+                <button class="bb-btn" id="bb-reset" type="button" hidden>Start over</button>
+                <button class="bb-btn" id="bb-pass" type="button" hidden>Give up</button>
+              </div>
+            </section>
           </div>
 
           <aside class="bb-side">
@@ -157,25 +210,13 @@
               <p class="bb-note" id="bb-note"></p>
             </div>
 
-            <div class="panel bb-panel">
-              <h3>Robots</h3>
+            <div class="panel bb-panel" id="bb-robot-panel" hidden>
+              <h3>Move a robot</h3>
               <div class="bb-robots" id="bb-robots"></div>
-              <p class="bb-moves" id="bb-moves"></p>
               <p class="bb-hint">
-                Press <kbd>1</kbd>–<kbd>5</kbd> or click a robot to select it. Arrow keys move it.
+                Press <kbd>1</kbd>–<kbd>5</kbd> or click a robot to pick it, then use the
+                <kbd>arrow keys</kbd>. It slides until something stops it.
               </p>
-
-              <form class="bb-bid" id="bb-bid-form" hidden>
-                <label for="bb-bid-input">I can solve it in</label>
-                <input id="bb-bid-input" type="number" min="1" max="99" placeholder="5" />
-                <button class="bb-btn bb-btn-primary" type="submit">Bid</button>
-              </form>
-
-              <div class="bb-actions">
-                <button class="bb-btn" id="bb-reset" type="button" hidden>Reset board</button>
-                <button class="bb-btn" id="bb-pass" type="button" hidden>Pass</button>
-                <button class="bb-btn" id="bb-resign" type="button" hidden>Resign the round</button>
-              </div>
             </div>
 
             <div class="panel bb-panel">
@@ -205,6 +246,8 @@
             <li>A robot slides in a straight line until a wall, the centre block, or another robot stops it. There is no stopping halfway.</li>
             <li>Only one marker shows at a time — the bracketed square with a hollow centre. Get the robot matching its colour onto it. A purple marker accepts any robot.</li>
             <li>The board is locked while everyone is thinking. Work the route out in your head — you only get to touch the robots when it is your turn to prove it.</li>
+            <li>Bid with the number buttons, or type a number and press <kbd>Enter</kbd>. Once you have bid, only lower numbers stay available — you can improve a bid, never inflate it.</li>
+            <li>Every move in a proof is drawn on the board as a numbered arrow, so you can check the count even if you look away. When nobody solves it, the shortest line is revealed the same way.</li>
             <li>The first bid starts a shared countdown, and the board border flashes red when it begins. You can keep lowering your own bid until it runs out.</li>
             <li>Lowest bid has to prove it. Land the robot within your bid and you score a point.</li>
             <li>Fail to show your line and it costs you a point, then the next-lowest bidder gets their shot. That repeats until somebody proves it or every bidder has paid — so do not bid what you have not found.</li>

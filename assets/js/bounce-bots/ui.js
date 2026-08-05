@@ -4,8 +4,8 @@
 // 400-odd edge segments as elements would mean a wrapper per cell and a lot of
 // fighting with border collapse; here it is a handful of stroked lines.
 
-import { SIZE, DIRS, N, E, S, W, COLORS, CELEBRATE_MS, xOf, yOf } from "./constants.js?v=20260803b";
-import { slide } from "./rules.js?v=20260803b";
+import { SIZE, DIRS, N, E, S, W, COLORS, CELEBRATE_MS, xOf, yOf } from "./constants.js?v=20260804b";
+import { slide, traceMoves } from "./rules.js?v=20260804b";
 
 export const ROBOT_COLORS = {
   red: "#e5484d",
@@ -36,6 +36,7 @@ export class BoardView {
     this.dim = false;
     this.celebrateUntil = 0;
     this.celebrating = false;
+    this.trail = null;
 
     // Animation state: which robot is sliding, along what path, since when.
     this.anim = null;
@@ -56,6 +57,17 @@ export class BoardView {
 
   setSelected(index) {
     this.selected = index;
+    this.draw();
+  }
+
+  // The route taken so far in the current proof, as {startPositions, moves}.
+  // Passing null clears it.
+  setTrail(trail) {
+    if (!trail || !this.board || !trail.startPositions || !trail.moves?.length) {
+      this.trail = null;
+    } else {
+      this.trail = traceMoves(this.board, trail.startPositions, trail.moves).segments;
+    }
     this.draw();
   }
 
@@ -176,10 +188,98 @@ export class BoardView {
     this.drawDiagonals();
     this.drawTarget();
     this.drawWalls();
+    // Under the robots, so a route never obscures a piece.
+    this.drawTrail();
     this.drawRobots();
     this.drawCelebration();
 
     ctx.restore();
+  }
+
+  // The proof so far: one numbered, arrowed route per move. Earlier moves fade
+  // back so the most recent one reads first, but the whole sequence stays
+  // legible for anyone who lost count.
+  drawTrail() {
+    if (!this.trail?.length) return;
+    const { ctx } = this;
+    const last = this.trail.length - 1;
+
+    this.trail.forEach((seg, i) => {
+      const color = ROBOT_COLORS[COLORS[seg.robot]];
+      const recent = i === last;
+      const age = (i + 1) / this.trail.length;
+
+      ctx.globalAlpha = recent ? 0.95 : 0.25 + age * 0.35;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(2, this.cell * (recent ? 0.16 : 0.11));
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      ctx.beginPath();
+      seg.path.forEach((cell, step) => {
+        const px = this.cx(xOf(cell)) + this.cell / 2;
+        const py = this.cy(yOf(cell)) + this.cell / 2;
+        if (step === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+
+      this.drawArrowhead(seg, color);
+      this.drawStepBadge(seg, color, recent);
+    });
+
+    ctx.globalAlpha = 1;
+  }
+
+  drawArrowhead(seg, color) {
+    const { ctx } = this;
+    const path = seg.path;
+    if (path.length < 2) return;
+
+    const tip = path[path.length - 1];
+    const prev = path[path.length - 2];
+    const tx = this.cx(xOf(tip)) + this.cell / 2;
+    const ty = this.cy(yOf(tip)) + this.cell / 2;
+    const angle = Math.atan2(yOf(tip) - yOf(prev), xOf(tip) - xOf(prev));
+    const size = this.cell * 0.26;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(
+      tx - Math.cos(angle - 0.42) * size,
+      ty - Math.sin(angle - 0.42) * size
+    );
+    ctx.lineTo(
+      tx - Math.cos(angle + 0.42) * size,
+      ty - Math.sin(angle + 0.42) * size
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // The move number, parked beside the start of the move so it never sits
+  // under the robot that ends up there.
+  drawStepBadge(seg, color, recent) {
+    const { ctx } = this;
+    const x = this.cx(xOf(seg.from)) + this.cell / 2;
+    const y = this.cy(yOf(seg.from)) + this.cell / 2;
+    const r = this.cell * 0.2;
+
+    ctx.globalAlpha = recent ? 1 : 0.6;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#0b0b0b";
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1.5, this.cell * 0.05);
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.font = `700 ${Math.round(this.cell * 0.3)}px "Space Grotesk", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(seg.number), x, y + 1);
   }
 
   drawCelebration() {

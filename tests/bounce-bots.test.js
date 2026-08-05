@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 
 import { Rng, hashSeed } from "../assets/js/bounce-bots/rng.js";
 import { generateBoard, randomRobotPositions } from "../assets/js/bounce-bots/board.js";
-import { slide, applyMove, replay, isSolved } from "../assets/js/bounce-bots/rules.js";
+import {
+  slide,
+  applyMove,
+  replay,
+  isSolved,
+  traceMoves
+} from "../assets/js/bounce-bots/rules.js";
 import { solve } from "../assets/js/bounce-bots/solver.js";
 import {
   SIZE,
@@ -245,6 +251,89 @@ test("replay accepts a legal sequence", () => {
   ]);
   assert.equal(result.ok, true);
   assert.equal(result.positions[0], idx(SIZE - 1, SIZE - 1));
+});
+
+test("traceMoves expands a move list into numbered routes", () => {
+  const board = emptyBoard();
+  const positions = positionsWithRedAt(idx(0, 0));
+
+  const { segments, positions: ended } = traceMoves(board, positions, [
+    { robot: 0, dir: 1 },
+    { robot: 0, dir: 2 }
+  ]);
+
+  assert.equal(segments.length, 2);
+  assert.deepEqual(
+    segments.map((s) => s.number),
+    [1, 2]
+  );
+  assert.equal(segments[0].from, idx(0, 0));
+  assert.equal(segments[0].to, idx(SIZE - 1, 0));
+  assert.equal(segments[1].from, idx(SIZE - 1, 0));
+  assert.equal(segments[1].to, idx(SIZE - 1, SIZE - 1));
+  assert.equal(ended[0], idx(SIZE - 1, SIZE - 1));
+});
+
+test("traced routes carry every cell travelled, for drawing", () => {
+  const board = emptyBoard();
+  const positions = positionsWithRedAt(idx(0, 0));
+  const { segments } = traceMoves(board, positions, [{ robot: 0, dir: 1 }]);
+
+  // Start cell plus the fifteen it crosses.
+  assert.equal(segments[0].path.length, SIZE);
+  assert.equal(segments[0].path[0], idx(0, 0));
+  assert.equal(segments[0].path[SIZE - 1], idx(SIZE - 1, 0));
+});
+
+test("a traced route bends at a diagonal", () => {
+  const board = emptyBoard();
+  board.diagonals[idx(5, 5)] = { kind: "/", color: "blue" };
+  const positions = positionsWithRedAt(idx(0, 5));
+
+  const { segments } = traceMoves(board, positions, [{ robot: 0, dir: 1 }]);
+  const path = segments[0].path;
+
+  assert.equal(segments[0].to, idx(5, 0));
+  // The corner cell must be present, or the drawn line would cut across.
+  assert.ok(path.includes(idx(5, 5)), "the bend cell should be on the path");
+});
+
+test("traceMoves stops at the first impossible move", () => {
+  const board = emptyBoard();
+  const positions = positionsWithRedAt(idx(0, 0));
+
+  const { segments } = traceMoves(board, positions, [
+    { robot: 0, dir: 1 },
+    { robot: 0, dir: 0 }, // already on the top row: goes nowhere
+    { robot: 0, dir: 2 }
+  ]);
+
+  assert.equal(segments.length, 1, "a move that cannot happen ends the trace");
+});
+
+test("traceMoves survives malformed input", () => {
+  const board = emptyBoard();
+  const positions = positionsWithRedAt(idx(0, 0));
+
+  assert.equal(traceMoves(board, positions, []).segments.length, 0);
+  assert.equal(traceMoves(board, positions, [null]).segments.length, 0);
+  assert.equal(traceMoves(board, positions, [{ robot: 99, dir: 0 }]).segments.length, 0);
+});
+
+test("traceMoves agrees with replay on the final arrangement", () => {
+  const board = generateBoard({ code: "TRCE", difficulty: "medium" });
+  const positions = [idx(2, 2), idx(9, 4), idx(4, 11), idx(12, 8), idx(6, 6)];
+  const moves = [
+    { robot: 0, dir: 1 },
+    { robot: 2, dir: 0 },
+    { robot: 0, dir: 2 }
+  ];
+
+  const traced = traceMoves(board, positions, moves);
+  const replayed = replay(board, positions, moves);
+
+  assert.equal(replayed.ok, true);
+  assert.deepEqual(traced.positions, replayed.positions);
 });
 
 test("solver finds the optimal two-move solution", () => {

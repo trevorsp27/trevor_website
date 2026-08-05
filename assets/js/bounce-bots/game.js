@@ -4,12 +4,12 @@
 // Nothing here touches the DOM or the network. The host wires it to both, which
 // keeps the rules testable and stops UI bugs from corrupting game state.
 
-import { Rng } from "./rng.js?v=20260803b";
-import { generateBoard, randomRobotPositions } from "./board.js?v=20260803b";
-import { applyMove, isSolved } from "./rules.js?v=20260803b";
-import { isPlayableRound } from "./solver.js?v=20260803b";
-import { COLORS, CELEBRATE_MS } from "./constants.js?v=20260803b";
-import { BotPlayer, botLevel } from "./bot.js?v=20260803b";
+import { Rng } from "./rng.js?v=20260804b";
+import { generateBoard, randomRobotPositions } from "./board.js?v=20260804b";
+import { applyMove, isSolved } from "./rules.js?v=20260804b";
+import { isPlayableRound } from "./solver.js?v=20260804b";
+import { COLORS, CELEBRATE_MS } from "./constants.js?v=20260804b";
+import { BotPlayer, botLevel } from "./bot.js?v=20260804b";
 
 export const PHASES = {
   LOBBY: "lobby",
@@ -580,6 +580,9 @@ export class HostGame {
       currentDemo: this.currentDemoId(),
       currentBid: this.currentBid(),
       demoMoveCount: this.demoMoveCount,
+      // A handful of {robot, dir} pairs. Clients expand these back into routes
+      // so the proof can be drawn on the board.
+      demoTrail: this.demoTrail,
       bidDeadline: this.bidDeadline,
       demoDeadline: this.demoDeadline,
       revealDeadline: this.revealDeadline,

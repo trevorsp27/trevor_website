@@ -165,8 +165,6 @@ kbd {
 }
 
 .bb-board-wrap {
-  position: sticky;
-  top: 1rem;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -324,24 +322,162 @@ kbd {
   background: var(--brand-soft);
 }
 
-/* ---- bidding ----------------------------------------------------------- */
+/* ---- the stage: steps, board, bid bar ---------------------------------- */
 
-.bb-bid {
+.bb-stage {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.8rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--line);
+  flex-direction: column;
+  gap: 0.7rem;
+  position: sticky;
+  top: 1rem;
 }
 
-.bb-bid label {
-  font-size: 0.88rem;
+/* Three steps, current one lit. This is the whole game loop in one line. */
+.bb-steps {
+  display: flex;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bb-steps li {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  color: var(--muted);
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+
+.bb-steps li span {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.bb-steps li.is-current {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--brand-soft);
+}
+
+.bb-steps li.is-current span {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.bb-steps li.is-done {
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+/* ---- bid bar ----------------------------------------------------------- */
+
+.bb-bidbar,
+.bb-proofbar {
+  padding: 0.85rem 1rem 0.9rem;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.bb-proofbar {
+  border-color: var(--line);
+}
+
+.bb-bidbar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.bb-bidbar-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.bb-bidbar-clock {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bb-bidbar-clock.is-urgent {
+  color: #e5484d;
+}
+
+/* Big targets: bidding is timed, so it must never take aim. */
+.bb-numpad {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(2.6rem, 1fr));
+  gap: 0.4rem;
+}
+
+.bb-num {
+  padding: 0.6rem 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.bb-num:hover:not(:disabled),
+.bb-num:focus-visible:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* Bids may only ever go down, so anything you cannot claim is visibly out of
+   reach. The rule teaches itself. */
+.bb-num:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.bb-num.is-mine {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  opacity: 1;
+}
+
+.bb-bid-more {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.bb-bid-more label {
+  font-size: 0.85rem;
   color: var(--muted);
 }
 
-.bb-bid input {
+.bb-bid-more input {
   width: 4.5rem;
   padding: 0.4rem 0.5rem;
   background: var(--brand-soft);
@@ -350,6 +486,24 @@ kbd {
   border-radius: var(--radius);
   font-family: inherit;
   font-size: 0.95rem;
+}
+
+.bb-bidbar-state,
+.bb-proof-count {
+  margin: 0.6rem 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.bb-proof-count {
+  font-size: 1.05rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-lead {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /* ---- players ----------------------------------------------------------- */
@@ -391,12 +545,53 @@ kbd {
 
 .bb-bid-chip {
   display: inline-block;
-  padding: 0.05rem 0.45rem;
+  min-width: 1.9rem;
+  padding: 0.1rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
   font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* The current low bid is the one everyone is racing. */
+.bb-bid-chip.is-lowest {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.bb-bid-chip.is-none {
   color: var(--muted);
+  font-weight: 400;
+  border-style: dashed;
+}
+
+/* A bid landing is news. The row is rebuilt on every render, so the animation
+   plays exactly once, on the render where the number actually changed. */
+@keyframes bb-bid-landed {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(245, 245, 245, 0.55);
+  }
+  35% {
+    transform: scale(1.14);
+    box-shadow: 0 0 0 6px rgba(245, 245, 245, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+}
+
+.bb-bid-chip.is-new {
+  animation: bb-bid-landed 620ms ease-out 1;
+}
+
+.bb-player.is-new-bid {
+  border-color: var(--ink);
 }
 
 .bb-score {

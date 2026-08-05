@@ -4,8 +4,8 @@
 // one-move gimme. BFS (not DFS) because we need the *optimal* move count, and
 // the first time BFS reaches a goal it has found the shortest path.
 
-import { COLORS } from "./constants.js?v=20260803b";
-import { applyMove, isSolved } from "./rules.js?v=20260803b";
+import { COLORS } from "./constants.js?v=20260804b";
+import { applyMove, isSolved } from "./rules.js?v=20260804b";
 
 // Five robots on 256 cells is a ~1e12 state space, so the search is bounded on
 // both depth and nodes. Rounds that need more than six moves are rare enough

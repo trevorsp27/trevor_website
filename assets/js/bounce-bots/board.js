@@ -1,7 +1,7 @@
 // Board generation. Everything here is a pure function of the seed, so all
 // players build a byte-identical board from a four-character lobby code.
 
-import { Rng } from "./rng.js?v=20260803b";
+import { Rng } from "./rng.js?v=20260804b";
 import {
   SIZE,
   CELLS,
@@ -19,7 +19,7 @@ import {
   yOf,
   inBounds,
   centerCells
-} from "./constants.js?v=20260803b";
+} from "./constants.js?v=20260804b";
 
 // Target squares always carry their own walls, so the count is fixed. Only the
 // decorative walls scale with difficulty: more walls means more surfaces to

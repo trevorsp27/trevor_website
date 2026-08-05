@@ -665,6 +665,22 @@ test("the snapshot stays small enough to broadcast on every change", () => {
   assert.ok(bytes < 2048, `snapshot was ${bytes} bytes`);
 });
 
+test("the snapshot carries the proof trail so clients can draw it", () => {
+  const game = newGame();
+  game.start("host");
+  game.bid("alice", 5);
+  game.lockBids("host");
+
+  const move = game.optimal.solution[0];
+  game.demoMove("alice", move.robot, move.dir);
+
+  const snap = game.snapshot();
+  assert.equal(snap.demoTrail.length, 1);
+  assert.equal(snap.demoTrail[0].robot, move.robot);
+  assert.equal(snap.demoTrail[0].dir, move.dir);
+  assert.ok(snap.startPositions, "the trail is meaningless without its origin");
+});
+
 test("the snapshot carries everything a client needs to rebuild the board", () => {
   const game = newGame();
   game.start("host");

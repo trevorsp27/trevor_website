@@ -2,7 +2,7 @@
 // The host re-runs these to validate a demonstrated solution, and the solver
 // runs them a few hundred thousand times per round, so they stay allocation-light.
 
-import { SIZE, DIRS, DEFLECT, COLORS, inBounds, xOf, yOf } from "./constants.js?v=20260803b";
+import { SIZE, DIRS, DEFLECT, COLORS, inBounds, xOf, yOf } from "./constants.js?v=20260804b";
 
 // A robot slides until something stops it. Diagonals do not stop it -- they
 // turn it 90 degrees and it keeps going, which is what makes them interesting.
@@ -77,6 +77,38 @@ export function isSolved(target, positions) {
   }
   const robotIndex = COLORS.indexOf(target.color);
   return robotIndex >= 0 && positions[robotIndex] === target.cell;
+}
+
+// Expands a move list into the route each robot actually travelled, so a
+// demonstration can be drawn rather than just watched. Someone who blinks, or
+// loses count, can read the whole proof off the board afterwards.
+//
+// Returns one segment per move, in order, each carrying the full cell path
+// (including any diagonal bends) and the move's 1-based number.
+export function traceMoves(board, startPositions, moves) {
+  const positions = startPositions.slice();
+  const segments = [];
+
+  for (let i = 0; i < moves.length; i += 1) {
+    const move = moves[i];
+    if (!move || !Number.isInteger(move.robot) || !Number.isInteger(move.dir)) break;
+    if (move.robot < 0 || move.robot >= positions.length) break;
+
+    const { to, path } = slide(board, positions, move.robot, move.dir);
+    if (to === positions[move.robot]) break; // an illegal move never happened
+
+    segments.push({
+      number: segments.length + 1,
+      robot: move.robot,
+      dir: move.dir,
+      from: positions[move.robot],
+      to,
+      path
+    });
+    positions[move.robot] = to;
+  }
+
+  return { segments, positions };
 }
 
 // Replays a move list from a starting arrangement. Used by the host to verify

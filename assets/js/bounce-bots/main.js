@@ -4,12 +4,12 @@
 // `send()`. On the host that calls the game directly; on a client it posts to
 // the host. Nothing else in the UI needs to know which role it is running.
 
-import { generateBoard, makeLobbyCode } from "./board.js?v=20260803b";
-import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260803b";
-import { createHost, createClient } from "./net.js?v=20260803b";
-import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260803b";
-import { botLevel } from "./bot.js?v=20260803b";
-import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260803b";
+import { generateBoard, makeLobbyCode } from "./board.js?v=20260804b";
+import { HostGame, PHASES, DEFAULT_SETTINGS, HEARTBEAT_MS } from "./game.js?v=20260804b";
+import { createHost, createClient } from "./net.js?v=20260804b";
+import { BoardView, ROBOT_COLORS, colorFor } from "./ui.js?v=20260804b";
+import { botLevel } from "./bot.js?v=20260804b";
+import { COLORS, ROBOT_COUNT } from "./constants.js?v=20260804b";
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,8 +30,14 @@ const state = {
   // changes, rather than on every snapshot.
   bidDeadline: 0,
   round: -1,
+  // Last render's bids, so a landing bid can be animated exactly once.
+  seenBids: new Map(),
   heartbeat: null
 };
+
+// Buttons cover the range real solutions fall in; anything longer goes in the
+// text field. Two is the floor because the generator never ships a shorter round.
+const BID_BUTTONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -73,6 +79,7 @@ function boot() {
   $("bb-copy").addEventListener("click", copyInvite);
 
   buildRobotButtons();
+  buildNumpad();
   document.addEventListener("keydown", handleKey);
   setInterval(renderClock, 250);
 
@@ -104,6 +111,20 @@ function buildRobotButtons() {
     button.title = `Select the ${color} robot (press ${index + 1})`;
     button.addEventListener("click", () => selectRobot(index));
     wrap.appendChild(button);
+  });
+}
+
+function buildNumpad() {
+  const pad = $("bb-numpad");
+  pad.innerHTML = "";
+  BID_BUTTONS.forEach((n) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "bb-num";
+    button.dataset.bid = String(n);
+    button.textContent = String(n);
+    button.addEventListener("click", () => send({ type: "bid", moves: n }));
+    pad.appendChild(button);
   });
 }
 
@@ -330,6 +351,15 @@ function syncClockPulse(snapshot) {
   wrap.style.setProperty("--bb-tick-delay", `-${offset}ms`);
 }
 
+function canBidNow() {
+  const phase = state.snapshot?.phase;
+  return phase === PHASES.THINKING || phase === PHASES.BIDDING;
+}
+
+function myBid() {
+  return state.snapshot?.bids.find((b) => b.id === state.me)?.moves ?? null;
+}
+
 function amDemonstrating() {
   return state.snapshot?.phase === PHASES.DEMO && state.snapshot.currentDemo === state.me;
 }
@@ -362,9 +392,24 @@ function handleKey(event) {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
   if (!state.snapshot) return;
 
-  if (event.key >= "1" && event.key <= String(ROBOT_COUNT)) {
-    selectRobot(Number(event.key) - 1);
-    event.preventDefault();
+  // Digits mean different things depending on what you are doing. While the
+  // board is locked there is nothing to select, so they go to the bid field;
+  // during your proof they pick a robot. Typing never bids on its own -- Enter
+  // does -- so a stray keystroke cannot commit you to a number.
+  if (event.key >= "0" && event.key <= "9") {
+    if (canBidNow()) {
+      const input = $("bb-bid-input");
+      input.value = event.key;
+      input.focus();
+      input.select();
+      event.preventDefault();
+      return;
+    }
+    const robot = Number(event.key) - 1;
+    if (robot >= 0 && robot < ROBOT_COUNT) {
+      selectRobot(robot);
+      event.preventDefault();
+    }
     return;
   }
 
@@ -431,14 +476,17 @@ function render() {
     dim: snap.phase === PHASES.DEMO && !amDemonstrating(),
     celebrateUntil: snap.celebrateUntil || 0
   });
+  renderTrail(snap);
 
   $("bb-code").textContent = snap.code;
   $("bb-round").textContent = snap.round ? `Round ${snap.round} / ${snap.totalRounds}` : "Lobby";
   $("bb-phase").textContent = phaseLabel(snap);
 
   renderTarget(snap);
+  renderSteps(snap);
   renderPlayers(snap);
   renderControls(snap);
+  renderBidBar(snap);
   renderClock();
 
   // A live clock is worth showing on the board itself, not just in the panel.
@@ -447,6 +495,93 @@ function render() {
   document.querySelectorAll(".bb-robot-btn").forEach((btn) => {
     btn.classList.toggle("is-active", Number(btn.dataset.robot) === state.selected);
   });
+}
+
+// The proof is drawn during the demonstration, and again over the reveal so a
+// round that nobody won still shows the line that existed.
+function renderTrail(snap) {
+  if (snap.phase === PHASES.DEMO) {
+    state.view.setTrail({ startPositions: snap.startPositions, moves: snap.demoTrail || [] });
+    return;
+  }
+  if (snap.phase === PHASES.REVEAL) {
+    state.view.setTrail({
+      startPositions: snap.startPositions,
+      moves: snap.lastRound?.solution || []
+    });
+    return;
+  }
+  state.view.setTrail(null);
+}
+
+function renderSteps(snap) {
+  const step =
+    snap.phase === PHASES.THINKING
+      ? "think"
+      : snap.phase === PHASES.BIDDING
+        ? "bid"
+        : snap.phase === PHASES.DEMO
+          ? "prove"
+          : null;
+
+  const order = ["think", "bid", "prove"];
+  const at = order.indexOf(step);
+
+  $("bb-steps").querySelectorAll("li").forEach((li) => {
+    const index = order.indexOf(li.dataset.step);
+    li.classList.toggle("is-current", li.dataset.step === step);
+    li.classList.toggle("is-done", at >= 0 && index < at);
+  });
+}
+
+function renderBidBar(snap) {
+  const bidding = canBidNow();
+  const proving = snap.phase === PHASES.DEMO;
+
+  $("bb-bidbar").hidden = !bidding;
+  $("bb-proofbar").hidden = !proving;
+  $("bb-robot-panel").hidden = !amDemonstrating();
+
+  if (bidding) {
+    const mine = myBid();
+    const best = snap.bids.length ? Math.min(...snap.bids.map((b) => b.moves)) : null;
+
+    // Only numbers that would actually improve your position stay live.
+    $("bb-numpad").querySelectorAll(".bb-num").forEach((btn) => {
+      const value = Number(btn.dataset.bid);
+      btn.disabled = mine !== null && value >= mine;
+      btn.classList.toggle("is-mine", mine === value);
+    });
+
+    $("bb-bidbar-title").textContent =
+      mine === null ? "How many moves do you need?" : `You bid ${mine} — can you go lower?`;
+
+    const parts = [];
+    if (best !== null) {
+      const leaders = snap.bids
+        .filter((b) => b.moves === best)
+        .map((b) => snap.players.find((p) => p.id === b.id)?.name || "Someone");
+      parts.push(
+        `Lowest bid <span class="bb-lead">${best}</span> — ${escapeHtml(leaders.join(", "))}`
+      );
+    } else {
+      parts.push("No bids yet. The first one starts the clock for everyone.");
+    }
+    if (mine !== null && best !== null && mine > best) {
+      parts.push("You are not the lowest, so you will not have to prove it.");
+    }
+    $("bb-bidbar-state").innerHTML = parts.join(" · ");
+  }
+
+  if (proving) {
+    const who = snap.players.find((p) => p.id === snap.currentDemo);
+    $("bb-proof-title").textContent = amDemonstrating()
+      ? `Your turn — show it in ${snap.currentBid}`
+      : `${who?.name || "Someone"} is proving ${snap.currentBid}`;
+    $("bb-proof-hint").textContent = amDemonstrating()
+      ? "Each move is numbered on the board as you make it."
+      : "Numbered arrows show every move, so you can follow along or check the count.";
+  }
 }
 
 function phaseLabel(snap) {
@@ -493,6 +628,16 @@ function renderTarget(snap) {
 
 function renderPlayers(snap) {
   const bids = new Map(snap.bids.map((b) => [b.id, b.moves]));
+  const best = snap.bids.length ? Math.min(...snap.bids.map((b) => b.moves)) : null;
+
+  // A bid is only "new" on the render where it actually changed, so the pulse
+  // fires once rather than on every snapshot that happens to arrive.
+  const landed = new Set();
+  bids.forEach((moves, id) => {
+    if (state.seenBids.get(id) !== moves) landed.add(id);
+  });
+  state.seenBids = new Map(bids);
+
   const rows = [...snap.players]
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
     .map((player) => {
@@ -507,11 +652,25 @@ function renderPlayers(snap) {
       }
 
       const bid = bids.get(player.id);
-      // Bids are public: underbidding is the whole game.
-      const bidText = bid ? `<span class="bb-bid-chip">${bid}</span>` : "";
+      // Bids are public: underbidding is the whole game, so show who is where.
+      const showBids = snap.phase === PHASES.THINKING || snap.phase === PHASES.BIDDING;
+      const chipClass = [
+        "bb-bid-chip",
+        bid === best && bid !== undefined ? "is-lowest" : "",
+        landed.has(player.id) ? "is-new" : "",
+        bid === undefined ? "is-none" : ""
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const bidText = bid
+        ? `<span class="${chipClass}">${bid}</span>`
+        : showBids
+          ? `<span class="${chipClass}">–</span>`
+          : "";
       const you = player.id === state.me ? " is-you" : "";
+      const fresh = landed.has(player.id) ? " is-new-bid" : "";
 
-      return `<li class="bb-player${you}${player.connected ? "" : " is-offline"}">
+      return `<li class="bb-player${you}${fresh}${player.connected ? "" : " is-offline"}">
         <span class="bb-player-name">${escapeHtml(player.name)}</span>
         ${bidText}
         <span class="bb-score">${player.score}</span>
@@ -533,8 +692,7 @@ function renderControls(snap) {
   $("bb-lock").hidden = snap.phase !== PHASES.BIDDING;
   $("bb-skip").hidden = !inPlay;
 
-  const canBid = snap.phase === PHASES.THINKING || snap.phase === PHASES.BIDDING;
-  $("bb-bid-form").hidden = !canBid;
+  const canBid = canBidNow();
   $("bb-pass").hidden = !amDemonstrating();
   $("bb-reset").hidden = !amDemonstrating();
 
@@ -558,20 +716,13 @@ function renderControls(snap) {
         : "Everyone must agree to throw the round away. Nobody scores.";
   }
 
-  // The move counter means different things in each phase, so label it.
+  // Spectators need the running count too, or a slow proof reads as nothing
+  // happening at all.
   const counter = $("bb-moves");
-  if (amDemonstrating()) {
-    counter.textContent = `${snap.demoMoveCount} / ${snap.currentBid} moves used`;
-  } else if (snap.phase === PHASES.DEMO) {
-    // Spectators need the running count too, or a slow demonstration reads as
-    // nothing happening.
-    const who = snap.players.find((p) => p.id === snap.currentDemo);
-    counter.textContent = `${who?.name || "They"}: ${snap.demoMoveCount} / ${snap.currentBid} moves`;
-  } else if (canBid) {
-    counter.textContent = "Work it out in your head — the board is locked.";
-  } else {
-    counter.textContent = "";
-  }
+  counter.textContent =
+    snap.phase === PHASES.DEMO
+      ? `Move ${snap.demoMoveCount} of ${snap.currentBid}`
+      : "";
 
   const note = $("bb-note");
   if (snap.phase === PHASES.REVEAL && snap.lastRound) {
@@ -598,23 +749,31 @@ function renderControls(snap) {
 
 function renderClock() {
   const snap = state.snapshot;
-  const el = $("bb-timer");
-  if (!snap || !el) return;
+  if (!snap) return;
 
   let deadline = 0;
   if (snap.phase === PHASES.BIDDING) deadline = snap.bidDeadline;
   else if (snap.phase === PHASES.DEMO) deadline = snap.demoDeadline;
   else if (snap.phase === PHASES.REVEAL) deadline = snap.revealDeadline;
 
+  // The clock appears wherever the current action is, not only in the panel.
+  const faces = [$("bb-timer"), $("bb-bidbar-clock"), $("bb-proof-clock")].filter(Boolean);
+
   if (!deadline) {
-    el.textContent = "";
-    el.classList.remove("is-urgent");
+    // Before the first bid there is no clock, and saying so is the point.
+    const idle = snap.phase === PHASES.THINKING ? "no clock yet" : "";
+    faces.forEach((face) => {
+      face.textContent = face.id === "bb-bidbar-clock" ? idle : "";
+      face.classList.remove("is-urgent");
+    });
     return;
   }
 
   const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-  el.textContent = `${left}s`;
-  el.classList.toggle("is-urgent", left <= 10);
+  faces.forEach((face) => {
+    face.textContent = `${left}s`;
+    face.classList.toggle("is-urgent", left <= 10);
+  });
 }
 
 function escapeHtml(text) {
