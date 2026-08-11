@@ -1,0 +1,29 @@
+/* Publications page additions. Scoped with a .pub- prefix; the card and grid
+   themselves still come from the shared design system. */
+
+/* Author lists are what make a publications page read as academic rather than
+   as a list of links, so they sit directly under the title. */
+.publication-card .pub-authors {
+  margin: -0.2rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.pub-me {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.publication-card .pub-venue {
+  margin: -0.15rem 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.pub-footnote {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}

@@ -1,0 +1,184 @@
+/* Work Experience page. Scoped with an .xp- prefix and loaded only here, so the
+   shared design system in styles.css is untouched. Colours come from the
+   site's existing custom properties. */
+
+/* ---- calls to action ---------------------------------------------------- */
+
+.xp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.xp-download,
+.xp-secondary {
+  display: inline-block;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.94rem;
+  transition: transform 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+
+.xp-download {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.xp-download:hover,
+.xp-download:focus-visible {
+  transform: translateY(-1px);
+  background: var(--brand);
+}
+
+.xp-secondary {
+  color: var(--ink);
+}
+
+.xp-secondary:hover,
+.xp-secondary:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+/* ---- timeline ----------------------------------------------------------- */
+
+.xp-timeline {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The rail is drawn behind the markers rather than as a border on each item,
+   so it stays continuous regardless of how tall an entry grows. */
+.xp-timeline::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: var(--line);
+}
+
+.xp-item {
+  position: relative;
+  padding: 0 0 1.6rem 2.1rem;
+}
+
+.xp-item:last-child {
+  padding-bottom: 0;
+}
+
+.xp-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+/* A filled marker reads as "still going" without needing a label. */
+.xp-item.is-current::before {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.xp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem 1rem;
+}
+
+.xp-role {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.xp-org {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.xp-dates {
+  margin: 0;
+  flex: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.xp-points {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.xp-points li {
+  margin-bottom: 0.3rem;
+}
+
+.xp-points li:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- skills ------------------------------------------------------------- */
+
+.xp-skills {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.xp-skill-label {
+  margin: 0 0 0.45rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.xp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.xp-chip {
+  padding: 0.28rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  font-size: 0.86rem;
+}
+
+/* ---- narrow screens ----------------------------------------------------- */
+
+@media (max-width: 640px) {
+  /* Stack the date under the role rather than letting it wrap awkwardly. */
+  .xp-head {
+    flex-direction: column;
+  }
+
+  .xp-dates {
+    order: -1;
+  }
+}

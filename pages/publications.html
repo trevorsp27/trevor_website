@@ -17,7 +17,8 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <script src="../assets/js/site-data.js?v=20260811a" defer></script>
+    <link rel="stylesheet" href="../assets/css/publications.css?v=20260811a" />
+    <script src="../assets/js/site-data.js?v=20260811b" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
 
     <link rel="canonical" href="https://trevorspinosa.com/pages/publications.html" />
@@ -55,15 +56,48 @@
         </section>
 
         <section class="panel reveal" aria-labelledby="pub-list">
-          <h2 id="pub-list">Selected Publications</h2>
+          <h2 id="pub-list">Peer-reviewed publications</h2>
           <div class="publication-grid">
             <article class="publication-card">
-              <p class="card-kicker">2026 • DFRWS EU</p>
-              <h3>Ex Machina: A Forensic Evaluation of AI Companion Applications</h3>
-              <p>
-                First cross-application forensic study of AI companion platforms (25M+
-                downloads), with artifact-based user profiling and evidentiary analysis.
+              <p class="card-kicker">2026 • Forensic Science International: Digital Investigation</p>
+              <h3>
+                With or without logs: Memory forensic reconstruction of Model Context
+                Protocol (MCP) activity in agentic LLM systems
+              </h3>
+              <p class="pub-authors">
+                A. Satter, M. Salmon, L. Muhanna, <span class="pub-me">T. T. Spinosa</span>,
+                T. Gharaibeh, I. Baggili
               </p>
+              <p>
+                Reconstructs Model Context Protocol activity from memory in agentic LLM
+                systems, showing how tool-use behaviour and system interactions remain
+                recoverable even when no logs were kept.
+              </p>
+              <p class="pub-venue">FSI: Digital Investigation, vol. 57, art. 302130</p>
+              <a
+                href="https://www.sciencedirect.com/science/article/pii/S2666281726000879"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-link"
+                >Read paper</a
+              >
+            </article>
+
+            <article class="publication-card">
+              <p class="card-kicker">2026 • DFRWS EU</p>
+              <h3>
+                Ex Machina: A forensic evaluation of AI companion applications and their
+                evidentiary value
+              </h3>
+              <p class="pub-authors">
+                K. J. Comeaux, <span class="pub-me">T. T. Spinosa</span>, A. Ghosn, I. Baggili
+              </p>
+              <p>
+                First cross-application forensic study of AI companion platforms totalling
+                over 25M downloads, with artifact-based user profiling and an assessment of
+                evidentiary value.
+              </p>
+              <p class="pub-venue">FSI: Digital Investigation, vol. 56, art. 302050</p>
               <a
                 href="https://dfrws.org/presentation/ex-machina-a-forensic-evaluation-of-ai-companion-applications-and-their-evidentiary-value/"
                 target="_blank"
@@ -74,12 +108,18 @@
             </article>
 
             <article class="publication-card">
-              <p class="card-kicker">2025 • WSDF ARES</p>
-              <h3>PyMent: Venmo Forensic Analysis Tool</h3>
+              <p class="card-kicker">2025 • ARES / WSDF</p>
+              <h3>Money on My Mind: Forensic Investigation of Venmo Payment App</h3>
+              <p class="pub-authors">
+                <span class="pub-me">T. Spinosa</span>, A. Onik, J. Rovira, I. Baggili
+              </p>
               <p>
-                Analyzes vulnerabilities in Venmo through network traffic inspection and
-                logical acquisition, including MFA bypass pathways and API session-token
-                abuse for transaction recovery.
+                First-author study of vulnerabilities in Venmo through network traffic
+                inspection and logical acquisition, including MFA bypass pathways and API
+                session-token abuse for transaction recovery. Released as the PyMent tool.
+              </p>
+              <p class="pub-venue">
+                Int. Conf. on Availability, Reliability and Security, pp. 60–77
               </p>
               <a
                 href="https://link.springer.com/chapter/10.1007/978-3-032-00635-6_4"
@@ -91,29 +131,20 @@
             </article>
 
             <article class="publication-card">
-              <p class="card-kicker">2026 • ScienceDirect</p>
-              <h3>With or without logs: Memory forensic reconstruction of Model Context Protocol (MCP) activity in agentic LLM systems</h3>
-              <p>
-                Explores forensic reconstruction of MCP activity in agentic LLM systems and
-                how memory artifacts can reveal tool-use behavior and system interactions.
+              <p class="card-kicker">2024 • DFRWS USA</p>
+              <h3>
+                Hit and run: Forensic vehicle event reconstruction through driver-based cloud
+                data from Progressive's Snapshot application
+              </h3>
+              <p class="pub-authors">
+                A. R. Onik, <span class="pub-me">T. T. Spinosa</span>, A. M. Asad, I. Baggili
               </p>
-              <a
-                href="https://www.sciencedirect.com/science/article/pii/S2666281726000879"
-                target="_blank"
-                rel="noreferrer"
-                class="inline-link"
-                >Read paper</a
-              >
-            </article>
-
-            <article class="publication-card">
-              <p class="card-kicker">2024 • DFRWS</p>
-              <h3>PyShot: Progressive Snapshot Forensic Analysis Tool</h3>
               <p>
-                Presents a Python-based tool to extract and validate Progressive Snapshot
-                artifacts, including driving behavior evidence not fully exposed in the
-                mobile UI.
+                Extracts and validates Progressive Snapshot artifacts, demonstrating accurate
+                speed and location recording and revealing driving behaviour not exposed in
+                the mobile interface. Released as the PyShot tool.
               </p>
+              <p class="pub-venue">FSI: Digital Investigation, vol. 49, art. 301762</p>
               <a
                 href="https://www.sciencedirect.com/science/article/pii/S2666281724000817"
                 target="_blank"
@@ -123,6 +154,17 @@
               >
             </article>
           </div>
+
+          <p class="pub-footnote">
+            Full citation record on
+            <a
+              href="https://scholar.google.com/citations?user=yt8kPJ4AAAAJ"
+              target="_blank"
+              rel="noreferrer"
+              class="inline-link"
+              >Google Scholar</a
+            >.
+          </p>
         </section>
       </main>
 
