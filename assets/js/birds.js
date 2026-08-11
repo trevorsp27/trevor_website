@@ -56,11 +56,10 @@
     const files = manifest.speciesPhotos[species.id];
     const fileIndex = daySeed % files.length;
     const fileName = files[fileIndex];
-    const photoSrc = `../assets/birds/photos/${species.familySlug}/${species.slug}/${fileName}`;
     const galleryHref = buildGalleryHref(species.id);
 
-    featuredImageEl.src = photoSrc;
     featuredImageEl.alt = `${species.name} featured photo`;
+    window.setBirdPhoto(featuredImageEl, species.familySlug, species.slug, fileName);
     featuredNameEl.textContent = species.name;
     featuredLinkEl.href = galleryHref;
     featuredOpenEl.href = galleryHref;

@@ -97,11 +97,8 @@
 
       function renderCurrentPhoto() {
         const fileName = files[currentIndex];
-        const src = `../assets/birds/photos/${species.familySlug}/${species.slug}/${fileName}`;
-        const alt = `${species.name} photo ${currentIndex + 1}`;
-
-        imageEl.src = src;
-        imageEl.alt = alt;
+        imageEl.alt = `${species.name} photo ${currentIndex + 1}`;
+        window.setBirdPhoto(imageEl, species.familySlug, species.slug, fileName);
         countEl.textContent = `${currentIndex + 1} / ${files.length}`;
 
         const hasMultiplePhotos = files.length > 1;

@@ -120,14 +120,19 @@
     linkedInLink.href = config.linkedInUrl;
   }
 
-  findProfileImagePath()
-    .then((imagePath) => {
-      const profileTargets = document.querySelectorAll("[data-profile-image]");
-      profileTargets.forEach((img) => {
-        img.src = imagePath;
+  // Probing a candidate downloads the whole file, not just its headers. This
+  // used to run on every page, so pages with nowhere to show a portrait were
+  // still paying for one. Only probe where there is somewhere to put it.
+  const profileTargets = document.querySelectorAll("[data-profile-image]");
+  if (profileTargets.length) {
+    findProfileImagePath()
+      .then((imagePath) => {
+        profileTargets.forEach((img) => {
+          img.src = imagePath;
+        });
+      })
+      .catch(() => {
+        // If no profile image exists yet, keep the layout functional without failing.
       });
-    })
-    .catch(() => {
-      // If no profile image exists yet, keep the layout functional without failing.
-    });
+  }
 })();

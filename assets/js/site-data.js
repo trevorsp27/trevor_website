@@ -5,8 +5,11 @@ window.SITE_CONFIG = {
   email: "trevsp27@gmail.com",
   githubUrl: "https://github.com/trevorsp27",
   linkedInUrl: "https://www.linkedin.com/in/trevor-spinosa-a65b00102/",
-  profileImageFile: "profile_pic.jpeg",
+  // Web-sized crop. The 4MB original is roughly twenty times larger than the
+  // 190px circle it renders in.
+  profileImageFile: "profile-400.jpg",
   profileImageCandidates: [
+    "profile-400.jpg",
     "profile.jpg",
     "profile.jpeg",
     "profile.png",
@@ -39,13 +42,15 @@ window.SITE_CONFIG = {
       summary: "Roles, projects, skills, and professional highlights.",
       icon: "Experience"
     },
-    {
-      id: "music",
-      title: "Music",
-      path: "/pages/music.html",
-      summary: "Coming soon",
-      icon: "Music"
-    },
+    // Music is hidden until it has content. The page still exists at
+    // /pages/music.html -- uncomment this to put it back in the nav.
+    // {
+    //   id: "music",
+    //   title: "Music",
+    //   path: "/pages/music.html",
+    //   summary: "Coming soon",
+    //   icon: "Music"
+    // },
     {
       id: "birds",
       title: "Birds",
