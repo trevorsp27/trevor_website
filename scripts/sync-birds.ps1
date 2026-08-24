@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 function To-Slug {
   param([string]$Text)
@@ -139,6 +139,7 @@ foreach ($familyDir in $existingFamilyDirs) {
 
 $manifest = [ordered]@{}
 $notesManifest = [ordered]@{}
+$addedManifest = [ordered]@{}
 $validExtensions = @(".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".heic", ".heif")
 
 foreach ($family in $families) {
@@ -196,6 +197,12 @@ foreach ($family in $families) {
 
     if ($photoNames.Count -gt 0) {
       $manifest[$species.id] = $photoNames
+
+      # When this species was last added to. The birds page features the most
+      # recently added bird, and file timestamps are the only record of that --
+      # nothing in the catalogue says when a photo showed up.
+      $newestPhoto = $photoFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+      $addedManifest[$species.id] = $newestPhoto.LastWriteTimeUtc.ToString("yyyy-MM-ddTHH:mm:ssZ")
     }
 
     $snippetFiles = Get-ChildItem -Path $speciesPath -File -Filter "*.txt" | Sort-Object Name
@@ -225,7 +232,7 @@ $catalogPath = Join-Path $repoRoot "assets/birds/birds-catalog.json"
 $manifestPath = Join-Path $repoRoot "assets/birds/photo-manifest.json"
 
 $catalogOutput | ConvertTo-Json -Depth 8 | Set-Content -Path $catalogPath -Encoding utf8
-([ordered]@{ speciesPhotos = $manifest; speciesNotes = $notesManifest }) | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding utf8
+([ordered]@{ speciesPhotos = $manifest; speciesNotes = $notesManifest; speciesAdded = $addedManifest }) | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding utf8
 
 Write-Host "Bird catalog synced. Families:" $families.Count
 Write-Host "Photo manifest entries:" $manifest.Count

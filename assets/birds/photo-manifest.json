@@ -52,6 +52,9 @@
                                                                          "IMG_0518.JPG",
                                                                          "IMG_0522.JPG"
                                                                      ],
+                          "hummingbirds--ruby-throated-hummingbird":  [
+                                                                          "IMG_0925.PNG"
+                                                                      ],
                           "rails-gallinules-and-coots--common-gallinule":  [
                                                                                "main_gallinule.JPG",
                                                                                "IMG_0683.JPG"
@@ -155,6 +158,10 @@
                                                  "IMG_0461.JPG",
                                                  "IMG_0704.JPG"
                                              ],
+                          "hawks-eagles-and-kites--cooper-s-hawk":  [
+                                                                        "IMG_0644.JPEG",
+                                                                        "IMG_0649.JPEG"
+                                                                    ],
                           "hawks-eagles-and-kites--mississippi-kite":  [
                                                                            "main_mississippi-kite.JPG",
                                                                            "IMG_0777.JPG",
@@ -172,10 +179,6 @@
                                                                           "IMG_9823.JPEG",
                                                                           "IMG_9824.JPEG"
                                                                       ],
-                          "hawks-eagles-and-kites--cooper-s-hawk":  [
-                                                                          "IMG_0644.JPEG",
-                                                                          "IMG_0649.JPEG"
-                                                                      ],
                           "woodpeckers--red-headed-woodpecker":  [
                                                                      "IMG_9694.JPEG"
                                                                  ],
@@ -186,6 +189,9 @@
                                                                 "main_downy-woodpecker.JPG",
                                                                 "IMG_9246.JPEG"
                                                             ],
+                          "woodpeckers--pileated-woodpecker":  [
+                                                                   "IMG_0907.PNG"
+                                                               ],
                           "falcons-and-caracaras--american-kestrel":  [
                                                                           "IMG_0554.JPEG",
                                                                           "IMG_2068.JPEG"
@@ -333,18 +339,110 @@
                       },
     "speciesNotes":  {
                          "ducks-geese-and-waterfowl--common-goldeneye":  "Rob and Janet helped me identify these Goldeneye\u0027s at Whiteswan Lake near Cranbrook. Fun times.",
+                         "hummingbirds--ruby-throated-hummingbird":  "Hummingbirds finally found my feeders! I was so excited when I saw him. And it was right after I successfully plugged my tired. Good day.",
                          "cranes--sandhill-crane":  "SANDHILL CRANE!! Saw it in some random prairie in Montana while on road trip with Rory. We were freaking out. There were around 5 of them in the flock.",
                          "gulls-terns-and-skimmers--ring-billed-gull":  "Spotted these guys near Lake Michigan after Electric Forest. Pretty birds.",
                          "herons-egrets-and-bitterns--yellow-crowned-night-heron":  "Alise took these photos, we were walking the nature trails in Bayou Sauvage :)",
                          "ibises-and-spoonbills--roseate-spoonbill":  "Taken at the LSU lakes behind Blake Hall near Laville. These are my favorite birds I love them!",
                          "osprey--osprey":  "There are so many Osprey nests at Lake Martin. It\u0027s magnificent. Their calls are so interesting. They mate for life, and I saw so many cute couples. Lovely birds.",
-                         "hawks-eagles-and-kites--red-shouldered-hawk":  "Indiana marsh on side of interstate on way to visit Kammy Wammy in Chicago.",
                          "hawks-eagles-and-kites--cooper-s-hawk":  "Enchanted forest on LSU campus.",
+                         "hawks-eagles-and-kites--red-shouldered-hawk":  "Indiana marsh on side of interstate on way to visit Kammy Wammy in Chicago.",
+                         "woodpeckers--pileated-woodpecker":  "This guy popped out of a cypress tree at Lake Martin. He must have built his nest in the tree. Cool",
                          "falcons-and-caracaras--american-kestrel":  "Washington Prairie. These things are so cool they hover in place like a hummingbird and their tail split is awesome.",
                          "tyrant-flycatchers--great-crested-flycatcher":  "Laban, Nathan, and I went birding after watching Listers documentary in Burden in Baton Rouge and saw this awesome bird. We were so excited",
                          "crows-jays-and-magpies--clark-s-nutcracker":  "Mirror Lake in Banff. So many of these guys crackin nuts.",
                          "new-world-sparrows--spotted-towhee":  "Kept hearing this guy near our campsite in Washing in that weird prairie. The same night we got destroyed by those mosquitos.",
                          "new-world-warblers--yellow-rumped-warbler":  "Spotted this lil guy at Banff in Canada.",
                          "cardinals-and-allies--summer-tanager":  "Laban, Nathan, and I were birding in Burden. We think this is a summer tanager, but aren\u0027t positive."
+                     },
+    "speciesAdded":  {
+                         "ducks-geese-and-waterfowl--black-bellied-whistling-duck":  "2026-06-03T15:13:25Z",
+                         "ducks-geese-and-waterfowl--canada-goose":  "2026-06-03T15:13:15Z",
+                         "ducks-geese-and-waterfowl--wood-duck":  "2026-06-03T15:14:20Z",
+                         "ducks-geese-and-waterfowl--mallard":  "2000-01-01T05:00:40Z",
+                         "ducks-geese-and-waterfowl--lesser-scaup":  "2026-06-03T15:14:19Z",
+                         "ducks-geese-and-waterfowl--bufflehead":  "2026-07-15T00:03:44Z",
+                         "ducks-geese-and-waterfowl--common-goldeneye":  "2026-07-15T00:03:44Z",
+                         "ducks-geese-and-waterfowl--domestic-duck":  "2026-06-03T15:13:21Z",
+                         "ducks-geese-and-waterfowl--muscovy-duck":  "2026-06-03T15:13:19Z",
+                         "pheasants-grouse-and-allies--wild-turkey":  "2026-07-15T00:03:40Z",
+                         "pheasants-grouse-and-allies--domestic-chicken":  "2026-06-03T15:12:46Z",
+                         "pigeons-and-doves--rock-pigeon":  "2000-01-01T05:01:21Z",
+                         "pigeons-and-doves--mourning-dove":  "2026-06-03T15:14:08Z",
+                         "cuckoos--yellow-billed-cuckoo":  "2026-05-03T12:18:02Z",
+                         "nightjars-and-allies--common-nighthawk":  "2026-06-04T19:45:21Z",
+                         "hummingbirds--ruby-throated-hummingbird":  "2026-08-24T15:51:05Z",
+                         "rails-gallinules-and-coots--common-gallinule":  "2026-06-20T18:57:12Z",
+                         "cranes--sandhill-crane":  "2026-07-15T00:03:42Z",
+                         "stilts-and-avocets--black-necked-stilt":  "2026-04-18T07:54:36Z",
+                         "plovers-and-lapwings--black-bellied-plover":  "2026-04-18T07:21:12Z",
+                         "plovers-and-lapwings--killdeer":  "2026-06-03T15:14:22Z",
+                         "sandpipers-and-allies--sanderling":  "2026-06-03T15:14:47Z",
+                         "sandpipers-and-allies--willet":  "2026-04-18T07:55:12Z",
+                         "gulls-terns-and-skimmers--laughing-gull":  "2026-04-18T09:20:19Z",
+                         "gulls-terns-and-skimmers--ring-billed-gull":  "2026-07-15T00:03:58Z",
+                         "loons--common-loon":  "2026-07-16T15:59:57Z",
+                         "anhingas--anhinga":  "2026-06-10T13:39:40Z",
+                         "cormorants-and-shags--double-crested-cormorant":  "2026-06-05T15:02:13Z",
+                         "cormorants-and-shags--neotropic-cormorant":  "2026-06-05T15:02:19Z",
+                         "pelicans--brown-pelican":  "2026-06-03T15:12:42Z",
+                         "herons-egrets-and-bitterns--great-blue-heron":  "2026-06-03T15:14:26Z",
+                         "herons-egrets-and-bitterns--great-egret":  "2026-06-03T15:13:29Z",
+                         "herons-egrets-and-bitterns--snowy-egret":  "2026-06-19T21:18:58Z",
+                         "herons-egrets-and-bitterns--little-blue-heron":  "2026-06-13T16:28:50Z",
+                         "herons-egrets-and-bitterns--tricolored-heron":  "2026-06-03T15:14:31Z",
+                         "herons-egrets-and-bitterns--cattle-egret":  "2026-06-03T15:13:01Z",
+                         "herons-egrets-and-bitterns--green-heron":  "2026-06-03T21:41:54Z",
+                         "herons-egrets-and-bitterns--black-crowned-night-heron":  "2026-06-03T15:14:29Z",
+                         "herons-egrets-and-bitterns--yellow-crowned-night-heron":  "2026-06-20T18:47:58Z",
+                         "ibises-and-spoonbills--white-ibis":  "2000-01-01T05:00:34Z",
+                         "ibises-and-spoonbills--roseate-spoonbill":  "2026-06-03T21:42:04Z",
+                         "new-world-vultures--black-vulture":  "2026-04-19T11:28:52Z",
+                         "osprey--osprey":  "2026-06-10T13:31:11Z",
+                         "hawks-eagles-and-kites--cooper-s-hawk":  "2026-07-28T02:03:00Z",
+                         "hawks-eagles-and-kites--mississippi-kite":  "2026-06-20T17:38:50Z",
+                         "hawks-eagles-and-kites--red-shouldered-hawk":  "2026-07-15T00:03:54Z",
+                         "hawks-eagles-and-kites--red-tailed-hawk":  "2026-06-03T15:14:56Z",
+                         "woodpeckers--red-headed-woodpecker":  "2026-06-03T15:14:41Z",
+                         "woodpeckers--red-bellied-woodpecker":  "2026-06-20T15:55:27Z",
+                         "woodpeckers--downy-woodpecker":  "2026-06-06T01:05:37Z",
+                         "woodpeckers--pileated-woodpecker":  "2026-08-24T15:49:14Z",
+                         "falcons-and-caracaras--american-kestrel":  "2026-07-15T00:03:42Z",
+                         "tyrant-flycatchers--great-crested-flycatcher":  "2026-06-06T01:09:46Z",
+                         "tyrant-flycatchers--eastern-kingbird":  "2026-06-03T15:14:45Z",
+                         "tyrant-flycatchers--eastern-phoebe":  "2026-07-15T00:03:54Z",
+                         "vireos-shrike-babblers-and-erpornis--white-eyed-vireo":  "2026-06-03T15:13:41Z",
+                         "crows-jays-and-magpies--blue-jay":  "2026-06-04T19:56:28Z",
+                         "crows-jays-and-magpies--clark-s-nutcracker":  "2026-07-15T00:03:48Z",
+                         "crows-jays-and-magpies--american-crow":  "2026-06-03T15:14:12Z",
+                         "tits-chickadees-and-titmice--carolina-chickadee":  "2026-06-03T15:14:17Z",
+                         "tits-chickadees-and-titmice--tufted-titmouse":  "2026-06-03T15:13:36Z",
+                         "swallows--tree-swallow":  "2026-07-15T00:03:52Z",
+                         "swallows--purple-martin":  "2026-06-10T14:15:51Z",
+                         "swallows--barn-swallow":  "2026-07-15T00:03:54Z",
+                         "waxwings--cedar-waxwing":  "2026-06-03T15:13:57Z",
+                         "wrens--carolina-wren":  "2026-06-06T01:25:46Z",
+                         "mockingbirds-and-thrashers--brown-thrasher":  "2026-06-03T15:14:42Z",
+                         "mockingbirds-and-thrashers--northern-mockingbird":  "2026-06-03T15:13:09Z",
+                         "starlings--european-starling":  "2026-06-03T15:13:06Z",
+                         "thrushes-and-allies--eastern-bluebird":  "2026-06-20T16:50:32Z",
+                         "thrushes-and-allies--american-robin":  "2026-06-03T15:13:12Z",
+                         "old-world-sparrows--house-sparrow":  "2026-06-19T21:19:02Z",
+                         "finches-euphonias-and-allies--house-finch":  "2026-06-19T21:18:34Z",
+                         "finches-euphonias-and-allies--american-goldfinch":  "2026-07-15T00:03:52Z",
+                         "new-world-sparrows--chipping-sparrow":  "2026-07-15T00:03:56Z",
+                         "new-world-sparrows--song-sparrow":  "2026-07-15T00:03:56Z",
+                         "new-world-sparrows--spotted-towhee":  "2026-07-16T16:05:31Z",
+                         "troupials-and-allies--red-winged-blackbird":  "2026-06-06T01:11:19Z",
+                         "troupials-and-allies--brown-headed-cowbird":  "2026-06-03T15:13:49Z",
+                         "troupials-and-allies--boat-tailed-grackle":  "2026-06-03T15:13:17Z",
+                         "troupials-and-allies--great-tailed-grackle":  "2026-04-18T07:48:50Z",
+                         "new-world-warblers--prothonotary-warbler":  "2026-06-03T15:14:14Z",
+                         "new-world-warblers--yellow-warbler":  "2026-07-15T00:03:52Z",
+                         "new-world-warblers--pine-warbler":  "2026-06-06T01:06:14Z",
+                         "new-world-warblers--yellow-rumped-warbler":  "2026-07-15T00:03:50Z",
+                         "cardinals-and-allies--summer-tanager":  "2026-06-06T01:09:18Z",
+                         "cardinals-and-allies--scarlet-tanager":  "2026-05-03T12:23:05Z",
+                         "cardinals-and-allies--northern-cardinal":  "2026-06-03T15:13:30Z"
                      }
 }

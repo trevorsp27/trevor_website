@@ -6,6 +6,7 @@
   const featuredEmptyEl = document.getElementById("featured-bird-empty");
   const featuredImageEl = document.getElementById("featured-bird-image");
   const featuredNameEl = document.getElementById("featured-bird-name");
+  const featuredAddedEl = document.getElementById("featured-bird-added");
   const featuredLinkEl = document.getElementById("featured-bird-link");
   const featuredOpenEl = document.getElementById("featured-bird-open");
   const speciesProgressEl = document.getElementById("species-progress");
@@ -50,15 +51,37 @@
       return;
     }
 
-    const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
-    const speciesIndex = daySeed % withPhotos.length;
-    const species = withPhotos[speciesIndex];
+    // Most recently added species. speciesAdded is written by
+    // scripts/sync-birds.ps1 from the newest photo file's timestamp -- nothing
+    // in the catalogue itself records when a bird showed up.
+    const addedAt = (manifest && manifest.speciesAdded) || {};
+    const species = withPhotos.slice().sort((a, b) => {
+      const left = addedAt[a.id] || "";
+      const right = addedAt[b.id] || "";
+      // Newest first. Species with no timestamp sort last, and ties fall back
+      // to the alphabetical order the list already carries.
+      return right.localeCompare(left) || a.id.localeCompare(b.id);
+    })[0];
+
     const files = manifest.speciesPhotos[species.id];
-    const fileIndex = daySeed % files.length;
-    const fileName = files[fileIndex];
+    // files[0] is the "main_" shot where one exists; sync-birds.ps1 sorts it first.
+    const fileName = files[0];
     const galleryHref = buildGalleryHref(species.id);
 
-    featuredImageEl.alt = `${species.name} featured photo`;
+    if (featuredAddedEl) {
+      const stamp = addedAt[species.id];
+      const when = stamp ? new Date(stamp) : null;
+      featuredAddedEl.textContent =
+        when && !Number.isNaN(when.valueOf())
+          ? `Added ${when.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              year: "numeric"
+            })}`
+          : "Newest";
+    }
+
+    featuredImageEl.alt = `${species.name} photo`;
     window.setBirdPhoto(featuredImageEl, species.familySlug, species.slug, fileName);
     featuredNameEl.textContent = species.name;
     featuredLinkEl.href = galleryHref;
