@@ -36,6 +36,11 @@ const PHYS = {
 
 const COMBAT = {
   timeLimitFrames: 60 * 180,   // 3 minutes, then most stocks / least damage
+  // Ults charge from damage in both directions, and the player on the back
+  // foot charges faster -- being beaten on should build toward a way out.
+  ultMax: 100,
+  ultPerDamageDealt: 1.1,
+  ultPerDamageTaken: 1.7,
   hitstopLight: 3,
   hitstopHeavy: 7,
   shieldMax: 100,
@@ -205,7 +210,7 @@ const ROSTER = {
     tag: 'THE BONETHROWER',
     drawn: true,
     blurb: 'Lobs a spinning bone that arcs downrange. Controls space.',
-    weight: 98, walk: 1.38, jump: 6.5, doubleJump: 6.0,
+    weight: 98, walk: 1.46, jump: 6.5, doubleJump: 6.0,
     jab: { startup: 4, active: 4, recovery: 10, damage: 5,
            base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
     special: {
@@ -213,7 +218,15 @@ const ROSTER = {
       startup: 6, active: 1, recovery: 13,
       maxAlive: 3,
       speed: 3.3, lift: -0.55, drop: 0.055, life: 170,
-      damage: 9, base: 2.1, scale: 6.4, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      damage: 10, base: 2.3, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+    },
+    // Placeholder ult -- no note for Kel yet. Uses his own drawn bone.
+    ult: {
+      kind: 'barrage', label: 'BONEYARD',
+      startup: 10, active: 1, recovery: 26,
+      count: 6, spread: 0.5,
+      speed: 3.4, lift: -0.9, drop: 0.055, life: 170,
+      damage: 10, base: 2.6, scale: 7.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
     },
   },
 
@@ -221,25 +234,35 @@ const ROSTER = {
     name: 'REESE',
     tag: 'SHIRTS OPTIONAL',
     drawn: true,
-    blurb: 'Rips the shirt off. Hits harder and moves faster, but flies further.',
+    blurb: 'Shoulder-charges in. Ult rips the shirt off: far stronger, far faster.',
     weight: 96, walk: 1.42, jump: 6.6, doubleJump: 6.1,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.3, scale: 6.5, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
+    // Placeholder: the notes only ever gave Reese an ult, so his neutral
+    // special is invented and should be replaced when there's a real one.
     special: {
-      kind: 'buff',
-      startup: 7, active: 1, recovery: 11,
-      duration: 540,          // 9 seconds
-      damageMul: 1.45,
-      speedMul: 1.30,
-      knockbackTakenMul: 1.22,
+      kind: 'dash',
+      startup: 6, active: 12, recovery: 14, speed: 4.2,
+      damage: 9, base: 2.2, scale: 6, angle: 34, kx: 0.82903757255504174, ky: 0.5591929034707469,
+      ox: -4, oy: -9, w: 15, h: 12,
+    },
+    // "ult: shirtless" -- their note, and the only alternate sprite set Kel
+    // drew for anyone.
+    ult: {
+      kind: 'buff', label: 'SHIRTS OPTIONAL',
+      startup: 8, active: 1, recovery: 12,
+      duration: 900,          // 15 seconds
+      damageMul: 1.8,
+      speedMul: 1.48,
+      knockbackTakenMul: 1.05,
     },
   },
 
   autisnick: {
     name: 'AUTISNICK',
-    tag: 'PIZZA',
+    tag: 'PIZZA & RAINBOWS',
     drawn: true,
-    blurb: 'Throws a pizza slice. Hold down to drop one straight through the floor.',
+    blurb: 'Throws pizza. Hold up to lob a rainbow over cover, down to drop a slice.',
     weight: 106, walk: 1.14, jump: 6.2, doubleJump: 5.7,
     jab: { startup: 5, active: 4, recovery: 11, damage: 6,
            base: 2.4, scale: 6.8, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925, ox: 2, oy: -9, w: 11, h: 10 },
@@ -248,7 +271,27 @@ const ROSTER = {
       startup: 8, active: 1, recovery: 14,
       maxAlive: 2,
       speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 170,
-      damage: 9, base: 2.2, scale: 6.6, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+      damage: 8, base: 2.1, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+      // Up + special. Lobbed high so it drops in behind a platform, which is
+      // what makes it worth having next to the flat pizza.
+      // Tuned against the stage rather than by feel. Apex is lift^2/(2*drop)
+      // at speed*lift/drop away: ~40px up, ~77px out. The side platforms sit
+      // 38px above the floor, so the arc passes through exactly the space a
+      // flat shot can never reach. That is the whole reason it exists next
+      // to the pizza.
+      rainbow: {
+        speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
+        damage: 9, base: 2.3, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+      },
+    },
+    // "mike Tyson flies in from trees, sounds of rainforest" -- their note.
+    // The figure is left abstract rather than drawn as a likeness.
+    ult: {
+      kind: 'rush', label: 'OUT OF THE TREES',
+      startup: 16, active: 16, recovery: 30,
+      lunge: 3.2, tint: '#2f7d32',
+      damage: 17, base: 3.8, scale: 10, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824,
+      ox: -18, oy: -12, w: 150, h: 32,
     },
   },
 
@@ -266,6 +309,13 @@ const ROSTER = {
       damage: 11, base: 2.7, scale: 8.4, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
       ox: -26, oy: -8, w: 52, h: 18,
     },
+    // Placeholder ult -- no note for John yet.
+    ult: {
+      kind: 'shockwave', label: 'GROUND ZERO',
+      startup: 14, active: 12, recovery: 30,
+      damage: 20, base: 4, scale: 10.5, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+      ox: -70, oy: -10, w: 140, h: 46,
+    },
   },
 
   ladeane: {
@@ -274,31 +324,50 @@ const ROSTER = {
     drawn: false,
     blurb: 'Launches into a low dash. Fast, safe, closes distance instantly.',
     weight: 90, walk: 1.70, jump: 6.8, doubleJump: 6.3,
-    jab: { startup: 3, active: 3, recovery: 8, damage: 4,
+    jab: { startup: 3, active: 3, recovery: 8, damage: 5,
            base: 2.0, scale: 5.6, angle: 46, kx: 0.69465837045899725, ky: 0.71933980033865119, ox: 2, oy: -9, w: 10, h: 10 },
     special: {
       kind: 'dash',
       startup: 6, active: 14, recovery: 13,
       speed: 4.4,
-      damage: 8, base: 2.0, scale: 5.6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
+      damage: 9, base: 2.2, scale: 6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
       ox: -4, oy: -9, w: 15, h: 12,
+    },
+    // Placeholder ult -- no note for Ladeane yet.
+    ult: {
+      kind: 'dash', label: 'FULL SEND',
+      startup: 6, active: 22, recovery: 26, speed: 5.6,
+      damage: 18, base: 3.8, scale: 10, angle: 32, kx: 0.84804809615642596, ky: 0.5299192642332049,
+      ox: -6, oy: -10, w: 20, h: 16,
     },
   },
 
   trev: {
     name: 'TREV',
-    tag: 'PLACEHOLDER',
+    tag: 'FLAMING LASER SWORD',
     drawn: false,
-    blurb: 'Rising uppercut. Doubles as a recovery -- hard to knock off for good.',
+    blurb: 'Rising sword slash. Doubles as a recovery -- hard to knock off for good.',
     weight: 96, walk: 1.46, jump: 6.9, doubleJump: 6.2,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
+    // "newtons flaming lazer swords" -- their note. Kept mechanically as the
+    // rising attack it already was, so his recovery and the balance around it
+    // are untouched; only the name and the visual changed.
     special: {
-      kind: 'uppercut',
+      kind: 'uppercut', blade: '#ff8a2a',
       startup: 5, active: 11, recovery: 24,
       rise: -5.6, drift: 0.9,
       damage: 8, base: 2.2, scale: 6.8, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
       ox: -7, oy: -12, w: 14, h: 18,
+    },
+    // Placeholder ult. Their other note for Trev is "something with cereal",
+    // which isn't enough to build from yet.
+    ult: {
+      kind: 'rush', label: 'LASER SWORD',
+      startup: 14, active: 16, recovery: 28,
+      lunge: 3, tint: '#ff7a2a',
+      damage: 16, base: 3.6, scale: 9.4, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      ox: -14, oy: -12, w: 145, h: 32,
     },
   },
 };
@@ -447,11 +516,11 @@ let prevHeld = new Set();
 
 const BINDS = [
   { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS',
-    attack: 'KeyF', special: 'KeyG', shield: 'KeyH' },
+    attack: 'KeyF', special: 'KeyG', shield: 'KeyH', ult: 'KeyR' },
   { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
-    attack: 'Comma', special: 'Period', shield: 'Slash',
+    attack: 'Comma', special: 'Period', shield: 'Slash', ult: 'Semicolon',
     // Numpad alternates, for keyboards where the punctuation cluster is awkward.
-    attack2: 'Numpad1', special2: 'Numpad2', shield2: 'Numpad3' },
+    attack2: 'Numpad1', special2: 'Numpad2', shield2: 'Numpad3', ult2: 'Numpad0' },
 ];
 
 window.addEventListener('keydown', (e) => {
@@ -498,12 +567,13 @@ function readPad(idx) {
     attack: anyTap(b.attack, b.attack2),
     special: anyTap(b.special, b.special2),
     shield: any(b.shield, b.shield2),
+    ult: anyTap(b.ult, b.ult2),
   };
 }
 
 const NEUTRAL = {
   left: false, right: false, up: false, down: false,
-  jump: false, attack: false, special: false, shield: false,
+  jump: false, attack: false, special: false, shield: false, ult: false,
 };
 
 /* The 2018 menu art (BACK / QUIT) is 325x128 -- wider than the whole 320px
@@ -593,6 +663,7 @@ class Fighter {
     this.landLag = 0;
     this.dropThrough = 0;
     this.hazardCd = 0;
+    this.ultMeter = 0;
 
     this.shield = COMBAT.shieldMax;
     this.shieldBroken = 0;
@@ -603,6 +674,7 @@ class Fighter {
     this.specialSpawned = false;
 
     this.buffTimer = 0;
+    this.buffStats = null;
     this.walkAnim = 0;
 
     this.ai = { timer: 0, plan: 'approach', cooldown: 0, jumpCd: 0,
@@ -610,13 +682,13 @@ class Fighter {
   }
 
   get damageMul() {
-    return this.buffTimer > 0 ? this.def.special.damageMul : 1;
+    return this.buffTimer > 0 && this.buffStats ? this.buffStats.damageMul : 1;
   }
   get speedMul() {
-    return this.buffTimer > 0 ? this.def.special.speedMul : 1;
+    return this.buffTimer > 0 && this.buffStats ? this.buffStats.speedMul : 1;
   }
   get kbTakenMul() {
-    return this.buffTimer > 0 ? this.def.special.knockbackTakenMul : 1;
+    return this.buffTimer > 0 && this.buffStats ? this.buffStats.knockbackTakenMul : 1;
   }
   get busy() {
     return this.state === 'attack' || this.state === 'special' ||
@@ -646,9 +718,10 @@ class Fighter {
       if (this.attackFrame >= m.startup + m.active) return null;
       return { box: this.relBox(m), move: m };
     }
-    if (this.state === 'special') {
-      const s = this.def.special;
-      if (s.kind === 'projectile' || s.kind === 'buff') return null;
+    if (this.state === 'special' || this.state === 'ult') {
+      const s = this.moveFor(this.state);
+      if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
+          s.kind === 'pizza' || s.kind === 'barrage') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -706,7 +779,8 @@ class Fighter {
     }
     if (this.state === 'roll') { this.updateRoll(); return; }
     if (this.state === 'dodge') { this.updateDodge(); return; }
-    if (this.state === 'attack' || this.state === 'special') {
+    if (this.state === 'attack' || this.state === 'special' ||
+        this.state === 'ult') {
       this.updateAttack(pad);
       this.checkBlastZones();
       return;
@@ -751,6 +825,12 @@ class Fighter {
     // --- attacks ---
     if (pad.attack && this.landLag <= 0) {
       this.startAttack('attack');
+      return;
+    }
+    if (pad.ult && this.landLag <= 0 && this.def.ult &&
+        this.ultMeter >= COMBAT.ultMax) {
+      this.ultMeter = 0;
+      this.startAttack('ult', pad);
       return;
     }
     if (pad.special && this.landLag <= 0 && this.canSpecial()) {
@@ -814,9 +894,12 @@ class Fighter {
 
   startAttack(kind, pad) {
     if (kind === 'special' && this.def.special.kind === 'pizza') {
-      this.pizzaHeading = pad && pad.down ? 'D' : (this.facing > 0 ? 'R' : 'L');
+      // Up throws the rainbow instead; down drops a slice through the floor.
+      this.pizzaHeading = pad && pad.up ? 'UP'
+                        : pad && pad.down ? 'D'
+                        : (this.facing > 0 ? 'R' : 'L');
     }
-    this.setState(kind === 'attack' ? 'attack' : 'special');
+    this.setState(kind);
     this.attackKind = kind;
     this.attackFrame = 0;
     this.hasHit = false;
@@ -824,15 +907,21 @@ class Fighter {
     if (this.grounded) this.vx *= 0.4;
   }
 
+  moveFor(state) {
+    return state === 'attack' ? this.def.jab
+         : state === 'ult' ? this.def.ult
+         : this.def.special;
+  }
+
   updateAttack(pad) {
-    const m = this.state === 'attack' ? this.def.jab : this.def.special;
+    const m = this.moveFor(this.state);
     const total = m.startup + m.active + m.recovery;
     this.attackFrame++;
 
-    if (this.state === 'special') this.runSpecial(m);
+    if (this.state === 'special' || this.state === 'ult') this.runSpecial(m);
 
     // Roots and dashes control their own horizontal motion.
-    const rooted = this.state === 'special' &&
+    const rooted = (this.state === 'special' || this.state === 'ult') &&
       ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut');
     if (!rooted) {
       if (this.grounded) this.vx *= PHYS.groundFriction;
@@ -863,7 +952,39 @@ class Fighter {
       case 'pizza':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Pizza(this, s, this.pizzaHeading || 'R'));
+          if (this.pizzaHeading === 'UP') {
+            projectiles.push(new Rainbow(this, s.rainbow));
+          } else {
+            projectiles.push(new Pizza(this, s, this.pizzaHeading || 'R'));
+          }
+        }
+        break;
+
+      // A fan of bones at once, rather than one at a time.
+      case 'barrage':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          for (let i = 0; i < s.count; i++) {
+            const shot = new Bone(this, s);
+            shot.vy = s.lift - (i - (s.count - 1) / 2) * s.spread;
+            projectiles.push(shot);
+          }
+        }
+        break;
+
+      // A committed charge across the ground. Invulnerable through the
+      // wind-up so it can be thrown out as a comeback rather than only as a
+      // punish.
+      case 'rush':
+        if (this.attackFrame < s.startup) {
+          this.invuln = Math.max(this.invuln, 2);
+          if (this.attackFrame % 4 === 0) {
+            addEffect('spark', this.x + rand(-10, 10), this.y - rand(2, 18), s.tint);
+          }
+        }
+        if (this.attackFrame === s.startup) {
+          addEffect('rush', this.x, this.y - 10, s.tint, this.facing, s);
+          this.vx = this.facing * (s.lunge || 0);
         }
         break;
 
@@ -871,6 +992,13 @@ class Fighter {
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           this.buffTimer = s.duration;
+          // Read from the move that actually granted it, whichever slot
+          // that move happens to occupy.
+          this.buffStats = {
+            damageMul: s.damageMul || 1,
+            speedMul: s.speedMul || 1,
+            knockbackTakenMul: s.knockbackTakenMul || 1,
+          };
           for (let i = 0; i < 10; i++) addEffect('spark', this.x, this.y - 7, this.accent);
         }
         break;
@@ -899,6 +1027,10 @@ class Fighter {
         break;
 
       case 'uppercut':
+        if (s.blade && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active && this.attackFrame % 2 === 0) {
+          addEffect('blade', this.x + this.facing * 4, this.y - 14, s.blade);
+        }
         if (this.attackFrame === s.startup) {
           this.vy = s.rise;
           this.vx = this.facing * s.drift;
@@ -1055,6 +1187,7 @@ class Fighter {
     this.percent = 0;
     this.shield = COMBAT.shieldMax;
     this.buffTimer = 0;
+    this.buffStats = null;
     this.hitstun = 0;
     this.invuln = COMBAT.respawnInvuln;
     this.hazardCd = 0;
@@ -1073,7 +1206,8 @@ class Fighter {
     const entry = SPRITES[this.key];
     let set = 'base';
     // Kel drew himself a real attack animation -- use it when he swings.
-    if (entry.attack && (this.state === 'attack' || this.state === 'special')) {
+    if (entry.attack && (this.state === 'attack' || this.state === 'special' ||
+                         this.state === 'ult')) {
       set = 'attack';
     }
     // Reese's shirtless set is his buff state, exactly as drawn.
@@ -1212,6 +1346,72 @@ class Pizza {
 }
 
 /* =====================================================================
+   RAINBOW - AutisNick's arcing shot.
+
+   Nobody drew art for this one, so it is drawn in code from the spectrum on
+   his shirt: the same bands, lobbed. It arcs high enough to come down behind
+   a platform, which is the point of having it alongside the flat pizza.
+   ===================================================================== */
+
+class Rainbow {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 7;
+    this.y = owner.y - 9;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift;
+    this.life = spec.life;
+    this.trail = [];
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > 14) this.trail.shift();
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+    this.life--;
+
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.dead = true;
+          for (let i = 0; i < 6; i++) {
+            addEffect('spark', this.x, p.y, RAINBOW[i % RAINBOW.length]);
+          }
+          break;
+        }
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 3, y: this.y - 3, w: 6, h: 6 };
+  }
+
+  draw(g) {
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = this.trail[i];
+      g.globalAlpha = (i / this.trail.length) * 0.7;
+      g.fillStyle = RAINBOW[(i + (this.life | 0)) % RAINBOW.length];
+      g.fillRect(Math.round(t.x) - 1, Math.round(t.y) - 1, 2, 2);
+    }
+    g.globalAlpha = 1;
+    for (let i = 0; i < RAINBOW.length; i++) {
+      g.fillStyle = RAINBOW[i];
+      g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 3 + i, 6, 1);
+    }
+  }
+}
+
+/* =====================================================================
    EFFECTS - everything Kel didn't draw is code-drawn, so his art is
    never mixed with generated pixels.
    ===================================================================== */
@@ -1257,6 +1457,18 @@ function drawEffects(g) {
         g.fillRect(Math.round(e.x - 3), Math.round(e.y - 1), 6, 1);
         g.globalAlpha = 1;
         break;
+      case 'blade': {
+        // A bright rising blade: hot core, cooler edge.
+        g.globalAlpha = k;
+        g.fillStyle = e.color;
+        g.fillRect(Math.round(e.x) - 1, Math.round(e.y) - 8, 3, 16);
+        g.globalAlpha = k * 0.9;
+        g.fillStyle = '#fff6d8';
+        g.fillRect(Math.round(e.x), Math.round(e.y) - 7, 1, 14);
+        g.globalAlpha = 1;
+        break;
+      }
+
       case 'trail':
         g.fillStyle = e.color;
         g.globalAlpha = k * 0.5;
@@ -1285,6 +1497,21 @@ function drawEffects(g) {
         g.globalAlpha = 1;
         break;
       }
+      case 'rush': {
+        // A dark streak with leaf-coloured debris tumbling out of it.
+        const sp = e.spec;
+        const x0 = e.dir > 0 ? e.x + sp.ox : e.x - sp.ox - sp.w;
+        g.globalAlpha = Math.min(0.9, k * 1.5);
+        g.fillStyle = e.color;
+        g.fillRect(x0, e.y - sp.h / 2, sp.w, sp.h);
+        g.globalAlpha = Math.min(1, k * 1.8);
+        g.fillStyle = '#ffffff';
+        g.fillRect(x0, e.y - sp.h / 2, sp.w, 1);
+        g.fillRect(x0, e.y + sp.h / 2 - 1, sp.w, 1);
+        g.globalAlpha = 1;
+        break;
+      }
+
       case 'beam': {
         // AutisNick's rainbow shirt is the loudest thing Kel drew.
         // The beam quotes it back as stacked spectrum bands.
@@ -1313,6 +1540,10 @@ function applyHit(attacker, defender, move, sourceX) {
   const dmg = move.damage * attacker.damageMul;
   if (attacker.ai) attacker.ai.starve = 0;
   if (defender.ai) defender.ai.starve = 0;
+  attacker.ultMeter = Math.min(COMBAT.ultMax,
+    attacker.ultMeter + dmg * COMBAT.ultPerDamageDealt);
+  defender.ultMeter = Math.min(COMBAT.ultMax,
+    defender.ultMeter + dmg * COMBAT.ultPerDamageTaken);
 
   // Shield eats the hit if it's up and facing the right way.
   if (defender.state === 'shield' && defender.shield > 0) {
@@ -1483,6 +1714,20 @@ function aiDecide(me, foe) {
   if (dy < -6 && !me.grounded && me.vy > 0 && me.jumpsLeft > 0 && headroom &&
       Math.random() < 0.10) {
     wantJump();
+  }
+
+  // A charged ult is worth using; the CPU should not hoard it.
+  if (me.def.ult && me.ultMeter >= COMBAT.ultMax && a.cooldown <= 0) {
+    const k = me.def.ult.kind;
+    const inRange =
+      k === 'barrage' ? adx < 150 :
+      k === 'buff' ? true :
+      adx < 90 && Math.abs(dy) < 26;
+    if (inRange && Math.random() < 0.4) {
+      pad.ult = true;
+      a.cooldown = 40;
+      return pad;
+    }
   }
 
   if (a.cooldown <= 0) {
@@ -2093,7 +2338,7 @@ function text(str, x, y, size, color, align, weight) {
 }
 
 function drawHUD() {
-  const y = VH - 18;
+  const y = VH - 22;
 
   const band = sctx.createLinearGradient(0, px(VH - 32), 0, px(VH));
   band.addColorStop(0, 'rgba(8,10,20,0)');
@@ -2113,14 +2358,34 @@ function drawHUD() {
         Math.round(235 - heat * 205) + ')';
 
     text(f.def.name, cx, y - 12, 6, f.accent, 'center', 700);
-    text(Math.floor(f.percent) + '%', cx, y + 10, 15, col, 'center', 800);
+    text(Math.floor(f.percent) + '%', cx, y + 8, 14, col, 'center', 800);
 
     // Stock icons.
     const total = COMBAT.stocks;
     for (let s = 0; s < total; s++) {
       const sx = cx - (total * 5) / 2 + s * 5 + 1;
       sctx.fillStyle = s < f.stocks ? f.accent : '#2c2f3d';
-      sctx.fillRect(px(sx), px(y + 14), px(3), px(3));
+      sctx.fillRect(px(sx), px(y + 12), px(3), px(3));
+    }
+
+    // Ult meter. Fills with damage in both directions and flashes when it is
+    // ready, since an ult you don't know you have is no ult at all.
+    if (f.def.ult && !f.eliminated) {
+      const w = 34;
+      const bx = cx - w / 2;
+      const by = y + 16;
+      const full = f.ultMeter >= COMBAT.ultMax;
+      sctx.fillStyle = '#23262f';
+      sctx.fillRect(px(bx), px(by), px(w), px(2));
+      const fill = Math.max(0, Math.min(1, f.ultMeter / COMBAT.ultMax));
+      if (full) {
+        sctx.globalAlpha = 0.65 + Math.sin(battleFrames * 0.22) * 0.35;
+        sctx.fillStyle = '#ffffff';
+      } else {
+        sctx.fillStyle = f.accent;
+      }
+      sctx.fillRect(px(bx), px(by), px(w * fill), px(2));
+      sctx.globalAlpha = 1;
     }
   }
 
@@ -2294,13 +2559,14 @@ const netplay = {
 function padToBits(p) {
   return (p.left ? 1 : 0) | (p.right ? 2 : 0) | (p.up ? 4 : 0) | (p.down ? 8 : 0) |
          (p.jump ? 16 : 0) | (p.attack ? 32 : 0) | (p.special ? 64 : 0) |
-         (p.shield ? 128 : 0);
+         (p.shield ? 128 : 0) | (p.ult ? 256 : 0);
 }
 
 function bitsToPad(b) {
   return {
     left: !!(b & 1), right: !!(b & 2), up: !!(b & 4), down: !!(b & 8),
     jump: !!(b & 16), attack: !!(b & 32), special: !!(b & 64), shield: !!(b & 128),
+    ult: !!(b & 256),
   };
 }
 

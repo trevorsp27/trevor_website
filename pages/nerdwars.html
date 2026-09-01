@@ -20,11 +20,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260831d" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901a" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260831a" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260831d" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260901a" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
 
@@ -151,6 +151,7 @@
                   <th scope="col">Attack</th>
                   <th scope="col">Special</th>
                   <th scope="col">Shield</th>
+                  <th scope="col">Ult</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,6 +163,7 @@
                   <td><kbd>F</kbd></td>
                   <td><kbd>G</kbd></td>
                   <td><kbd>H</kbd></td>
+                  <td><kbd>R</kbd></td>
                 </tr>
                 <tr>
                   <th scope="row" class="nw-p2">Player 2</th>
@@ -171,6 +173,7 @@
                   <td><kbd>,</kbd></td>
                   <td><kbd>.</kbd></td>
                   <td><kbd>/</kbd></td>
+                  <td><kbd>;</kbd></td>
                 </tr>
               </tbody>
             </table>
@@ -179,6 +182,7 @@
             <li>Damage percent does not kill you. It decides how far the next hit throws you. Get knocked off the screen and you lose a stock.</li>
             <li>You get two air jumps. Hold down while airborne to fall faster, or down plus jump to drop through a platform.</li>
             <li>Shield plus a direction rolls, and you are invincible in the middle of it. Shield plus down is a spot dodge.</li>
+            <li>The bar under your stocks is your ult. It fills as damage is dealt <em>and</em> taken &mdash; faster when you are the one being beaten on &mdash; and flashes white when it is ready.</li>
             <li>Playing alone is fine &mdash; pick 1 Player and the second fighter is a CPU.</li>
           </ul>
         </section>
@@ -192,8 +196,9 @@
           <ul class="list">
             <li><strong>Kel</strong> is the only character with a full drawn attack animation, plus a four-frame spinning bone. He drew himself a projectile, so he plays as a zoner.</li>
             <li><strong>Reese</strong> is the only one with a complete second sprite set: a full shirtless walk cycle. In game that is a transformation &mdash; faster and stronger, but he flies further when hit.</li>
-            <li><strong>AutisNick</strong> throws pizza. Three drawn slices, and the crust trails the direction of travel, so they are not mirrors of each other. Hold down to drop one through the floor.</li>
-            <li><strong>JohnnyHam</strong>, <strong>Ladeane</strong> and <strong>Trev</strong> only ever got movement art, so their specials are placeholders picked to cover distinct playstyles rather than personalities.</li>
+            <li><strong>AutisNick</strong> throws pizza &mdash; three drawn slices, and the crust trails the direction of travel, so they are not mirrors of each other. Hold down to drop one through the floor, or up to lob a rainbow over a platform, which is the one place the flat shot cannot reach.</li>
+            <li><strong>Trev</strong> swings a flaming laser sword on the way up, which doubles as his recovery.</li>
+            <li><strong>JohnnyHam</strong> and <strong>Ladeane</strong> only ever got movement art, so their specials are placeholders picked to cover distinct playstyles rather than personalities. Several ults are placeholders too.</li>
           </ul>
           <p class="nw-hint">
             Five stages, all built from tilesets found in the same 2018 folder. Which tiles

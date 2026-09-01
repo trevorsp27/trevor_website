@@ -62,7 +62,8 @@ than waiting on the transport to notice.
 ## NerdWars
 
 A two-player platform fighter at `pages/nerdwars.html`, built from pixel sprites the
-author and his friends drew in 2018. Two players share one keyboard; a CPU fills the
+author and his friends drew in 2018. Six characters, five stages, ults on a meter
+that charges faster for whoever is losing. Two players share one keyboard; a CPU fills the
 second slot in one-player mode. Five stages, six characters.
 
 ### The JavaScript here is generated - do not hand-edit it
