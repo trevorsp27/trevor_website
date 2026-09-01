@@ -192,6 +192,13 @@ let STAGE = STAGES[0];
    to change.
    ===================================================================== */
 
+/* Every move carries `kx` and `ky` alongside `angle`: they are the cosine and
+   sine of that angle, written out as literals. Math.cos and Math.sin are not
+   guaranteed to agree to the last bit across JavaScript engines, and online
+   play runs the same simulation on both machines -- one differing bit in a
+   knockback vector compounds until the two players see different fights.
+   src/build.py checks kx/ky against angle on every build, so changing an
+   angle without updating them is a build error rather than a desync. */
 const ROSTER = {
   kel: {
     name: 'KEL',
@@ -200,13 +207,13 @@ const ROSTER = {
     blurb: 'Lobs a spinning bone that arcs downrange. Controls space.',
     weight: 98, walk: 1.38, jump: 6.5, doubleJump: 6.0,
     jab: { startup: 4, active: 4, recovery: 10, damage: 5,
-           base: 2.2, scale: 6.4, angle: 42, ox: 2, oy: -9, w: 11, h: 10 },
+           base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
     special: {
       kind: 'projectile',
       startup: 6, active: 1, recovery: 13,
       maxAlive: 3,
       speed: 3.3, lift: -0.55, drop: 0.055, life: 170,
-      damage: 9, base: 2.1, scale: 6.4, angle: 38,
+      damage: 9, base: 2.1, scale: 6.4, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
     },
   },
 
@@ -217,7 +224,7 @@ const ROSTER = {
     blurb: 'Rips the shirt off. Hits harder and moves faster, but flies further.',
     weight: 96, walk: 1.42, jump: 6.6, doubleJump: 6.1,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
-           base: 2.3, scale: 6.5, angle: 44, ox: 2, oy: -9, w: 11, h: 10 },
+           base: 2.3, scale: 6.5, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
     special: {
       kind: 'buff',
       startup: 7, active: 1, recovery: 11,
@@ -235,13 +242,13 @@ const ROSTER = {
     blurb: 'Throws a pizza slice. Hold down to drop one straight through the floor.',
     weight: 106, walk: 1.14, jump: 6.2, doubleJump: 5.7,
     jab: { startup: 5, active: 4, recovery: 11, damage: 6,
-           base: 2.4, scale: 6.8, angle: 40, ox: 2, oy: -9, w: 11, h: 10 },
+           base: 2.4, scale: 6.8, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925, ox: 2, oy: -9, w: 11, h: 10 },
     special: {
       kind: 'pizza',
       startup: 8, active: 1, recovery: 14,
       maxAlive: 2,
       speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 170,
-      damage: 9, base: 2.2, scale: 6.6, angle: 40,
+      damage: 9, base: 2.2, scale: 6.6, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
     },
   },
 
@@ -252,11 +259,11 @@ const ROSTER = {
     blurb: 'Slams the ground. Bursts on both sides and launches straight up.',
     weight: 110, walk: 1.20, jump: 6.1, doubleJump: 5.6,
     jab: { startup: 5, active: 5, recovery: 11, damage: 6,
-           base: 2.5, scale: 6.6, angle: 38, ox: 2, oy: -9, w: 12, h: 10 },
+           base: 2.5, scale: 6.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829, ox: 2, oy: -9, w: 12, h: 10 },
     special: {
       kind: 'shockwave',
       startup: 10, active: 8, recovery: 19,
-      damage: 11, base: 2.7, scale: 8.4, angle: 74,
+      damage: 11, base: 2.7, scale: 8.4, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
       ox: -26, oy: -8, w: 52, h: 18,
     },
   },
@@ -268,12 +275,12 @@ const ROSTER = {
     blurb: 'Launches into a low dash. Fast, safe, closes distance instantly.',
     weight: 90, walk: 1.70, jump: 6.8, doubleJump: 6.3,
     jab: { startup: 3, active: 3, recovery: 8, damage: 4,
-           base: 2.0, scale: 5.6, angle: 46, ox: 2, oy: -9, w: 10, h: 10 },
+           base: 2.0, scale: 5.6, angle: 46, kx: 0.69465837045899725, ky: 0.71933980033865119, ox: 2, oy: -9, w: 10, h: 10 },
     special: {
       kind: 'dash',
       startup: 6, active: 14, recovery: 13,
       speed: 4.4,
-      damage: 8, base: 2.0, scale: 5.6, angle: 30,
+      damage: 8, base: 2.0, scale: 5.6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
       ox: -4, oy: -9, w: 15, h: 12,
     },
   },
@@ -285,12 +292,12 @@ const ROSTER = {
     blurb: 'Rising uppercut. Doubles as a recovery -- hard to knock off for good.',
     weight: 96, walk: 1.46, jump: 6.9, doubleJump: 6.2,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
-           base: 2.2, scale: 6.2, angle: 44, ox: 2, oy: -9, w: 11, h: 10 },
+           base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
     special: {
       kind: 'uppercut',
       startup: 5, active: 11, recovery: 24,
       rise: -5.6, drift: 0.9,
-      damage: 8, base: 2.2, scale: 6.8, angle: 80,
+      damage: 8, base: 2.2, scale: 6.8, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
       ox: -7, oy: -12, w: 14, h: 18,
     },
   },
@@ -1332,9 +1339,10 @@ function applyHit(attacker, defender, move, sourceX) {
              (100 / defender.def.weight) * defender.kbTakenMul;
 
   const dir = Math.sign(defender.x - sourceX) || attacker.facing;
-  const ang = (move.angle * Math.PI) / 180;
-  defender.vx = Math.cos(ang) * kb * dir;
-  defender.vy = -Math.sin(ang) * kb;
+  // kx/ky are the cosine and sine of move.angle, baked in as literals. See
+  // the note in the roster: runtime trig is not portable enough for lockstep.
+  defender.vx = move.kx * kb * dir;
+  defender.vy = -move.ky * kb;
   // setState resets the state timer, so compute hitstun after it.
   defender.setState('hitstun');
   defender.grounded = false;
@@ -1741,14 +1749,22 @@ function drawStageSelect() {
    ===================================================================== */
 
 function updateBattle() {
-  if (menuBack()) { scene = 'select'; select.locked = [false, false]; return; }
+  if (menuBack()) {
+    if (netplay.active) {
+      if (netplay.send) netplay.send({ t: 'bye' });
+      netStop('you left');
+      return;
+    }
+    scene = 'select';
+    select.locked = [false, false];
+    return;
+  }
 
   if (freezeFrames > 0) { freezeFrames--; return; }
 
-  const pads = [
-    readPad(0),
-    twoPlayer ? readPad(1) : aiPad(fighters[1], fighters[0]),
-  ];
+  const pads = netplay.active && netplay.framePads
+    ? netplay.framePads
+    : [readPad(0), twoPlayer ? readPad(1) : aiPad(fighters[1], fighters[0])];
 
   for (let i = 0; i < fighters.length; i++) {
     fighters[i].update(pads[i], fighters[1 - i]);
@@ -2237,6 +2253,213 @@ function render() {
 }
 
 /* =====================================================================
+   NETPLAY - deterministic lockstep
+
+   Only button presses cross the wire, never positions. Both machines run the
+   identical simulation from the identical inputs, which is only possible
+   because the sim is deterministic: fixed timestep, no randomness feeding
+   game state, and no runtime trig (see the note on kx/ky in the roster).
+
+   Each side runs `delay` frames behind its own input: what you press now is
+   scheduled for frame N+delay, which gives the packet that long to arrive.
+   Frame N is simulated only once BOTH sides' inputs for N are in hand. Until
+   then the game waits rather than guessing, so the two can never diverge.
+
+   This section owns the frame buffer. Getting bytes between two browsers is
+   somebody else's job: pass in a `send` function, and feed whatever arrives
+   to receive().
+   ===================================================================== */
+
+const NET_REDUNDANCY = 12;   // past frames resent in every packet
+const NET_CHECK_EVERY = 30;  // how often to compare a state hash
+
+const netplay = {
+  active: false,
+  localSlot: 0,
+  delay: 4,
+  send: null,
+  onEvent: null,
+  inputs: [new Map(), new Map()],
+  checks: new Map(),
+  framePads: null,
+  frame: 0,
+  submittedTo: -1,
+  stalling: false,
+  stalledFrames: 0,
+  worstStall: 0,
+  desync: null,
+  ended: null,
+};
+
+function padToBits(p) {
+  return (p.left ? 1 : 0) | (p.right ? 2 : 0) | (p.up ? 4 : 0) | (p.down ? 8 : 0) |
+         (p.jump ? 16 : 0) | (p.attack ? 32 : 0) | (p.special ? 64 : 0) |
+         (p.shield ? 128 : 0);
+}
+
+function bitsToPad(b) {
+  return {
+    left: !!(b & 1), right: !!(b & 2), up: !!(b & 4), down: !!(b & 8),
+    jump: !!(b & 16), attack: !!(b & 32), special: !!(b & 64), shield: !!(b & 128),
+  };
+}
+
+/* Hash the exact float bits rather than a rounded printout. A desync begins
+   as one differing bit and only becomes visible much later; by then it is
+   far harder to tell which frame caused it. */
+const hashView = new DataView(new ArrayBuffer(8));
+
+function mixNumber(h, v) {
+  hashView.setFloat64(0, v);
+  for (let i = 0; i < 8; i++) {
+    h ^= hashView.getUint8(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+function stateHash() {
+  let h = 2166136261 >>> 0;
+  for (const f of fighters) {
+    h = mixNumber(h, f.x);
+    h = mixNumber(h, f.y);
+    h = mixNumber(h, f.vx);
+    h = mixNumber(h, f.vy);
+    h = mixNumber(h, f.percent);
+    h = mixNumber(h, f.stocks);
+    h = mixNumber(h, f.hitstun);
+    h = mixNumber(h, f.attackFrame);
+    h = mixNumber(h, f.facing);
+    h = mixNumber(h, f.grounded ? 1 : 0);
+  }
+  h = mixNumber(h, projectiles.length);
+  for (const pr of projectiles) {
+    h = mixNumber(h, pr.x);
+    h = mixNumber(h, pr.y);
+  }
+  return h >>> 0;
+}
+
+function netEmit(kind, detail) {
+  if (netplay.onEvent) netplay.onEvent(kind, detail || null);
+}
+
+function netHaveFrame(f) {
+  return netplay.inputs[0].has(f) && netplay.inputs[1].has(f);
+}
+
+/* Capture this machine's input for frame+delay and put it on the wire with a
+   window of earlier frames, so a dropped packet heals without a resend. */
+function netSubmitLocal() {
+  const target = netplay.frame + netplay.delay;
+  if (netplay.submittedTo >= target) return;
+  netplay.submittedTo = target;
+  const mine = netplay.inputs[netplay.localSlot];
+  mine.set(target, padToBits(readPad(netplay.localSlot)));
+
+  const from = Math.max(0, target - (NET_REDUNDANCY - 1));
+  const bits = [];
+  for (let f = from; f <= target; f++) bits.push(mine.get(f) || 0);
+  if (netplay.send) netplay.send({ t: 'i', f: from, b: bits });
+}
+
+function netReceive(msg) {
+  if (!msg || !netplay.active) return;
+
+  if (msg.t === 'i') {
+    const remote = netplay.inputs[1 - netplay.localSlot];
+    for (let i = 0; i < msg.b.length; i++) {
+      const f = msg.f + i;
+      if (!remote.has(f)) remote.set(f, msg.b[i]);
+    }
+    return;
+  }
+
+  if (msg.t === 'c') {
+    const mine = netplay.checks.get(msg.f);
+    if (mine !== undefined && mine !== msg.h && !netplay.desync) {
+      netplay.desync = { frame: msg.f, mine: mine, theirs: msg.h };
+      netEmit('desync', netplay.desync);
+    }
+    return;
+  }
+
+  if (msg.t === 'bye') netStop('opponent left');
+}
+
+function netAfterStep() {
+  const f = netplay.frame;
+
+  if (f % NET_CHECK_EVERY === 0) {
+    const h = stateHash();
+    netplay.checks.set(f, h);
+    if (netplay.send) netplay.send({ t: 'c', f: f, h: h });
+    if (netplay.checks.size > 40) {
+      const cutoff = f - NET_CHECK_EVERY * 30;
+      for (const k of netplay.checks.keys()) {
+        if (k < cutoff) netplay.checks.delete(k);
+      }
+    }
+  }
+
+  // Frames older than the redundancy window can never be asked for again.
+  const stale = f - NET_REDUNDANCY * 4;
+  if (stale > 0 && f % 60 === 0) {
+    for (const map of netplay.inputs) {
+      for (const k of map.keys()) if (k < stale) map.delete(k);
+    }
+  }
+
+  netplay.frame++;
+}
+
+function netStart(opts) {
+  const stageIdx = STAGES.findIndex((st) => st.key === opts.stage);
+  stagePick = stageIdx < 0 ? 0 : stageIdx;
+  select.cursor = [
+    Math.max(0, ORDER.indexOf(opts.chars[0])),
+    Math.max(0, ORDER.indexOf(opts.chars[1])),
+  ];
+  twoPlayer = true;                 // both sides are human; no AI in netplay
+
+  netplay.active = true;
+  netplay.localSlot = opts.localSlot === 1 ? 1 : 0;
+  netplay.delay = Math.max(1, Math.min(12, opts.delay || 4));
+  netplay.send = opts.send || null;
+  netplay.onEvent = opts.onEvent || null;
+  netplay.inputs = [new Map(), new Map()];
+  netplay.checks = new Map();
+  netplay.frame = 0;
+  netplay.submittedTo = netplay.delay - 1;
+  netplay.stalling = false;
+  netplay.stalledFrames = 0;
+  netplay.worstStall = 0;
+  netplay.desync = null;
+  netplay.ended = null;
+  netplay.framePads = [NEUTRAL, NEUTRAL];
+
+  // Both sides open on an identical run-up of neutral input.
+  for (let f = 0; f < netplay.delay; f++) {
+    netplay.inputs[0].set(f, 0);
+    netplay.inputs[1].set(f, 0);
+  }
+
+  startBattle();
+  hasFocus = true;
+  if (mount) mount.dataset.nerdwarsFocus = 'on';
+  netEmit('started', { slot: netplay.localSlot, stage: STAGE.key });
+}
+
+function netStop(reason) {
+  if (!netplay.active) return;
+  netplay.active = false;
+  netplay.ended = reason || 'ended';
+  netplay.framePads = null;
+  scene = 'title';
+  netEmit('stopped', { reason: netplay.ended });
+}
+
+/* =====================================================================
    MAIN LOOP
    Fixed 60Hz simulation with an accumulator, so the physics behaves the
    same on a 60Hz laptop panel and a 144Hz monitor.
@@ -2266,10 +2489,30 @@ function frame(now) {
   acc += dt;
   let guard = 0;
   while (acc >= STEP && guard < 8) {
+    if (netplay.active && scene === 'battle') {
+      netSubmitLocal();
+      if (!netHaveFrame(netplay.frame)) {
+        // Wait rather than guess. Guessing is what rollback does, and
+        // rollback needs to be able to rewind; this cannot.
+        netplay.stalling = true;
+        netplay.stalledFrames++;
+        netplay.worstStall = Math.max(netplay.worstStall, netplay.stalledFrames);
+        break;
+      }
+      netplay.stalling = false;
+      netplay.stalledFrames = 0;
+      netplay.framePads = [
+        bitsToPad(netplay.inputs[0].get(netplay.frame)),
+        bitsToPad(netplay.inputs[1].get(netplay.frame)),
+      ];
+    }
     step();
+    if (netplay.active && scene === 'battle') netAfterStep();
     acc -= STEP;
     guard++;
   }
+  // A long wait must not become a long fast-forward once input arrives.
+  if (netplay.stalling) acc = Math.min(acc, STEP * 12);
   render();
   requestAnimationFrame(frame);
 }
@@ -2282,10 +2525,41 @@ window.NerdWars = {
   get stage() { return STAGE.key; },
   get focused() { return hasFocus; },
   get ready() { return assetsReady; },
+  // Read-only copies, so a page can build a lobby without duplicating the
+  // roster or the stage list and drifting out of sync with the game.
+  get roster() {
+    return ORDER.map((k) => ({
+      key: k, name: ROSTER[k].name, tag: ROSTER[k].tag,
+      blurb: ROSTER[k].blurb, drawn: !!ROSTER[k].drawn, accent: SPRITES[k].accent,
+    }));
+  },
+  get stages() {
+    return STAGES.map((st) => ({ key: st.key, name: st.name, tag: st.tag }));
+  },
   get keys() { return [...held]; },
   get frames() { return frameCount; },
   get fullscreen() { return fullscreenActive(); },
   toggleFullscreen: toggleFullscreen,
+  net: {
+    start: netStart,
+    stop: netStop,
+    receive: netReceive,
+    get active() { return netplay.active; },
+    get status() {
+      return {
+        active: netplay.active,
+        slot: netplay.localSlot,
+        frame: netplay.frame,
+        delay: netplay.delay,
+        stalling: netplay.stalling,
+        stalledFrames: netplay.stalledFrames,
+        worstStall: netplay.worstStall,
+        desync: netplay.desync,
+        ended: netplay.ended,
+        buffered: netplay.inputs[1 - netplay.localSlot].size,
+      };
+    },
+  },
   get fighters() {
     return fighters.map((f) => ({
       key: f.key, percent: Math.floor(f.percent), stocks: f.stocks,

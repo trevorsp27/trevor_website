@@ -20,11 +20,13 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260831c" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260831d" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260831a" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260831c" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260831d" defer></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
 
     <link rel="canonical" href="https://trevorspinosa.com/pages/nerdwars.html" />
     <meta property="og:type" content="website" />
@@ -82,6 +84,57 @@
             back. Fullscreen is worth it &mdash; the game draws at 320&times;180 and scales by whole
             numbers, and every 16:9 screen is an exact multiple of that, so it fills the display
             with no blur and no black bars.
+          </p>
+        </section>
+
+        <section class="panel reveal" id="nw-online" data-phase="idle"
+                 aria-labelledby="nw-online-title">
+          <h2 id="nw-online-title">Play online</h2>
+          <p class="nw-online-lede">
+            One of you creates a room and reads the code out; the other types it in. The
+            connection is browser to browser &mdash; there is no server in the middle, and
+            nothing to sign up for.
+          </p>
+
+          <div class="nw-online-actions" data-when="idle">
+            <button class="nw-btn nw-btn-primary" type="button" id="nw-host">Create a room</button>
+            <span class="nw-or">or</span>
+            <label class="nw-join-label" for="nw-join-code">Room code</label>
+            <input id="nw-join-code" class="nw-input" type="text" maxlength="4"
+                   inputmode="text" autocomplete="off" spellcheck="false" placeholder="ABCD" />
+            <button class="nw-btn" type="button" id="nw-join">Join</button>
+          </div>
+
+          <p class="nw-room" data-when="room">
+            Room code <strong id="nw-code">----</strong>
+          </p>
+
+          <div class="nw-lobby" data-when="room">
+            <div class="nw-lobby-row">
+              <span class="nw-lobby-label">Your fighter</span>
+              <div class="nw-picks" id="nw-chars"></div>
+            </div>
+            <div class="nw-lobby-row">
+              <span class="nw-lobby-label">Opponent</span>
+              <span class="nw-their" id="nw-their-pick">not here yet</span>
+            </div>
+            <div class="nw-lobby-row" id="nw-stage-row">
+              <label class="nw-lobby-label" for="nw-stage-pick">Stage</label>
+              <select class="nw-select" id="nw-stage-pick"></select>
+            </div>
+            <div class="nw-lobby-row nw-lobby-buttons">
+              <button class="nw-btn nw-btn-primary" type="button" id="nw-start">Start match</button>
+              <button class="nw-btn" type="button" id="nw-leave">Leave room</button>
+            </div>
+          </div>
+
+          <p class="nw-status" id="nw-status" role="status" aria-live="polite"></p>
+
+          <p class="nw-hint">
+            Both machines run the same simulation and swap only button presses, so what you
+            see is what your opponent sees. That costs a few frames of input delay: fine
+            between nearby friends, heavy across an ocean. If the two ever disagree the
+            match stops rather than quietly showing you different fights.
           </p>
         </section>
 

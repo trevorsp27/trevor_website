@@ -87,6 +87,48 @@ engine in an IIFE, so the only name it adds to the page is the read-only `window
 status object (`scene`, `stage`, `focused`, `ready`, `keys`, `frames`, `fighters`), which
 is there for debugging and for wiring up netplay later.
 
+### Online play
+
+Two browsers connect straight to each other over WebRTC, introduced by PeerJS's
+public broker, exactly as Bounce Bots does. The site stays static and there is
+still nothing to run.
+
+The model is different from Bounce Bots, though. Bounce Bots is
+host-authoritative: the leader's browser decides and the others ask. That suits
+a turn-based puzzle and would be wrong here, because it gives the guest visible
+lag on every input. NerdWars instead runs **deterministic lockstep** - both
+machines run the identical simulation and exchange only which buttons were
+pressed on which frame, a few bytes each way.
+
+`assets/js/nerdwars/net.js` is only the transport and the lobby. The frame
+buffer lives in the engine, reached through `window.NerdWars.net`:
+
+- `start({ localSlot, chars, stage, delay, send, onEvent })` begins a match
+- `receive(msg)` feeds it whatever arrives from the other side
+- `status` reports frame, stalls, and desync
+
+Each side runs `delay` frames behind its own input (4 by default, so ~66ms):
+what you press now is scheduled for frame N+delay, which gives the packet that
+long to arrive. Frame N is simulated only once *both* sides' inputs for N are in
+hand - until then the game waits rather than guessing, because guessing is what
+rollback does and rollback needs to be able to rewind. That means a slow
+connection shows up as hitching, not as the two players seeing different fights.
+
+Lockstep only works if the simulation is genuinely identical on both machines,
+which constrains the engine:
+
+- **No runtime trig.** `Math.sin` and `Math.cos` are not guaranteed to agree to
+  the last bit across JavaScript engines. Every knockback angle is a constant,
+  so each move stores `kx`/`ky` - its cosine and sine - as literals. The build
+  verifies them against the angle and refuses to build if they disagree.
+- **No AI.** The CPU uses `Math.random`, so online matches are human vs human.
+- Randomness elsewhere (particles, the starfield, background pulses) never
+  feeds back into game state, so it is free to differ.
+
+Every 30 frames each side hashes the exact float bits of its state and sends it
+across. A mismatch stops the match and says so, rather than quietly letting two
+people play different games.
+
 ### Keyboard focus
 
 The game only takes the keyboard while the player has clicked inside it. `game.js` looks
@@ -126,6 +168,14 @@ The game logic has no DOM or network dependencies, so it runs under Node directl
 ```bash
 npm test
 ```
+
+`tests/nerdwars-netplay.test.js` boots two independent copies of the NerdWars
+engine inside `vm` contexts with a stubbed DOM and a hand-cranked
+`requestAnimationFrame`, wires each one's output into the other, and plays 900
+frames with different inputs on each side. Driving the clock by hand is what
+makes a frame-exact test possible. The assertion is the game's own desync
+detector: if the two simulations ever disagreed by a single bit, the test
+fails.
 
 ### Working on it locally
 

@@ -226,3 +226,171 @@
     transition: none;
   }
 }
+
+/* ---- online lobby ----
+   Phase drives visibility: `idle` shows the create/join controls, anything
+   with a room shows the lobby, and `playing` hides the whole thing so it
+   isn't sitting under a live match. */
+
+.nw-online-lede {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+#nw-online[data-phase="idle"] [data-when="room"],
+#nw-online[data-phase="joining"] [data-when="room"] {
+  display: none;
+}
+
+#nw-online[data-phase="hosting"] [data-when="idle"],
+#nw-online[data-phase="lobby"] [data-when="idle"],
+#nw-online[data-phase="playing"] [data-when="idle"] {
+  display: none;
+}
+
+#nw-online[data-phase="playing"] [data-when="room"] {
+  display: none;
+}
+
+.nw-online-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nw-or {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0.2rem;
+}
+
+.nw-join-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.nw-input {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  width: 6.5rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+}
+
+.nw-input:focus-visible,
+.nw-select:focus-visible {
+  outline: 2px solid #59a5ff;
+  outline-offset: 2px;
+}
+
+.nw-btn-primary {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.nw-btn-primary:hover {
+  background: #ffffff;
+}
+
+.nw-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nw-room {
+  margin: 0.2rem 0 1rem;
+  color: var(--muted);
+}
+
+.nw-room strong {
+  font-family: "Bitter", Georgia, serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.3em;
+  color: var(--ink);
+  margin-left: 0.4rem;
+}
+
+.nw-lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.nw-lobby-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nw-lobby-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-width: 6.5rem;
+}
+
+.nw-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* The accent on each button is the character's own colour, sampled from
+   their sprite, so the lobby matches the character select in the game. */
+.nw-pick {
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--pick, var(--line));
+  border-radius: var(--radius);
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+
+.nw-pick[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--pick, var(--ink));
+  border-left-width: 3px;
+  background: var(--brand-soft);
+}
+
+.nw-select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.5rem;
+}
+
+.nw-their {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.nw-lobby-buttons {
+  margin-top: 0.2rem;
+}
+
+.nw-status {
+  min-height: 1.2rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.nw-status[data-kind="good"] { color: #8fe08f; }
+.nw-status[data-kind="warn"] { color: #ffb066; }
