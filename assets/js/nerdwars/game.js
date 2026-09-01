@@ -276,12 +276,17 @@ const ROSTER = {
         damage: 11, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
       },
     },
+    // "mike Tyson flies in from trees, sounds of rainforest". This used to be
+    // an abstract charge across the stage, with a comment apologising for
+    // leaving the figure undrawn. He is drawn now: he comes in on a vine tied
+    // above the stage, crosses the entire screen on a pendulum, and hits
+    // whatever he passes through on the way. Nick does not move at all.
     ult: {
-      kind: 'rush', label: 'OUT OF THE TREES',
-      startup: 16, active: 16, recovery: 30,
-      lunge: 3.2, tint: '#2f7d32',
-      damage: 17, base: 3.8, scale: 10, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824,
-      ox: -18, oy: -12, w: 150, h: 32,
+      kind: 'swingin', label: 'OUT OF THE TREES',
+      startup: 14, active: 1, recovery: 30,
+      tint: '#4a7a35',
+      hitEvery: 30,
+      damage: 20, base: 4.2, scale: 10, angle: 46, kx: 0.6946583704589973, ky: 0.7193398003386512,
     },
   },
 
@@ -324,9 +329,9 @@ const ROSTER = {
 
   kel: {
     name: 'KEL',
-    tag: 'THE BONETHROWER',
+    tag: 'BONES & BARBELLS',
     drawn: true,
-    blurb: 'Bones flat, low or lobbed. The only character who drew his own attack.',
+    blurb: 'The bone he drew himself, and the rest of it out of the gym.',
     weight: 98, walk: 1.46, jump: 6.5, doubleJump: 6.0,
     jab: { startup: 4, active: 4, recovery: 10, damage: 5,
            base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
@@ -337,27 +342,38 @@ const ROSTER = {
         speed: 3.3, lift: -0.55, drop: 0.055, life: 170,
         damage: 12, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       },
-      // PLACEHOLDER: skimmed low and fast along the ground.
+      // He lived in the gym, so the other two slots came out of it rather than
+      // being two more bones with the numbers changed.
+      //
+      // A dumbbell is not thrown so much as released: it barely travels, it
+      // falls fast, and it hurts more than anything else he owns.
       down: {
-        kind: 'projectile', label: 'SKIMMER',
-        startup: 5, active: 1, recovery: 12, maxAlive: 3,
-        speed: 4.4, lift: 0.35, drop: 0.02, life: 120,
-        damage: 8, base: 3.2, scale: 5.4, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
+        kind: 'scatter', label: 'DUMBBELL',
+        startup: 8, active: 1, recovery: 18, maxAlive: 2,
+        count: 1, spread: 0,
+        shape: 'dumbbell', tints: ['#9aa0b4'],
+        speed: 2.8, lift: -1.5, drop: 0.24, life: 100,
+        damage: 15, base: 3.4, scale: 7.2, angle: 55, kx: 0.573576436351046, ky: 0.8191520442889918,
       },
-      // PLACEHOLDER: tossed high, comes down on someone above.
+      // The lift is the recovery: he drives a barbell overhead and goes up
+      // with it. Anything above him is in the way of the bar.
       up: {
-        kind: 'projectile', label: 'HIGH TOSS',
-        startup: 8, active: 1, recovery: 16, maxAlive: 3,
-        speed: 1.9, lift: -3.4, drop: 0.13, life: 200,
-        damage: 11, base: 3.3, scale: 6.4, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+        kind: 'uppercut', label: 'CLEAN & JERK', overhead: '#9aa0b4',
+        startup: 6, active: 12, recovery: 22,
+        rise: -6.1, drift: 0.8,
+        damage: 11, base: 2.6, scale: 6.6, angle: 82, kx: 0.13917310096006547, ky: 0.9902680687415704,
+        ox: -9, oy: -26, w: 18, h: 22,
       },
     },
+    // A loaded bar, put down and left to roll. It crosses the whole stage,
+    // bounces off nothing, and is the widest hitbox in the game.
     ult: {
-      kind: 'barrage', label: 'BONEYARD',
-      startup: 10, active: 1, recovery: 26,
-      count: 6, spread: 0.5,
-      speed: 3.4, lift: -0.9, drop: 0.055, life: 170,
-      damage: 10, base: 2.6, scale: 7.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      kind: 'ball', label: 'LEG DAY',
+      art: 'barbell', boxW: 20, boxH: 8,
+      pierce: true, hitEvery: 40,
+      startup: 14, active: 1, recovery: 28, maxAlive: 1,
+      speed: 2.7, lift: -0.3, drop: 0.16, bounce: 0.42, life: 420,
+      damage: 16, base: 4.0, scale: 9, angle: 24, kx: 0.9135454576426009, ky: 0.4067366430758002,
     },
   },
 
@@ -423,41 +439,50 @@ const ROSTER = {
     name: 'REESE',
     tag: 'SHIRTS OPTIONAL',
     drawn: true,
-    blurb: 'Charges in. Ult takes the shirt off: far stronger, far faster, for a while.',
-    weight: 96, walk: 1.42, jump: 6.6, doubleJump: 6.1,
+    blurb: 'Never still. Everything is fast, nothing is committed. Ult loses the shirt.',
+    weight: 96, walk: 1.58, jump: 6.6, doubleJump: 6.1,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.3, scale: 6.5, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
     specials: {
-      // PLACEHOLDER: the notes only ever gave Reese an ult.
+      // He cannot sit still, so his whole kit is startup and recovery rather
+      // than damage. Three frames to begin, single figures to finish, and
+      // less on every hit than anyone else: he throws far more than the rest
+      // of the roster and commits to none of it.
       neutral: {
-        kind: 'dash', label: 'SHOULDER',
-        startup: 6, active: 12, recovery: 14, speed: 4.2,
-        damage: 9, base: 2.2, scale: 6, angle: 34, kx: 0.82903757255504174, ky: 0.5591929034707469,
-        ox: -4, oy: -9, w: 15, h: 12,
+        kind: 'dash', label: 'JITTERS',
+        startup: 3, active: 9, recovery: 8, speed: 5.4,
+        damage: 6, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
+        ox: -4, oy: -9, w: 14, h: 12,
       },
-      // PLACEHOLDER
       down: {
-        kind: 'shockwave', label: 'DROP',
-        startup: 7, active: 6, recovery: 16,
-        damage: 8, base: 2.3, scale: 6.4, angle: 66, kx: 0.40673664307580021, ky: 0.91354545764260087,
-        ox: -22, oy: -6, w: 44, h: 14,
+        kind: 'shockwave', label: 'TWITCH',
+        startup: 3, active: 4, recovery: 9,
+        damage: 5, base: 1.9, scale: 5.2, angle: 60, kx: 0.5000000000000001, ky: 0.8660254037844386,
+        ox: -18, oy: -6, w: 36, h: 12,
       },
-      // PLACEHOLDER
       up: {
-        kind: 'uppercut', label: 'RISE',
-        startup: 5, active: 10, recovery: 22,
-        rise: -5.6, drift: 0.9,
-        damage: 8, base: 2.2, scale: 6.4, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        kind: 'uppercut', label: 'BOUNCE',
+        startup: 3, active: 8, recovery: 14,
+        rise: -6.2, drift: 1.2,
+        damage: 6, base: 1.9, scale: 5.4, angle: 84, kx: 0.10452846326765346, ky: 0.9945218953682733,
         ox: -7, oy: -12, w: 14, h: 18,
       },
     },
+    // Still the shirt coming off -- Kel drew the shirtless set, and that is
+    // what the buff swaps him to. It just does not vanish any more: it leaves
+    // at speed, tumbling, and it hurts on the way past.
     ult: {
       kind: 'buff', label: 'SHIRTS OPTIONAL',
       startup: 8, active: 1, recovery: 12,
       duration: 780,
-      damageMul: 1.8,
-      speedMul: 1.48,
+      damageMul: 1.7,
+      speedMul: 1.62,
       knockbackTakenMul: 1.05,
+      shirt: {
+        shape: 'shirt', tints: ['#ed821a'],
+        speed: 4.2, lift: -2.4, drop: 0.12, bounce: 0.55, life: 150,
+        damage: 7, base: 2.4, scale: 5.4, angle: 46, kx: 0.6946583704589973, ky: 0.7193398003386512,
+      },
     },
   },
 
@@ -1024,7 +1049,7 @@ class Fighter {
     if (this.state === 'special' || this.state === 'ult') {
       const s = this.moveFor(this.state);
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
-          s.kind === 'equip' ||
+          s.kind === 'equip' || s.kind === 'swingin' ||
           s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain') return null;
@@ -1408,6 +1433,15 @@ class Fighter {
         }
         break;
 
+      // Somebody swings in out of the trees.
+      case 'swingin':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Swinger(this, s));
+          addEffect('ring', this.x, this.y - 8, s.tint || '#8cea1d');
+        }
+        break;
+
       // Hand over the sword. No hitbox of its own -- the ten seconds
       // afterwards are the attack.
       case 'equip':
@@ -1446,6 +1480,8 @@ class Fighter {
             knockbackTakenMul: s.knockbackTakenMul || 1,
           };
           for (let i = 0; i < 10; i++) addEffect('spark', this.x, this.y - 7, this.accent);
+          // The shirt has to go somewhere.
+          if (s.shirt) projectiles.push(new Pellet(this, s.shirt, 0));
         }
         break;
 
@@ -1496,6 +1532,11 @@ class Fighter {
         if (s.blade && this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active && this.attackFrame % 2 === 0) {
           addEffect('blade', this.x + this.facing * 4, this.y - 14, s.blade);
+        }
+        // Something pressed overhead, drawn above him the whole way up.
+        if (s.overhead && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active) {
+          addEffect('bar', this.x, this.y - 24, s.overhead);
         }
         // A geyser throws its own contents about. Droplets come off the
         // column the whole way up, not just at the start, so the move reads
@@ -1814,6 +1855,89 @@ const KNIGHT_ART = [
   '#######',
 ];
 
+/* Kel's gym equipment. A dumbbell is two weights and a short bar; a barbell
+   is the same idea with a much longer one, which is the whole joke. */
+const DUMBBELL_ART = [
+  'ww.....ww',
+  'ww.....ww',
+  'wwbbbbbww',
+  'ww.....ww',
+  'ww.....ww',
+];
+
+const BARBELL_ART = [
+  'ww..............ww',
+  'ww..............ww',
+  'wwbbbbbbbbbbbbbbww',
+  'wwbbbbbbbbbbbbbbww',
+  'ww..............ww',
+  'ww..............ww',
+];
+
+/* Reese's shirt, once it is no longer on Reese. */
+const SHIRT_ART = [
+  '##.....##',
+  '#########',
+  '#########',
+  '.#######.',
+  '.#######.',
+  '.#######.',
+  '.#######.',
+  '.##...##.',
+];
+
+/* "mike Tyson flies in from trees, sounds of rainforest" -- the 2018 note,
+   finally drawn. Gloves up on the vine and out in front, and deliberately
+   half again as tall as anybody else on the stage. */
+const BOXER_ART = [
+  '..............##......',
+  '.............ssss.....',
+  '.......hhhhhhss.......',
+  '......hhhhhhhhss......',
+  '.....hhhhhhhhhss......',
+  '.....hhsssssshh.......',
+  '.....hssssssssh.......',
+  '.....ssesssesss.......',
+  '.....ssssssssss.......',
+  '......ssssmmss........',
+  '.......ssssss.........',
+  '.....ssssssssss.......',
+  '..rrrsssssssssss......',
+  '.rrrrrsssssssssss.....',
+  '.rrrrrsssssssssss.....',
+  '..rrrsssssssssss......',
+  '.....sssssssssss......',
+  '.....sssssssssss......',
+  '.....wwwwwwwwwww......',
+  '.....kkkkkkkkkkk......',
+  '.....kkkkkkkkkkk......',
+  '.....kkkkkkkkkkk......',
+  '.....kkkk...kkkkk.....',
+  '.....sss.....sssss....',
+  '.....sss......sssss...',
+  '....bbbb.......bbbb...',
+  '....bbbb.......bbbb...',
+];
+
+const BOXER_PAL = {
+  h: '#1a1412', s: '#8c5636', e: '#fafafa', m: '#5a2828',
+  r: '#ce2a2a', k: '#181820', w: '#dedee6', b: '#3c3c48',
+};
+
+/* The path he swings through, as offsets from where the vine is tied. A
+   pendulum, written out rather than computed: Math.cos is banned in this file
+   because the simulation has to be identical on both machines and runtime
+   trig is not (see the note on kx/ky in the roster). Two frames per step, so
+   the crossing takes a second. */
+const VINE_ARC = [
+  [-150, 32], [-146, 46], [-141, 59], [-135, 72], [-128, 84],
+  [-119, 96], [-110, 107], [-99, 117], [-88, 125], [-76, 133],
+  [-63, 140], [-49, 145], [-36, 149], [-21, 151], [-7, 153],
+  [7, 153], [21, 151], [36, 149], [49, 145], [63, 140],
+  [76, 133], [88, 125], [99, 117], [110, 107], [119, 96],
+  [128, 84], [135, 72], [141, 59], [146, 46], [150, 32],
+];
+
 /* Trev's sword, held point-up. The blade is drawn in two tones so it reads
    as lit rather than flat; the fire itself is sparks thrown off it. */
 const SWORD_ART = [
@@ -2116,6 +2240,18 @@ class Pellet {
               this.x, this.y);
       return;
     }
+    if (this.shape === 'dumbbell') {
+      drawArt(g, pixelArt('dumbbell', DUMBBELL_ART,
+                          { w: '#565a68', b: '#9aa0b4' }), this.x, this.y);
+      return;
+    }
+    if (this.shape === 'shirt') {
+      // Tumbles, because a thrown shirt does.
+      const spin = Math.floor(this.life / 5) % 2;
+      drawArt(g, pixelArt('shirt' + spin, SHIRT_ART,
+                          { '#': this.tint }, spin === 1), this.x, this.y);
+      return;
+    }
     // A piece of cereal: one of three shapes, in one of six colours.
     drawArt(g, pixelArt('cereal.' + this.art + '.' + this.tint,
                         CEREAL_SHAPES[this.art], { '#': this.tint }),
@@ -2168,6 +2304,65 @@ class Laser {
 }
 
 /* =====================================================================
+   SWINGER - what comes out of the trees when AutisNick spends his ult.
+
+   A pendulum on a vine tied above the stage, crossing the whole screen in
+   about a second. He passes THROUGH people rather than stopping on the first
+   one, which is why he carries his own hit cooldown instead of dying on
+   contact like every other projectile.
+   ===================================================================== */
+
+class Swinger {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    // He swings in from behind and crosses in the direction being faced.
+    this.dir = owner.facing;
+    this.ax = VW / 2;
+    // Tied off screen, and placed so the bottom of the arc passes through
+    // people standing on the floor rather than under their feet. The arc
+    // drops 153px, the floor is at 128, so the knot sits at -37.
+    this.ay = -37;
+    this.step = 0;
+    this.pierce = true;
+    this.hitAt = [0, 0];
+    this.dead = false;
+    this.x = this.ax + VINE_ARC[0][0] * this.dir;
+    this.y = this.ay + VINE_ARC[0][1];
+  }
+
+  update() {
+    for (let i = 0; i < 2; i++) if (this.hitAt[i] > 0) this.hitAt[i]--;
+    this.step++;
+    // Two frames per point on the arc.
+    const i = Math.min(VINE_ARC.length - 1, this.step >> 1);
+    const p = VINE_ARC[i];
+    this.x = this.ax + p[0] * this.dir;
+    this.y = this.ay + p[1];
+    if (this.step >= VINE_ARC.length * 2) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 9, y: this.y - 16, w: 18, h: 30 };
+  }
+
+  draw(g) {
+    // The vine he is hanging from, back up to wherever it is tied.
+    g.strokeStyle = '#4a7a35';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(this.ax, this.ay);
+    g.lineTo(Math.round(this.x) + this.dir * 3, Math.round(this.y) - 14);
+    g.stroke();
+    g.lineWidth = 1;
+
+    const left = this.dir < 0;
+    drawArt(g, pixelArt('boxer' + (left ? 'L' : 'R'), BOXER_ART, BOXER_PAL, left),
+            this.x, this.y);
+  }
+}
+
+/* =====================================================================
    BALL - Lucas's soccerball.
 
    The other four projectiles all fly: an arcing bone, a flat pizza, a high
@@ -2187,9 +2382,13 @@ class Ball {
     this.life = spec.life;
     this.spin = 0;
     this.dead = false;
+    // A loaded bar does not stop because it met somebody.
+    this.pierce = !!spec.pierce;
+    this.hitAt = [0, 0];
   }
 
   update() {
+    for (let i = 0; i < 2; i++) if (this.hitAt[i] > 0) this.hitAt[i]--;
     const prevY = this.y;
     this.x += this.vx;
     this.y += this.vy;
@@ -2215,11 +2414,19 @@ class Ball {
   }
 
   box() {
-    return { x: this.x - 4, y: this.y - 4, w: 8, h: 8 };
+    // A barbell is much wider than it is tall, and the hitbox has to say so
+    // or it would roll straight past people it visibly went through.
+    const w = this.spec.boxW || 8, h = this.spec.boxH || 8;
+    return { x: this.x - w / 2, y: this.y - h / 2, w: w, h: h };
   }
 
   draw(g) {
     const x = Math.round(this.x), y = Math.round(this.y);
+    if (this.spec.art === 'barbell') {
+      drawArt(g, pixelArt('barbell', BARBELL_ART,
+                          { w: '#565a68', b: '#9aa0b4' }), this.x, this.y);
+      return;
+    }
     drawArt(g, pixelArt('ball', BALL_ART,
                         { '#': '#f4f4f4', o: '#5a6070' }), this.x, this.y);
     // One dark panel that travels round the ball as it rolls.
@@ -2364,6 +2571,14 @@ function drawEffects(g) {
         g.fillRect(lx - 2, ly, 5, 1);
         g.fillRect(lx - 1, ly - 1, 3, 1);
         g.fillRect(lx - 1, ly + 1, 3, 1);
+        g.globalAlpha = 1;
+        break;
+      }
+
+      case 'bar': {
+        g.globalAlpha = Math.min(1, k * 1.6);
+        drawArt(g, pixelArt('barbell', BARBELL_ART,
+                            { w: '#565a68', b: '#9aa0b4' }), e.x, e.y);
         g.globalAlpha = 1;
         break;
       }
@@ -2601,6 +2816,15 @@ function resolveCombat(fighters) {
       if (f === shot.owner || f.eliminated) continue;
       if (f.invulnerable || f.state === 'ko') continue;
       if (overlap(shot.box(), f.hurtbox())) {
+        // Something that swings through the whole stage keeps going. It has
+        // to remember who it just hit, or it would connect on every frame it
+        // overlapped them.
+        if (shot.pierce) {
+          if (shot.hitAt[f.slot] > 0) continue;
+          applyHit(shot.owner, f, shot.spec, shot.x);
+          shot.hitAt[f.slot] = shot.spec.hitEvery || 30;
+          continue;
+        }
         applyHit(shot.owner, f, shot.spec, shot.x);
         shot.dead = true;
         break;
