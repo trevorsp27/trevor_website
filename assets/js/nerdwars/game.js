@@ -41,6 +41,12 @@ const COMBAT = {
   ultMax: 100,
   ultPerDamageDealt: 1.1,
   ultPerDamageTaken: 1.7,
+  // Specials draw on a pool that refills on its own. Jabs are free, so
+  // running dry leaves you poking rather than helpless, and ults are already
+  // gated by their own meter -- charging them twice would mean finally
+  // earning an ult and not being allowed to use it.
+  manaMax: 100,
+  manaRegen: 0.5,
   hitstopLight: 3,
   hitstopHeavy: 7,
   shieldMax: 100,
@@ -462,6 +468,42 @@ const ROSTER = {
   },
 };
 
+/* What a move costs is derived from how strong it is, not hand-assigned:
+   thirty moves would drift out of step with their numbers the first time
+   anything was rebalanced. Damage and knockback both count, because a move
+   that barely hurts but throws you off the stage still wins the game.
+
+   Everything here is plain arithmetic on constants, so both machines in an
+   online match compute identical costs. */
+function moveCost(m) {
+  if (!m) return 0;
+  const shots = m.count || 1;
+  let power = (m.damage || 0) * shots;
+
+  // Damage over time is still damage; count all of it.
+  if (m.poison) power += m.poison.frames * m.poison.dps;
+
+  // A buff does no damage itself, so price it by how much it multiplies
+  // everything else, and for how long.
+  if (m.kind === 'buff') {
+    power += (m.duration / 60) * ((m.damageMul || 1) - 1) * 9;
+  }
+
+  // Knockback decides whether a hit takes a stock, so it is worth as much
+  // as the damage attached to it.
+  power += (m.base || 0) * 1.6 + (m.scale || 0) * 0.7;
+
+  return Math.max(6, Math.round(3 + power * 1.15));
+}
+
+// Priced once at load. Jabs and ults stay free (see COMBAT.manaMax).
+for (const key in ROSTER) {
+  const def = ROSTER[key];
+  for (const slot in def.specials) {
+    def.specials[slot].mana = moveCost(def.specials[slot]);
+  }
+}
+
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev'];
 
 /* =====================================================================
@@ -757,6 +799,8 @@ class Fighter {
     this.dropThrough = 0;
     this.hazardCd = 0;
     this.ultMeter = 0;
+    this.mana = COMBAT.manaMax;
+    this.manaDenied = 0;
     this.poison = 0;
     this.poisonDps = 0;
 
@@ -923,6 +967,11 @@ class Fighter {
       return;
     }
     if (this.state === 'shield') this.setState('idle');
+    if (this.mana < COMBAT.manaMax) {
+      this.mana = Math.min(COMBAT.manaMax, this.mana + COMBAT.manaRegen);
+    }
+    if (this.manaDenied > 0) this.manaDenied--;
+
     if (this.shield < COMBAT.shieldMax) {
       this.shield = Math.min(COMBAT.shieldMax, this.shield + COMBAT.shieldRegen);
     }
@@ -938,9 +987,15 @@ class Fighter {
       this.startAttack('ult', pad);
       return;
     }
-    if (pad.special && this.landLag <= 0 && this.canSpecial(pad)) {
-      this.startAttack('special', pad);
-      return;
+    if (pad.special && this.landLag <= 0) {
+      if (this.canSpecial(pad)) {
+        this.mana -= this.def.specials[this.slotFor(pad)].mana;
+        this.startAttack('special', pad);
+        return;
+      }
+      // Out of mana: say so rather than silently eating the input.
+      const wanted = this.def.specials[this.slotFor(pad)];
+      if (wanted && this.mana < wanted.mana) this.manaDenied = 18;
     }
 
     // --- horizontal movement ---
@@ -991,6 +1046,7 @@ class Fighter {
   canSpecial(pad) {
     const s = this.def.specials[this.slotFor(pad)];
     if (!s) return false;
+    if (this.mana < s.mana) return false;
     if (s.maxAlive) {
       return projectiles.filter((b) => b.owner === this).length < s.maxAlive;
     }
@@ -1323,6 +1379,7 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.poison = 0;
+    this.mana = COMBAT.manaMax;
     this.hitstun = 0;
     this.invuln = COMBAT.respawnInvuln;
     this.hazardCd = 0;
@@ -1957,7 +2014,8 @@ function aiDecide(me, foe) {
     if (desperate && inJab) {
       pad.attack = true;
       a.cooldown = 10;
-    } else if (inSpecial && Math.random() < a.aggression * 0.5) {
+    } else if (inSpecial && me.mana >= me.def.specials.neutral.mana &&
+               Math.random() < a.aggression * 0.5) {
       pad.special = true;
       // Pick the slot that suits where the target actually is. Without this
       // the CPU only ever throws its neutral special and ignores two thirds
@@ -2572,53 +2630,70 @@ function text(str, x, y, size, color, align, weight) {
 }
 
 function drawHUD() {
-  const y = VH - 22;
+  // Fixed rows rather than offsets from one anchor: there are five things to
+  // fit between y=148 and the bottom of the screen, and stage geometry is
+  // laid out on the promise that nothing here climbs above 148.
+  const nameY = VH - 27;   // 153
+  const pctY = VH - 14;    // 166
+  const stockY = VH - 11;  // 169, 3px tall
+  const manaY = VH - 7;    // 173, 2px tall
+  const ultY = VH - 4;     // 176, 2px tall -- bottom lands at 178, clear of
+                           // the screen edge at 180.
 
   const band = sctx.createLinearGradient(0, px(VH - 32), 0, px(VH));
   band.addColorStop(0, 'rgba(8,10,20,0)');
   band.addColorStop(1, 'rgba(8,10,20,0.82)');
   sctx.fillStyle = band;
   sctx.fillRect(0, px(VH - 32), view.width, px(32));
+
+  const barW = 36;
+
   for (let i = 0; i < fighters.length; i++) {
     const f = fighters[i];
     const cx = i === 0 ? 66 : VW - 66;
+    const bx = cx - barW / 2;
 
     // Damage percent, reddening as it climbs -- the number that decides
     // how far the next hit sends you.
     const heat = clamp(f.percent / 160, 0, 1);
     const col = f.eliminated
       ? '#4a4a56'
-      : 'rgb(' + Math.round(235) + ',' + Math.round(235 - heat * 175) + ',' +
+      : 'rgb(235,' + Math.round(235 - heat * 175) + ',' +
         Math.round(235 - heat * 205) + ')';
 
-    text(f.def.name, cx, y - 12, 6, f.accent, 'center', 700);
-    text(Math.floor(f.percent) + '%', cx, y + 8, 14, col, 'center', 800);
+    text(f.def.name, cx, nameY, 6, f.accent, 'center', 700);
+    text(Math.floor(f.percent) + '%', cx, pctY, 12, col, 'center', 800);
 
     // Stock icons.
     const total = COMBAT.stocks;
-    for (let s = 0; s < total; s++) {
-      const sx = cx - (total * 5) / 2 + s * 5 + 1;
-      sctx.fillStyle = s < f.stocks ? f.accent : '#2c2f3d';
-      sctx.fillRect(px(sx), px(y + 12), px(3), px(3));
+    for (let st = 0; st < total; st++) {
+      const sx = cx - (total * 5) / 2 + st * 5 + 1;
+      sctx.fillStyle = st < f.stocks ? f.accent : '#2c2f3d';
+      sctx.fillRect(px(sx), px(stockY), px(3), px(3));
     }
 
-    // Ult meter. Fills with damage in both directions and flashes when it is
-    // ready, since an ult you don't know you have is no ult at all.
-    if (f.def.ult && !f.eliminated) {
-      const w = 34;
-      const bx = cx - w / 2;
-      const by = y + 16;
-      const full = f.ultMeter >= COMBAT.ultMax;
+    if (f.eliminated) continue;
+
+    // Mana. Flashes red for a moment when a special was refused for want of
+    // it, so an input that did nothing has a visible reason.
+    sctx.fillStyle = '#1b2030';
+    sctx.fillRect(px(bx), px(manaY), px(barW), px(2));
+    const manaFill = clamp(f.mana / COMBAT.manaMax, 0, 1);
+    sctx.fillStyle = f.manaDenied > 0 ? '#ff6b6b' : '#4fa8ff';
+    sctx.fillRect(px(bx), px(manaY), px(barW * manaFill), px(2));
+
+    // Ult meter, flashing when it is ready to spend.
+    if (f.def.ult) {
       sctx.fillStyle = '#23262f';
-      sctx.fillRect(px(bx), px(by), px(w), px(2));
-      const fill = Math.max(0, Math.min(1, f.ultMeter / COMBAT.ultMax));
+      sctx.fillRect(px(bx), px(ultY), px(barW), px(2));
+      const full = f.ultMeter >= COMBAT.ultMax;
       if (full) {
         sctx.globalAlpha = 0.65 + Math.sin(battleFrames * 0.22) * 0.35;
         sctx.fillStyle = '#ffffff';
       } else {
         sctx.fillStyle = f.accent;
       }
-      sctx.fillRect(px(bx), px(by), px(w * fill), px(2));
+      sctx.fillRect(px(bx), px(ultY), px(barW * clamp(f.ultMeter / COMBAT.ultMax, 0, 1)), px(2));
       sctx.globalAlpha = 1;
     }
   }
@@ -2832,6 +2907,7 @@ function stateHash() {
     h = mixNumber(h, f.vx);
     h = mixNumber(h, f.vy);
     h = mixNumber(h, f.percent);
+    h = mixNumber(h, f.mana);
     h = mixNumber(h, f.stocks);
     h = mixNumber(h, f.hitstun);
     h = mixNumber(h, f.attackFrame);
@@ -3040,6 +3116,11 @@ window.NerdWars = {
     return ORDER.map((k) => ({
       key: k, name: ROSTER[k].name, tag: ROSTER[k].tag,
       blurb: ROSTER[k].blurb, drawn: !!ROSTER[k].drawn, accent: SPRITES[k].accent,
+      moves: Object.keys(ROSTER[k].specials).map((slot) => ({
+        slot: slot, label: ROSTER[k].specials[slot].label,
+        mana: ROSTER[k].specials[slot].mana,
+      })),
+      ult: ROSTER[k].ult ? ROSTER[k].ult.label : null,
     }));
   },
   get stages() {

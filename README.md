@@ -63,7 +63,8 @@ than waiting on the transport to notice.
 
 A two-player platform fighter at `pages/nerdwars.html`, built from pixel sprites the
 author and his friends drew in 2018. Six characters, five stages, three specials
-and an ult each, with the ult meter charging faster for whoever is losing.
+and an ult each. Specials draw on a mana pool so nothing can be spammed, and
+the ult meter charges faster for whoever is losing.
 
 **The web build is online-only.** The mount carries `data-nerdwars="online"`,
 which tells the engine to skip its local menu entirely: the only way into a
