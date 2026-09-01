@@ -62,8 +62,13 @@ than waiting on the transport to notice.
 ## NerdWars
 
 A two-player platform fighter at `pages/nerdwars.html`, built from pixel sprites the
-author and his friends drew in 2018. Six characters, five stages, ults on a meter
-that charges faster for whoever is losing. Two players share one keyboard; a CPU fills the
+author and his friends drew in 2018. Six characters, five stages, three specials
+and an ult each, with the ult meter charging faster for whoever is losing.
+
+**The web build is online-only.** The mount carries `data-nerdwars="online"`,
+which tells the engine to skip its local menu entirely: the only way into a
+match is the lobby on the page. The standalone build still has local play and a
+CPU. Two players share one keyboard; a CPU fills the
 second slot in one-player mode. Five stages, six characters.
 
 ### The JavaScript here is generated - do not hand-edit it
@@ -107,6 +112,12 @@ buffer lives in the engine, reached through `window.NerdWars.net`:
 - `start({ localSlot, chars, stage, delay, send, onEvent })` begins a match
 - `receive(msg)` feeds it whatever arrives from the other side
 - `status` reports frame, stalls, and desync
+
+Both machines read the **same keys** (WASD and friends) regardless of which slot
+they occupy. Online there is one person per keyboard, so reading each side's own
+slot bindings just meant the guest was on player two's arrow keys while reaching
+for WASD — jump and most specials silently did nothing. `tests/nerdwars-netplay.test.js`
+covers this now.
 
 Each side runs `delay` frames behind its own input (4 by default, so ~66ms):
 what you press now is scheduled for frame N+delay, which gives the packet that

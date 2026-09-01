@@ -20,11 +20,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901a" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901b" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260831a" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260901a" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260901b" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
 
@@ -67,12 +67,12 @@
         <section class="nw-panel reveal" aria-labelledby="nw-play-title">
           <h2 id="nw-play-title" class="nw-sr-only">Play</h2>
           <div class="nw-bar">
-            <p class="nw-bar-hint">Two players, one keyboard.</p>
+            <p class="nw-bar-hint">Online only &mdash; create or join a room below.</p>
             <button class="nw-btn" type="button" data-nerdwars-fullscreen>
               Fullscreen
             </button>
           </div>
-          <div class="nw-stage" data-nerdwars>
+          <div class="nw-stage" data-nerdwars="online">
             <canvas id="nw-canvas" aria-label="NerdWars game screen"></canvas>
             <div class="nw-veil" aria-hidden="true">
               <span class="nw-veil-key">CLICK TO PLAY</span>
@@ -81,7 +81,7 @@
           </div>
           <p class="nw-note">
             Click the screen to hand it the keyboard; click anywhere else on the page to give it
-            back. Fullscreen is worth it &mdash; the game draws at 320&times;180 and scales by whole
+            back. Both players use the same keys, one on each machine. Fullscreen is worth it &mdash; the game draws at 320&times;180 and scales by whole
             numbers, and every 16:9 screen is an exact multiple of that, so it fills the display
             with no blur and no black bars.
           </p>
@@ -144,7 +144,6 @@
             <table class="nw-keys">
               <thead>
                 <tr>
-                  <th scope="col">&nbsp;</th>
                   <th scope="col">Move</th>
                   <th scope="col">Jump</th>
                   <th scope="col">Drop</th>
@@ -156,7 +155,6 @@
               </thead>
               <tbody>
                 <tr>
-                  <th scope="row" class="nw-p1">Player 1</th>
                   <td><kbd>A</kbd><kbd>D</kbd></td>
                   <td><kbd>W</kbd></td>
                   <td><kbd>S</kbd></td>
@@ -165,20 +163,11 @@
                   <td><kbd>H</kbd></td>
                   <td><kbd>R</kbd></td>
                 </tr>
-                <tr>
-                  <th scope="row" class="nw-p2">Player 2</th>
-                  <td><kbd>&larr;</kbd><kbd>&rarr;</kbd></td>
-                  <td><kbd>&uarr;</kbd></td>
-                  <td><kbd>&darr;</kbd></td>
-                  <td><kbd>,</kbd></td>
-                  <td><kbd>.</kbd></td>
-                  <td><kbd>/</kbd></td>
-                  <td><kbd>;</kbd></td>
-                </tr>
               </tbody>
             </table>
           </div>
           <ul class="list">
+            <li>Everyone has <strong>three specials</strong>: <kbd>G</kbd> on its own, <kbd>G</kbd> while holding <kbd>W</kbd>, and <kbd>G</kbd> while holding <kbd>S</kbd>. Up is usually the one that gets you back to the stage.</li>
             <li>Damage percent does not kill you. It decides how far the next hit throws you. Get knocked off the screen and you lose a stock.</li>
             <li>You get two air jumps. Hold down while airborne to fall faster, or down plus jump to drop through a platform.</li>
             <li>Shield plus a direction rolls, and you are invincible in the middle of it. Shield plus down is a spot dodge.</li>
@@ -196,9 +185,9 @@
           <ul class="list">
             <li><strong>Kel</strong> is the only character with a full drawn attack animation, plus a four-frame spinning bone. He drew himself a projectile, so he plays as a zoner.</li>
             <li><strong>Reese</strong> is the only one with a complete second sprite set: a full shirtless walk cycle. In game that is a transformation &mdash; faster and stronger, but he flies further when hit.</li>
-            <li><strong>AutisNick</strong> throws pizza &mdash; three drawn slices, and the crust trails the direction of travel, so they are not mirrors of each other. Hold down to drop one through the floor, or up to lob a rainbow over a platform, which is the one place the flat shot cannot reach.</li>
-            <li><strong>Trev</strong> swings a flaming laser sword on the way up, which doubles as his recovery.</li>
-            <li><strong>JohnnyHam</strong> and <strong>Ladeane</strong> only ever got movement art, so their specials are placeholders picked to cover distinct playstyles rather than personalities. Several ults are placeholders too.</li>
+            <li><strong>AutisNick</strong> throws pizza forward, kisses you down (which keeps hurting for seven seconds afterwards), and lobs a rainbow up and over a platform &mdash; the one place his flat shot cannot reach.</li>
+            <li><strong>Trev</strong> throws cereal three ways, and his ult is a flaming laser sword.</li>
+            <li><strong>JohnnyHam</strong> and <strong>Ladeane</strong> only ever got movement art, so their moves are placeholders picked to cover distinct playstyles rather than personalities. Several ults are placeholders too.</li>
           </ul>
           <p class="nw-hint">
             Five stages, all built from tilesets found in the same 2018 folder. Which tiles

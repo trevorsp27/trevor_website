@@ -236,6 +236,53 @@ test("two independent engines stay bit-identical through a fought match", async 
   );
 });
 
+test("both players use the same keys, whichever slot they are in", async () => {
+  // The bug this covers: each machine used to read its own slot's bindings,
+  // so the guest was on player two's controls (arrows and punctuation) while
+  // reaching for WASD. Online there is one person per keyboard, so both ends
+  // must answer to the same keys.
+  const a = await bootGame();
+  const b = await bootGame();
+
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "space",
+                   delay: 4, send: (m) => b.nw.net.receive(m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "space",
+                   delay: 4, send: (m) => a.nw.net.receive(m) });
+
+  const settle = (n) => { for (let i = 0; i < n; i++) { a.pump(1); b.pump(1); } };
+  settle(20);
+
+  const groundedY = b.nw.fighters[1].y;
+
+  // The GUEST presses W. Their own fighter is slot 1.
+  b.press("KeyW");
+  settle(3);
+  b.release("KeyW");
+  settle(25);
+
+  const guest = b.nw.fighters[1];
+  assert.ok(guest.y < groundedY - 8,
+    `guest pressed W and should have left the ground (y ${guest.y} vs ${groundedY})`);
+
+  // And the host sees the same jump, because it is the same simulation.
+  const asSeenByHost = a.nw.fighters[1];
+  assert.equal(JSON.stringify(asSeenByHost), JSON.stringify(guest),
+    "host and guest disagree about the guest's fighter");
+
+  // The guest moving right with D must move slot 1, not slot 0.
+  const p0 = b.nw.fighters[0].x;
+  const p1 = b.nw.fighters[1].x;
+  b.press("KeyD");
+  for (let i = 0; i < 30; i++) { a.pump(1); b.pump(1); }
+  b.release("KeyD");
+  settle(5);
+  assert.ok(b.nw.fighters[1].x > p1 + 5, "guest's own fighter should have moved right");
+  assert.equal(b.nw.fighters[0].x, p0, "the host's fighter should not have moved");
+
+  assert.equal(a.nw.net.status.desync, null);
+  assert.equal(b.nw.net.status.desync, null);
+});
+
 test("a side with no opponent input waits instead of guessing", async () => {
   const a = await bootGame();
   const outbox = [];

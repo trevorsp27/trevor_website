@@ -203,89 +203,50 @@ let STAGE = STAGES[0];
    play runs the same simulation on both machines -- one differing bit in a
    knockback vector compounds until the two players see different fights.
    src/build.py checks kx/ky against angle on every build, so changing an
-   angle without updating them is a build error rather than a desync. */
+   angle without updating them is a build error rather than a desync.
+
+   Each character has three specials -- neutral, down and up -- plus one ult
+   fired from a full meter. Moves marked PLACEHOLDER are mine, not theirs, and
+   are meant to be replaced as real ones turn up. */
 const ROSTER = {
-  kel: {
-    name: 'KEL',
-    tag: 'THE BONETHROWER',
-    drawn: true,
-    blurb: 'Lobs a spinning bone that arcs downrange. Controls space.',
-    weight: 98, walk: 1.46, jump: 6.5, doubleJump: 6.0,
-    jab: { startup: 4, active: 4, recovery: 10, damage: 5,
-           base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
-    special: {
-      kind: 'projectile',
-      startup: 6, active: 1, recovery: 13,
-      maxAlive: 3,
-      speed: 3.3, lift: -0.55, drop: 0.055, life: 170,
-      damage: 10, base: 2.3, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
-    },
-    // Placeholder ult -- no note for Kel yet. Uses his own drawn bone.
-    ult: {
-      kind: 'barrage', label: 'BONEYARD',
-      startup: 10, active: 1, recovery: 26,
-      count: 6, spread: 0.5,
-      speed: 3.4, lift: -0.9, drop: 0.055, life: 170,
-      damage: 10, base: 2.6, scale: 7.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
-    },
-  },
-
-  reese: {
-    name: 'REESE',
-    tag: 'SHIRTS OPTIONAL',
-    drawn: true,
-    blurb: 'Shoulder-charges in. Ult rips the shirt off: far stronger, far faster.',
-    weight: 96, walk: 1.42, jump: 6.6, doubleJump: 6.1,
-    jab: { startup: 4, active: 4, recovery: 9, damage: 5,
-           base: 2.3, scale: 6.5, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
-    // Placeholder: the notes only ever gave Reese an ult, so his neutral
-    // special is invented and should be replaced when there's a real one.
-    special: {
-      kind: 'dash',
-      startup: 6, active: 12, recovery: 14, speed: 4.2,
-      damage: 9, base: 2.2, scale: 6, angle: 34, kx: 0.82903757255504174, ky: 0.5591929034707469,
-      ox: -4, oy: -9, w: 15, h: 12,
-    },
-    // "ult: shirtless" -- their note, and the only alternate sprite set Kel
-    // drew for anyone.
-    ult: {
-      kind: 'buff', label: 'SHIRTS OPTIONAL',
-      startup: 8, active: 1, recovery: 12,
-      duration: 900,          // 15 seconds
-      damageMul: 1.8,
-      speedMul: 1.48,
-      knockbackTakenMul: 1.05,
-    },
-  },
-
   autisnick: {
     name: 'AUTISNICK',
-    tag: 'PIZZA & RAINBOWS',
+    tag: 'PIZZA, RAINBOWS, KISSES',
     drawn: true,
-    blurb: 'Throws pizza. Hold up to lob a rainbow over cover, down to drop a slice.',
+    blurb: 'Pizza forward, a kiss that keeps hurting, a rainbow lobbed over cover.',
     weight: 106, walk: 1.14, jump: 6.2, doubleJump: 5.7,
     jab: { startup: 5, active: 4, recovery: 11, damage: 6,
            base: 2.4, scale: 6.8, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925, ox: 2, oy: -9, w: 11, h: 10 },
-    special: {
-      kind: 'pizza',
-      startup: 8, active: 1, recovery: 14,
-      maxAlive: 2,
-      speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 170,
-      damage: 8, base: 2.1, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
-      // Up + special. Lobbed high so it drops in behind a platform, which is
-      // what makes it worth having next to the flat pizza.
-      // Tuned against the stage rather than by feel. Apex is lift^2/(2*drop)
-      // at speed*lift/drop away: ~40px up, ~77px out. The side platforms sit
-      // 38px above the floor, so the arc passes through exactly the space a
-      // flat shot can never reach. That is the whole reason it exists next
-      // to the pizza.
-      rainbow: {
+    specials: {
+      // Thrown flat on the ground; in the air it goes down, which is what
+      // the third drawn slice was for.
+      neutral: {
+        kind: 'pizza', label: 'PIZZA',
+        startup: 8, active: 1, recovery: 14, maxAlive: 2,
+        speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 170,
+        damage: 8, base: 2.1, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+      },
+      // Their original note for this one was a joke about giving people a
+      // disease. Kept as the mechanic underneath it: a kiss that lands
+      // almost no damage up front and then bleeds them for seven seconds.
+      down: {
+        kind: 'kiss', label: 'KISS',
+        startup: 6, active: 6, recovery: 20,
+        damage: 2, base: 1.4, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
+        ox: 2, oy: -10, w: 11, h: 9,
+        poison: { frames: 420, dps: 0.055 },
+      },
+      // Tuned against the stage, not by feel. Apex is lift^2/(2*drop) at
+      // speed*lift/drop away: ~40px up, ~78px out. The side platforms sit
+      // 38px above the floor, so the arc reaches the one place the flat
+      // shot never can.
+      up: {
+        kind: 'rainbow', label: 'RAINBOW',
+        startup: 9, active: 1, recovery: 16, maxAlive: 2,
         speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
         damage: 9, base: 2.3, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
       },
     },
-    // "mike Tyson flies in from trees, sounds of rainforest" -- their note.
-    // The figure is left abstract rather than drawn as a likeness.
     ult: {
       kind: 'rush', label: 'OUT OF THE TREES',
       startup: 16, active: 16, recovery: 30,
@@ -300,16 +261,30 @@ const ROSTER = {
     tag: 'PLACEHOLDER',
     drawn: false,
     blurb: 'Slams the ground. Bursts on both sides and launches straight up.',
-    weight: 110, walk: 1.20, jump: 6.1, doubleJump: 5.6,
+    weight: 105, walk: 1.20, jump: 6.1, doubleJump: 5.6,
     jab: { startup: 5, active: 5, recovery: 11, damage: 6,
            base: 2.5, scale: 6.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829, ox: 2, oy: -9, w: 12, h: 10 },
-    special: {
-      kind: 'shockwave',
-      startup: 10, active: 8, recovery: 19,
-      damage: 11, base: 2.7, scale: 8.4, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
-      ox: -26, oy: -8, w: 52, h: 18,
+    specials: {
+      neutral: {
+        kind: 'shockwave', label: 'SLAM',
+        startup: 10, active: 8, recovery: 19,
+        damage: 10, base: 2.5, scale: 8, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+        ox: -26, oy: -8, w: 52, h: 18,
+      },
+      down: {
+        kind: 'shockwave', label: 'STOMP',
+        startup: 6, active: 6, recovery: 14,
+        damage: 7, base: 2.2, scale: 6.2, angle: 60, kx: 0.50000000000000011, ky: 0.8660254037844386,
+        ox: -20, oy: -4, w: 40, h: 12,
+      },
+      up: {
+        kind: 'uppercut', label: 'HEAVE',
+        startup: 6, active: 10, recovery: 24,
+        rise: -5.2, drift: 0.7,
+        damage: 8, base: 2.3, scale: 6.6, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        ox: -8, oy: -12, w: 16, h: 18,
+      },
     },
-    // Placeholder ult -- no note for John yet.
     ult: {
       kind: 'shockwave', label: 'GROUND ZERO',
       startup: 14, active: 12, recovery: 30,
@@ -318,22 +293,76 @@ const ROSTER = {
     },
   },
 
+  kel: {
+    name: 'KEL',
+    tag: 'THE BONETHROWER',
+    drawn: true,
+    blurb: 'Bones flat, low or lobbed. The only character who drew his own attack.',
+    weight: 98, walk: 1.46, jump: 6.5, doubleJump: 6.0,
+    jab: { startup: 4, active: 4, recovery: 10, damage: 5,
+           base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
+    specials: {
+      neutral: {
+        kind: 'projectile', label: 'BONE',
+        startup: 6, active: 1, recovery: 13, maxAlive: 3,
+        speed: 3.3, lift: -0.55, drop: 0.055, life: 170,
+        damage: 10, base: 2.3, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      },
+      // PLACEHOLDER: skimmed low and fast along the ground.
+      down: {
+        kind: 'projectile', label: 'SKIMMER',
+        startup: 5, active: 1, recovery: 12, maxAlive: 3,
+        speed: 4.4, lift: 0.35, drop: 0.02, life: 120,
+        damage: 7, base: 1.9, scale: 5.4, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
+      },
+      // PLACEHOLDER: tossed high, comes down on someone above.
+      up: {
+        kind: 'projectile', label: 'HIGH TOSS',
+        startup: 8, active: 1, recovery: 16, maxAlive: 3,
+        speed: 1.9, lift: -3.4, drop: 0.13, life: 200,
+        damage: 9, base: 2.2, scale: 6.4, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+      },
+    },
+    ult: {
+      kind: 'barrage', label: 'BONEYARD',
+      startup: 10, active: 1, recovery: 26,
+      count: 6, spread: 0.5,
+      speed: 3.4, lift: -0.9, drop: 0.055, life: 170,
+      damage: 10, base: 2.6, scale: 7.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+    },
+  },
+
   ladeane: {
     name: 'LADEANE',
     tag: 'PLACEHOLDER',
     drawn: false,
-    blurb: 'Launches into a low dash. Fast, safe, closes distance instantly.',
+    blurb: 'Fastest on the roster. Dashes in, slides under, leaps out.',
     weight: 90, walk: 1.70, jump: 6.8, doubleJump: 6.3,
     jab: { startup: 3, active: 3, recovery: 8, damage: 5,
            base: 2.0, scale: 5.6, angle: 46, kx: 0.69465837045899725, ky: 0.71933980033865119, ox: 2, oy: -9, w: 10, h: 10 },
-    special: {
-      kind: 'dash',
-      startup: 6, active: 14, recovery: 13,
-      speed: 4.4,
-      damage: 9, base: 2.2, scale: 6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
-      ox: -4, oy: -9, w: 15, h: 12,
+    specials: {
+      neutral: {
+        kind: 'dash', label: 'DASH',
+        startup: 6, active: 14, recovery: 13, speed: 4.4,
+        damage: 9, base: 2.2, scale: 6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
+        ox: -4, oy: -9, w: 15, h: 12,
+      },
+      // PLACEHOLDER: lower, quicker, less committed.
+      down: {
+        kind: 'dash', label: 'SLIDE',
+        startup: 4, active: 10, recovery: 11, speed: 5,
+        damage: 6, base: 1.8, scale: 4.8, angle: 16, kx: 0.96126169593831889, ky: 0.27563735581699916,
+        ox: -4, oy: -5, w: 16, h: 8,
+      },
+      // PLACEHOLDER: her way back to the stage.
+      up: {
+        kind: 'uppercut', label: 'VAULT',
+        startup: 5, active: 10, recovery: 22,
+        rise: -6, drift: 1.1,
+        damage: 7, base: 2.1, scale: 6, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        ox: -7, oy: -12, w: 14, h: 18,
+      },
     },
-    // Placeholder ult -- no note for Ladeane yet.
     ult: {
       kind: 'dash', label: 'FULL SEND',
       startup: 6, active: 22, recovery: 26, speed: 5.6,
@@ -342,31 +371,92 @@ const ROSTER = {
     },
   },
 
+  reese: {
+    name: 'REESE',
+    tag: 'SHIRTS OPTIONAL',
+    drawn: true,
+    blurb: 'Charges in. Ult takes the shirt off: far stronger, far faster, for a while.',
+    weight: 96, walk: 1.42, jump: 6.6, doubleJump: 6.1,
+    jab: { startup: 4, active: 4, recovery: 9, damage: 5,
+           base: 2.3, scale: 6.5, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
+    specials: {
+      // PLACEHOLDER: the notes only ever gave Reese an ult.
+      neutral: {
+        kind: 'dash', label: 'SHOULDER',
+        startup: 6, active: 12, recovery: 14, speed: 4.2,
+        damage: 9, base: 2.2, scale: 6, angle: 34, kx: 0.82903757255504174, ky: 0.5591929034707469,
+        ox: -4, oy: -9, w: 15, h: 12,
+      },
+      // PLACEHOLDER
+      down: {
+        kind: 'shockwave', label: 'DROP',
+        startup: 7, active: 6, recovery: 16,
+        damage: 8, base: 2.3, scale: 6.4, angle: 66, kx: 0.40673664307580021, ky: 0.91354545764260087,
+        ox: -22, oy: -6, w: 44, h: 14,
+      },
+      // PLACEHOLDER
+      up: {
+        kind: 'uppercut', label: 'RISE',
+        startup: 5, active: 10, recovery: 22,
+        rise: -5.6, drift: 0.9,
+        damage: 8, base: 2.2, scale: 6.4, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        ox: -7, oy: -12, w: 14, h: 18,
+      },
+    },
+    ult: {
+      kind: 'buff', label: 'SHIRTS OPTIONAL',
+      startup: 8, active: 1, recovery: 12,
+      duration: 900,
+      damageMul: 1.8,
+      speedMul: 1.48,
+      knockbackTakenMul: 1.05,
+    },
+  },
+
   trev: {
     name: 'TREV',
-    tag: 'FLAMING LASER SWORD',
+    tag: 'CEREAL & LASER SWORD',
     drawn: false,
-    blurb: 'Rising sword slash. Doubles as a recovery -- hard to knock off for good.',
+    blurb: 'Throws cereal three ways. Ult is a flaming laser sword.',
     weight: 96, walk: 1.46, jump: 6.9, doubleJump: 6.2,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
-    // "newtons flaming lazer swords" -- their note. Kept mechanically as the
-    // rising attack it already was, so his recovery and the balance around it
-    // are untouched; only the name and the visual changed.
-    special: {
-      kind: 'uppercut', blade: '#ff8a2a',
-      startup: 5, active: 11, recovery: 24,
-      rise: -5.6, drift: 0.9,
-      damage: 8, base: 2.2, scale: 6.8, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-      ox: -7, oy: -12, w: 14, h: 18,
+    specials: {
+      // "something with cereal" was the whole note, so this is improvised:
+      // a handful flung in a fan, individually weak and collectively rude.
+      neutral: {
+        kind: 'scatter', label: 'CEREAL',
+        startup: 7, active: 1, recovery: 15, maxAlive: 10,
+        count: 4, spread: 0.5,
+        speed: 3.2, lift: -0.7, drop: 0.09, life: 130,
+        tints: ['#e8a33c', '#d9822b', '#f2c85b', '#c25e2a'],
+        damage: 3, base: 1.4, scale: 4, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
+      },
+      // Poured out at his feet and left bouncing.
+      down: {
+        kind: 'scatter', label: 'SPILL',
+        startup: 6, active: 1, recovery: 14, maxAlive: 10,
+        count: 4, spread: 0.75,
+        speed: 1.4, lift: -1.6, drop: 0.16, life: 150, bounce: 0.55,
+        tints: ['#e8a33c', '#d9822b', '#f2c85b', '#c25e2a'],
+        damage: 3, base: 1.5, scale: 4.2, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+      },
+      // His recovery, kept as the rising attack it always was so the balance
+      // around it is untouched.
+      up: {
+        kind: 'uppercut', label: 'MILK',
+        startup: 5, active: 11, recovery: 24,
+        rise: -5.6, drift: 0.9,
+        damage: 8, base: 2.2, scale: 6.8, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        ox: -7, oy: -12, w: 14, h: 18,
+      },
     },
-    // Placeholder ult. Their other note for Trev is "something with cereal",
-    // which isn't enough to build from yet.
+    // "newtons flaming lazer swords" -- their note.
     ult: {
-      kind: 'rush', label: 'LASER SWORD',
+      kind: 'rush', label: 'LASER SWORD', blade: '#ff8a2a',
       startup: 14, active: 16, recovery: 28,
       lunge: 3, tint: '#ff7a2a',
-      damage: 16, base: 3.6, scale: 9.4, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      damage: 15, base: 3.4, scale: 9, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       ox: -14, oy: -12, w: 145, h: 32,
     },
   },
@@ -384,6 +474,9 @@ const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev'];
 // `data-nerdwars` marks an embedded mount: on a page the game doesn't own,
 // it must not swallow the keyboard until the player clicks into it.
 const mount = document.querySelector('[data-nerdwars]');
+// data-nerdwars="online" hides local play entirely: the only way into a match
+// is the lobby on the host page.
+const onlineOnly = !!mount && mount.dataset.nerdwars === 'online';
 const view = document.getElementById('nw-canvas') || document.getElementById('game');
 const embedded = !!mount;
 let hasFocus = !embedded;
@@ -664,6 +757,8 @@ class Fighter {
     this.dropThrough = 0;
     this.hazardCd = 0;
     this.ultMeter = 0;
+    this.poison = 0;
+    this.poisonDps = 0;
 
     this.shield = COMBAT.shieldMax;
     this.shieldBroken = 0;
@@ -721,7 +816,8 @@ class Fighter {
     if (this.state === 'special' || this.state === 'ult') {
       const s = this.moveFor(this.state);
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
-          s.kind === 'pizza' || s.kind === 'barrage') return null;
+          s.kind === 'pizza' || s.kind === 'barrage' ||
+          s.kind === 'rainbow' || s.kind === 'scatter') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -751,6 +847,15 @@ class Fighter {
 
     if (this.invuln > 0) this.invuln--;
     if (this.buffTimer > 0) this.buffTimer--;
+
+    // Damage over time. Ticks through everything except being dead, so it
+    // keeps working while the victim is in hitstun or shielding.
+    if (this.poison > 0) {
+      this.poison--;
+      this.percent += this.poisonDps;
+      this.ultMeter = Math.min(COMBAT.ultMax,
+        this.ultMeter + this.poisonDps * COMBAT.ultPerDamageTaken);
+    }
     if (this.dropThrough > 0) this.dropThrough--;
     if (this.landLag > 0) this.landLag--;
     this.timer++;
@@ -833,7 +938,7 @@ class Fighter {
       this.startAttack('ult', pad);
       return;
     }
-    if (pad.special && this.landLag <= 0 && this.canSpecial()) {
+    if (pad.special && this.landLag <= 0 && this.canSpecial(pad)) {
       this.startAttack('special', pad);
       return;
     }
@@ -883,9 +988,10 @@ class Fighter {
     }
   }
 
-  canSpecial() {
-    const s = this.def.special;
-    if (s.kind === 'projectile' || s.kind === 'pizza') {
+  canSpecial(pad) {
+    const s = this.def.specials[this.slotFor(pad)];
+    if (!s) return false;
+    if (s.maxAlive) {
       return projectiles.filter((b) => b.owner === this).length < s.maxAlive;
     }
     if (s.kind === 'buff') return this.buffTimer <= 0;
@@ -893,12 +999,7 @@ class Fighter {
   }
 
   startAttack(kind, pad) {
-    if (kind === 'special' && this.def.special.kind === 'pizza') {
-      // Up throws the rainbow instead; down drops a slice through the floor.
-      this.pizzaHeading = pad && pad.up ? 'UP'
-                        : pad && pad.down ? 'D'
-                        : (this.facing > 0 ? 'R' : 'L');
-    }
+    if (kind === 'special') this.specialSlot = this.slotFor(pad);
     this.setState(kind);
     this.attackKind = kind;
     this.attackFrame = 0;
@@ -907,10 +1008,17 @@ class Fighter {
     if (this.grounded) this.vx *= 0.4;
   }
 
+  // Up and down pick a different special, the way a fighting game does.
+  // A character without one for that direction falls back to neutral.
+  slotFor(pad) {
+    const want = pad && pad.up ? 'up' : pad && pad.down ? 'down' : 'neutral';
+    return this.def.specials[want] ? want : 'neutral';
+  }
+
   moveFor(state) {
     return state === 'attack' ? this.def.jab
          : state === 'ult' ? this.def.ult
-         : this.def.special;
+         : this.def.specials[this.specialSlot || 'neutral'];
   }
 
   updateAttack(pad) {
@@ -952,11 +1060,33 @@ class Fighter {
       case 'pizza':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          if (this.pizzaHeading === 'UP') {
-            projectiles.push(new Rainbow(this, s.rainbow));
-          } else {
-            projectiles.push(new Pizza(this, s, this.pizzaHeading || 'R'));
+          // In the air it goes down, which is what PizzaD was drawn for.
+          const heading = this.grounded ? (this.facing > 0 ? 'R' : 'L') : 'D';
+          projectiles.push(new Pizza(this, s, heading));
+        }
+        break;
+
+      case 'rainbow':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Rainbow(this, s));
+        }
+        break;
+
+      // A handful of something thrown in a fan.
+      case 'scatter':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          for (let i = 0; i < s.count; i++) {
+            const spread = (i - (s.count - 1) / 2) * s.spread;
+            projectiles.push(new Pellet(this, s, spread));
           }
+        }
+        break;
+
+      case 'kiss':
+        if (this.attackFrame === s.startup) {
+          addEffect('lips', this.x + this.facing * 9, this.y - 11, '#ff5f8f');
         }
         break;
 
@@ -981,6 +1111,10 @@ class Fighter {
           if (this.attackFrame % 4 === 0) {
             addEffect('spark', this.x + rand(-10, 10), this.y - rand(2, 18), s.tint);
           }
+        }
+        if (s.blade && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active && this.attackFrame % 3 === 0) {
+          addEffect('blade', this.x + this.facing * 10, this.y - 12, s.blade);
         }
         if (this.attackFrame === s.startup) {
           addEffect('rush', this.x, this.y - 10, s.tint, this.facing, s);
@@ -1188,6 +1322,7 @@ class Fighter {
     this.shield = COMBAT.shieldMax;
     this.buffTimer = 0;
     this.buffStats = null;
+    this.poison = 0;
     this.hitstun = 0;
     this.invuln = COMBAT.respawnInvuln;
     this.hazardCd = 0;
@@ -1412,6 +1547,65 @@ class Rainbow {
 }
 
 /* =====================================================================
+   PELLET - a small thrown thing with no sprite of its own.
+
+   Used for Trev's cereal. Drawn in code as a couple of coloured pixels,
+   because nobody ever drew cereal and inventing a sprite would put made-up
+   art next to the hand-drawn stuff.
+   ===================================================================== */
+
+class Pellet {
+  constructor(owner, spec, spreadY) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 7;
+    this.y = owner.y - 9;
+    this.vx = owner.facing * spec.speed;
+    this.vy = (spec.lift || 0) + spreadY;
+    this.life = spec.life;
+    this.dead = false;
+    this.tint = spec.tints[(Math.abs(Math.round(spreadY * 100)) + owner.slot) %
+                           spec.tints.length];
+  }
+
+  update() {
+    const prevY = this.y;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+    this.life--;
+
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          if (this.spec.bounce && Math.abs(this.vy) > 0.6) {
+            this.y = p.y;
+            this.vy = -this.vy * this.spec.bounce;
+          } else {
+            this.dead = true;
+          }
+          break;
+        }
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 2, y: this.y - 2, w: 4, h: 4 };
+  }
+
+  draw(g) {
+    g.fillStyle = this.tint;
+    g.fillRect(Math.round(this.x) - 2, Math.round(this.y) - 1, 3, 2);
+    g.fillRect(Math.round(this.x) - 1, Math.round(this.y) - 2, 1, 4);
+  }
+}
+
+/* =====================================================================
    EFFECTS - everything Kel didn't draw is code-drawn, so his art is
    never mixed with generated pixels.
    ===================================================================== */
@@ -1457,6 +1651,18 @@ function drawEffects(g) {
         g.fillRect(Math.round(e.x - 3), Math.round(e.y - 1), 6, 1);
         g.globalAlpha = 1;
         break;
+      case 'lips': {
+        // A little kiss mark where it landed.
+        g.globalAlpha = Math.min(1, k * 1.4);
+        g.fillStyle = e.color;
+        const lx = Math.round(e.x), ly = Math.round(e.y - (1 - k) * 6);
+        g.fillRect(lx - 2, ly, 5, 1);
+        g.fillRect(lx - 1, ly - 1, 3, 1);
+        g.fillRect(lx - 1, ly + 1, 3, 1);
+        g.globalAlpha = 1;
+        break;
+      }
+
       case 'blade': {
         // A bright rising blade: hot core, cooler edge.
         g.globalAlpha = k;
@@ -1564,6 +1770,11 @@ function applyHit(attacker, defender, move, sourceX) {
 
   defender.percent += dmg;
 
+  if (move.poison) {
+    defender.poison = move.poison.frames;
+    defender.poisonDps = move.poison.dps;
+  }
+
   // Smash-style: knockback grows with the victim's accumulated damage,
   // scaled by weight. Light characters fly further off the same hit.
   const kb = (move.base + (defender.percent / 100) * move.scale * (dmg / 8)) *
@@ -1668,7 +1879,7 @@ function aiDecide(me, foe) {
       a.jumpCd = 9;
     }
     // Trev's uppercut doubles as a recovery.
-    if (me.def.special.kind === 'uppercut' && me.vy > 1.5 && me.jumpsLeft <= 0 &&
+    if (me.def.specials.up && me.def.specials.up.kind === 'uppercut' && me.vy > 1.5 && me.jumpsLeft <= 0 &&
         a.cooldown <= 0) {
       pad.special = true;
       a.cooldown = 40;
@@ -1694,7 +1905,7 @@ function aiDecide(me, foe) {
   }
 
   // Close the gap.
-  const s = me.def.special;
+  const s = me.def.specials.neutral;
   const ranged = s.kind === 'projectile' || s.kind === 'pizza';
   const idealRange = ranged ? 55 : s.kind === 'beam' ? 45 : 13;
 
@@ -1748,8 +1959,19 @@ function aiDecide(me, foe) {
       a.cooldown = 10;
     } else if (inSpecial && Math.random() < a.aggression * 0.5) {
       pad.special = true;
-      if (pizzaDrop) pad.down = true;      // aim the slice downward
-      a.cooldown = Math.round(rand(30, 60));
+      // Pick the slot that suits where the target actually is. Without this
+      // the CPU only ever throws its neutral special and ignores two thirds
+      // of its moveset.
+      if (pizzaDrop) {
+        pad.down = true;
+      } else if (me.def.specials.up && dy < -14 && Math.random() < 0.7) {
+        pad.up = true;                     // they are above
+      } else if (me.def.specials.down && dy > 10 && adx < 30 && Math.random() < 0.6) {
+        pad.down = true;                   // they are below and close
+      } else if (Math.random() < 0.25) {
+        pad[Math.random() < 0.5 ? 'up' : 'down'] = true;   // keep it varied
+      }
+      a.cooldown = Math.round(rand(24, 50));
     } else if (inJab && Math.random() < a.aggression * 0.7) {
       pad.attack = true;
       a.cooldown = Math.round(rand(12, 26));
@@ -1854,6 +2076,7 @@ function startBattle() {
 let titleChoice = 0;
 
 function updateTitle() {
+  if (onlineOnly) return;      // the lobby drives everything here
   if (tapped('KeyW') || tapped('ArrowUp') || tapped('KeyS') || tapped('ArrowDown')) {
     titleChoice = 1 - titleChoice;
   }
@@ -2000,7 +2223,7 @@ function updateBattle() {
       netStop('you left');
       return;
     }
-    scene = 'select';
+    scene = onlineOnly ? 'title' : 'select';
     select.locked = [false, false];
     return;
   }
@@ -2051,7 +2274,7 @@ function updateResults() {
   if (resultTimer > 40 && (menuConfirm() || tapped('KeyF') || tapped('Comma'))) {
     select.locked = [false, false];
     select.activeSlot = 0;
-    scene = 'select';
+    scene = onlineOnly ? 'title' : 'select';
   }
 }
 
@@ -2281,6 +2504,17 @@ function drawFighter(g, f) {
   const x = Math.round(f.x - 8);
   const y = Math.round(f.y - 16);
 
+  if (f.poison > 0) {
+    const lx = Math.round(f.x);
+    const ly = Math.round(f.y - 20 + Math.sin(f.poison * 0.18) * 1.2);
+    g.globalAlpha = 0.55 + Math.sin(f.poison * 0.3) * 0.35;
+    g.fillStyle = '#ff5f8f';
+    g.fillRect(lx - 2, ly, 5, 1);
+    g.fillRect(lx - 1, ly - 1, 3, 1);
+    g.fillRect(lx - 1, ly + 1, 3, 1);
+    g.globalAlpha = 1;
+  }
+
   // Buff aura sits behind the sprite so it glows around Kel's pixels rather
   // than boxing them in.
   if (f.buffTimer > 0) {
@@ -2417,6 +2651,12 @@ function drawTitle() {
 
   text('NERDWARS', VW / 2, 116, 30, '#ffffff', 'center', 800);
   text('sprites by Kel, 2018', VW / 2, 128, 6, '#6a7290', 'center', 500);
+
+  if (onlineOnly) {
+    text('create or join a room below to play', VW / 2, 150, 8, '#c8cee6', 'center', 600);
+    text('two players, one on each keyboard', VW / 2, 162, 6, '#5f6884', 'center', 500);
+    return;
+  }
 
   const opts = ['1 PLAYER  (vs CPU)', '2 PLAYERS  (local)'];
   opts.forEach((o, i) => {
@@ -2621,7 +2861,9 @@ function netSubmitLocal() {
   if (netplay.submittedTo >= target) return;
   netplay.submittedTo = target;
   const mine = netplay.inputs[netplay.localSlot];
-  mine.set(target, padToBits(readPad(netplay.localSlot)));
+  // Always scheme 0: online there is one person per keyboard, so both ends
+  // use WASD regardless of which slot they occupy.
+  mine.set(target, padToBits(readPad(0)));
 
   const from = Math.max(0, target - (NET_REDUNDANCY - 1));
   const bits = [];
@@ -2791,6 +3033,7 @@ window.NerdWars = {
   get stage() { return STAGE.key; },
   get focused() { return hasFocus; },
   get ready() { return assetsReady; },
+  get onlineOnly() { return onlineOnly; },
   // Read-only copies, so a page can build a lobby without duplicating the
   // roster or the stage list and drifting out of sync with the game.
   get roster() {
