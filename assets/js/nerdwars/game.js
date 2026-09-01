@@ -347,13 +347,17 @@ const ROSTER = {
       //
       // A dumbbell is not thrown so much as released: it barely travels, it
       // falls fast, and it hurts more than anything else he owns.
+      // Thrown up, not across. Catching it in the air hurts, but the point
+      // is where it lands: the floor kicks out both ways from the impact.
       down: {
-        kind: 'scatter', label: 'DUMBBELL',
-        startup: 8, active: 1, recovery: 18, maxAlive: 2,
-        count: 1, spread: 0,
-        shape: 'dumbbell', tints: ['#9aa0b4'],
-        speed: 2.8, lift: -1.5, drop: 0.24, life: 100,
-        damage: 15, base: 3.4, scale: 7.2, angle: 55, kx: 0.573576436351046, ky: 0.8191520442889918,
+        kind: 'weight', label: 'DROP SET',
+        startup: 9, active: 1, recovery: 20, maxAlive: 1,
+        speed: 1.5, lift: -2.6, drop: 0.28, life: 110,
+        damage: 12, base: 3.2, scale: 6.8, angle: 55, kx: 0.573576436351046, ky: 0.8191520442889918,
+        quake: {
+          speed: 3.4, life: 42,
+          damage: 8, base: 2.8, scale: 6, angle: 70, kx: 0.3420201433256688, ky: 0.9396926207859083,
+        },
       },
       // The lift is the recovery: he drives a barbell overhead and goes up
       // with it. Anything above him is in the way of the bar.
@@ -502,8 +506,8 @@ const ROSTER = {
         startup: 7, active: 1, recovery: 15, maxAlive: 10,
         count: 4, spread: 0.5,
         speed: 3.2, lift: -0.7, drop: 0.09, life: 130,
-        // Six colours, not four browns. Cereal is not brown.
-        tints: ['#ff4d4d', '#ff9c2a', '#ffd21f', '#4fd44f', '#4db8ff', '#b06cf0'],
+        milk: true,
+        tints: ['#e8b060'],
         damage: 3, base: 1.4, scale: 4, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
       },
       // "something creative with chess pieces". A knight moves two squares
@@ -570,6 +574,7 @@ function moveCost(m) {
 
   // Damage over time is still damage; count all of it.
   if (m.poison) power += m.poison.frames * m.poison.dps;
+  if (m.quake) power += m.quake.damage * 2;   // it lands twice, one each way
 
   // A buff does no damage itself, so price it by how much it multiplies
   // everything else, and for how long.
@@ -1049,7 +1054,7 @@ class Fighter {
     if (this.state === 'special' || this.state === 'ult') {
       const s = this.moveFor(this.state);
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
-          s.kind === 'equip' || s.kind === 'swingin' ||
+          s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
           s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain') return null;
@@ -1356,6 +1361,18 @@ class Fighter {
             const spread = (i - (s.count - 1) / 2) * s.spread;
             projectiles.push(new Pellet(this, s, spread, null, i));
           }
+          // Cereal comes with milk. A square on its own could be anything;
+          // a square in a spray of milk is unmistakably breakfast.
+          if (s.milk) {
+            for (let i = 0; i < 8; i++) {
+              const e = addEffect('milk', this.x + this.facing * 7, this.y - 9);
+              if (e) {
+                e.vx = this.facing * rand(0.8, 2.8);
+                e.vy = rand(-1.7, -0.1);
+                e.life = 24;
+              }
+            }
+          }
         }
         break;
 
@@ -1430,6 +1447,14 @@ class Fighter {
         if (this.attackFrame === s.startup) {
           addEffect('rush', this.x, this.y - 10, s.tint, this.facing, s);
           this.vx = this.facing * (s.lunge || 0);
+        }
+        break;
+
+      // Put it up, let it come down, let the floor deal with it.
+      case 'weight':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Weight(this, s));
         }
         break;
 
@@ -1816,26 +1841,39 @@ function drawArt(g, art, x, y) {
                    Math.round(y) - (art.height >> 1));
 }
 
-/* Trev's cereal. Three shapes so a handful reads as cereal rather than as
-   gravel: a loop with a hole through it, a lattice square, and a
-   marshmallow. */
-const CEREAL_SHAPES = [
-  ['.####.',
-   '##..##',
-   '#....#',
-   '#....#',
-   '##..##',
-   '.####.'],
-  ['#####',
-   '#.#.#',
-   '#####',
-   '#.#.#',
-   '#####'],
-  ['..#..',
-   '.###.',
-   '#####',
-   '.###.',
-   '..#..'],
+/* Trev's cereal is Cinnamon Toast Crunch specifically, so it has to look like
+   it and not merely like "a cereal": a square with a dark crusted edge, a
+   toasted face, and cinnamon sugar scattered across it. Three squares, so a
+   handful is not the same stamp nine times. */
+const CTC_SHAPES = [
+  ['.ccccc.',
+   'chhtstc',
+   'chtttsc',
+   'cttsttc',
+   'cstttsc',
+   'cttttsc',
+   '.ccccc.'],
+  ['.ccccc.',
+   'ctstttc',
+   'cttttsc',
+   'cststtc',
+   'cttttsc',
+   'ctsttsc',
+   '.ccccc.'],
+  ['.ccccc.',
+   'cttsttc',
+   'ctssstc',
+   'ctsttsc',
+   'cttsttc',
+   'ctttttc',
+   '.ccccc.'],
+];
+
+/* Three shades, because no two pieces in a box are toasted the same. */
+const CTC_PALETTES = [
+  { c: '#8a4b1e', t: '#e8b060', s: '#96541f', h: '#fae0a8' },
+  { c: '#7a3f18', t: '#d9a052', s: '#8a4a1c', h: '#f0d296' },
+  { c: '#96552a', t: '#f0bd72', s: '#a05d26', h: '#fde8bb' },
 ];
 
 /* Ladeane's soccerball: a white ball with a soft rim, so it still reads
@@ -1862,6 +1900,17 @@ const KNIGHT_ART = [
   '..###..',
   '.#####.',
   '#######',
+];
+
+/* The same dumbbell end-on, for when it is tumbling through the air. */
+const DUMBBELL_V_ART = [
+  'wwwww',
+  'wwwww',
+  '..b..',
+  '..b..',
+  '..b..',
+  'wwwww',
+  'wwwww',
 ];
 
 /* Gym equipment. A dumbbell is two weights and a short bar; a barbell
@@ -2507,7 +2556,8 @@ class Pellet {
     const n = idx || 0;
     const seed = n * 2 + owner.slot + battleFrames;
     this.tint = spec.tints[seed % spec.tints.length];
-    this.art = (n + battleFrames) % CEREAL_SHAPES.length;
+    this.art = (n + battleFrames) % CTC_SHAPES.length;
+    this.toast = (n * 2 + battleFrames) % CTC_PALETTES.length;
   }
 
   update() {
@@ -2562,9 +2612,9 @@ class Pellet {
                           { '#': this.tint }, spin === 1), this.x, this.y);
       return;
     }
-    // A piece of cereal: one of three shapes, in one of six colours.
-    drawArt(g, pixelArt('cereal.' + this.art + '.' + this.tint,
-                        CEREAL_SHAPES[this.art], { '#': this.tint }),
+    // A square of Cinnamon Toast Crunch.
+    drawArt(g, pixelArt('ctc.' + this.art + '.' + this.toast,
+                        CTC_SHAPES[this.art], CTC_PALETTES[this.toast]),
             this.x, this.y);
   }
 }
@@ -2615,6 +2665,125 @@ class Laser {
     g.fillRect(x - (dir > 0 ? 16 : 0), y - 2, 16, 4);
     g.fillStyle = '#fffcf0';
     g.fillRect(x - (dir > 0 ? 14 : -2), y - 1, 13, 2);
+  }
+}
+
+/* =====================================================================
+   WEIGHT + SHOCK - Kel drops a dumbbell, and the floor objects.
+
+   He already had a bone that flies in an arc, so a dumbbell that flies in an
+   arc was the same move twice with different numbers. The throw here is only
+   the delivery: the attack is what happens when it lands. Two shockwaves run
+   out along the ground in opposite directions, which threatens where somebody
+   is STANDING rather than where they are flying.
+   ===================================================================== */
+
+class Weight {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 9;
+    this.y = owner.y - 11;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift || 0;
+    this.spin = 0;
+    this.life = spec.life;
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+    this.spin += 0.31;
+    this.life--;
+
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) { this.land(p.y); return; }
+      }
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  land(surfaceY) {
+    this.dead = true;
+    for (let i = 0; i < 12; i++) {
+      addEffect('dust', this.x + rand(-9, 9), surfaceY - rand(0, 5), '#c9a06a');
+    }
+    addEffect('ring', this.x, surfaceY - 3, '#c9a06a');
+    const q = this.spec.quake;
+    if (!q) return;
+    projectiles.push(new Shock(this.owner, q, this.x, surfaceY, -1));
+    projectiles.push(new Shock(this.owner, q, this.x, surfaceY, 1));
+  }
+
+  box() {
+    return { x: this.x - 5, y: this.y - 3, w: 10, h: 6 };
+  }
+
+  draw(g) {
+    // End over end, because that is what a thrown dumbbell does.
+    const flat = (Math.floor(this.spin) & 1) === 0;
+    drawArt(g, pixelArt(flat ? 'dumbbell' : 'dumbbellV',
+                        flat ? DUMBBELL_ART : DUMBBELL_V_ART,
+                        { w: '#565a68', b: '#9aa0b4' }), this.x, this.y);
+  }
+}
+
+class Shock {
+  constructor(owner, spec, x, y, dir) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = x;
+    this.y = y;
+    this.dir = dir;
+    this.vx = dir * spec.speed;
+    this.life = spec.life;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.t++;
+    this.life--;
+    if (this.t % 2 === 0) {
+      addEffect('dust', this.x, this.y - rand(0, 4), '#c9a06a');
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -16 || this.x > VW + 16) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 5, y: this.y - 13, w: 10, h: 14 };
+  }
+
+  draw(g) {
+    // A wedge of floor coming up, shortest at the leading edge, and sinking
+    // back down as it runs out of energy.
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const fade = 1 - this.t / this.spec.life;
+    // Tallest at the leading edge and trailing back behind it, so it reads as
+    // the floor being pushed up and out rather than as a row of fence posts.
+    g.fillStyle = '#8a6a44';
+    for (let i = 0; i < 6; i++) {
+      const h = Math.max(1, Math.round((16 - i * 2.6) * fade));
+      g.fillRect(x - this.dir * (i * 4) - 2, y - h, 4, h);
+    }
+    g.fillStyle = '#c9a06a';
+    for (let i = 0; i < 6; i++) {
+      const h = Math.max(1, Math.round((14 - i * 2.6) * fade));
+      g.fillRect(x - this.dir * (i * 4) - 1, y - h, 2, h);
+    }
+    // A bright chip of floor thrown off the front of it.
+    g.globalAlpha = 0.75 * fade;
+    g.fillStyle = '#f0d6a8';
+    g.fillRect(x + this.dir * 2 - 1, y - Math.max(3, Math.round(18 * fade)), 3, 4);
+    g.globalAlpha = 1;
   }
 }
 
