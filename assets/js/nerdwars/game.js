@@ -503,13 +503,30 @@ const ROSTER = {
         ox: -7, oy: -12, w: 14, h: 18,
       },
     },
-    // "newtons flaming lazer swords" -- their note.
+    // "newtons flaming lazer swords" -- their note. Not a single lunge: he
+    // is handed the sword and keeps it for ten seconds, and the ult button
+    // swings it for as long as he has it.
     ult: {
-      kind: 'rush', label: 'LASER SWORD', blade: '#ff8a2a',
-      startup: 18, active: 18, recovery: 34,
-      lunge: 3.4, tint: '#ff7a2a',
-      damage: 22, base: 4.4, scale: 11, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
-      ox: -14, oy: -12, w: 145, h: 32,
+      kind: 'equip', label: 'LASER SWORD', blade: '#ff8a2a',
+      startup: 10, active: 1, recovery: 20,
+      duration: 600,                       // ten seconds at 60Hz
+      damage: 0, base: 0, scale: 0,
+      // What the ult button does while he is holding it. No mana: the cost of
+      // an ult is the meter it took to earn, and the ceiling is the animation
+      // -- 33 frames a swing, about eighteen swings in the ten seconds.
+      swing: {
+        kind: 'laser', label: 'LASER SWORD',
+        blade: '#fff6d8', tint: '#ffb347',
+        startup: 6, active: 5, recovery: 22,
+        damage: 7, base: 2.6, scale: 6.4, angle: 40, kx: 0.766044443118978, ky: 0.6427876096865393,
+        ox: 2, oy: -19, w: 20, h: 20,
+        // The bolt it throws, with its own damage: the swing reaches an arm's
+        // length, this reaches the other side of the stage.
+        beam: {
+          speed: 6.4, life: 46,
+          damage: 6, base: 2.2, scale: 5.2, angle: 14, kx: 0.9702957262759965, ky: 0.24192189559966773,
+        },
+      },
     },
   },
 };
@@ -958,6 +975,10 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.walkAnim = 0;
+    // Trev's ult hands him a sword for ten seconds. While swordTimer is
+    // running the ult button swings it instead of casting anything.
+    this.swordTimer = 0;
+    this.swordSwing = false;
 
     this.ai = { timer: 0, plan: 'approach', cooldown: 0, jumpCd: 0,
                 aggression: rand(0.5, 0.9) };
@@ -1003,6 +1024,7 @@ class Fighter {
     if (this.state === 'special' || this.state === 'ult') {
       const s = this.moveFor(this.state);
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
+          s.kind === 'equip' ||
           s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain') return null;
@@ -1035,6 +1057,15 @@ class Fighter {
 
     if (this.invuln > 0) this.invuln--;
     if (this.buffTimer > 0) this.buffTimer--;
+    if (this.swordTimer > 0) {
+      this.swordTimer--;
+      // It is a FLAMING sword, so it has to be visibly on fire even when he
+      // is standing still.
+      if (this.swordTimer % 4 === 0) {
+        addEffect('spark', this.x + this.facing * 8 + rand(-2, 2),
+                  this.y - 20 + rand(-4, 4), '#ff8a2a');
+      }
+    }
     if (this.sinceHitFrames < 999) this.sinceHitFrames++;
     if (this.volleySince < 999) this.volleySince++;
 
@@ -1134,11 +1165,19 @@ class Fighter {
       this.startAttack('attack');
       return;
     }
-    if (pad.ult && this.landLag <= 0 && this.def.ult &&
-        this.ultMeter >= COMBAT.ultMax) {
-      this.ultMeter = 0;
-      this.startAttack('ult', pad);
-      return;
+    if (pad.ult && this.landLag <= 0 && this.def.ult) {
+      // Sword already in hand: the same button swings it, and costs nothing.
+      if (this.swordTimer > 0 && this.def.ult.swing) {
+        this.swordSwing = true;
+        this.startAttack('ult', pad);
+        return;
+      }
+      if (this.ultMeter >= COMBAT.ultMax) {
+        this.ultMeter = 0;
+        this.swordSwing = false;
+        this.startAttack('ult', pad);
+        return;
+      }
     }
     if (pad.special && this.landLag <= 0) {
       if (this.canSpecial(pad)) {
@@ -1226,7 +1265,9 @@ class Fighter {
 
   moveFor(state) {
     return state === 'attack' ? this.def.jab
-         : state === 'ult' ? this.def.ult
+         : state === 'ult'
+           ? (this.swordSwing && this.def.ult.swing ? this.def.ult.swing
+                                                    : this.def.ult)
          : this.def.specials[this.specialSlot || 'neutral'];
   }
 
@@ -1364,6 +1405,32 @@ class Fighter {
         if (this.attackFrame === s.startup) {
           addEffect('rush', this.x, this.y - 10, s.tint, this.facing, s);
           this.vx = this.facing * (s.lunge || 0);
+        }
+        break;
+
+      // Hand over the sword. No hitbox of its own -- the ten seconds
+      // afterwards are the attack.
+      case 'equip':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          this.swordTimer = s.duration;
+          addEffect('ring', this.x, this.y - 8, s.blade);
+          for (let i = 0; i < 16; i++) {
+            addEffect('spark', this.x + rand(-7, 7), this.y - rand(2, 20), s.blade);
+          }
+        }
+        break;
+
+      // One swing of it, which throws a laser as well as cutting.
+      case 'laser':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          addEffect('swipe', this.x, this.y - 10, s.tint, this.facing);
+          for (let i = 0; i < 4; i++) {
+            addEffect('spark', this.x + this.facing * rand(6, 16),
+                      this.y - rand(4, 18), s.blade);
+          }
+          if (s.beam) projectiles.push(new Laser(this, s.beam));
         }
         break;
 
@@ -1747,6 +1814,22 @@ const KNIGHT_ART = [
   '#######',
 ];
 
+/* Trev's sword, held point-up. The blade is drawn in two tones so it reads
+   as lit rather than flat; the fire itself is sparks thrown off it. */
+const SWORD_ART = [
+  '..cc..',
+  '..cc..',
+  '..bb..',
+  '..bb..',
+  '..bb..',
+  '..bb..',
+  '..bb..',
+  '..bb..',
+  '.gggg.',
+  '..hh..',
+  '..hh..',
+];
+
 /* A drumstick, tip up and to the right. Mirrored for the other facing. */
 const STICK_ART = [
   '....##',
@@ -2037,6 +2120,50 @@ class Pellet {
     drawArt(g, pixelArt('cereal.' + this.art + '.' + this.tint,
                         CEREAL_SHAPES[this.art], { '#': this.tint }),
             this.x, this.y);
+  }
+}
+
+/* =====================================================================
+   LASER - what Trev's sword throws when he swings it.
+
+   Flat, fast and long. It is the reason the sword is worth having: the swing
+   itself only reaches as far as an arm, and this covers the rest of the
+   stage.
+   ===================================================================== */
+
+class Laser {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 11;
+    this.y = owner.y - 11;
+    this.vx = owner.facing * spec.speed;
+    this.life = spec.life;
+    this.dead = false;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.life--;
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -24 || this.x > VW + 24) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 7, y: this.y - 2, w: 14, h: 4 };
+  }
+
+  draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const dir = this.vx < 0 ? -1 : 1;
+    // A hot white core inside a wider coloured bolt, with the tail trailing
+    // back the way it came.
+    g.fillStyle = '#ff8a2a';
+    g.fillRect(x - dir * 9, y - 2, 18, 4);
+    g.fillStyle = '#ffd76a';
+    g.fillRect(x - dir * 9, y - 1, 18, 2);
+    g.fillStyle = '#ffffff';
+    g.fillRect(x - dir * 4, y - 1, 9, 1);
   }
 }
 
@@ -2375,8 +2502,11 @@ function applyHit(attacker, defender, move, sourceX) {
   }
   if (attacker.ai) attacker.ai.starve = 0;
   if (defender.ai) defender.ai.starve = 0;
-  attacker.ultMeter = Math.min(COMBAT.ultMax,
-    attacker.ultMeter + dmg * COMBAT.ultPerDamageDealt);
+  // A sword swing earns nothing, so a good ult cannot pay for the next one.
+  if (attacker.swordTimer <= 0) {
+    attacker.ultMeter = Math.min(COMBAT.ultMax,
+      attacker.ultMeter + dmg * COMBAT.ultPerDamageDealt);
+  }
 
   // Shield eats the hit if it's up and facing the right way.
   if (defender.state === 'shield' && defender.shield > 0) {
@@ -3223,6 +3353,19 @@ function drawFighter(g, f) {
 
   g.drawImage(im, x, y);
   g.globalAlpha = 1;
+
+  // The sword is drawn after the sprite, because he is holding it.
+  if (f.swordTimer > 0) {
+    const art = pixelArt('sword', SWORD_ART,
+                         { c: '#fff6d8', b: '#ff8a2a', g: '#8a5a2a', h: '#5a3a1e' });
+    drawArt(g, art, f.x + f.facing * 7, f.y - 18);
+    // Runs out with a flicker rather than just vanishing.
+    if (f.swordTimer < 60 && Math.floor(f.swordTimer / 4) % 2 === 0) {
+      g.globalAlpha = 0.4;
+      drawArt(g, art, f.x + f.facing * 7, f.y - 18);
+      g.globalAlpha = 1;
+    }
+  }
 }
 
 function drawWorld() {
@@ -3310,14 +3453,21 @@ function drawHUD() {
     if (f.def.ult) {
       sctx.fillStyle = '#23262f';
       sctx.fillRect(px(bx), px(ultY), px(barW), px(2));
-      const full = f.ultMeter >= COMBAT.ultMax;
-      if (full) {
+      // While a weapon is in hand the bar counts it down instead, so you
+      // can see how long you have left to swing.
+      const armed = f.swordTimer > 0 && f.def.ult.duration;
+      const full = !armed && f.ultMeter >= COMBAT.ultMax;
+      if (armed) {
+        sctx.fillStyle = f.def.ult.blade || '#ff8a2a';
+      } else if (full) {
         sctx.globalAlpha = 0.65 + Math.sin(battleFrames * 0.22) * 0.35;
         sctx.fillStyle = '#ffffff';
       } else {
         sctx.fillStyle = f.accent;
       }
-      sctx.fillRect(px(bx), px(ultY), px(barW * clamp(f.ultMeter / COMBAT.ultMax, 0, 1)), px(2));
+      const frac = armed ? f.swordTimer / f.def.ult.duration
+                         : clamp(f.ultMeter / COMBAT.ultMax, 0, 1);
+      sctx.fillRect(px(bx), px(ultY), px(barW * frac), px(2));
       sctx.globalAlpha = 1;
     }
   }
