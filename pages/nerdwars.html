@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trevor | NerdWars</title>
+    <meta
+      name="description"
+      content="NerdWars: a browser platform fighter built from pixel sprites my friends and I drew in high school in 2018. Two players, one keyboard, five stages."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260831a" />
+    <script src="../assets/js/site-data.js?v=20260831a" defer></script>
+    <script src="../assets/js/site.js?v=20260811a" defer></script>
+    <script src="../assets/js/nerdwars/sprites.js?v=20260831a" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260831a" defer></script>
+
+    <link rel="canonical" href="https://trevorspinosa.com/pages/nerdwars.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Trevor Spinosa" />
+    <meta property="og:title" content="Trevor | NerdWars" />
+    <meta property="og:description" content="NerdWars: a browser platform fighter built from pixel sprites my friends and I drew in high school in 2018. Two players, one keyboard, five stages." />
+    <meta property="og:url" content="https://trevorspinosa.com/pages/nerdwars.html" />
+    <meta property="og:image" content="https://trevorspinosa.com/assets/og-card.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Trevor Spinosa" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Trevor | NerdWars" />
+    <meta name="twitter:description" content="NerdWars: a browser platform fighter built from pixel sprites my friends and I drew in high school in 2018. Two players, one keyboard, five stages." />
+    <meta name="twitter:image" content="https://trevorspinosa.com/assets/og-card.jpg" />
+  </head>
+  <body data-page="nerdwars">
+    <div class="site-shell">
+      <header class="site-header reveal">
+        <a class="logo" href="/" data-site-name>Trevor's Room</a>
+        <nav aria-label="Primary">
+          <ul data-nav></ul>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero reveal" aria-labelledby="nw-title">
+          <p class="kicker">Game</p>
+          <h1 id="nw-title">NerdWars</h1>
+          <p>
+            A platform fighter where the whole roster is my high school friend group. Kel drew
+            every character as a 16&times;16 sprite back in 2018, we planned a Smash Bros. clone
+            around them, and then we never built it. The sprites sat in a folder for seven years.
+            This is the game they were for.
+          </p>
+        </section>
+
+        <section class="nw-panel reveal" aria-labelledby="nw-play-title">
+          <h2 id="nw-play-title" class="nw-sr-only">Play</h2>
+          <div class="nw-stage" data-nerdwars>
+            <canvas id="nw-canvas" aria-label="NerdWars game screen"></canvas>
+            <div class="nw-veil" aria-hidden="true">
+              <span class="nw-veil-key">CLICK TO PLAY</span>
+              <span class="nw-veil-sub">the game takes the keyboard while you're in it</span>
+            </div>
+          </div>
+          <p class="nw-note">
+            Click the screen to hand it the keyboard; click anywhere else on the page to give it
+            back. Two players share one keyboard.
+          </p>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="nw-controls-title">
+          <h2 id="nw-controls-title">Controls</h2>
+          <div class="nw-keys-wrap">
+            <table class="nw-keys">
+              <thead>
+                <tr>
+                  <th scope="col">&nbsp;</th>
+                  <th scope="col">Move</th>
+                  <th scope="col">Jump</th>
+                  <th scope="col">Drop</th>
+                  <th scope="col">Attack</th>
+                  <th scope="col">Special</th>
+                  <th scope="col">Shield</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row" class="nw-p1">Player 1</th>
+                  <td><kbd>A</kbd><kbd>D</kbd></td>
+                  <td><kbd>W</kbd></td>
+                  <td><kbd>S</kbd></td>
+                  <td><kbd>F</kbd></td>
+                  <td><kbd>G</kbd></td>
+                  <td><kbd>H</kbd></td>
+                </tr>
+                <tr>
+                  <th scope="row" class="nw-p2">Player 2</th>
+                  <td><kbd>&larr;</kbd><kbd>&rarr;</kbd></td>
+                  <td><kbd>&uarr;</kbd></td>
+                  <td><kbd>&darr;</kbd></td>
+                  <td><kbd>,</kbd></td>
+                  <td><kbd>.</kbd></td>
+                  <td><kbd>/</kbd></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="list">
+            <li>Damage percent does not kill you. It decides how far the next hit throws you. Get knocked off the screen and you lose a stock.</li>
+            <li>You get two air jumps. Hold down while airborne to fall faster, or down plus jump to drop through a platform.</li>
+            <li>Shield plus a direction rolls, and you are invincible in the middle of it. Shield plus down is a spot dodge.</li>
+            <li>Playing alone is fine &mdash; pick 1 Player and the second fighter is a CPU.</li>
+          </ul>
+        </section>
+
+        <section class="panel reveal" aria-labelledby="nw-roster-title">
+          <h2 id="nw-roster-title">The roster</h2>
+          <p>
+            Three of the six movesets are not inventions &mdash; the art for them already existed,
+            and the game just uses it.
+          </p>
+          <ul class="list">
+            <li><strong>Kel</strong> is the only character with a full drawn attack animation, plus a four-frame spinning bone. He drew himself a projectile, so he plays as a zoner.</li>
+            <li><strong>Reese</strong> is the only one with a complete second sprite set: a full shirtless walk cycle. In game that is a transformation &mdash; faster and stronger, but he flies further when hit.</li>
+            <li><strong>AutisNick</strong> throws pizza. Three drawn slices, and the crust trails the direction of travel, so they are not mirrors of each other. Hold down to drop one through the floor.</li>
+            <li><strong>JohnnyHam</strong>, <strong>Ladeane</strong> and <strong>Trev</strong> only ever got movement art, so their specials are placeholders picked to cover distinct playstyles rather than personalities.</li>
+          </ul>
+          <p class="nw-hint">
+            Five stages, all built from tilesets found in the same 2018 folder. Which tiles
+            survived decided what each stage could be: two of them have a drawn ceiling, so those
+            are enclosed arenas you cannot be knocked out of the top of. Lava only ever got a
+            floor tile, so on that stage the floor is the hazard rather than the ground.
+          </p>
+        </section>
+      </main>
+
+      <footer>
+        <p>&copy; <span data-year></span> <span data-owner>Trevor</span>. All rights reserved.</p>
+      </footer>
+    </div>
+  </body>
+</html>

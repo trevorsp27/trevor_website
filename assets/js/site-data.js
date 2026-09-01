@@ -62,6 +62,13 @@ window.SITE_CONFIG = {
       path: "/pages/bounce-bots.html",
       summary: "A live multiplayer puzzle race. Create a lobby and play with friends.",
       icon: "Game"
+    },
+    {
+      id: "nerdwars",
+      title: "NerdWars",
+      path: "/pages/nerdwars.html",
+      summary: "A platform fighter built from sprites my friends drew in 2018.",
+      icon: "Game"
     }
   ]
 };

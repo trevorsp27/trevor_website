@@ -9,6 +9,7 @@ This is a GitHub Pages-ready personal website starter.
 - `pages/experience.html` - Work experience page
 - `pages/music.html` - Music page
 - `pages/bounce-bots.html` - Bounce Bots, a live multiplayer puzzle game
+- `pages/nerdwars.html` - NerdWars, a two-player platform fighter
 - `pages/_template.html` - Copy this to create a new page quickly
 - `assets/js/site-data.js` - Single source of truth for site name, intro text, nav links, and homepage cards
 - `assets/css/styles.css` - Shared design system
@@ -57,6 +58,46 @@ Source lives in `assets/js/bounce-bots/`:
 Clients ping the host every few seconds. WebRTC gives no reliable signal when a peer's
 tab is closed abruptly, so the host drops anyone who goes quiet for ten seconds rather
 than waiting on the transport to notice.
+
+## NerdWars
+
+A two-player platform fighter at `pages/nerdwars.html`, built from pixel sprites the
+author and his friends drew in 2018. Two players share one keyboard; a CPU fills the
+second slot in one-player mode. Five stages, six characters.
+
+### The JavaScript here is generated - do not hand-edit it
+
+`assets/js/nerdwars/sprites.js` and `assets/js/nerdwars/game.js` are **build output**. The
+source lives in a separate project (`NerdWars/src/nerdwars.js` plus the sprite folders),
+and both files carry a "do not edit" banner. Edits made here are lost on the next build.
+
+To regenerate them, run the build in the NerdWars project with `NERDWARS_SITE` pointed at
+this folder:
+
+```bash
+NERDWARS_SITE=/path/to/trevor_website python src/build.py
+```
+
+That writes both files, and also rebuilds the standalone `NerdWars.html`, so the site
+copy and the standalone copy can never drift apart.
+
+`sprites.js` is one namespaced global, `window.NERDWARS_ASSETS`, holding every sprite and
+tile as base64 data URIs - one request rather than eighty. `game.js` wraps the whole
+engine in an IIFE, so the only name it adds to the page is the read-only `window.NerdWars`
+status object (`scene`, `stage`, `focused`, `ready`, `keys`, `frames`, `fighters`), which
+is there for debugging and for wiring up netplay later.
+
+### Keyboard focus
+
+The game only takes the keyboard while the player has clicked inside it. `game.js` looks
+for a `[data-nerdwars]` mount and, when it finds one, starts in an unfocused state and
+sets `data-nerdwars-focus="on"` / `"off"` on that element as the player clicks in and out.
+Until it is focused it does not call `preventDefault`, so arrow keys and space still
+scroll the page normally. Clicking away also clears every held key, so nothing sticks
+down. `assets/css/nerdwars.css` uses that attribute to fade the "click to play" prompt.
+
+Without a `[data-nerdwars]` mount - as in the standalone build - the game assumes it owns
+the page and is focused from the start.
 
 ### A note on caching
 

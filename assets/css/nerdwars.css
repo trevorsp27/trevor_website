@@ -1,0 +1,164 @@
+/* NerdWars page.
+   The game renders a 320x180 buffer and scales it by whole numbers, so the
+   surrounding frame stays out of its way: no rounding on the canvas itself,
+   no filters, nothing that would resample a pixel. */
+
+.nw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nw-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.1rem;
+  margin: 1.4rem 0;
+}
+
+/* The mount the game measures itself against. It sets data-nerdwars-focus
+   on this element when the player clicks in or out. */
+.nw-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* 16:9, matching the game's 320x180 buffer, so the box never disagrees
+     with what the game wants to draw into it. */
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  cursor: pointer;
+}
+
+.nw-stage canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  display: block;
+  background: #000;
+}
+
+.nw-stage[data-nerdwars-focus="on"] {
+  border-color: #4a5170;
+  cursor: default;
+}
+
+/* Prompt covering the game until it owns the keyboard. Hidden the moment
+   the player clicks in. */
+.nw-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 1rem;
+  background: rgba(8, 9, 15, 0.72);
+  transition: opacity 0.2s ease;
+}
+
+.nw-stage[data-nerdwars-focus="on"] .nw-veil {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nw-veil-key {
+  font-family: "Bitter", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.nw-veil-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.nw-note,
+.nw-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.8rem 0 0;
+}
+
+/* ---- controls table ---- */
+
+.nw-keys-wrap {
+  overflow-x: auto;
+  margin: 0.6rem 0 1rem;
+}
+
+.nw-keys {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 34rem;
+  font-size: 0.92rem;
+}
+
+.nw-keys th,
+.nw-keys td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.nw-keys thead th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nw-keys tbody th {
+  font-weight: 700;
+}
+
+.nw-keys tbody tr:last-child th,
+.nw-keys tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.nw-p1 {
+  color: #59a5ff;
+}
+
+.nw-p2 {
+  color: #ff5f5f;
+}
+
+.nw-keys kbd {
+  display: inline-block;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--brand-soft);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  margin-right: 0.25rem;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nw-veil {
+    transition: none;
+  }
+}
