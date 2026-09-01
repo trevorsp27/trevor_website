@@ -21,7 +21,10 @@
   var PEER_PREFIX = "trevor-nerdwars-v1-";
   var CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1
   var CODE_LEN = 4;
-  var DEFAULT_DELAY = 4;
+  // Starting input delay, in frames. One, not four: the engine runs rollback
+  // now, so it does not need delay to cover the network, and it raises this
+  // on its own if a link turns out to be slow enough to need it.
+  var DEFAULT_DELAY = 1;
 
   var els = {};
   var state = {

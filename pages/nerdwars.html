@@ -24,7 +24,7 @@
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260901e" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260901e" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260901f" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
 
@@ -132,9 +132,14 @@
 
           <p class="nw-hint">
             Both machines run the same simulation and swap only button presses, so what you
-            see is what your opponent sees. That costs a few frames of input delay: fine
-            between nearby friends, heavy across an ocean. If the two ever disagree the
-            match stops rather than quietly showing you different fights.
+            see is what your opponent sees. Neither one waits for the other: whatever has not
+            arrived yet is guessed, and when the real input turns up and disagrees, the game
+            quietly rewinds a few frames and replays them. You get your own input almost
+            immediately &mdash; about 33ms, the same on a LAN as across an ocean &mdash; and
+            the cost is that your opponent occasionally snaps a few pixels instead of the
+            whole game stopping. It adds a frame of delay on its own if a connection turns
+            out to need one. If the two ever genuinely disagree the match stops rather than
+            showing you different fights.
           </p>
         </section>
 

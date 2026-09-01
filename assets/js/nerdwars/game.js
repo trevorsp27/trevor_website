@@ -836,11 +836,39 @@ function drawButton(key, cxVirtual, cyVirtual, widthVirtual, action) {
   uiButtons.push({ x: x, y: y, w: w, h: h, action: action });
 }
 
+/* Menu keys are derived from the gameplay bindings rather than repeated, so
+   remapping a button cannot leave the menus answering to a key that no longer
+   exists -- which is exactly what happened when attack moved from F to G. */
 function menuConfirm() {
-  return tapped('Enter') || tapped('Space');
+  if (tapped('Enter') || tapped('Space')) return true;
+  for (const b of BINDS) {
+    if (tapped(b.attack) || (b.attack2 && tapped(b.attack2))) return true;
+  }
+  return false;
 }
 function menuBack() {
   return tapped('Escape') || tapped('Backspace');
+}
+
+/* Shield doubles as "back" on the menus, but deliberately NOT through
+   menuBack(): updateBattle uses that to quit a match, and a shield button
+   that quits the fight is not a shield button. */
+function menuBackOrShield() {
+  if (menuBack()) return true;
+  for (const b of BINDS) {
+    if (tapped(b.shield) || (b.shield2 && tapped(b.shield2))) return true;
+  }
+  return false;
+}
+
+/* A key code as a player would recognise it on screen. */
+const KEY_LABELS = {
+  Comma: ',', Period: '.', Slash: '/', Semicolon: ';', Quote: "'",
+  ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', Space: 'SPACE', Enter: 'ENTER',
+};
+function keyName(code) {
+  if (KEY_LABELS[code]) return KEY_LABELS[code];
+  return code.replace(/^Key/, '').replace(/^Numpad/, 'num');
 }
 
 /* =====================================================================
@@ -1973,6 +2001,10 @@ class KnightPiece {
 const effects = [];
 
 function addEffect(kind, x, y, color, dir, spec) {
+  // Rollback replays the same frame several times. Effects are cosmetic and
+  // deliberately not part of a snapshot, so without this the same spark gets
+  // spawned once per replay and the screen fills with duplicates.
+  if (netplay.resimulating) return;
   effects.push({ kind, x, y, color, dir: dir || 1, spec, t: 0,
                  life: kind === 'beam' ? 20 : kind === 'ring' ? 18 : 16,
                  vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) });
@@ -2494,7 +2526,7 @@ function updateTitle() {
     titleChoice = 1 - titleChoice;
   }
   if (tapped('KeyH')) { scene = 'help'; return; }
-  if (menuConfirm() || tapped('KeyF') || tapped('Comma')) enterSelect();
+  if (menuConfirm()) enterSelect();
 }
 
 /* =====================================================================
@@ -2571,7 +2603,7 @@ function updateSelect() {
    ===================================================================== */
 
 function updateStageSelect() {
-  if (menuBack() || tapped('KeyH') || tapped('Slash')) {
+  if (menuBackOrShield()) {
     scene = 'select';
     select.locked = [false, false];
     select.activeSlot = 0;
@@ -2583,7 +2615,7 @@ function updateStageSelect() {
   if (tapped('KeyD') || tapped('ArrowRight')) {
     stagePick = (stagePick + 1) % STAGES.length;
   }
-  if (menuConfirm() || tapped('KeyF') || tapped('Comma')) startBattle();
+  if (menuConfirm()) startBattle();
 }
 
 function drawStageSelect() {
@@ -2634,7 +2666,9 @@ function drawStageSelect() {
    ===================================================================== */
 
 function updateBattle() {
-  if (menuBack()) {
+  // menuBack() reads the live keyboard rather than the frame's input, so on a
+  // replayed frame it would fire again and send a second 'bye'.
+  if (!netplay.resimulating && menuBack()) {
     if (netplay.active) {
       if (netplay.send) netplay.send({ t: 'bye' });
       netStop('you left');
@@ -2688,7 +2722,7 @@ let resultTimer = 0;
 function updateResults() {
   resultTimer++;
   if (menuBack()) { scene = 'title'; return; }
-  if (resultTimer > 40 && (menuConfirm() || tapped('KeyF') || tapped('Comma'))) {
+  if (resultTimer > 40 && (menuConfirm())) {
     select.locked = [false, false];
     select.activeSlot = 0;
     scene = onlineOnly ? 'title' : 'select';
@@ -3201,13 +3235,15 @@ function drawSelect() {
 
   // Player status line.
   if (twoPlayer) {
-    text((select.locked[0] ? 'P1 READY' : 'P1 choosing') + '  WASD+F',
+    text((select.locked[0] ? 'P1 READY' : 'P1 choosing') +
+         '  WASD+' + keyName(BINDS[0].attack),
          10, VH - 33, 6.5, select.locked[0] ? '#8fe08f' : '#59a5ff', 'left', 700);
-    text((select.locked[1] ? 'P2 READY' : 'P2 choosing') + '  arrows+,',
+    text((select.locked[1] ? 'P2 READY' : 'P2 choosing') +
+         '  arrows+' + keyName(BINDS[1].attack),
          VW - 10, VH - 33, 6.5, select.locked[1] ? '#8fe08f' : '#ff5f5f', 'right', 700);
   } else {
     text((select.activeSlot === 0 ? 'PICK YOURSELF' : 'NOW PICK THE CPU') +
-         '  -  WASD + F',
+         '  -  WASD + ' + keyName(BINDS[0].attack),
          10, VH - 33, 6.5, '#59a5ff', 'left', 700);
   }
 }
@@ -3227,7 +3263,8 @@ function drawResults() {
   }
   if (resultTimer > 40) {
     sctx.globalAlpha = 0.6 + Math.sin(resultTimer * 0.09) * 0.4;
-    text('press F / ENTER for a rematch', VW / 2, 140, 8, '#c8cee6', 'center', 600);
+    text('press ' + keyName(BINDS[0].attack) + ' / ENTER for a rematch',
+         VW / 2, 140, 8, '#c8cee6', 'center', 600);
     sctx.globalAlpha = 1;
     drawButton('quit', VW / 2, 164, 58, () => { scene = 'title'; });
   }
@@ -3249,25 +3286,164 @@ function render() {
 }
 
 /* =====================================================================
-   NETPLAY - deterministic lockstep
+   NETPLAY - deterministic rollback
 
    Only button presses cross the wire, never positions. Both machines run the
    identical simulation from the identical inputs, which is only possible
    because the sim is deterministic: fixed timestep, no randomness feeding
    game state, and no runtime trig (see the note on kx/ky in the roster).
 
-   Each side runs `delay` frames behind its own input: what you press now is
-   scheduled for frame N+delay, which gives the packet that long to arrive.
-   Frame N is simulated only once BOTH sides' inputs for N are in hand. Until
-   then the game waits rather than guessing, so the two can never diverge.
+   This used to be lockstep: frame N was simulated only once BOTH sides'
+   inputs for N were in hand, and until then the game waited. That is simple
+   and it never diverges, but it has no good setting. `delay` frames of input
+   lag were charged on every press whether the network needed them or not --
+   four frames, 67ms, even over a LAN -- and when a packet missed its window
+   anyway, the picture stopped dead.
+
+   Now the simulation never waits. Any input that has not arrived is guessed,
+   and when the real one turns up and disagrees, the sim rewinds to that frame
+   and replays forward with the truth. Your own input is applied almost
+   immediately; the cost is that the opponent may occasionally snap a few
+   pixels, which is far less noticeable than the whole game stopping.
+
+   Three things this depends on:
+     - saveSim/restoreSim capture the simulation EXACTLY. A missed field is a
+       silent desync, which is why they are written reflectively rather than
+       as a hand-maintained list of properties that would rot.
+     - prediction never invents a button press (see NET_LEVEL_BITS).
+     - the desync hash only ever compares CONFIRMED frames, never guessed
+       ones, or prediction itself would look like divergence.
 
    This section owns the frame buffer. Getting bytes between two browsers is
    somebody else's job: pass in a `send` function, and feed whatever arrives
    to receive().
    ===================================================================== */
 
-const NET_REDUNDANCY = 12;   // past frames resent in every packet
+// Past frames resent in every packet. A loss burst longer than this leaves a
+// hole nothing can fill, which stops confirmedFrame permanently and with it
+// all desync checking -- and an input is two bytes, so the window is cheap.
+const NET_REDUNDANCY = 32;
 const NET_CHECK_EVERY = 30;  // how often to compare a state hash
+const NET_MAX_ROLLBACK = 20; // frames we will guess ahead before giving up
+const NET_SNAPSHOTS = 64;    // saved frames kept; must cover the hash cadence
+
+/* Adaptive delay. Each side reports how far ahead it is having to guess, and
+   the other side adds delay to shorten it -- your delay is spent on your
+   opponent's behalf, never your own. Both ends of a symmetric link converge
+   on the same number; an asymmetric one settles wherever it needs to. */
+// Deliberately close to the rollback ceiling. Guessing is cheap -- a
+// thirty-frame rollback costs half a millisecond, three percent of a frame --
+// so prediction is not something to spend input lag avoiding. Delay is only
+// worth paying when the guess is about to outrun the window and stall, which
+// is why these sit near NET_MAX_ROLLBACK rather than near zero. Tuned down at
+// 5/2 this cost transatlantic play 50ms of input lag to buy nothing.
+const NET_AHEAD_HIGH = 12;   // guessing this far is close to the cliff
+const NET_AHEAD_LOW = 8;     // ...back under here, give the frame back
+const NET_MAX_DELAY = 8;     // past here, let rollback carry the rest
+const NET_TUNE_EVERY = 45;   // frames between adjustments
+
+/* Which bits are a button being HELD rather than newly pressed.
+
+   The wire format carries edges, not levels -- readPad reports `attack` only
+   on the frame the key goes down. So the obvious prediction, "assume they did
+   the same thing again", would re-press their attack every frame they were
+   silent and have them throwing punches that never happened.
+
+   Prediction therefore keeps the held directions and shield, and assumes no
+   new presses. Missing a press for a frame costs one rollback; inventing one
+   makes the opponent visibly do something they did not do. */
+const NET_LEVEL_BITS = 1 | 2 | 4 | 8 | 128;
+
+/* ---------------------------------------------------------------------
+   SNAPSHOTS
+
+   Everything reachable from the roster and the stage table is read-only
+   data: move definitions, tuning, spawn points. Snapshots keep those by
+   reference. Copying them every frame would be waste, and identity matters --
+   `volleyOf` is compared with === against a move object.
+   --------------------------------------------------------------------- */
+let SIM_FROZEN = null;
+function simFrozen() {
+  if (SIM_FROZEN) return SIM_FROZEN;
+  const set = new Set();
+  const walk = (v) => {
+    if (!v || typeof v !== 'object' || set.has(v)) return;
+    set.add(v);
+    for (const k of Object.keys(v)) walk(v[k]);
+  };
+  walk(ROSTER); walk(STAGES); walk(COMBAT); walk(PHYS);
+  SIM_FROZEN = set;
+  return set;
+}
+
+function snapValue(v) {
+  if (v === null || typeof v !== 'object') return v;
+  // A live fighter: keep the pointer. Fighters are restored in place, so a
+  // projectile's `owner` survives a rollback without any remapping -- and it
+  // has to, because owner is compared by identity in three places (the
+  // maxAlive gate, the don't-hit-yourself check, and who gets credited for
+  // the damage).
+  if (v instanceof Fighter) return v;
+  if (simFrozen().has(v)) return v;
+  return Array.isArray(v) ? v.slice() : Object.assign({}, v);
+}
+
+function snapObject(o) {
+  const out = {};
+  for (const k of Object.keys(o)) out[k] = snapValue(o[k]);
+  return out;
+}
+
+function saveSim() {
+  const ps = [];
+  for (const p of projectiles) {
+    const c = snapObject(p);
+    c.__proto = Object.getPrototypeOf(p);
+    ps.push(c);
+  }
+  return {
+    fighters: fighters.map(snapObject),
+    projectiles: ps,
+    freezeFrames: freezeFrames,
+    battleFrames: battleFrames,
+    winnerKey: winnerKey,
+    banner: banner ? Object.assign({}, banner) : null,
+    // `scene` is simulation state, not presentation: updateBattle ends the
+    // match by setting it. A KO decided on a guessed frame would otherwise be
+    // irreversible -- the fighters would rewind and the results screen would
+    // not, leaving one machine on a screen the other never reached.
+    scene: scene,
+    resultTimer: resultTimer,
+  };
+}
+
+function restoreSim(snap) {
+  // Fighters are restored IN PLACE, so everything pointing at a fighter stays
+  // pointing at the right one. Properties added since the snapshot are
+  // deleted: assigning over the top would leave stale ones behind.
+  for (let i = 0; i < fighters.length; i++) {
+    const f = fighters[i], src = snap.fighters[i];
+    for (const k of Object.keys(f)) if (!(k in src)) delete f[k];
+    for (const k of Object.keys(src)) f[k] = snapValue(src[k]);
+  }
+  // Projectiles are rebuilt -- how many there are is itself state. Cloning on
+  // the way out as well as in keeps the snapshot reusable: a second rollback
+  // to the same frame must not find it mutated by the first.
+  projectiles.length = 0;
+  for (const src of snap.projectiles) {
+    const p = Object.create(src.__proto);
+    for (const k of Object.keys(src)) {
+      if (k !== '__proto') p[k] = snapValue(src[k]);
+    }
+    projectiles.push(p);
+  }
+  freezeFrames = snap.freezeFrames;
+  battleFrames = snap.battleFrames;
+  winnerKey = snap.winnerKey;
+  banner = snap.banner ? Object.assign({}, snap.banner) : null;
+  scene = snap.scene;
+  resultTimer = snap.resultTimer;
+}
 
 const netplay = {
   active: false,
@@ -3285,6 +3461,25 @@ const netplay = {
   worstStall: 0,
   desync: null,
   ended: null,
+
+  // --- rollback bookkeeping ---
+  snapshots: new Map(),      // frame -> state at the START of that frame
+  used: [new Map(), new Map()],     // what we actually fed the sim
+  guessed: [new Map(), new Map()],  // ...and whether it was a guess
+  lastReal: [0, 0],          // newest confirmed bits, the basis for a guess
+  rollbackTo: null,          // earliest frame proven wrong, or null
+  resimulating: false,
+  confirmedFrame: 0,         // every frame below this ran on real input
+  lastCheckedFrame: -1,
+  theirChecks: new Map(),
+  rollbacks: 0,
+  resimFrames: 0,
+
+  // --- adaptive delay ---
+  remoteNewest: -1,          // newest frame we hold opponent input for
+  aheadPeak: 0,              // worst guess distance this reporting window
+  peerAhead: 0,              // what they last told us about theirs
+  delayChanges: 0,
 };
 
 // Bit 64 used to be the single SPECIAL button. It is now three bits (512,
@@ -3322,9 +3517,11 @@ function mixNumber(h, v) {
   return h;
 }
 
-function stateHash() {
+function stateHash(snap) {
+  const fs = snap ? snap.fighters : fighters;
+  const ps = snap ? snap.projectiles : projectiles;
   let h = 2166136261 >>> 0;
-  for (const f of fighters) {
+  for (const f of fs) {
     h = mixNumber(h, f.x);
     h = mixNumber(h, f.y);
     h = mixNumber(h, f.vx);
@@ -3337,8 +3534,8 @@ function stateHash() {
     h = mixNumber(h, f.facing);
     h = mixNumber(h, f.grounded ? 1 : 0);
   }
-  h = mixNumber(h, projectiles.length);
-  for (const pr of projectiles) {
+  h = mixNumber(h, ps.length);
+  for (const pr of ps) {
     h = mixNumber(h, pr.x);
     h = mixNumber(h, pr.y);
   }
@@ -3356,68 +3553,231 @@ function netHaveFrame(f) {
 /* Capture this machine's input for frame+delay and put it on the wire with a
    window of earlier frames, so a dropped packet heals without a resend. */
 function netSubmitLocal() {
-  const target = netplay.frame + netplay.delay;
-  if (netplay.submittedTo >= target) return;
-  netplay.submittedTo = target;
   const mine = netplay.inputs[netplay.localSlot];
-  // Always scheme 0: online there is one person per keyboard, so both ends
-  // use WASD regardless of which slot they occupy.
-  mine.set(target, padToBits(readPad(0)));
+  const target = netplay.frame + netplay.delay;
 
-  const from = Math.max(0, target - (NET_REDUNDANCY - 1));
+  if (target > netplay.submittedTo) {
+    // Always scheme 0: online there is one person per keyboard, so both ends
+    // use WASD regardless of which slot they occupy.
+    const now = padToBits(readPad(0));
+    // Raising the delay moves the target forward by more than one frame.
+    // Those in-between frames get the HELD bits only: the sample carries
+    // edges, so copying it wholesale would deliver one jump press as three.
+    for (let f = netplay.submittedTo + 1; f < target; f++) {
+      mine.set(f, now & NET_LEVEL_BITS);
+    }
+    mine.set(target, now);
+    netplay.submittedTo = target;
+  }
+
+  // Send every frame, including while stalled. This used to sit behind the
+  // early return above, which meant a stalled machine transmitted nothing --
+  // and the only thing that can end a stall is a packet from the other side.
+  // Two sides stalling at once therefore deadlocked permanently.
+  if (!netplay.send) return;
+  const from = Math.max(0, netplay.submittedTo - (NET_REDUNDANCY - 1));
   const bits = [];
-  for (let f = from; f <= target; f++) bits.push(mine.get(f) || 0);
-  if (netplay.send) netplay.send({ t: 'i', f: from, b: bits });
+  for (let f = from; f <= netplay.submittedTo; f++) bits.push(mine.get(f) || 0);
+  // `a` rides along: how far ahead we are having to guess. It costs two bytes
+  // and saves the opponent from having to infer it.
+  netplay.send({ t: 'i', f: from, b: bits, a: netplay.aheadPeak });
+}
+
+/* Spend delay on the opponent's behalf, in single frames, rarely. */
+function netTuneDelay() {
+  if (netplay.frame % NET_TUNE_EVERY) return;
+  if (netplay.peerAhead > NET_AHEAD_HIGH && netplay.delay < NET_MAX_DELAY) {
+    netplay.delay++;
+    netplay.delayChanges++;
+  } else if (netplay.peerAhead < NET_AHEAD_LOW && netplay.delay > 1) {
+    netplay.delay--;
+    netplay.delayChanges++;
+  }
+  netplay.aheadPeak = 0;     // fresh measurement window
 }
 
 function netReceive(msg) {
   if (!msg || !netplay.active) return;
 
   if (msg.t === 'i') {
-    const remote = netplay.inputs[1 - netplay.localSlot];
+    const rs = 1 - netplay.localSlot;
+    const remote = netplay.inputs[rs];
+    if (typeof msg.a === 'number') netplay.peerAhead = msg.a;
     for (let i = 0; i < msg.b.length; i++) {
       const f = msg.f + i;
-      if (!remote.has(f)) remote.set(f, msg.b[i]);
+      if (remote.has(f)) continue;
+      const bits = msg.b[i];
+      remote.set(f, bits);
+      if (f > netplay.remoteNewest) netplay.remoteNewest = f;
+
+      // Did we already run this frame on a guess?
+      if (f < netplay.frame && netplay.guessed[rs].get(f)) {
+        if (netplay.used[rs].get(f) === bits) {
+          // The guess happened to be right, so the state is already correct.
+          netplay.guessed[rs].set(f, false);
+        } else if (netplay.rollbackTo === null || f < netplay.rollbackTo) {
+          netplay.rollbackTo = f;
+        }
+      }
     }
     return;
   }
 
   if (msg.t === 'c') {
-    const mine = netplay.checks.get(msg.f);
-    if (mine !== undefined && mine !== msg.h && !netplay.desync) {
-      netplay.desync = { frame: msg.f, mine: mine, theirs: msg.h };
-      netEmit('desync', netplay.desync);
-    }
+    // Keep it even if we have not reached that frame ourselves yet; the two
+    // sides confirm frames at different moments.
+    netplay.theirChecks.set(msg.f, msg.h);
+    netCompareCheck(msg.f);
     return;
   }
 
   if (msg.t === 'bye') netStop('opponent left');
 }
 
-function netAfterStep() {
-  const f = netplay.frame;
+function netCompareCheck(f) {
+  const mine = netplay.checks.get(f);
+  const theirs = netplay.theirChecks.get(f);
+  if (mine === undefined || theirs === undefined) return;
+  if (mine !== theirs && !netplay.desync) {
+    netplay.desync = { frame: f, mine: mine, theirs: theirs };
+    netEmit('desync', netplay.desync);
+  }
+}
 
-  if (f % NET_CHECK_EVERY === 0) {
-    const h = stateHash();
-    netplay.checks.set(f, h);
-    if (netplay.send) netplay.send({ t: 'c', f: f, h: h });
-    if (netplay.checks.size > 40) {
-      const cutoff = f - NET_CHECK_EVERY * 30;
-      for (const k of netplay.checks.keys()) {
-        if (k < cutoff) netplay.checks.delete(k);
-      }
+/* Simulate exactly one frame, from confirmed input where we have it and a
+   guess where we do not. Runs both for real frames and for replayed ones. */
+function netSimulateOne() {
+  const f = netplay.frame;
+  // Save BEFORE stepping, so snapshots.get(f) is the state a rollback to
+  // frame f should restore.
+  netplay.snapshots.set(f, saveSim());
+
+  const pads = [];
+  for (let sl = 0; sl < 2; sl++) {
+    const known = netplay.inputs[sl];
+    let bits, guessed = false;
+    if (known.has(f)) {
+      bits = known.get(f);
+      netplay.lastReal[sl] = bits;
+    } else {
+      bits = netplay.lastReal[sl] & NET_LEVEL_BITS;
+      guessed = true;
     }
+    netplay.used[sl].set(f, bits);
+    netplay.guessed[sl].set(f, guessed);
+    pads.push(bitsToPad(bits));
+  }
+  netplay.framePads = pads;
+
+  step();
+  netplay.frame++;
+}
+
+/* Rewind to the earliest frame we got wrong and replay to where we were. */
+function netRollback() {
+  const from = netplay.rollbackTo;
+  const to = netplay.frame;
+  netplay.rollbackTo = null;
+  const snap = netplay.snapshots.get(from);
+  // If the snapshot has already been pruned the misprediction is older than
+  // the window; nothing can be done about it, and the hash check will catch
+  // it if it actually mattered.
+  if (!snap || from >= to) return;
+
+  restoreSim(snap);
+  netplay.frame = from;
+  netplay.resimulating = true;
+  while (netplay.frame < to) netSimulateOne();
+  netplay.resimulating = false;
+
+  netplay.rollbacks++;
+  netplay.resimFrames += to - from;
+}
+
+/* Walk `confirmedFrame` forward over every frame that ran on real input.
+   Only those can be hashed: a guessed frame legitimately differs between the
+   two machines for a moment, and comparing it would cry desync. */
+function netAdvanceConfirmed() {
+  while (netplay.confirmedFrame < netplay.frame &&
+         !netplay.guessed[0].get(netplay.confirmedFrame) &&
+         !netplay.guessed[1].get(netplay.confirmedFrame)) {
+    netplay.confirmedFrame++;
   }
 
+  const target = Math.floor(netplay.confirmedFrame / NET_CHECK_EVERY) * NET_CHECK_EVERY;
+  if (target > netplay.lastCheckedFrame && netplay.snapshots.has(target)) {
+    const h = stateHash(netplay.snapshots.get(target));
+    netplay.lastCheckedFrame = target;
+    netplay.checks.set(target, h);
+    if (netplay.send) netplay.send({ t: 'c', f: target, h: h });
+    netCompareCheck(target);
+  }
+}
+
+function netPrune() {
+  const keepFrom = netplay.frame - NET_SNAPSHOTS;
+  if (keepFrom > 0) {
+    for (const k of netplay.snapshots.keys()) {
+      if (k < keepFrom) netplay.snapshots.delete(k);
+    }
+  }
+  if (netplay.frame % 60) return;
+
   // Frames older than the redundancy window can never be asked for again.
-  const stale = f - NET_REDUNDANCY * 4;
-  if (stale > 0 && f % 60 === 0) {
+  const stale = netplay.frame - NET_REDUNDANCY * 4;
+  if (stale > 0) {
     for (const map of netplay.inputs) {
       for (const k of map.keys()) if (k < stale) map.delete(k);
     }
+    for (const pair of [netplay.used, netplay.guessed]) {
+      for (const map of pair) {
+        for (const k of map.keys()) if (k < stale) map.delete(k);
+      }
+    }
   }
+  const cutoff = netplay.frame - NET_CHECK_EVERY * 30;
+  for (const m of [netplay.checks, netplay.theirChecks]) {
+    for (const k of m.keys()) if (k < cutoff) m.delete(k);
+  }
+}
 
-  netplay.frame++;
+/* One wall-clock frame of online play. Returns false if the simulation could
+   not advance, which is now rare: it takes the opponent falling further
+   behind than we are willing to guess. */
+function netAdvance() {
+  netSubmitLocal();
+
+  if (netplay.rollbackTo !== null) netRollback();
+
+  // Guessing is cheap; guessing a long way is not, and it is also a lie that
+  // gets more expensive to unwind. Past this far ahead, wait instead.
+  //
+  // Measured against the newest input we hold, NOT against confirmedFrame:
+  // confirmedFrame stops dead at a permanently lost frame, and keying the
+  // stall off it turned one unrecoverable packet into a permanent freeze.
+  if (!netplay.inputs[1 - netplay.localSlot].has(netplay.frame) &&
+      netplay.frame - netplay.remoteNewest > NET_MAX_ROLLBACK) {
+    netplay.stalling = true;
+    netplay.stalledFrames++;
+    netplay.worstStall = Math.max(netplay.worstStall, netplay.stalledFrames);
+    return false;
+  }
+  netplay.stalling = false;
+  netplay.stalledFrames = 0;
+
+  netSimulateOne();
+
+  // How far ahead of their newest input we are running. This is the quantity
+  // that actually matters, and it is measured rather than inferred from a
+  // round-trip time: it already contains latency, jitter, packet loss and
+  // whatever pace their machine is keeping.
+  const ahead = netplay.frame - netplay.remoteNewest;
+  if (ahead > netplay.aheadPeak) netplay.aheadPeak = ahead;
+
+  netAdvanceConfirmed();
+  netTuneDelay();
+  netPrune();
+  return true;
 }
 
 function netStart(opts) {
@@ -3431,7 +3791,9 @@ function netStart(opts) {
 
   netplay.active = true;
   netplay.localSlot = opts.localSlot === 1 ? 1 : 0;
-  netplay.delay = Math.max(1, Math.min(12, opts.delay || 4));
+  // One frame, not four. Rollback covers the network; the delay only exists
+  // now to give a packet a free frame of travel before anything is guessed.
+  netplay.delay = Math.max(1, Math.min(12, opts.delay == null ? 1 : opts.delay));
   netplay.send = opts.send || null;
   netplay.onEvent = opts.onEvent || null;
   netplay.inputs = [new Map(), new Map()];
@@ -3444,11 +3806,29 @@ function netStart(opts) {
   netplay.desync = null;
   netplay.ended = null;
   netplay.framePads = [NEUTRAL, NEUTRAL];
+  netplay.snapshots = new Map();
+  netplay.used = [new Map(), new Map()];
+  netplay.guessed = [new Map(), new Map()];
+  netplay.lastReal = [0, 0];
+  netplay.rollbackTo = null;
+  netplay.resimulating = false;
+  netplay.confirmedFrame = 0;
+  netplay.lastCheckedFrame = -1;
+  netplay.theirChecks = new Map();
+  netplay.rollbacks = 0;
+  netplay.resimFrames = 0;
+  netplay.remoteNewest = -1;
+  netplay.aheadPeak = 0;
+  netplay.peerAhead = 0;
+  netplay.delayChanges = 0;
 
-  // Both sides open on an identical run-up of neutral input.
+  // Only our own opening frames are primed. Seeding the opponent's from OUR
+  // delay is a hole nothing can fill if the two sides start on different
+  // numbers, and rollback does not need it anyway: their opening frames are
+  // guessed as neutral, which is what the prefill said, and corrected the
+  // moment their first packet lands.
   for (let f = 0; f < netplay.delay; f++) {
-    netplay.inputs[0].set(f, 0);
-    netplay.inputs[1].set(f, 0);
+    netplay.inputs[netplay.localSlot].set(f, 0);
   }
 
   startBattle();
@@ -3485,7 +3865,10 @@ function step() {
     case 'battle': updateBattle(); break;
     case 'results': updateResults(); break;
   }
-  prevHeld = new Set(held);
+  // Not on a replayed frame. A rollback runs step() several times in one tick,
+  // and advancing the edge state each time swallows anything pressed on that
+  // tick -- Escape included, so the player could not quit.
+  if (!netplay.resimulating) prevHeld = new Set(held);
 }
 
 function frame(now) {
@@ -3497,25 +3880,14 @@ function frame(now) {
   acc += dt;
   let guard = 0;
   while (acc >= STEP && guard < 8) {
-    if (netplay.active && scene === 'battle') {
-      netSubmitLocal();
-      if (!netHaveFrame(netplay.frame)) {
-        // Wait rather than guess. Guessing is what rollback does, and
-        // rollback needs to be able to rewind; this cannot.
-        netplay.stalling = true;
-        netplay.stalledFrames++;
-        netplay.worstStall = Math.max(netplay.worstStall, netplay.stalledFrames);
-        break;
-      }
-      netplay.stalling = false;
-      netplay.stalledFrames = 0;
-      netplay.framePads = [
-        bitsToPad(netplay.inputs[0].get(netplay.frame)),
-        bitsToPad(netplay.inputs[1].get(netplay.frame)),
-      ];
+    // Keep driving netplay through a pending rollback even once the scene has
+    // left the battle: a match ended by a mispredicted KO is exactly the case
+    // that needs rewinding, and gating on scene alone made it permanent.
+    if (netplay.active && (scene === 'battle' || netplay.rollbackTo !== null)) {
+      if (!netAdvance()) break;
+    } else {
+      step();
     }
-    step();
-    if (netplay.active && scene === 'battle') netAfterStep();
     acc -= STEP;
     guard++;
   }
@@ -3570,6 +3942,12 @@ window.NerdWars = {
         worstStall: netplay.worstStall,
         desync: netplay.desync,
         ended: netplay.ended,
+        confirmedFrame: netplay.confirmedFrame,
+        rollbacks: netplay.rollbacks,
+        resimFrames: netplay.resimFrames,
+        aheadPeak: netplay.aheadPeak,
+        peerAhead: netplay.peerAhead,
+        delayChanges: netplay.delayChanges,
         buffered: netplay.inputs[1 - netplay.localSlot].size,
       };
     },

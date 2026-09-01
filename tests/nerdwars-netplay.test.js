@@ -287,33 +287,188 @@ test("both players use the same keys, whichever slot they are in", async () => {
   assert.equal(b.nw.net.status.desync, null);
 });
 
-test("a side with no opponent input waits instead of guessing", async () => {
+test("a side with no opponent input guesses ahead instead of freezing", async () => {
   const a = await bootGame();
   const outbox = [];
   a.nw.net.start({
     localSlot: 0,
     chars: ["reese", "ladeane"],
     stage: "space",
-    delay: 4,
+    delay: 1,
     send: (m) => outbox.push(m),
   });
 
-  // The opening `delay` frames are primed neutral for both sides, so it can
-  // run exactly that far on its own and must then stop.
-  a.pump(40);
-  const stalled = a.nw.net.status;
-  assert.equal(stalled.stalling, true, "should be waiting on the opponent");
-  assert.equal(stalled.frame, 4, "should have run exactly the primed frames");
+  // Under lockstep this stopped dead at the primed frames. It should now keep
+  // simulating on a guess, and only stop once the guess would have to reach
+  // further ahead than a rollback could undo.
+  a.pump(80);
+  const guessing = a.nw.net.status;
+  assert.ok(
+    guessing.frame > 10,
+    `should have guessed well past the primed frames, got ${guessing.frame}`
+  );
+  assert.equal(guessing.stalling, true, "should stop at the rollback limit");
+  assert.equal(guessing.desync, null, "guessing is not divergence");
+
+  // Nothing may be treated as agreed while it is still a guess: confirming a
+  // frame is what licenses the hash comparison, and comparing a guessed frame
+  // would report a desync that has not happened.
+  assert.ok(
+    guessing.confirmedFrame < guessing.frame,
+    "frames run on a guess must not count as confirmed"
+  );
 
   // Hand it the opponent's missing inputs; it should pick straight back up.
   const bits = [];
-  for (let f = 0; f < 200; f++) bits.push(0);
+  for (let f = 0; f < 400; f++) bits.push(0);
   a.nw.net.receive({ t: "i", f: 0, b: bits });
   a.pump(60);
 
   const resumed = a.nw.net.status;
   assert.equal(resumed.stalling, false, "should have resumed");
-  assert.ok(resumed.frame > stalled.frame, "should have advanced past the stall");
+  assert.ok(resumed.frame > guessing.frame, "should have advanced past the stall");
+  assert.equal(resumed.desync, null, "resuming must not have diverged");
+});
+
+test("two engines on a laggy link roll back and stay identical", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+
+  // A frame-quantised link: anything sent on pump N arrives on pump N+LAG.
+  // Six frames is longer than the one frame of input delay, so NEITHER side
+  // can ever have the other's input in time -- every frame is simulated from
+  // a guess and then corrected. That is the path this test exists to cover.
+  const LAG = 6;
+  let now = 0;
+  const wire = [];
+  const post = (to, m) => wire.push({ at: now + LAG, to, m });
+  const flush = () => {
+    for (let i = wire.length - 1; i >= 0; i--) {
+      if (wire[i].at <= now) {
+        const p = wire.splice(i, 1)[0];
+        (p.to === "a" ? a : b).nw.net.receive(p.m);
+      }
+    }
+  };
+
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("b", m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("a", m) });
+
+  const p1 = ["KeyD", "KeyF", "KeyW", "KeyA", "KeyG", "ShiftLeft", "KeyS", "KeyQ"];
+  const p2 = ["KeyA", "KeyC", "KeyW", "KeyD", "KeyR", "KeyG", "KeyQ", "KeyS"];
+  let ha = null, hb = null;
+
+  for (let i = 0; i < 900; i++) {
+    flush();
+    if (i % 7 === 0) { if (ha) a.release(ha); ha = p1[(i / 7) % p1.length | 0]; a.press(ha); }
+    if (i % 5 === 0) { if (hb) b.release(hb); hb = p2[(i / 5) % p2.length | 0]; b.press(hb); }
+    a.pump(1);
+    b.pump(1);
+    now++;
+  }
+
+  const sa = a.nw.net.status, sb = b.nw.net.status;
+
+  assert.ok(sa.rollbacks > 0, "the link is too slow for anything else: expected rollbacks");
+  assert.ok(sa.resimFrames > sa.rollbacks, "a rollback should replay more than nothing");
+  assert.equal(sa.desync, null, "player 1 saw a desync");
+  assert.equal(sb.desync, null, "player 2 saw a desync");
+  assert.ok(sa.frame > 500, `expected real progress, got frame ${sa.frame}`);
+
+  // The hash check only ever compares confirmed frames, so it being clean
+  // above is the real assertion. This pins the other half: both sides agreed
+  // on enough frames for that comparison to have actually run.
+  assert.ok(
+    sa.confirmedFrame > 400,
+    `expected most frames confirmed, got ${sa.confirmedFrame}`
+  );
+});
+
+test("a mutual stall recovers once the link comes back", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+
+  // A link that can be cut. While it is down packets are DROPPED, not queued,
+  // which is the case that used to be fatal: both sides run out of opponent
+  // input, both stop at the rollback limit, and a stalled side used to
+  // transmit nothing at all -- so neither could ever un-stall the other and
+  // the match hung forever with no way out but closing the tab.
+  let up = true;
+  const inbox = [];
+  const post = (to, m) => { if (up) inbox.push({ to, m }); };
+  const flush = () => {
+    while (inbox.length) {
+      const p = inbox.shift();
+      (p.to === "a" ? a : b).nw.net.receive(p.m);
+    }
+  };
+
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("b", m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("a", m) });
+
+  const run = (n) => { for (let i = 0; i < n; i++) { flush(); a.pump(1); b.pump(1); } };
+
+  run(60);
+  const before = a.nw.net.status.frame;
+  assert.ok(before > 40, "should be running normally before the outage");
+
+  // Pull the plug on both directions for long enough to outlast the guess
+  // window on both sides.
+  up = false;
+  inbox.length = 0;
+  run(90);
+
+  const stalled = a.nw.net.status;
+  assert.equal(stalled.stalling, true, "both sides should have run out of guesses");
+
+  // Plug it back in. Nothing sent during the outage survived, so recovery has
+  // to come from packets sent AFTER it -- which only happens if a stalled
+  // side keeps transmitting.
+  up = true;
+  run(120);
+
+  const sa = a.nw.net.status, sb = b.nw.net.status;
+  assert.equal(sa.stalling, false, "player 1 never recovered from the outage");
+  assert.equal(sb.stalling, false, "player 2 never recovered from the outage");
+  assert.ok(sa.frame > stalled.frame + 30,
+    `should have advanced well past the stall, got ${sa.frame} from ${stalled.frame}`);
+  assert.equal(sa.desync, null, "player 1 diverged across the outage");
+  assert.equal(sb.desync, null, "player 2 diverged across the outage");
+});
+
+test("the scene is part of the snapshot, so a match end can be rewound", async () => {
+  const a = await bootGame();
+  a.nw.net.start({
+    localSlot: 0,
+    chars: ["kel", "trev"],
+    stage: "swamp",
+    delay: 1,
+    send: () => {},
+  });
+
+  // Run forward on guesses, then hand over a contradicting input for a frame
+  // already simulated. The rollback must restore everything the simulation
+  // owns -- and `scene` is part of that, because updateBattle ends the match
+  // by setting it. A KO decided on a guessed frame used to be irreversible.
+  a.pump(30);
+  const mid = a.nw.net.status.frame;
+  assert.ok(mid > 5, "should have guessed forward");
+
+  const before = a.nw.net.status.rollbacks;
+  const held = [];
+  for (let i = 0; i < 12; i++) held.push(3);      // left+right held: not a guess
+  a.nw.net.receive({ t: "i", f: Math.max(0, mid - 10), b: held });
+  a.pump(5);
+
+  const after = a.nw.net.status;
+  assert.ok(after.rollbacks > before, "a contradicted guess should have rewound");
+  assert.equal(after.desync, null, "rewinding is not divergence");
+  assert.equal(a.nw.scene, "battle", "the rollback must leave us in the match");
+  assert.ok(after.frame >= mid, "should have replayed back up to where it was");
 });
 
 test("a mismatched state hash is reported as a desync", async () => {
