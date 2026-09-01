@@ -197,8 +197,12 @@ test("two independent engines stay bit-identical through a fought match", async 
 
   // Two different players mashing two different sets of keys. The sequences
   // are fixed so a failure is reproducible.
-  const p1 = ["KeyD", "KeyF", "KeyW", "KeyA", "KeyG", "KeyH", "KeyS"];
-  const p2 = ["ArrowLeft", "Comma", "ArrowUp", "ArrowRight", "Period", "Slash"];
+  //
+  // Both are scheme-0 keys: online there is one person per keyboard, so both
+  // ends read WASD regardless of which slot they hold. An arrow-key sequence
+  // here would press nothing at all.
+  const p1 = ["KeyD", "KeyF", "KeyW", "KeyA", "KeyG", "ShiftLeft", "KeyS", "KeyQ"];
+  const p2 = ["KeyA", "KeyC", "KeyW", "KeyD", "KeyR", "KeyG", "KeyQ", "KeyS"];
   const held = { a: null, b: null };
 
   for (let i = 0; i < 900; i++) {

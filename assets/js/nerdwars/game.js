@@ -214,13 +214,16 @@ let STAGE = STAGES[0];
 /* =====================================================================
    ROSTER
 
-   Two of these movesets are canon: Kel drew himself an attack animation
-   and a spinning bone projectile, and drew Reese a complete shirtless
-   alternate sprite set. Those aren't inventions -- they're in the art.
+   Six friends, six fighters. Three of these movesets are canon: Kel drew
+   himself an attack animation and a spinning bone projectile, drew Reese a
+   complete shirtless alternate sprite set, and drew AutisNick his pizza.
+   Those aren't inventions -- they're in the art.
 
-   The other four are PLACEHOLDERS chosen to cover distinct archetypes.
-   Swap the `special` block to re-theme any of them; nothing else needs
-   to change.
+   Two more (Trev, Ladeane) come from the movesets we wrote down in 2018:
+   real ideas, just with no drawn art behind them.
+
+   One is still a PLACEHOLDER chosen to cover an archetype -- JohnnyHam.
+   Swap the `specials` block to re-theme him; nothing else needs to change.
    ===================================================================== */
 
 /* Every move carries `kx` and `ky` alongside `angle`: they are the cosine and
@@ -358,42 +361,60 @@ const ROSTER = {
     },
   },
 
+  // Ladeane and "Lucas" are the same person -- Ladeane is the nickname, and
+  // the roster carried him twice before anyone noticed. The sprite sheet that
+  // arrived labelled Lucas turned out to be this folder's own
+  // Ladeane(1)SpriteSheet.png re-exported at 4x, pixel for pixel.
+  //
+  // He keeps the name everyone actually calls him and the art Kel drew in
+  // 2018; the moveset is the one from the notes, which was written under the
+  // other name. The dash kit that used to live here was a placeholder of
+  // mine and is gone.
   ladeane: {
     name: 'LADEANE',
-    tag: 'PLACEHOLDER',
+    tag: 'SOCCER, DRUMS & THE STROKES',
     drawn: false,
-    blurb: 'Fastest on the roster. Dashes in, slides under, leaps out.',
-    weight: 90, walk: 1.70, jump: 6.8, doubleJump: 6.3,
-    jab: { startup: 3, active: 3, recovery: 8, damage: 5,
-           base: 2.0, scale: 5.6, angle: 46, kx: 0.69465837045899725, ky: 0.71933980033865119, ox: 2, oy: -9, w: 10, h: 10 },
+    blurb: 'Soccerball along the floor, drumsticks up close, notes overhead.',
+    weight: 96, walk: 1.5, jump: 6.6, doubleJump: 6.1,
+    jab: { startup: 4, active: 4, recovery: 9, damage: 5,
+           base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
     specials: {
+      // "kick soccerball projectile". Everything else in the game threatens
+      // the air; this one owns the floor.
       neutral: {
-        kind: 'dash', label: 'DASH',
-        startup: 6, active: 14, recovery: 13, speed: 4.4,
-        damage: 8, base: 2.2, scale: 6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
-        ox: -4, oy: -9, w: 15, h: 12,
+        kind: 'ball', label: 'SOCCERBALL',
+        startup: 8, active: 1, recovery: 15, maxAlive: 2,
+        speed: 3.4, lift: -0.4, drop: 0.14, bounce: 0.62, life: 260,
+        damage: 8, base: 3.0, scale: 6, angle: 26, kx: 0.89879404629916704, ky: 0.4383711467890774,
       },
-      // PLACEHOLDER: lower, quicker, less committed.
+      // "drumstick weapon". A plain melee swing -- no kind handler needed,
+      // the hitbox is the whole move.
       down: {
-        kind: 'dash', label: 'SLIDE',
-        startup: 4, active: 10, recovery: 11, speed: 5,
-        damage: 6, base: 1.8, scale: 4.8, angle: 16, kx: 0.96126169593831889, ky: 0.27563735581699916,
-        ox: -4, oy: -5, w: 16, h: 8,
+        kind: 'swing', label: 'DRUMSTICKS',
+        startup: 4, active: 6, recovery: 12,
+        damage: 6, base: 2.2, scale: 6.4, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        ox: 1, oy: -10, w: 15, h: 12,
       },
-      // PLACEHOLDER: her way back to the stage.
+      // "something creative with a music note", and his way back to the
+      // stage: he rides the note up. The purple is the note motif, not his
+      // character color -- it stays legible on every stage.
       up: {
-        kind: 'uppercut', label: 'VAULT',
+        kind: 'uppercut', label: 'HIGH NOTE', blade: '#b06cf0',
         startup: 5, active: 10, recovery: 22,
-        rise: -6, drift: 1.1,
-        damage: 7, base: 2.1, scale: 6, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        rise: -5.8, drift: 0.9,
+        damage: 7, base: 2.2, scale: 6.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
         ox: -7, oy: -12, w: 14, h: 18,
       },
     },
+    // "the strokes starts playing in background spiky music notes start
+    // falling from ceiling to deal damage."
     ult: {
-      kind: 'dash', label: 'FULL SEND',
-      startup: 6, active: 22, recovery: 26, speed: 5.6,
-      damage: 18, base: 3.8, scale: 10, angle: 32, kx: 0.84804809615642596, ky: 0.5299192642332049,
-      ox: -6, oy: -10, w: 20, h: 16,
+      kind: 'rain', label: 'THE STROKES',
+      startup: 14, active: 168, recovery: 26,
+      every: 4, stride: 15, offset: 8, fallSpeed: 2.4,
+      drop: 0.02, life: 200, shape: 'note', ghost: true,
+      tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
+      damage: 11, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -436,53 +457,6 @@ const ROSTER = {
       damageMul: 1.8,
       speedMul: 1.48,
       knockbackTakenMul: 1.05,
-    },
-  },
-
-  lucas: {
-    name: 'LUCAS',
-    tag: 'NO SPRITE YET',
-    drawn: false,
-    blurb: 'Soccerball along the floor, drumsticks up close, notes overhead.',
-    weight: 96, walk: 1.5, jump: 6.6, doubleJump: 6.1,
-    jab: { startup: 4, active: 4, recovery: 9, damage: 5,
-           base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
-    specials: {
-      // "kick soccerball projectile". Everything else in the game threatens
-      // the air; this one owns the floor.
-      neutral: {
-        kind: 'ball', label: 'SOCCERBALL',
-        startup: 8, active: 1, recovery: 15, maxAlive: 2,
-        speed: 3.4, lift: -0.4, drop: 0.14, bounce: 0.62, life: 260,
-        damage: 8, base: 3.0, scale: 6, angle: 26, kx: 0.89879404629916704, ky: 0.4383711467890774,
-      },
-      // "drumstick weapon". A plain melee swing -- no kind handler needed,
-      // the hitbox is the whole move.
-      down: {
-        kind: 'swing', label: 'DRUMSTICKS',
-        startup: 4, active: 6, recovery: 12,
-        damage: 6, base: 2.2, scale: 6.4, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
-        ox: 1, oy: -10, w: 15, h: 12,
-      },
-      // "something creative with a music note", and his way back to the
-      // stage: he rides the note up.
-      up: {
-        kind: 'uppercut', label: 'HIGH NOTE', blade: '#b06cf0',
-        startup: 5, active: 10, recovery: 22,
-        rise: -5.8, drift: 0.9,
-        damage: 7, base: 2.2, scale: 6.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-        ox: -7, oy: -12, w: 14, h: 18,
-      },
-    },
-    // "the strokes starts playing in background spiky music notes start
-    // falling from ceiling to deal damage."
-    ult: {
-      kind: 'rain', label: 'THE STROKES',
-      startup: 14, active: 168, recovery: 26,
-      every: 4, stride: 15, offset: 8, fallSpeed: 2.4,
-      drop: 0.02, life: 200, shape: 'note', ghost: true,
-      tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
-      damage: 11, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -571,7 +545,7 @@ for (const key in ROSTER) {
   }
 }
 
-const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'lucas', 'reese', 'trev'];
+const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev'];
 
 /* =====================================================================
    CANVAS
@@ -716,13 +690,23 @@ function loadAssets(done) {
 const held = new Set();
 let prevHeld = new Set();
 
+/* Each special has its own key. It used to be one SPECIAL button whose
+   meaning depended on whether you were holding up or down, which meant you
+   could not throw your down special without also fastfalling, or your up
+   special without the game reading it as a jump input.
+
+   P1 is a one-handed layout: WASD to move, and the specials sit around it --
+   Q up and left, C below, F to the right, with R above F for the ult. */
 const BINDS = [
   { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS',
-    attack: 'KeyF', special: 'KeyG', shield: 'KeyH', ult: 'KeyR' },
+    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyR',
+    spNeutral: 'KeyF', spDown: 'KeyC', spUp: 'KeyQ' },
   { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
-    attack: 'Comma', special: 'Period', shield: 'Slash', ult: 'Semicolon',
+    attack: 'KeyL', shield: 'ShiftRight', ult: 'Quote',
+    spNeutral: 'Period', spDown: 'Slash', spUp: 'Semicolon',
     // Numpad alternates, for keyboards where the punctuation cluster is awkward.
-    attack2: 'Numpad1', special2: 'Numpad2', shield2: 'Numpad3', ult2: 'Numpad0' },
+    attack2: 'Numpad0', shield2: 'Numpad4', ult2: 'Numpad5',
+    spNeutral2: 'Numpad1', spDown2: 'Numpad2', spUp2: 'Numpad3' },
 ];
 
 window.addEventListener('keydown', (e) => {
@@ -760,6 +744,11 @@ function readPad(idx) {
   const b = BINDS[idx];
   const any = (a, c) => down(a) || (c && down(c));
   const anyTap = (a, c) => tapped(a) || (c && tapped(c));
+  // Three separate buttons, plus `special` as "any of them", which is the
+  // gate the Fighter and the AI both test before spending mana.
+  const spN = anyTap(b.spNeutral, b.spNeutral2);
+  const spD = anyTap(b.spDown, b.spDown2);
+  const spU = anyTap(b.spUp, b.spUp2);
   return {
     left: down(b.left),
     right: down(b.right),
@@ -767,7 +756,10 @@ function readPad(idx) {
     down: down(b.down),
     jump: tapped(b.up),
     attack: anyTap(b.attack, b.attack2),
-    special: anyTap(b.special, b.special2),
+    spNeutral: spN,
+    spDown: spD,
+    spUp: spU,
+    special: spN || spD || spU,
     shield: any(b.shield, b.shield2),
     ult: anyTap(b.ult, b.ult2),
   };
@@ -775,7 +767,9 @@ function readPad(idx) {
 
 const NEUTRAL = {
   left: false, right: false, up: false, down: false,
-  jump: false, attack: false, special: false, shield: false, ult: false,
+  jump: false, attack: false, special: false,
+  spNeutral: false, spDown: false, spUp: false,
+  shield: false, ult: false,
 };
 
 /* The 2018 menu art (BACK / QUIT) is 325x128 -- wider than the whole 320px
@@ -784,26 +778,59 @@ const NEUTRAL = {
    rect so it works with the mouse as well as the key shown beside it. */
 const uiButtons = [];
 
-view.addEventListener('mousedown', (e) => {
+/* Where the pointer is, in device pixels. Menus only -- nothing here is read
+   by the simulation, so hover can never differ between two machines mid-match
+   and can never desync online play. -1 means the pointer is off the canvas. */
+let mouseX = -1;
+let mouseY = -1;
+
+function viewPoint(e) {
   const r = view.getBoundingClientRect();
-  const mx = (e.clientX - r.left) * (view.width / r.width);
-  const my = (e.clientY - r.top) * (view.height / r.height);
+  return [(e.clientX - r.left) * (view.width / r.width),
+          (e.clientY - r.top) * (view.height / r.height)];
+}
+
+function buttonAt(mx, my) {
   for (const b of uiButtons) {
-    if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
-      b.action();
-      return;
-    }
+    if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) return b;
   }
+  return null;
+}
+
+view.addEventListener('mousedown', (e) => {
+  const p = viewPoint(e);
+  const b = buttonAt(p[0], p[1]);
+  if (b) b.action();
+});
+
+view.addEventListener('mousemove', (e) => {
+  const p = viewPoint(e);
+  mouseX = p[0];
+  mouseY = p[1];
+  // The hit rects are from the frame just drawn. They only move when the
+  // scene changes, so testing against last frame's is never wrong in practice.
+  view.style.cursor = buttonAt(mouseX, mouseY) ? 'pointer' : '';
+});
+
+view.addEventListener('mouseleave', () => {
+  mouseX = -1;
+  mouseY = -1;
+  view.style.cursor = '';
 });
 
 function drawButton(key, cxVirtual, cyVirtual, widthVirtual, action) {
-  const im = IMG['ui.' + key];
   const meta = UI[key];
-  if (!im || !meta) return;
+  const base = IMG['ui.' + key];
+  if (!meta || !base) return;
   const w = px(widthVirtual);
   const h = w * (meta.h / meta.w);
   const x = px(cxVirtual) - w / 2;
   const y = px(cyVirtual) - h / 2;
+  // Every button ships with a second copy of the art with the gradient
+  // shifted; that is the hover state. Falls back to the base art if a
+  // particular button never got one drawn.
+  const hot = mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
+  const im = (hot && IMG['ui.' + key + 'Hover']) || base;
   sctx.imageSmoothingEnabled = false;
   sctx.drawImage(im, x, y, w, h);
   uiButtons.push({ x: x, y: y, w: w, h: h, action: action });
@@ -1147,10 +1174,10 @@ class Fighter {
     if (this.grounded) this.vx *= 0.4;
   }
 
-  // Up and down pick a different special, the way a fighting game does.
-  // A character without one for that direction falls back to neutral.
+  // Which special was pressed. A character without a move in that slot
+  // falls back to neutral rather than doing nothing.
   slotFor(pad) {
-    const want = pad && pad.up ? 'up' : pad && pad.down ? 'down' : 'neutral';
+    const want = pad && pad.spUp ? 'up' : pad && pad.spDown ? 'down' : 'neutral';
     return this.def.specials[want] ? want : 'neutral';
   }
 
@@ -2251,6 +2278,7 @@ function aiDecide(me, foe) {
     if (me.def.specials.up && me.def.specials.up.kind === 'uppercut' && me.vy > 1.5 && me.jumpsLeft <= 0 &&
         a.cooldown <= 0) {
       pad.special = true;
+      pad.spUp = true;
       a.cooldown = 40;
     }
     return pad;
@@ -2328,19 +2356,24 @@ function aiDecide(me, foe) {
       a.cooldown = 10;
     } else if (inSpecial && me.mana >= me.def.specials.neutral.mana &&
                Math.random() < a.aggression * 0.5) {
-      pad.special = true;
       // Pick the slot that suits where the target actually is. Without this
       // the CPU only ever throws its neutral special and ignores two thirds
-      // of its moveset.
+      // of its moveset. Now that each special has its own button, choosing
+      // one no longer drags a direction along with it -- reaching for the
+      // down special used to make the CPU fastfall at the same time.
+      let slot = 'neutral';
       if (pizzaDrop) {
-        pad.down = true;
+        slot = 'down';
       } else if (me.def.specials.up && dy < -14 && Math.random() < 0.7) {
-        pad.up = true;                     // they are above
+        slot = 'up';                       // they are above
       } else if (me.def.specials.down && dy > 10 && adx < 30 && Math.random() < 0.6) {
-        pad.down = true;                   // they are below and close
+        slot = 'down';                     // they are below and close
       } else if (Math.random() < 0.25) {
-        pad[Math.random() < 0.5 ? 'up' : 'down'] = true;   // keep it varied
+        slot = Math.random() < 0.5 ? 'up' : 'down';   // keep it varied
       }
+      if (!me.def.specials[slot]) slot = 'neutral';
+      pad.special = true;
+      pad[slot === 'up' ? 'spUp' : slot === 'down' ? 'spDown' : 'spNeutral'] = true;
       a.cooldown = Math.round(rand(24, 50));
     } else if (inJab && Math.random() < a.aggression * 0.7) {
       pad.attack = true;
@@ -2445,17 +2478,31 @@ function startBattle() {
 
 let titleChoice = 0;
 
+// Shared by the keyboard and the START button, so the two can't drift apart.
+function enterSelect() {
+  twoPlayer = titleChoice === 1;
+  select.locked = [false, false];
+  select.activeSlot = 0;
+  scene = 'select';
+}
+
 function updateTitle() {
+  // The HELP button still works online -- it is a mouse action, so it sets
+  // the scene without going through here.
   if (onlineOnly) return;      // the lobby drives everything here
   if (tapped('KeyW') || tapped('ArrowUp') || tapped('KeyS') || tapped('ArrowDown')) {
     titleChoice = 1 - titleChoice;
   }
-  if (menuConfirm() || tapped('KeyF') || tapped('Comma')) {
-    twoPlayer = titleChoice === 1;
-    select.locked = [false, false];
-    select.activeSlot = 0;
-    scene = 'select';
-  }
+  if (tapped('KeyH')) { scene = 'help'; return; }
+  if (menuConfirm() || tapped('KeyF') || tapped('Comma')) enterSelect();
+}
+
+/* =====================================================================
+   SCENE: HELP
+   ===================================================================== */
+
+function updateHelp() {
+  if (menuBack() || menuConfirm() || tapped('KeyH')) scene = 'title';
 }
 
 /* =====================================================================
@@ -3043,22 +3090,62 @@ function drawTitle() {
     drawPortrait(k, cx, 74, 1.9);
   });
 
-  text('NERDWARS', VW / 2, 116, 30, '#ffffff', 'center', 800);
-  text('sprites by Kel, 2018', VW / 2, 128, 6, '#6a7290', 'center', 500);
+  text('NERDWARS', VW / 2, 112, 30, '#ffffff', 'center', 800);
+  text('sprites by Kel, 2018', VW / 2, 122, 6, '#6a7290', 'center', 500);
 
   if (onlineOnly) {
-    text('create or join a room below to play', VW / 2, 150, 8, '#c8cee6', 'center', 600);
-    text('two players, one on each keyboard', VW / 2, 162, 6, '#5f6884', 'center', 500);
+    text('create or join a room below to play', VW / 2, 138, 8, '#c8cee6', 'center', 600);
+    text('two players, one on each keyboard', VW / 2, 148, 6, '#5f6884', 'center', 500);
+    drawButton('help', VW / 2, 166, 48, () => { scene = 'help'; });
     return;
   }
 
   const opts = ['1 PLAYER  (vs CPU)', '2 PLAYERS  (local)'];
   opts.forEach((o, i) => {
     const on = titleChoice === i;
-    text((on ? '> ' : '  ') + o, VW / 2, 148 + i * 12, 8,
+    text((on ? '> ' : '  ') + o, VW / 2, 134 + i * 10, 8,
          on ? '#ffffff' : '#5f6884', 'center', on ? 800 : 500);
   });
-  text('W/S or arrows to choose  -  ENTER to start', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
+  // The buttons are 325x128 -- two and a half times wider than they are tall
+  // -- so a pair side by side is the only way two of them fit across 320px.
+  // At 48 wide each is 18.9 tall, which is what sets everything above them.
+  drawButton('start', VW / 2 - 30, 161, 48, enterSelect);
+  drawButton('help', VW / 2 + 30, 161, 48, () => { scene = 'help'; });
+  text('W/S to choose', VW / 2, VH - 3, 5, '#454c66', 'center', 500);
+}
+
+/* The keyboard half of the game has never been written down anywhere the
+   player can see it -- the controls table lives on the website, which is no
+   use in fullscreen. HELP puts it in the game. */
+const HELP_ROWS = [
+  ['MOVE', 'A  D', ''],
+  ['JUMP', 'W', 'again in the air for a second jump'],
+  ['DROP', 'S', 'S + W drops you through a platform'],
+  ['SPECIALS', 'Q F C', 'three separate moves, each costs mana'],
+  ['ULT', 'R', 'only once the ult bar is full'],
+  ['JAB', 'G', 'free -- it still works at zero mana'],
+  ['SHIELD', 'SHIFT', 'with a direction rolls, with S dodges'],
+];
+
+function drawHelp() {
+  sctx.fillStyle = '#0d1020';
+  sctx.fillRect(0, 0, view.width, view.height);
+
+  text('CONTROLS', VW / 2, 20, 12, '#ffffff', 'center', 800);
+
+  HELP_ROWS.forEach((row, i) => {
+    const y = 42 + i * 13;
+    text(row[0], 96, y, 7, '#5f6884', 'right', 700);
+    text(row[1], 104, y, 8, '#ffffff', 'left', 800);
+    text(row[2], 146, y, 5.5, '#98a0bc', 'left', 500);
+  });
+
+  text('specials cost mana -- the blue bar, which refills on its own',
+       VW / 2, 142, 5.5, '#5a6280', 'center', 500);
+  text('the ult bar fills as you deal damage and as you take it',
+       VW / 2, 150, 5.5, '#5a6280', 'center', 500);
+
+  drawButton('back', VW / 2, 167, 52, () => { scene = 'title'; });
 }
 
 function drawSelect() {
@@ -3066,6 +3153,9 @@ function drawSelect() {
   sctx.fillRect(0, 0, view.width, view.height);
 
   text('CHOOSE YOUR FIGHTER', VW / 2, 18, 11, '#ffffff', 'center', 800);
+
+  // Not online: there the lobby owns which scene you are in.
+  if (!onlineOnly) drawButton('back', 30, 18, 44, () => { scene = 'title'; });
 
   const cellW = 74, cellH = 52;
   const originX = VW / 2 - (GRID_COLS * cellW) / 2 + cellW / 2;
@@ -3095,12 +3185,18 @@ function drawSelect() {
   // Detail panel for whichever character the active cursor is on.
   const focusSlot = twoPlayer ? 0 : select.activeSlot;
   const focus = ROSTER[ORDER[select.cursor[focusSlot]]];
+  // Three states, not two. "Not drawn" used to print "placeholder", which
+  // was wrong for Trev and for Lucas: their movesets come from the 2018
+  // notes, there is just no drawn art of them throwing a chess piece.
+  const fromNotes = !focus.drawn && focus.tag !== 'PLACEHOLDER';
   text(focus.tag, VW / 2, VH - 22, 7,
-       focus.drawn ? '#8fe08f' : '#c8a05a', 'center', 700);
+       focus.drawn ? '#8fe08f' : fromNotes ? '#c8a05a' : '#7d849c', 'center', 700);
   text(focus.blurb, VW / 2, VH - 13, 6, '#98a0bc', 'center', 500);
   text(focus.drawn
         ? 'this moveset is drawn into Kel’s original sprites'
-        : 'placeholder — swap in a real personality later',
+        : fromNotes
+          ? 'from the movesets we wrote down in 2018'
+          : 'placeholder — swap in a real personality later',
        VW / 2, VH - 5, 5.5, '#5a6280', 'center', 500);
 
   // Player status line.
@@ -3140,6 +3236,7 @@ function drawResults() {
 function render() {
   uiButtons.length = 0;
   if (scene === 'title') { drawTitle(); return; }
+  if (scene === 'help') { drawHelp(); return; }
   if (scene === 'select') { drawSelect(); return; }
   if (scene === 'stage') { drawStageSelect(); return; }
   if (scene === 'results') { drawResults(); return; }
@@ -3190,17 +3287,24 @@ const netplay = {
   ended: null,
 };
 
+// Bit 64 used to be the single SPECIAL button. It is now three bits (512,
+// 1024, 2048), one per special, and `special` is derived from them rather
+// than sent -- there is no way for the two to disagree across the wire.
 function padToBits(p) {
   return (p.left ? 1 : 0) | (p.right ? 2 : 0) | (p.up ? 4 : 0) | (p.down ? 8 : 0) |
-         (p.jump ? 16 : 0) | (p.attack ? 32 : 0) | (p.special ? 64 : 0) |
-         (p.shield ? 128 : 0) | (p.ult ? 256 : 0);
+         (p.jump ? 16 : 0) | (p.attack ? 32 : 0) |
+         (p.shield ? 128 : 0) | (p.ult ? 256 : 0) |
+         (p.spNeutral ? 512 : 0) | (p.spDown ? 1024 : 0) | (p.spUp ? 2048 : 0);
 }
 
 function bitsToPad(b) {
+  const spN = !!(b & 512), spD = !!(b & 1024), spU = !!(b & 2048);
   return {
     left: !!(b & 1), right: !!(b & 2), up: !!(b & 4), down: !!(b & 8),
-    jump: !!(b & 16), attack: !!(b & 32), special: !!(b & 64), shield: !!(b & 128),
+    jump: !!(b & 16), attack: !!(b & 32), shield: !!(b & 128),
     ult: !!(b & 256),
+    spNeutral: spN, spDown: spD, spUp: spU,
+    special: spN || spD || spU,
   };
 }
 
@@ -3375,6 +3479,7 @@ let frameCount = 0;
 function step() {
   switch (scene) {
     case 'title': updateTitle(); break;
+    case 'help': updateHelp(); break;
     case 'select': updateSelect(); break;
     case 'stage': updateStageSelect(); break;
     case 'battle': updateBattle(); break;
