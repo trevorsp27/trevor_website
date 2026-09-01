@@ -20,11 +20,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901c" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901d" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
-    <script src="../assets/js/nerdwars/sprites.js?v=20260831a" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260901c" defer></script>
+    <script src="../assets/js/nerdwars/sprites.js?v=20260901a" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260901d" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
 
@@ -67,12 +67,12 @@
         <section class="nw-panel reveal" aria-labelledby="nw-play-title">
           <h2 id="nw-play-title" class="nw-sr-only">Play</h2>
           <div class="nw-bar">
-            <p class="nw-bar-hint">Online only &mdash; create or join a room below.</p>
+            <p class="nw-bar-hint">Play here on your own, or create a room below.</p>
             <button class="nw-btn" type="button" data-nerdwars-fullscreen>
               Fullscreen
             </button>
           </div>
-          <div class="nw-stage" data-nerdwars="online">
+          <div class="nw-stage" data-nerdwars>
             <canvas id="nw-canvas" aria-label="NerdWars game screen"></canvas>
             <div class="nw-veil" aria-hidden="true">
               <span class="nw-veil-key">CLICK TO PLAY</span>
@@ -168,7 +168,7 @@
           </div>
           <ul class="list">
             <li>Everyone has <strong>three specials</strong>: <kbd>G</kbd> on its own, <kbd>G</kbd> while holding <kbd>W</kbd>, and <kbd>G</kbd> while holding <kbd>S</kbd>. Up is usually the one that gets you back to the stage.</li>
-            <li>Damage percent does not kill you. It decides how far the next hit throws you. Get knocked off the screen and you lose a stock.</li>
+            <li>Everyone has a <strong>health bar</strong>. Damage takes health away; at zero you lose a stock and come back full. Hits still shove you, but the shove no longer kills &mdash; which is why most stages are now sealed arenas with a floor running wall to wall, the way they were drawn in 2018.</li>
             <li>You get two air jumps. Hold down while airborne to fall faster, or down plus jump to drop through a platform.</li>
             <li>Shield plus a direction rolls, and you are invincible in the middle of it. Shield plus down is a spot dodge.</li>
             <li>The <strong>blue bar</strong> under your stocks is mana. Every special costs some, priced by how strong it is &mdash; from 17 for a quick slide up to 37 for AutisNick&rsquo;s kiss, out of a pool of 100 that refills at 30 a second. It flashes red when a move is refused. Jabs are free, so running dry leaves you poking rather than helpless.</li>
@@ -187,7 +187,8 @@
             <li><strong>Kel</strong> is the only character with a full drawn attack animation, plus a four-frame spinning bone. He drew himself a projectile, so he plays as a zoner.</li>
             <li><strong>Reese</strong> is the only one with a complete second sprite set: a full shirtless walk cycle. In game that is a transformation &mdash; faster and stronger, but he flies further when hit.</li>
             <li><strong>AutisNick</strong> throws pizza forward, kisses you down (which keeps hurting for seven seconds afterwards), and lobs a rainbow up and over a platform &mdash; the one place his flat shot cannot reach.</li>
-            <li><strong>Trev</strong> throws cereal three ways, and his ult is a flaming laser sword.</li>
+            <li><strong>Trev</strong> throws cereal, and a chess knight that runs flat and then breaks hard downward &mdash; the piece&rsquo;s move is the mechanic. His ult is a flaming laser sword.</li>
+            <li><strong>Lucas</strong> kicks a soccerball that bounces and rolls along the floor, swings drumsticks up close, and rides a music note back to the stage. His ult drops spiky notes from the ceiling across the whole arena. <em>He has no sprite yet</em> &mdash; he plays as a flat silhouette until somebody draws him.</li>
             <li><strong>JohnnyHam</strong> and <strong>Ladeane</strong> only ever got movement art, so their moves are placeholders picked to cover distinct playstyles rather than personalities. Several ults are placeholders too.</li>
           </ul>
           <p class="nw-hint">

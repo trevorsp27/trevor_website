@@ -35,18 +35,35 @@ const PHYS = {
 };
 
 const COMBAT = {
-  timeLimitFrames: 60 * 180,   // 3 minutes, then most stocks / least damage
-  // Ults charge from damage in both directions, and the player on the back
-  // foot charges faster -- being beaten on should build toward a way out.
+  timeLimitFrames: 60 * 180,   // 3 minutes, then most stocks / most health
+
+  // Health, not accumulated damage. A hit takes health away; at zero you lose
+  // a stock and come back full. Moves deal 3-24, so 100 health is roughly a
+  // dozen clean hits per stock.
+  maxHealth: 100,
   ultMax: 100,
-  ultPerDamageDealt: 1.1,
-  ultPerDamageTaken: 1.7,
+  // Charges only on damage dealt: the meter is a reward for landing hits.
+  ultPerDamageDealt: 1.5,
   // Specials draw on a pool that refills on its own. Jabs are free, so
   // running dry leaves you poking rather than helpless, and ults are already
   // gated by their own meter -- charging them twice would mean finally
   // earning an ult and not being allowed to use it.
   manaMax: 100,
   manaRegen: 0.5,
+  // A hit used to keep its full horizontal speed for the whole of hitstun,
+  // because the hitstun branch applies gravity and movement but no friction.
+  // Subtractive rather than a multiplier: a multiplier squashes the gap
+  // between a weak hit and a strong one back toward nothing.
+  hitstunDrag: 0.22,
+  // Repeating one move on a cornered opponent was a genuine infinite once the
+  // floors ran wall to wall: against a wall the pushback that normally
+  // carries them out of range does nothing. Each hit in quick succession
+  // gives less hitstun than the last, so any loop runs out.
+  comboDecayPerHit: 0.1,
+  comboDecayFloor: 0.45,
+  comboWindow: 30,
+  // A volley that lands every projectile at once is one input for six hits.
+  volleyFalloff: [1, 0.7, 0.5, 0.35, 0.25, 0.2],
   hitstopLight: 3,
   hitstopHeavy: 7,
   shieldMax: 100,
@@ -76,13 +93,16 @@ const COMBAT = {
      lava    floor only -> the floor becomes the hazard, not the ground
      space   platform only -> open arena, nothing above or below
 
-   The two level sketches (MapSprites/Layouts) both draw a solid line
-   across the top AND bottom, so these maps were designed as enclosed
-   arenas rather than floating islands. Taken literally that breaks a
-   ring-out game -- a floor everywhere plus a lid means a launched fighter
-   always lands and can never be KO'd. So the enclosed stages keep the
-   ceiling and the floor, but the floor stops short of the view edges,
-   leaving the pits that make a KO possible.
+   The level sketches (MapSprites/Layouts) draw a solid line across the top
+   AND the bottom, so these maps were designed as enclosed arenas rather
+   than floating islands. That was impossible while the game killed by
+   ring-out: a floor everywhere plus a lid means a launched fighter always
+   lands and can never be KO'd, so the floors had pits cut into them.
+
+   Health bars removed that constraint. Damage decides the match now, so an
+   arena needs no exit, and these floors run wall to wall as drawn. Deep
+   Space is the deliberate exception -- no floor tile was ever drawn for it,
+   so it stays the open stage where falling still costs you a stock.
 
    Platforms are one-way: you land on them from above and drop through
    with Down + Jump. Widths are multiples of 16 so the tiles land whole.
@@ -117,7 +137,7 @@ const STAGES = [
     ceilingY: 16,          // solid: you bump your head, no upward KOs
     hazard: null,
     platforms: [
-      { x: 16, y: 128, w: 288, main: true, capped: true },
+      { x: 0, y: 128, w: 320, main: true },
       { x: 48, y: 92, w: 48, capped: true },
       { x: 224, y: 92, w: 48, capped: true },
       { x: 128, y: 52, w: 64, capped: true },
@@ -136,7 +156,7 @@ const STAGES = [
     ceilingY: 16,
     hazard: null,
     platforms: [
-      { x: 32, y: 128, w: 256, main: true },
+      { x: 0, y: 128, w: 320, main: true },
       { x: 32, y: 88, w: 48 },
       { x: 240, y: 88, w: 48 },
       { x: 128, y: 48, w: 64 },
@@ -155,7 +175,7 @@ const STAGES = [
     ceilingY: null,
     hazard: null,
     platforms: [
-      { x: 16, y: 128, w: 288, main: true, capped: true },
+      { x: 0, y: 128, w: 320, main: true },
       { x: 56, y: 92, w: 48, capped: true },
       { x: 216, y: 92, w: 48, capped: true },
     ],
@@ -220,7 +240,7 @@ const ROSTER = {
     tag: 'PIZZA, RAINBOWS, KISSES',
     drawn: true,
     blurb: 'Pizza forward, a kiss that keeps hurting, a rainbow lobbed over cover.',
-    weight: 106, walk: 1.14, jump: 6.2, doubleJump: 5.7,
+    weight: 106, walk: 1.34, jump: 6.4, doubleJump: 5.9,
     jab: { startup: 5, active: 4, recovery: 11, damage: 6,
            base: 2.4, scale: 6.8, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925, ox: 2, oy: -9, w: 11, h: 10 },
     specials: {
@@ -230,7 +250,7 @@ const ROSTER = {
         kind: 'pizza', label: 'PIZZA',
         startup: 8, active: 1, recovery: 14, maxAlive: 2,
         speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 170,
-        damage: 8, base: 2.1, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+        damage: 10, base: 3.4, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       },
       // Their original note for this one was a joke about giving people a
       // disease. Kept as the mechanic underneath it: a kiss that lands
@@ -238,9 +258,9 @@ const ROSTER = {
       down: {
         kind: 'kiss', label: 'KISS',
         startup: 6, active: 6, recovery: 20,
-        damage: 2, base: 1.4, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
+        damage: 4, base: 2.2, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
         ox: 2, oy: -10, w: 11, h: 9,
-        poison: { frames: 420, dps: 0.055 },
+        poison: { frames: 260, dps: 0.12 },
       },
       // Tuned against the stage, not by feel. Apex is lift^2/(2*drop) at
       // speed*lift/drop away: ~40px up, ~78px out. The side platforms sit
@@ -250,7 +270,7 @@ const ROSTER = {
         kind: 'rainbow', label: 'RAINBOW',
         startup: 9, active: 1, recovery: 16, maxAlive: 2,
         speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
-        damage: 9, base: 2.3, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        damage: 11, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
       },
     },
     ult: {
@@ -274,7 +294,7 @@ const ROSTER = {
       neutral: {
         kind: 'shockwave', label: 'SLAM',
         startup: 10, active: 8, recovery: 19,
-        damage: 10, base: 2.5, scale: 8, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+        damage: 8, base: 2.5, scale: 8, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
         ox: -26, oy: -8, w: 52, h: 18,
       },
       down: {
@@ -294,7 +314,7 @@ const ROSTER = {
     ult: {
       kind: 'shockwave', label: 'GROUND ZERO',
       startup: 14, active: 12, recovery: 30,
-      damage: 20, base: 4, scale: 10.5, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+      damage: 16, base: 4, scale: 10.5, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
       ox: -70, oy: -10, w: 140, h: 46,
     },
   },
@@ -312,21 +332,21 @@ const ROSTER = {
         kind: 'projectile', label: 'BONE',
         startup: 6, active: 1, recovery: 13, maxAlive: 3,
         speed: 3.3, lift: -0.55, drop: 0.055, life: 170,
-        damage: 10, base: 2.3, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+        damage: 12, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       },
       // PLACEHOLDER: skimmed low and fast along the ground.
       down: {
         kind: 'projectile', label: 'SKIMMER',
         startup: 5, active: 1, recovery: 12, maxAlive: 3,
         speed: 4.4, lift: 0.35, drop: 0.02, life: 120,
-        damage: 7, base: 1.9, scale: 5.4, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
+        damage: 8, base: 3.2, scale: 5.4, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
       },
       // PLACEHOLDER: tossed high, comes down on someone above.
       up: {
         kind: 'projectile', label: 'HIGH TOSS',
         startup: 8, active: 1, recovery: 16, maxAlive: 3,
         speed: 1.9, lift: -3.4, drop: 0.13, life: 200,
-        damage: 9, base: 2.2, scale: 6.4, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+        damage: 11, base: 3.3, scale: 6.4, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
       },
     },
     ult: {
@@ -350,7 +370,7 @@ const ROSTER = {
       neutral: {
         kind: 'dash', label: 'DASH',
         startup: 6, active: 14, recovery: 13, speed: 4.4,
-        damage: 9, base: 2.2, scale: 6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
+        damage: 8, base: 2.2, scale: 6, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
         ox: -4, oy: -9, w: 15, h: 12,
       },
       // PLACEHOLDER: lower, quicker, less committed.
@@ -412,10 +432,57 @@ const ROSTER = {
     ult: {
       kind: 'buff', label: 'SHIRTS OPTIONAL',
       startup: 8, active: 1, recovery: 12,
-      duration: 900,
+      duration: 780,
       damageMul: 1.8,
       speedMul: 1.48,
       knockbackTakenMul: 1.05,
+    },
+  },
+
+  lucas: {
+    name: 'LUCAS',
+    tag: 'NO SPRITE YET',
+    drawn: false,
+    blurb: 'Soccerball along the floor, drumsticks up close, notes overhead.',
+    weight: 96, walk: 1.5, jump: 6.6, doubleJump: 6.1,
+    jab: { startup: 4, active: 4, recovery: 9, damage: 5,
+           base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
+    specials: {
+      // "kick soccerball projectile". Everything else in the game threatens
+      // the air; this one owns the floor.
+      neutral: {
+        kind: 'ball', label: 'SOCCERBALL',
+        startup: 8, active: 1, recovery: 15, maxAlive: 2,
+        speed: 3.4, lift: -0.4, drop: 0.14, bounce: 0.62, life: 260,
+        damage: 8, base: 3.0, scale: 6, angle: 26, kx: 0.89879404629916704, ky: 0.4383711467890774,
+      },
+      // "drumstick weapon". A plain melee swing -- no kind handler needed,
+      // the hitbox is the whole move.
+      down: {
+        kind: 'swing', label: 'DRUMSTICKS',
+        startup: 4, active: 6, recovery: 12,
+        damage: 6, base: 2.2, scale: 6.4, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        ox: 1, oy: -10, w: 15, h: 12,
+      },
+      // "something creative with a music note", and his way back to the
+      // stage: he rides the note up.
+      up: {
+        kind: 'uppercut', label: 'HIGH NOTE', blade: '#b06cf0',
+        startup: 5, active: 10, recovery: 22,
+        rise: -5.8, drift: 0.9,
+        damage: 7, base: 2.2, scale: 6.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        ox: -7, oy: -12, w: 14, h: 18,
+      },
+    },
+    // "the strokes starts playing in background spiky music notes start
+    // falling from ceiling to deal damage."
+    ult: {
+      kind: 'rain', label: 'THE STROKES',
+      startup: 14, active: 168, recovery: 26,
+      every: 4, stride: 15, offset: 8, fallSpeed: 2.4,
+      drop: 0.02, life: 200, shape: 'note', ghost: true,
+      tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
+      damage: 11, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -423,7 +490,7 @@ const ROSTER = {
     name: 'TREV',
     tag: 'CEREAL & LASER SWORD',
     drawn: false,
-    blurb: 'Throws cereal three ways. Ult is a flaming laser sword.',
+    blurb: 'Cereal, a chess knight that turns a corner, milk to get home.',
     weight: 96, walk: 1.46, jump: 6.9, doubleJump: 6.2,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
@@ -438,14 +505,14 @@ const ROSTER = {
         tints: ['#e8a33c', '#d9822b', '#f2c85b', '#c25e2a'],
         damage: 3, base: 1.4, scale: 4, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
       },
-      // Poured out at his feet and left bouncing.
+      // "something creative with chess pieces". A knight moves two squares
+      // one way then one across, so this runs flat and then breaks hard
+      // downward. Nothing else in the game turns a corner.
       down: {
-        kind: 'scatter', label: 'SPILL',
-        startup: 6, active: 1, recovery: 14, maxAlive: 10,
-        count: 4, spread: 0.75,
-        speed: 1.4, lift: -1.6, drop: 0.16, life: 150, bounce: 0.55,
-        tints: ['#e8a33c', '#d9822b', '#f2c85b', '#c25e2a'],
-        damage: 3, base: 1.5, scale: 4.2, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+        kind: 'knight', label: 'KNIGHT',
+        startup: 7, active: 1, recovery: 16, maxAlive: 2,
+        speed: 3.6, turnAfter: 18, turnSpeed: 3.0, life: 140,
+        damage: 9, base: 2.3, scale: 6.4, angle: 64, kx: 0.43837114678907746, ky: 0.89879404629916704,
       },
       // His recovery, kept as the rising attack it always was so the balance
       // around it is untouched.
@@ -460,9 +527,9 @@ const ROSTER = {
     // "newtons flaming lazer swords" -- their note.
     ult: {
       kind: 'rush', label: 'LASER SWORD', blade: '#ff8a2a',
-      startup: 14, active: 16, recovery: 28,
-      lunge: 3, tint: '#ff7a2a',
-      damage: 15, base: 3.4, scale: 9, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      startup: 18, active: 18, recovery: 34,
+      lunge: 3.4, tint: '#ff7a2a',
+      damage: 22, base: 4.4, scale: 11, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       ox: -14, oy: -12, w: 145, h: 32,
     },
   },
@@ -504,7 +571,7 @@ for (const key in ROSTER) {
   }
 }
 
-const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev'];
+const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'lucas', 'reese', 'trev'];
 
 /* =====================================================================
    CANVAS
@@ -785,7 +852,7 @@ class Fighter {
     this.facing = slot === 0 ? 1 : -1;
     this.grounded = true;
 
-    this.percent = 0;
+    this.health = COMBAT.maxHealth;
     this.stocks = COMBAT.stocks;
     this.eliminated = false;
 
@@ -799,6 +866,12 @@ class Fighter {
     this.dropThrough = 0;
     this.hazardCd = 0;
     this.ultMeter = 0;
+    this.poisonBy = -1;
+    this.combo = 0;
+    this.sinceHitFrames = 999;
+    this.volleyOf = null;
+    this.volleyHits = 0;
+    this.volleySince = 999;
     this.mana = COMBAT.manaMax;
     this.manaDenied = 0;
     this.poison = 0;
@@ -861,7 +934,8 @@ class Fighter {
       const s = this.moveFor(this.state);
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
           s.kind === 'pizza' || s.kind === 'barrage' ||
-          s.kind === 'rainbow' || s.kind === 'scatter') return null;
+          s.kind === 'rainbow' || s.kind === 'scatter' ||
+          s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -891,14 +965,20 @@ class Fighter {
 
     if (this.invuln > 0) this.invuln--;
     if (this.buffTimer > 0) this.buffTimer--;
+    if (this.sinceHitFrames < 999) this.sinceHitFrames++;
+    if (this.volleySince < 999) this.volleySince++;
 
     // Damage over time. Ticks through everything except being dead, so it
     // keeps working while the victim is in hitstun or shielding.
     if (this.poison > 0) {
       this.poison--;
-      this.percent += this.poisonDps;
-      this.ultMeter = Math.min(COMBAT.ultMax,
-        this.ultMeter + this.poisonDps * COMBAT.ultPerDamageTaken);
+      this.health -= this.poisonDps;
+      if (this.health <= 0) { this.knockOut(); return; }
+      const by = fighters[this.poisonBy];
+      if (by && by !== this) {
+        by.ultMeter = Math.min(COMBAT.ultMax,
+          by.ultMeter + this.poisonDps * COMBAT.ultPerDamageDealt);
+      }
     }
     if (this.dropThrough > 0) this.dropThrough--;
     if (this.landLag > 0) this.landLag--;
@@ -920,6 +1000,9 @@ class Fighter {
     }
     if (this.state === 'hitstun') {
       this.hitstun--;
+      // Bleed off the horizontal shove so a hit is a nudge, not a journey.
+      if (this.vx > 0) this.vx = Math.max(0, this.vx - COMBAT.hitstunDrag);
+      else if (this.vx < 0) this.vx = Math.min(0, this.vx + COMBAT.hitstunDrag);
       this.applyGravity();
       this.move();
       if (this.hitstun <= 0) this.setState(this.grounded ? 'idle' : 'air');
@@ -1140,6 +1223,42 @@ class Fighter {
         }
         break;
 
+      case 'ball':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Ball(this, s));
+        }
+        break;
+
+      case 'knight':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new KnightPiece(this, s));
+        }
+        break;
+
+      // Notes fall from the ceiling, sweeping across the stage. Deterministic
+      // because the simulation has to stay in step online, and a sweep rather
+      // than a scattered pattern because a sweep is something you can move
+      // around: it threatens every position in turn instead of leaving fixed
+      // blind spots where standing still happens to be safe.
+      case 'rain':
+        if (this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active) {
+          const step = this.attackFrame - s.startup;
+          if (step % s.every === 0) {
+            const n = step / s.every;
+            projectiles.push(new Pellet(this, s, 0, {
+              x: (n * s.stride + s.offset) % VW,
+              y: (STAGE.ceilingY || 0) + 2,
+              vx: 0,
+              vy: s.fallSpeed,
+              shape: 'note',
+            }));
+          }
+        }
+        break;
+
       case 'kiss':
         if (this.attackFrame === s.startup) {
           addEffect('lips', this.x + this.facing * 9, this.y - 11, '#ff5f8f');
@@ -1309,7 +1428,8 @@ class Fighter {
     if (this.y < hz.y || this.x < 0 || this.x > VW) return;
     if (this.invuln > 0) return;
 
-    this.percent += hz.damage;
+    this.health -= hz.damage;
+    if (this.health <= 0) { this.knockOut(); return; }
     this.vy = hz.launch;
     this.vx *= 0.4;
     this.grounded = false;
@@ -1356,6 +1476,16 @@ class Fighter {
     }
   }
 
+  // Health ran out.
+  knockOut() {
+    if (this.state === 'ko' || this.eliminated) return;
+    this.health = 0;
+    this.vy = -3.2;
+    this.grounded = false;
+    for (let i = 0; i < 10; i++) addEffect('spark', this.x, this.y - 8, this.accent);
+    this.koed();
+  }
+
   koed() {
     this.stocks--;
     this.setState('ko');
@@ -1374,7 +1504,9 @@ class Fighter {
     this.prevY = this.y;
     this.vx = 0;
     this.vy = 0;
-    this.percent = 0;
+    this.health = COMBAT.maxHealth;
+    this.combo = 0;
+    this.volleyOf = null;
     this.shield = COMBAT.shieldMax;
     this.buffTimer = 0;
     this.buffStats = null;
@@ -1612,13 +1744,14 @@ class Rainbow {
    ===================================================================== */
 
 class Pellet {
-  constructor(owner, spec, spreadY) {
+  constructor(owner, spec, spreadY, origin) {
     this.owner = owner;
     this.spec = spec;
-    this.x = owner.x + owner.facing * 7;
-    this.y = owner.y - 9;
-    this.vx = owner.facing * spec.speed;
-    this.vy = (spec.lift || 0) + spreadY;
+    this.shape = (origin && origin.shape) || spec.shape || 'crumb';
+    this.x = origin ? origin.x : owner.x + owner.facing * 7;
+    this.y = origin ? origin.y : owner.y - 9;
+    this.vx = origin ? (origin.vx || 0) : owner.facing * spec.speed;
+    this.vy = origin ? (origin.vy || 0) : (spec.lift || 0) + spreadY;
     this.life = spec.life;
     this.dead = false;
     this.tint = spec.tints[(Math.abs(Math.round(spreadY * 100)) + owner.slot) %
@@ -1632,7 +1765,11 @@ class Pellet {
     this.vy += this.spec.drop;
     this.life--;
 
-    if (this.vy > 0) {
+    // Falling notes pass straight through the platforms. Without this,
+    // standing under one made you immune to the ult, and which positions
+    // were safe depended entirely on where that stage happened to put its
+    // platforms -- different on all five, and invisible to the player.
+    if (this.vy > 0 && !this.spec.ghost) {
       for (const p of STAGE.platforms) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
@@ -1656,9 +1793,148 @@ class Pellet {
   }
 
   draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
     g.fillStyle = this.tint;
-    g.fillRect(Math.round(this.x) - 2, Math.round(this.y) - 1, 3, 2);
-    g.fillRect(Math.round(this.x) - 1, Math.round(this.y) - 2, 1, 4);
+    if (this.shape === 'note') {
+      // A spiky quaver: filled head, stem, and a flag off the top.
+      g.fillRect(x - 2, y, 3, 3);
+      g.fillRect(x + 1, y - 4, 1, 5);
+      g.fillRect(x + 2, y - 4, 1, 2);
+      return;
+    }
+    g.fillRect(x - 2, y - 1, 3, 2);
+    g.fillRect(x - 1, y - 2, 1, 4);
+  }
+}
+
+/* =====================================================================
+   BALL - Lucas's soccerball.
+
+   The other four projectiles all fly: an arcing bone, a flat pizza, a high
+   rainbow lob, a fan of pellets. This one is the ground game. It bounces,
+   loses height each time, settles into a roll and keeps going, so it denies
+   the floor rather than threatening a point in the air.
+   ===================================================================== */
+
+class Ball {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 8;
+    this.y = owner.y - 5;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift || 0;
+    this.life = spec.life;
+    this.spin = 0;
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+    this.spin += this.vx * 0.3;
+    this.life--;
+
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.y = p.y - 1;
+          this.vy = -Math.abs(this.vy) * this.spec.bounce;
+          // Once the bounce is small enough it stops hopping and rolls.
+          if (Math.abs(this.vy) < 0.55) this.vy = 0;
+          break;
+        }
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 4, y: this.y - 4, w: 8, h: 8 };
+  }
+
+  draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#f4f4f4';
+    g.fillRect(x - 3, y - 2, 6, 4);
+    g.fillRect(x - 2, y - 3, 4, 6);
+    // One dark panel that travels round the ball as it rolls.
+    g.fillStyle = '#20242e';
+    const phase = ((Math.floor(this.spin) % 4) + 4) % 4;
+    const ox = phase === 0 ? -1 : phase === 1 ? 0 : phase === 2 ? 1 : 0;
+    const oy = phase === 0 ? 0 : phase === 1 ? -1 : phase === 2 ? 0 : 1;
+    g.fillRect(x + ox - 1, y + oy - 1, 2, 2);
+  }
+}
+
+/* =====================================================================
+   KNIGHT - Trevor's chess piece.
+
+   A knight moves two squares one way and then one across, and that rule IS
+   the move: it runs flat, then breaks hard downward. Nothing else in the
+   game turns a corner, so it reaches behind a shield or over a ledge in a
+   way none of the straight or arcing shots can.
+   ===================================================================== */
+
+class KnightPiece {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 8;
+    this.y = owner.y - 15;
+    this.vx = owner.facing * spec.speed;
+    this.vy = 0;
+    this.t = 0;
+    this.turned = false;
+    this.life = spec.life;
+    this.dead = false;
+  }
+
+  update() {
+    this.t++;
+    if (!this.turned && this.t >= this.spec.turnAfter) {
+      this.turned = true;
+      this.vy = this.spec.turnSpeed;
+      this.vx *= 0.18;
+    }
+
+    const prevY = this.y;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life--;
+
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.dead = true;
+          addEffect('dust', this.x, p.y, '#e8e2d0');
+          break;
+        }
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 3, y: this.y - 4, w: 6, h: 8 };
+  }
+
+  draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#efe7d2';
+    g.fillRect(x - 2, y + 1, 5, 3);     // base
+    g.fillRect(x - 1, y - 2, 3, 3);     // body
+    g.fillRect(x, y - 4, 3, 2);         // head
+    g.fillStyle = '#2b2b33';
+    g.fillRect(x + 1, y - 3, 1, 1);     // eye
   }
 }
 
@@ -1800,13 +2076,24 @@ function drawEffects(g) {
    ===================================================================== */
 
 function applyHit(attacker, defender, move, sourceX) {
-  const dmg = move.damage * attacker.damageMul;
+  let dmg = move.damage * attacker.damageMul;
+
+  // A fan of projectiles is one input; without falloff Kel's six-bone ult
+  // would take more than half a health bar in a single press.
+  if (move.count && move.count > 1) {
+    if (defender.volleyOf !== move || defender.volleySince > 40) {
+      defender.volleyOf = move;
+      defender.volleyHits = 0;
+    }
+    const f = COMBAT.volleyFalloff;
+    dmg *= f[Math.min(defender.volleyHits, f.length - 1)];
+    defender.volleyHits++;
+    defender.volleySince = 0;
+  }
   if (attacker.ai) attacker.ai.starve = 0;
   if (defender.ai) defender.ai.starve = 0;
   attacker.ultMeter = Math.min(COMBAT.ultMax,
     attacker.ultMeter + dmg * COMBAT.ultPerDamageDealt);
-  defender.ultMeter = Math.min(COMBAT.ultMax,
-    defender.ultMeter + dmg * COMBAT.ultPerDamageTaken);
 
   // Shield eats the hit if it's up and facing the right way.
   if (defender.state === 'shield' && defender.shield > 0) {
@@ -1825,16 +2112,24 @@ function applyHit(attacker, defender, move, sourceX) {
     return;
   }
 
-  defender.percent += dmg;
+  defender.health -= dmg;
 
   if (move.poison) {
     defender.poison = move.poison.frames;
     defender.poisonDps = move.poison.dps;
+    defender.poisonBy = attacker.slot;
   }
 
-  // Smash-style: knockback grows with the victim's accumulated damage,
-  // scaled by weight. Light characters fly further off the same hit.
-  const kb = (move.base + (defender.percent / 100) * move.scale * (dmg / 8)) *
+  // Pushback, not knockback. It no longer kills anyone, so it no longer
+  // scales with how hurt they are -- it exists so a hit visibly lands. A weak
+  // move shoves a little, an ult a lot, and heavier characters move less.
+  // Without this the whole game reads as two sprites standing in each other
+  // and numbers quietly changing.
+  //
+  // Built from move.damage, NOT the buffed dmg: Reese's ult multiplies his
+  // damage by 1.8, and if that multiplied launch too it would silently
+  // rewrite every spacing in the game for thirteen seconds.
+  const kb = (move.base + move.damage * 0.14) *
              (100 / defender.def.weight) * defender.kbTakenMul;
 
   const dir = Math.sign(defender.x - sourceX) || attacker.facing;
@@ -1845,7 +2140,24 @@ function applyHit(attacker, defender, move, sourceX) {
   // setState resets the state timer, so compute hitstun after it.
   defender.setState('hitstun');
   defender.grounded = false;
-  defender.hitstun = Math.round(8 + kb * 2.6);
+  // Hits landed in quick succession give progressively less hitstun, so no
+  // sequence can repeat forever -- which matters now that the arenas have
+  // walls to be cornered against.
+  defender.combo = defender.sinceHitFrames < COMBAT.comboWindow
+    ? defender.combo + 1
+    : 0;
+  defender.sinceHitFrames = 0;
+  const decay = Math.max(COMBAT.comboDecayFloor,
+                         1 - COMBAT.comboDecayPerHit * defender.combo);
+  defender.hitstun = Math.min(30, Math.round((6 + kb * 2.2) * decay));
+
+  if (defender.health <= 0) {
+    // The blow that takes the stock is the one place launch still runs free:
+    // they should visibly go flying rather than blink out.
+    defender.vx *= 3;
+    defender.vy *= 3;
+    defender.knockOut();
+  }
 
   const stop = kb > 7 ? COMBAT.hitstopHeavy : COMBAT.hitstopLight;
   attacker.hitstop = stop;
@@ -2313,7 +2625,7 @@ function updateBattle() {
   if (battleFrames >= COMBAT.timeLimitFrames) {
     const [a, b] = fighters;
     if (a.stocks !== b.stocks) winnerKey = a.stocks > b.stocks ? a.key : b.key;
-    else if (a.percent !== b.percent) winnerKey = a.percent < b.percent ? a.key : b.key;
+    else if (a.health !== b.health) winnerKey = a.health > b.health ? a.key : b.key;
     else winnerKey = null;
     scene = 'results';
     resultTimer = 0;
@@ -2630,15 +2942,14 @@ function text(str, x, y, size, color, align, weight) {
 }
 
 function drawHUD() {
-  // Fixed rows rather than offsets from one anchor: there are five things to
-  // fit between y=148 and the bottom of the screen, and stage geometry is
-  // laid out on the promise that nothing here climbs above 148.
-  const nameY = VH - 27;   // 153
-  const pctY = VH - 14;    // 166
-  const stockY = VH - 11;  // 169, 3px tall
-  const manaY = VH - 7;    // 173, 2px tall
-  const ultY = VH - 4;     // 176, 2px tall -- bottom lands at 178, clear of
-                           // the screen edge at 180.
+  // Fixed rows: five things share the 32px strip above the bottom of the
+  // screen, and the stages are laid out on the promise that nothing here
+  // climbs above y=148.
+  const nameY = VH - 28;   // 152
+  const barY = VH - 25;    // 155, 5px tall
+  const stockY = VH - 17;  // 163, 3px tall
+  const manaY = VH - 11;   // 169, 2px tall
+  const ultY = VH - 7;     // 173, 2px tall -- bottom at 175
 
   const band = sctx.createLinearGradient(0, px(VH - 32), 0, px(VH));
   band.addColorStop(0, 'rgba(8,10,20,0)');
@@ -2646,43 +2957,51 @@ function drawHUD() {
   sctx.fillStyle = band;
   sctx.fillRect(0, px(VH - 32), view.width, px(32));
 
-  const barW = 36;
+  const barW = 62;
 
   for (let i = 0; i < fighters.length; i++) {
     const f = fighters[i];
     const cx = i === 0 ? 66 : VW - 66;
     const bx = cx - barW / 2;
+    const hp = clamp(f.health / COMBAT.maxHealth, 0, 1);
 
-    // Damage percent, reddening as it climbs -- the number that decides
-    // how far the next hit sends you.
-    const heat = clamp(f.percent / 160, 0, 1);
-    const col = f.eliminated
-      ? '#4a4a56'
-      : 'rgb(235,' + Math.round(235 - heat * 175) + ',' +
-        Math.round(235 - heat * 205) + ')';
+    // Green down through amber to red. Colour carries the reading at a
+    // glance; the number is there for when you want to know exactly.
+    const hue = f.eliminated ? '#4a4a56'
+      : hp > 0.55 ? '#5fd46a'
+      : hp > 0.28 ? '#e8c341'
+      : '#ff5f5f';
 
-    text(f.def.name, cx, nameY, 6, f.accent, 'center', 700);
-    text(Math.floor(f.percent) + '%', cx, pctY, 12, col, 'center', 800);
+    text(f.def.name, bx, nameY, 6, f.accent, 'left', 700);
+    text(f.eliminated ? 'OUT' : String(Math.max(0, Math.ceil(f.health))),
+         bx + barW, nameY, 7, hue, 'right', 800);
+
+    // Health.
+    sctx.fillStyle = '#1b1e28';
+    sctx.fillRect(px(bx), px(barY), px(barW), px(5));
+    sctx.fillStyle = hue;
+    sctx.fillRect(px(bx), px(barY), px(barW * hp), px(5));
+    sctx.fillStyle = 'rgba(255,255,255,0.18)';
+    sctx.fillRect(px(bx), px(barY), px(barW * hp), px(1));
 
     // Stock icons.
     const total = COMBAT.stocks;
     for (let st = 0; st < total; st++) {
-      const sx = cx - (total * 5) / 2 + st * 5 + 1;
+      const sx = bx + st * 5;
       sctx.fillStyle = st < f.stocks ? f.accent : '#2c2f3d';
       sctx.fillRect(px(sx), px(stockY), px(3), px(3));
     }
 
     if (f.eliminated) continue;
 
-    // Mana. Flashes red for a moment when a special was refused for want of
+    // Mana, flashing red for a moment when a special was refused for want of
     // it, so an input that did nothing has a visible reason.
     sctx.fillStyle = '#1b2030';
     sctx.fillRect(px(bx), px(manaY), px(barW), px(2));
-    const manaFill = clamp(f.mana / COMBAT.manaMax, 0, 1);
     sctx.fillStyle = f.manaDenied > 0 ? '#ff6b6b' : '#4fa8ff';
-    sctx.fillRect(px(bx), px(manaY), px(barW * manaFill), px(2));
+    sctx.fillRect(px(bx), px(manaY), px(barW * clamp(f.mana / COMBAT.manaMax, 0, 1)), px(2));
 
-    // Ult meter, flashing when it is ready to spend.
+    // Ult, flashing when it is ready to spend.
     if (f.def.ult) {
       sctx.fillStyle = '#23262f';
       sctx.fillRect(px(bx), px(ultY), px(barW), px(2));
@@ -2906,7 +3225,7 @@ function stateHash() {
     h = mixNumber(h, f.y);
     h = mixNumber(h, f.vx);
     h = mixNumber(h, f.vy);
-    h = mixNumber(h, f.percent);
+    h = mixNumber(h, f.health);
     h = mixNumber(h, f.mana);
     h = mixNumber(h, f.stocks);
     h = mixNumber(h, f.hitstun);
@@ -3152,7 +3471,7 @@ window.NerdWars = {
   },
   get fighters() {
     return fighters.map((f) => ({
-      key: f.key, percent: Math.floor(f.percent), stocks: f.stocks,
+      key: f.key, health: Math.round(f.health), stocks: f.stocks,
       x: Math.round(f.x), y: Math.round(f.y), state: f.state,
     }));
   },
