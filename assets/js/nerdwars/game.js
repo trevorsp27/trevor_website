@@ -429,10 +429,16 @@ const ROSTER = {
     },
     // "the strokes starts playing in background spiky music notes start
     // falling from ceiling to deal damage."
+    //
+    // He puts the song on and then plays through it. The cast is half a
+    // second; `duration` is how long the notes keep coming afterwards, and he
+    // is completely free for all of it -- moving, jumping, hitting people
+    // while the ceiling comes down on them.
     ult: {
       kind: 'rain', label: 'THE STROKES',
-      startup: 14, active: 168, recovery: 26,
-      every: 4, stride: 15, offset: 8, fallSpeed: 2.4,
+      startup: 12, active: 1, recovery: 18,
+      duration: 240,
+      every: 2, stride: 13, offset: 6, fallSpeed: 3.3,
       drop: 0.02, life: 200, shape: 'note', ghost: true,
       tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
       damage: 11, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
@@ -1009,6 +1015,10 @@ class Fighter {
     // running the ult button swings it instead of casting anything.
     this.swordTimer = 0;
     this.swordSwing = false;
+    // A song, once started, keeps playing without him standing in it.
+    this.rainTimer = 0;
+    this.rainSpec = null;
+    this.rainStep = 0;
 
     this.ai = { timer: 0, plan: 'approach', cooldown: 0, jumpCd: 0,
                 aggression: rand(0.5, 0.9) };
@@ -1087,6 +1097,26 @@ class Fighter {
 
     if (this.invuln > 0) this.invuln--;
     if (this.buffTimer > 0) this.buffTimer--;
+    if (this.rainTimer > 0) {
+      this.rainTimer--;
+      const r = this.rainSpec;
+      if (r && this.rainStep % r.every === 0) {
+        const n = this.rainStep / r.every;
+        // An even sweep dropped at one constant speed lines every note up on
+        // a single diagonal, which reads as a conveyor belt rather than as
+        // something falling. This scatters them off it -- derived from the
+        // note index, so it is the same shower on both machines.
+        const j = (n * 37) % 11;
+        projectiles.push(new Pellet(this, r, 0, {
+          x: (n * r.stride + r.offset + (j % 5) * 3) % VW,
+          y: (STAGE.ceilingY || 0) + 2 + (j % 3) * 6,
+          vx: 0,
+          vy: r.fallSpeed * (0.82 + (j % 7) * 0.06),
+          shape: 'note',
+        }));
+      }
+      this.rainStep++;
+    }
     if (this.swordTimer > 0) {
       this.swordTimer--;
       // The fire is drawn into the blade now, so this is just the odd ember
@@ -1395,20 +1425,15 @@ class Fighter {
       // than a scattered pattern because a sweep is something you can move
       // around: it threatens every position in turn instead of leaving fixed
       // blind spots where standing still happens to be safe.
+      // Start the song. The notes fall on their own timer from here, so the
+      // cast is over in half a second and he is free for the rest of it.
       case 'rain':
-        if (this.attackFrame >= s.startup &&
-            this.attackFrame < s.startup + s.active) {
-          const step = this.attackFrame - s.startup;
-          if (step % s.every === 0) {
-            const n = step / s.every;
-            projectiles.push(new Pellet(this, s, 0, {
-              x: (n * s.stride + s.offset) % VW,
-              y: (STAGE.ceilingY || 0) + 2,
-              vx: 0,
-              vy: s.fallSpeed,
-              shape: 'note',
-            }));
-          }
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          this.rainTimer = s.duration;
+          this.rainSpec = s;
+          this.rainStep = 0;
+          addEffect('ring', this.x, this.y - 8, s.tints[0]);
         }
         break;
 
@@ -2591,6 +2616,12 @@ class Pellet {
   }
 
   box() {
+    // A note is drawn 6 wide and 8 tall; it used to be caught by a 4x4 box,
+    // less than half of what you can see, which is most of the reason the
+    // ult never seemed to hit anything.
+    if (this.shape === 'note') {
+      return { x: this.x - 3, y: this.y - 4, w: 6, h: 9 };
+    }
     return { x: this.x - 2, y: this.y - 2, w: 4, h: 4 };
   }
 
