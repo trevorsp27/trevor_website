@@ -322,12 +322,23 @@ let SCALE = 4;
 
 function resize() {
   // Measure the host element rather than the window, so the game fits
-  // whatever box it's placed in -- full view standalone, or a panel when
-  // it's embedded in a page.
+  // whatever box it's placed in -- the whole screen standalone, or a panel
+  // when it's embedded in a page.
   const host = view.parentElement;
-  const pad = 16;
-  const availW = (host && host.clientWidth) || window.innerWidth;
-  const availH = (host && host.clientHeight) || window.innerHeight;
+  // 320x180 divides exactly into every 16:9 resolution (720p is 4x, 1080p is
+  // 6x, 1440p is 8x, 4K is 12x), so fullscreen lands on a whole scale with no
+  // bars at all -- but only if nothing is subtracted first. (1920-16)/320
+  // rounds down to 5, throwing away an entire step at the one size that fits
+  // perfectly. Breathing room is the container's job, not the scale maths'.
+  // In fullscreen, measure the window rather than the host element. The host
+  // is the screen at that point, but its border and padding are subtracted
+  // from clientWidth -- and a single pixel of border is enough to turn
+  // 1920/320 = 6 into floor(1918/320) = 5, losing a whole scale step to CSS.
+  // The window's inner size has no such trim.
+  const fs = !!document.fullscreenElement;
+  const pad = fs ? 0 : 8;
+  const availW = fs ? window.innerWidth : ((host && host.clientWidth) || window.innerWidth);
+  const availH = fs ? window.innerHeight : ((host && host.clientHeight) || window.innerHeight);
   const sx = Math.floor((availW - pad) / VW);
   const sy = Math.floor((availH - pad) / VH);
   SCALE = Math.max(1, Math.min(sx, sy));
@@ -335,6 +346,41 @@ function resize() {
   view.height = VH * SCALE;
   sctx.imageSmoothingEnabled = false;
 }
+function fullscreenHost() {
+  return mount || view.parentElement || document.documentElement;
+}
+
+function fullscreenActive() {
+  return !!document.fullscreenElement;
+}
+
+function toggleFullscreen() {
+  if (fullscreenActive()) {
+    if (document.exitFullscreen) document.exitFullscreen();
+    return;
+  }
+  const el = fullscreenHost();
+  if (el && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+}
+
+document.addEventListener('fullscreenchange', () => {
+  // Someone who just went fullscreen wants to play, not to click again.
+  if (fullscreenActive()) {
+    hasFocus = true;
+    if (mount) mount.dataset.nerdwarsFocus = 'on';
+  }
+  resize();
+});
+
+// Wire any control marked as the fullscreen button, in any build.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest && e.target.closest('[data-nerdwars-fullscreen]');
+  if (btn) {
+    e.preventDefault();
+    toggleFullscreen();
+  }
+});
+
 window.addEventListener('resize', resize);
 if (typeof ResizeObserver !== 'undefined' && view.parentElement) {
   new ResizeObserver(resize).observe(view.parentElement);
@@ -2238,6 +2284,8 @@ window.NerdWars = {
   get ready() { return assetsReady; },
   get keys() { return [...held]; },
   get frames() { return frameCount; },
+  get fullscreen() { return fullscreenActive(); },
+  toggleFullscreen: toggleFullscreen,
   get fighters() {
     return fighters.map((f) => ({
       key: f.key, percent: Math.floor(f.percent), stocks: f.stocks,

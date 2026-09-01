@@ -20,11 +20,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260831a" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260831c" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260831a" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260831a" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260831c" defer></script>
 
     <link rel="canonical" href="https://trevorspinosa.com/pages/nerdwars.html" />
     <meta property="og:type" content="website" />
@@ -64,6 +64,12 @@
 
         <section class="nw-panel reveal" aria-labelledby="nw-play-title">
           <h2 id="nw-play-title" class="nw-sr-only">Play</h2>
+          <div class="nw-bar">
+            <p class="nw-bar-hint">Two players, one keyboard.</p>
+            <button class="nw-btn" type="button" data-nerdwars-fullscreen>
+              Fullscreen
+            </button>
+          </div>
           <div class="nw-stage" data-nerdwars>
             <canvas id="nw-canvas" aria-label="NerdWars game screen"></canvas>
             <div class="nw-veil" aria-hidden="true">
@@ -73,7 +79,9 @@
           </div>
           <p class="nw-note">
             Click the screen to hand it the keyboard; click anywhere else on the page to give it
-            back. Two players share one keyboard.
+            back. Fullscreen is worth it &mdash; the game draws at 320&times;180 and scales by whole
+            numbers, and every 16:9 screen is an exact multiple of that, so it fills the display
+            with no blur and no black bars.
           </p>
         </section>
 
