@@ -6,7 +6,7 @@
     <title>Trevor | NerdWars</title>
     <meta
       name="description"
-      content="NerdWars: a browser platform fighter built from pixel sprites my friends and I drew in high school in 2018. Two players, one keyboard, five stages."
+      content="NerdWars: a browser platform fighter built from pixel sprites drawn in high school in 2016. Two players, six fighters, five stages."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,8 +23,8 @@
     <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901d" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
-    <script src="../assets/js/nerdwars/sprites.js?v=20260901e" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260901i" defer></script>
+    <script src="../assets/js/nerdwars/sprites.js?v=20260901j" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260901j" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
 
@@ -32,7 +32,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Trevor Spinosa" />
     <meta property="og:title" content="Trevor | NerdWars" />
-    <meta property="og:description" content="NerdWars: a browser platform fighter built from pixel sprites my friends and I drew in high school in 2018. Two players, one keyboard, five stages." />
+    <meta property="og:description" content="NerdWars: a browser platform fighter built from pixel sprites drawn in high school in 2016. Two players, six fighters, five stages." />
     <meta property="og:url" content="https://trevorspinosa.com/pages/nerdwars.html" />
     <meta property="og:image" content="https://trevorspinosa.com/assets/og-card.jpg" />
     <meta property="og:image:width" content="1200" />
@@ -40,7 +40,7 @@
     <meta property="og:image:alt" content="Trevor Spinosa" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Trevor | NerdWars" />
-    <meta name="twitter:description" content="NerdWars: a browser platform fighter built from pixel sprites my friends and I drew in high school in 2018. Two players, one keyboard, five stages." />
+    <meta name="twitter:description" content="NerdWars: a browser platform fighter built from pixel sprites drawn in high school in 2016. Two players, six fighters, five stages." />
     <meta name="twitter:image" content="https://trevorspinosa.com/assets/og-card.jpg" />
   </head>
   <body data-page="nerdwars">
@@ -56,18 +56,11 @@
         <section class="hero reveal" aria-labelledby="nw-title">
           <p class="kicker">Game</p>
           <h1 id="nw-title">NerdWars</h1>
-          <p>
-            A platform fighter where the whole roster is my high school friend group. Kel drew
-            every character as a 16&times;16 sprite back in 2018, we planned a Smash Bros. clone
-            around them, and then we never built it. The sprites sat in a folder for seven years.
-            This is the game they were for.
-          </p>
         </section>
 
         <section class="nw-panel reveal" aria-labelledby="nw-play-title">
           <h2 id="nw-play-title" class="nw-sr-only">Play</h2>
           <div class="nw-bar">
-            <p class="nw-bar-hint">Play here on your own, or create a room below.</p>
             <button class="nw-btn" type="button" data-nerdwars-fullscreen>
               Fullscreen
             </button>
@@ -76,26 +69,13 @@
             <canvas id="nw-canvas" aria-label="NerdWars game screen"></canvas>
             <div class="nw-veil" aria-hidden="true">
               <span class="nw-veil-key">CLICK TO PLAY</span>
-              <span class="nw-veil-sub">the game takes the keyboard while you're in it</span>
             </div>
           </div>
-          <p class="nw-note">
-            Click the screen to hand it the keyboard; click anywhere else on the page to give it
-            back. Both players use the same keys, one on each machine. Fullscreen is worth it &mdash; the game draws at 320&times;180 and scales by whole
-            numbers, and every 16:9 screen is an exact multiple of that, so it fills the display
-            with no blur and no black bars.
-          </p>
         </section>
 
         <section class="panel reveal" id="nw-online" data-phase="idle"
                  aria-labelledby="nw-online-title">
           <h2 id="nw-online-title">Play online</h2>
-          <p class="nw-online-lede">
-            One of you creates a room and reads the code out; the other types it in. The
-            connection is browser to browser &mdash; there is no server in the middle, and
-            nothing to sign up for.
-          </p>
-
           <div class="nw-online-actions" data-when="idle">
             <button class="nw-btn nw-btn-primary" type="button" id="nw-host">Create a room</button>
             <span class="nw-or">or</span>
@@ -130,17 +110,6 @@
 
           <p class="nw-status" id="nw-status" role="status" aria-live="polite"></p>
 
-          <p class="nw-hint">
-            Both machines run the same simulation and swap only button presses, so what you
-            see is what your opponent sees. Neither one waits for the other: whatever has not
-            arrived yet is guessed, and when the real input turns up and disagrees, the game
-            quietly rewinds a few frames and replays them. You get your own input almost
-            immediately &mdash; about 33ms, the same on a LAN as across an ocean &mdash; and
-            the cost is that your opponent occasionally snaps a few pixels instead of the
-            whole game stopping. It adds a frame of delay on its own if a connection turns
-            out to need one. If the two ever genuinely disagree the match stops rather than
-            showing you different fights.
-          </p>
         </section>
 
         <section class="panel reveal" aria-labelledby="nw-controls-title">
@@ -171,38 +140,8 @@
               </tbody>
             </table>
           </div>
-          <ul class="list">
-            <li>Everyone has <strong>three specials</strong>, one to a key: <kbd>H</kbd>, <kbd>J</kbd> and <kbd>K</kbd>, with the ult on <kbd>L</kbd>. <kbd>K</kbd> is usually the one that gets you back to the stage. The hands are split by job &mdash; the left one only moves and blocks, the right one does all the attacking from the home row it is already on.</li>
-            <li>Everyone has a <strong>health bar</strong>. Damage takes health away; at zero you lose a stock and come back full. Hits still shove you, but the shove no longer kills &mdash; which is why most stages are now sealed arenas with a floor running wall to wall, the way they were drawn in 2018.</li>
-            <li>You get two air jumps. Hold down while airborne to fall faster, or down plus jump to drop through a platform.</li>
-            <li><kbd>Shift</kbd> plus a direction rolls, and you are invincible in the middle of it. <kbd>Shift</kbd> plus down is a spot dodge.</li>
-            <li>The <strong>blue bar</strong> under your stocks is mana. Every special costs some, priced by how strong it is &mdash; from 19 for Ladeane&rsquo;s drumsticks up to 50 for AutisNick&rsquo;s kiss, out of a pool of 100 that refills at 30 a second. It flashes red when a move is refused. The jab on <kbd>G</kbd> is free, so running dry leaves you poking rather than helpless.</li>
-            <li>The bar below that is your ult. It fills as damage is dealt <em>and</em> taken &mdash; faster when you are the one being beaten on &mdash; and flashes white when it is ready.</li>
-            <li>Playing alone is fine &mdash; pick 1 Player and the second fighter is a CPU.</li>
-          </ul>
         </section>
 
-        <section class="panel reveal" aria-labelledby="nw-roster-title">
-          <h2 id="nw-roster-title">The roster</h2>
-          <p>
-            Six of us, six fighters. Three of the movesets are not inventions &mdash; the art
-            for them already existed, and the game just uses it.
-          </p>
-          <ul class="list">
-            <li><strong>Kel</strong> is the only character with a full drawn attack animation, plus a four-frame spinning bone &mdash; he drew himself a projectile. The rest of his kit came out of the gym he lived in: a dumbbell that barely travels and hurts more than anything else he owns, a clean and jerk that drives him off the ground, and an ult that puts a loaded barbell on the floor and lets it roll the length of the stage through anyone in the way.</li>
-            <li><strong>Reese</strong> never sat still, so nothing in his kit commits: three frames to start every move, single figures to finish, and less damage on each than anyone else. He throws far more than the rest of the roster and can back out of all of it. He is also the only one with a complete second sprite set &mdash; a full shirtless walk cycle &mdash; which is what his ult swaps him to. The shirt does not vanish; it leaves at speed, tumbling, and it hurts on the way past.</li>
-            <li><strong>AutisNick</strong> throws pizza forward, kisses you down (which keeps hurting for seven seconds afterwards), and lobs a rainbow up and over a platform &mdash; the one place his flat shot cannot reach. His ult is the one line of the 2018 notes nobody expected to get built: <em>&ldquo;mike Tyson flies in from trees&rdquo;</em>. Somebody very large swings in on a vine, crosses the entire screen on a pendulum, and hits whatever he passes through. Nick doesn&rsquo;t move.</li>
-            <li><strong>Trev</strong> throws a handful of cereal, and a chess knight that runs flat and then breaks hard downward &mdash; the piece&rsquo;s own move is the mechanic. His ult hands him a flaming sword for ten seconds; while he has it the ult button swings it, and every swing throws a laser the length of the stage.</li>
-            <li><strong>Ladeane</strong> kicks a soccerball that bounces and rolls along the floor, swings drumsticks up close, and rides a music note back to the stage. His ult drops spiky notes from the ceiling across the whole arena. He was in the roster twice for a while &mdash; once under his nickname and once under his real name &mdash; before anyone spotted it.</li>
-            <li><strong>JohnnyHam</strong> is the last placeholder. He got movement art and nothing else, no notes either, so his three specials cover an archetype rather than a personality. Several ults are placeholders too.</li>
-          </ul>
-          <p class="nw-hint">
-            Five stages, all built from tilesets found in the same 2018 folder. Which tiles
-            survived decided what each stage could be: two of them have a drawn ceiling, so those
-            are enclosed arenas you cannot be knocked out of the top of. Lava only ever got a
-            floor tile, so on that stage the floor is the hazard rather than the ground.
-          </p>
-        </section>
       </main>
 
       <footer>

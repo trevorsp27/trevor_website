@@ -3,7 +3,7 @@
 var __A = window.NERDWARS_ASSETS || {};
 var SPRITES = __A.SPRITES, TILES = __A.TILES, UI = __A.UI;
 /* =====================================================================
-   NerdWars - a platform fighter built on Kel's 2018 sprite set.
+   NerdWars - a platform fighter built on a 2016 sprite set.
 
    Everything you'd want to tweak lives in the TUNING and ROSTER blocks
    at the top. The rest is engine.
@@ -84,7 +84,7 @@ const COMBAT = {
 /* =====================================================================
    STAGES
 
-   Built from the tilesets recovered out of the 2018 .xcf files. Which
+   Built from the tilesets recovered out of the 2016 .xcf files. Which
    tiles exist decides what each stage can be:
 
      matrix  ceiling + floor + platform  -> a fully enclosed arena
@@ -214,12 +214,12 @@ let STAGE = STAGES[0];
 /* =====================================================================
    ROSTER
 
-   Six friends, six fighters. Three of these movesets are canon: Kel drew
-   himself an attack animation and a spinning bone projectile, drew Reese a
-   complete shirtless alternate sprite set, and drew AutisNick his pizza.
-   Those aren't inventions -- they're in the art.
+   Six friends, six fighters. Three of these movesets are canon: the art for
+   them already existed -- an attack animation and a spinning bone, a complete
+   shirtless alternate sprite set, and the pizza slices. Those aren't
+   inventions, they're in the art.
 
-   Two more (Trev, Ladeane) come from the movesets we wrote down in 2018:
+   Two more (Trev, Ladeane) come from the movesets we wrote down in 2016:
    real ideas, just with no drawn art behind them.
 
    One is still a PLACEHOLDER chosen to cover an archetype -- JohnnyHam.
@@ -331,7 +331,7 @@ const ROSTER = {
     name: 'KEL',
     tag: 'BONES & BARBELLS',
     drawn: true,
-    blurb: 'The bone he drew himself, and the rest of it out of the gym.',
+    blurb: 'A bone he made himself, and the rest of it out of the gym.',
     weight: 98, walk: 1.46, jump: 6.5, doubleJump: 6.0,
     jab: { startup: 4, active: 4, recovery: 10, damage: 5,
            base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
@@ -382,8 +382,8 @@ const ROSTER = {
   // arrived labelled Lucas turned out to be this folder's own
   // Ladeane(1)SpriteSheet.png re-exported at 4x, pixel for pixel.
   //
-  // He keeps the name everyone actually calls him and the art Kel drew in
-  // 2018; the moveset is the one from the notes, which was written under the
+  // He keeps the name everyone actually calls him and the art drawn for him
+  // in 2016; the moveset is the one from the notes, which was written under the
   // other name. The dash kit that used to live here was a placeholder of
   // mine and is gone.
   ladeane: {
@@ -468,8 +468,8 @@ const ROSTER = {
         ox: -7, oy: -12, w: 14, h: 18,
       },
     },
-    // Still the shirt coming off -- Kel drew the shirtless set, and that is
-    // what the buff swaps him to. It just does not vanish any more: it leaves
+    // Still the shirt coming off -- there is a whole shirtless sprite set,
+    // and that is what the buff swaps him to. It just does not vanish any more: it leaves
     // at speed, tumbling, and it hurts on the way past.
     ult: {
       kind: 'buff', label: 'SHIRTS OPTIONAL',
@@ -597,7 +597,7 @@ const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev'];
 /* =====================================================================
    CANVAS
    The world renders to a 320x180 buffer that gets integer-scaled with
-   nearest-neighbor sampling, so Kel's pixels stay exact squares. UI text
+   nearest-neighbor sampling, so the pixels stay exact squares. UI text
    is drawn afterwards at full device resolution so it stays readable.
    ===================================================================== */
 
@@ -829,7 +829,7 @@ const NEUTRAL = {
   shield: false, ult: false,
 };
 
-/* The 2018 menu art (BACK / QUIT) is 325x128 -- wider than the whole 320px
+/* The 2016 menu art (BACK / QUIT) is 325x128 -- wider than the whole 320px
    playfield -- so it is drawn on the UI layer at device resolution instead of
    being crushed down into the world buffer. Each drawn button registers a hit
    rect so it works with the mouse as well as the key shown beside it. */
@@ -1738,11 +1738,11 @@ class Fighter {
     this.timer = 0;
   }
 
-  /* ---- which of Kel's frames to draw ---- */
+  /* ---- which frame to draw ---- */
   sprite() {
     const entry = SPRITES[this.key];
     let set = 'base';
-    // Kel drew himself a real attack animation -- use it when he swings.
+    // There is a real attack animation for him -- use it when he swings.
     if (entry.attack && (this.state === 'attack' || this.state === 'special' ||
                          this.state === 'ult')) {
       set = 'attack';
@@ -1768,7 +1768,7 @@ class Fighter {
 /* =====================================================================
    PIXEL ART
 
-   Sprites for things nobody drew in 2018, written as strings so the shape is
+   Sprites for things nobody drew in 2016, written as strings so the shape is
    visible in the source and can be edited without a paint program. Each one
    is rasterised once into its own little canvas and blitted after that --
    a 6x6 sprite is 36 fillRect calls, and there can be a dozen on screen.
@@ -1855,7 +1855,7 @@ const KNIGHT_ART = [
   '#######',
 ];
 
-/* Kel's gym equipment. A dumbbell is two weights and a short bar; a barbell
+/* Gym equipment. A dumbbell is two weights and a short bar; a barbell
    is the same idea with a much longer one, which is the whole joke. */
 const DUMBBELL_ART = [
   'ww.....ww',
@@ -1886,7 +1886,7 @@ const SHIRT_ART = [
   '.##...##.',
 ];
 
-/* "mike Tyson flies in from trees, sounds of rainforest" -- the 2018 note,
+/* "mike Tyson flies in from trees, sounds of rainforest" -- the 2016 note,
    finally drawn. Gloves up on the vine and out in front, and deliberately
    half again as tall as anybody else on the stage. */
 const BOXER_ART = [
@@ -1988,7 +1988,7 @@ const NOTE_ART = [
 ];
 
 /* =====================================================================
-   BONE - Kel's projectile, spinning through its 4 drawn rotations
+   BONE - the drawn projectile, spinning through its 4 rotations
    ===================================================================== */
 
 class Bone {
@@ -2502,8 +2502,8 @@ class KnightPiece {
 }
 
 /* =====================================================================
-   EFFECTS - everything Kel didn't draw is code-drawn, so his art is
-   never mixed with generated pixels.
+   EFFECTS - anything that was never drawn is code-drawn, so the original
+   art is never mixed with generated pixels.
    ===================================================================== */
 
 const effects = [];
@@ -2677,7 +2677,7 @@ function drawEffects(g) {
       }
 
       case 'beam': {
-        // AutisNick's rainbow shirt is the loudest thing Kel drew.
+        // AutisNick's rainbow shirt is the loudest thing in the set.
         // The beam quotes it back as stacked spectrum bands.
         const s = e.spec;
         const x0 = e.dir > 0 ? e.x + s.ox : e.x - s.ox - s.w;
@@ -2703,7 +2703,7 @@ function drawEffects(g) {
 function applyHit(attacker, defender, move, sourceX) {
   let dmg = move.damage * attacker.damageMul;
 
-  // A fan of projectiles is one input; without falloff Kel's six-bone ult
+  // A fan of projectiles is one input; without falloff a six-bone ult
   // would take more than half a health bar in a single press.
   if (move.count && move.count > 1) {
     if (defender.volleyOf !== move || defender.volleySince > 40) {
@@ -3544,7 +3544,7 @@ function drawFighter(g, f) {
     g.globalAlpha = 1;
   }
 
-  // Buff aura sits behind the sprite so it glows around Kel's pixels rather
+  // Buff aura sits behind the sprite so it glows around the pixels rather
   // than boxing them in.
   if (f.buffTimer > 0) {
     const pulse = 0.5 + Math.sin(f.timer * 0.22) * 0.5;
@@ -3722,8 +3722,7 @@ function drawTitle() {
     drawPortrait(k, cx, 74, 1.9);
   });
 
-  text('NERDWARS', VW / 2, 112, 30, '#ffffff', 'center', 800);
-  text('sprites by Kel, 2018', VW / 2, 122, 6, '#6a7290', 'center', 500);
+  text('NERDWARS', VW / 2, 116, 30, '#ffffff', 'center', 800);
 
   if (onlineOnly) {
     text('create or join a room below to play', VW / 2, 138, 8, '#c8cee6', 'center', 600);
@@ -3818,16 +3817,16 @@ function drawSelect() {
   const focusSlot = twoPlayer ? 0 : select.activeSlot;
   const focus = ROSTER[ORDER[select.cursor[focusSlot]]];
   // Three states, not two. "Not drawn" used to print "placeholder", which
-  // was wrong for Trev and for Lucas: their movesets come from the 2018
+  // was wrong for Trev and for Lucas: their movesets come from the 2016
   // notes, there is just no drawn art of them throwing a chess piece.
   const fromNotes = !focus.drawn && focus.tag !== 'PLACEHOLDER';
   text(focus.tag, VW / 2, VH - 22, 7,
        focus.drawn ? '#8fe08f' : fromNotes ? '#c8a05a' : '#7d849c', 'center', 700);
   text(focus.blurb, VW / 2, VH - 13, 6, '#98a0bc', 'center', 500);
   text(focus.drawn
-        ? 'this moveset is drawn into Kel’s original sprites'
+        ? 'this moveset is drawn into the original sprites'
         : fromNotes
-          ? 'from the movesets we wrote down in 2018'
+          ? 'from the movesets we wrote down in 2016'
           : 'placeholder — swap in a real personality later',
        VW / 2, VH - 5, 5.5, '#5a6280', 'center', 500);
 
