@@ -391,6 +391,7 @@ const ROSTER = {
       // the hitbox is the whole move.
       down: {
         kind: 'swing', label: 'DRUMSTICKS',
+        tint: '#ffe9c4', sticks: '#c9a066',
         startup: 4, active: 6, recovery: 12,
         damage: 6, base: 2.2, scale: 6.4, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
         ox: 1, oy: -10, w: 15, h: 12,
@@ -476,7 +477,8 @@ const ROSTER = {
         startup: 7, active: 1, recovery: 15, maxAlive: 10,
         count: 4, spread: 0.5,
         speed: 3.2, lift: -0.7, drop: 0.09, life: 130,
-        tints: ['#e8a33c', '#d9822b', '#f2c85b', '#c25e2a'],
+        // Six colours, not four browns. Cereal is not brown.
+        tints: ['#ff4d4d', '#ff9c2a', '#ffd21f', '#4fd44f', '#4db8ff', '#b06cf0'],
         damage: 3, base: 1.4, scale: 4, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
       },
       // "something creative with chess pieces". A knight moves two squares
@@ -490,8 +492,11 @@ const ROSTER = {
       },
       // His recovery, kept as the rising attack it always was so the balance
       // around it is untouched.
+      // He rides a column of milk. It had no visual at all before -- the
+      // uppercut only draws when a move names a blade colour, and this one
+      // never did, so the move called MILK showed nothing whatsoever.
       up: {
-        kind: 'uppercut', label: 'MILK',
+        kind: 'uppercut', label: 'MILK', blade: '#f6f4ea', spray: true,
         startup: 5, active: 11, recovery: 24,
         rise: -5.6, drift: 0.9,
         damage: 8, base: 2.2, scale: 6.8, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
@@ -695,14 +700,24 @@ let prevHeld = new Set();
    could not throw your down special without also fastfalling, or your up
    special without the game reading it as a jump input.
 
-   P1 is a one-handed layout: WASD to move, and the specials sit around it --
-   Q up and left, C below, F to the right, with R above F for the ult. */
+   Both hands, split by job. The left hand only moves and blocks -- WASD, and
+   shift under the little finger. The right hand does all the attacking, on
+   the home row it is already sitting on: H J K for the three specials, L for
+   the ult, and G within reach of the left index for the free jab.
+
+   The specials were on Q/F/C, which put them on the same hand as the
+   movement keys. That is fine right up until you need to move and attack at
+   the same time, which is most of a fight. */
 const BINDS = [
   { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS',
-    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyR',
-    spNeutral: 'KeyF', spDown: 'KeyC', spUp: 'KeyQ' },
+    // Space jumps too. It is the button every platformer has trained people
+    // to reach for, and W is easy to miss while your hand is on A or D.
+    jump2: 'Space',
+    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyL',
+    spNeutral: 'KeyH', spDown: 'KeyJ', spUp: 'KeyK' },
   { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
-    attack: 'KeyL', shield: 'ShiftRight', ult: 'Quote',
+    // Comma, not L: L is player 1's ult now.
+    attack: 'Comma', shield: 'ShiftRight', ult: 'Quote',
     spNeutral: 'Period', spDown: 'Slash', spUp: 'Semicolon',
     // Numpad alternates, for keyboards where the punctuation cluster is awkward.
     attack2: 'Numpad0', shield2: 'Numpad4', ult2: 'Numpad5',
@@ -754,7 +769,7 @@ function readPad(idx) {
     right: down(b.right),
     up: down(b.up),
     down: down(b.down),
-    jump: tapped(b.up),
+    jump: anyTap(b.up, b.jump2),
     attack: anyTap(b.attack, b.attack2),
     spNeutral: spN,
     spDown: spD,
@@ -1273,7 +1288,7 @@ class Fighter {
           this.specialSpawned = true;
           for (let i = 0; i < s.count; i++) {
             const spread = (i - (s.count - 1) / 2) * s.spread;
-            projectiles.push(new Pellet(this, s, spread));
+            projectiles.push(new Pellet(this, s, spread, null, i));
           }
         }
         break;
@@ -1390,12 +1405,47 @@ class Fighter {
         }
         break;
 
+      // A melee swing had no handler at all, which is why it drew nothing.
+      case 'swing':
+        if (this.attackFrame === s.startup) {
+          addEffect('swipe', this.x, this.y - 9,
+                    s.tint || '#ffffff', this.facing);
+          // A move named after an object should show the object.
+          if (s.sticks) {
+            for (let i = 0; i < 2; i++) {
+              const e = addEffect('stick', this.x + this.facing * (6 + i * 3),
+                                  this.y - 12 + i * 4, s.sticks, this.facing);
+              if (e) {
+                e.vx = this.facing * (1.1 + i * 0.5);
+                e.vy = -1.4 + i * 0.5;
+                e.life = 18;
+              }
+            }
+          }
+        }
+        break;
+
       case 'uppercut':
         if (s.blade && this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active && this.attackFrame % 2 === 0) {
           addEffect('blade', this.x + this.facing * 4, this.y - 14, s.blade);
         }
+        // A geyser throws its own contents about. Droplets come off the
+        // column the whole way up, not just at the start, so the move reads
+        // as a spray rather than a puff.
+        if (s.spray && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active) {
+          for (let i = 0; i < 2; i++) {
+            addEffect('milk', this.x + rand(-4, 4), this.y - rand(6, 20));
+          }
+        }
         if (this.attackFrame === s.startup) {
+          if (s.spray) {
+            // A bigger burst off the ground as it goes off.
+            for (let i = 0; i < 7; i++) {
+              addEffect('milk', this.x + rand(-6, 6), this.y - rand(2, 10));
+            }
+          }
           this.vy = s.rise;
           this.vx = this.facing * s.drift;
           this.grounded = false;
@@ -1608,6 +1658,129 @@ class Fighter {
 }
 
 /* =====================================================================
+   PIXEL ART
+
+   Sprites for things nobody drew in 2018, written as strings so the shape is
+   visible in the source and can be edited without a paint program. Each one
+   is rasterised once into its own little canvas and blitted after that --
+   a 6x6 sprite is 36 fillRect calls, and there can be a dozen on screen.
+
+   Purely presentational: none of this is reachable from the simulation, so
+   it cannot affect a rollback or desync anything.
+   ===================================================================== */
+
+const artCache = new Map();
+
+/** rows: array of equal-length strings. palette: char -> css colour. */
+function pixelArt(key, rows, palette, flip) {
+  const hit = artCache.get(key);
+  if (hit) return hit;
+
+  const w = rows[0].length, h = rows.length;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const col = palette[rows[y][flip ? w - 1 - x : x]];
+      if (!col) continue;
+      g.fillStyle = col;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  artCache.set(key, c);
+  return c;
+}
+
+/** Blit a sprite centred on a world position, snapped to whole pixels. */
+function drawArt(g, art, x, y) {
+  g.drawImage(art, Math.round(x) - (art.width >> 1),
+                   Math.round(y) - (art.height >> 1));
+}
+
+/* Trev's cereal. Three shapes so a handful reads as cereal rather than as
+   gravel: a loop with a hole through it, a lattice square, and a
+   marshmallow. */
+const CEREAL_SHAPES = [
+  ['.####.',
+   '##..##',
+   '#....#',
+   '#....#',
+   '##..##',
+   '.####.'],
+  ['#####',
+   '#.#.#',
+   '#####',
+   '#.#.#',
+   '#####'],
+  ['..#..',
+   '.###.',
+   '#####',
+   '.###.',
+   '..#..'],
+];
+
+/* Ladeane's soccerball: a white ball with a soft rim, so it still reads
+   against the beach sand, and a dark panel that travels round it as it
+   rolls (drawn on top, because the panel moves and the ball does not). */
+const BALL_ART = [
+  '..ooo..',
+  '.o###o.',
+  'o#####o',
+  'o#####o',
+  'o#####o',
+  '.o###o.',
+  '..ooo..',
+];
+
+/* Trev's chess knight, facing the way it is travelling. */
+const KNIGHT_ART = [
+  '..##...',
+  '.####..',
+  '##E###.',
+  '######.',
+  '.#####.',
+  '..####.',
+  '..###..',
+  '.#####.',
+  '#######',
+];
+
+/* A drumstick, tip up and to the right. Mirrored for the other facing. */
+const STICK_ART = [
+  '....##',
+  '....##',
+  '...##.',
+  '...#..',
+  '..##..',
+  '..#...',
+  '.##...',
+  '.#....',
+  '##....',
+];
+
+/* The path a swing travels: an arc out from the shoulder and down. Written
+   out rather than computed, because Math.cos is banned in this file -- the
+   simulation has to be identical on both machines and runtime trig is not
+   (see the note on kx/ky in the roster). */
+const SWING_ARC = [
+  [11, -6], [12, -2], [11, 2], [9, 6], [6, 9], [2, 11],
+];
+
+/* A quaver: head bottom left, stem up its right side, flag off the top. */
+const NOTE_ART = [
+  '....##',
+  '....##',
+  '....#.',
+  '....#.',
+  '....#.',
+  '....#.',
+  '.####.',
+  '.####.',
+];
+
+/* =====================================================================
    BONE - Kel's projectile, spinning through its 4 drawn rotations
    ===================================================================== */
 
@@ -1799,7 +1972,7 @@ class Rainbow {
    ===================================================================== */
 
 class Pellet {
-  constructor(owner, spec, spreadY, origin) {
+  constructor(owner, spec, spreadY, origin, idx) {
     this.owner = owner;
     this.spec = spec;
     this.shape = (origin && origin.shape) || spec.shape || 'crumb';
@@ -1809,8 +1982,15 @@ class Pellet {
     this.vy = origin ? (origin.vy || 0) : (spec.lift || 0) + spreadY;
     this.life = spec.life;
     this.dead = false;
-    this.tint = spec.tints[(Math.abs(Math.round(spreadY * 100)) + owner.slot) %
-                           spec.tints.length];
+    // Deterministic, so both machines throw the same colours in the same
+    // order. Seeded from the piece's own index rather than its spread: the
+    // fan is symmetric, so |spread| only has two distinct values across four
+    // pieces and half the handful came out matching. battleFrames is in the
+    // snapshot, so it survives a rollback and varies throw to throw.
+    const n = idx || 0;
+    const seed = n * 2 + owner.slot + battleFrames;
+    this.tint = spec.tints[seed % spec.tints.length];
+    this.art = (n + battleFrames) % CEREAL_SHAPES.length;
   }
 
   update() {
@@ -1848,17 +2028,15 @@ class Pellet {
   }
 
   draw(g) {
-    const x = Math.round(this.x), y = Math.round(this.y);
-    g.fillStyle = this.tint;
     if (this.shape === 'note') {
-      // A spiky quaver: filled head, stem, and a flag off the top.
-      g.fillRect(x - 2, y, 3, 3);
-      g.fillRect(x + 1, y - 4, 1, 5);
-      g.fillRect(x + 2, y - 4, 1, 2);
+      drawArt(g, pixelArt('note.' + this.tint, NOTE_ART, { '#': this.tint }),
+              this.x, this.y);
       return;
     }
-    g.fillRect(x - 2, y - 1, 3, 2);
-    g.fillRect(x - 1, y - 2, 1, 4);
+    // A piece of cereal: one of three shapes, in one of six colours.
+    drawArt(g, pixelArt('cereal.' + this.art + '.' + this.tint,
+                        CEREAL_SHAPES[this.art], { '#': this.tint }),
+            this.x, this.y);
   }
 }
 
@@ -1915,9 +2093,8 @@ class Ball {
 
   draw(g) {
     const x = Math.round(this.x), y = Math.round(this.y);
-    g.fillStyle = '#f4f4f4';
-    g.fillRect(x - 3, y - 2, 6, 4);
-    g.fillRect(x - 2, y - 3, 4, 6);
+    drawArt(g, pixelArt('ball', BALL_ART,
+                        { '#': '#f4f4f4', o: '#5a6070' }), this.x, this.y);
     // One dark panel that travels round the ball as it rolls.
     g.fillStyle = '#20242e';
     const phase = ((Math.floor(this.spin) % 4) + 4) % 4;
@@ -1983,13 +2160,10 @@ class KnightPiece {
   }
 
   draw(g) {
-    const x = Math.round(this.x), y = Math.round(this.y);
-    g.fillStyle = '#efe7d2';
-    g.fillRect(x - 2, y + 1, 5, 3);     // base
-    g.fillRect(x - 1, y - 2, 3, 3);     // body
-    g.fillRect(x, y - 4, 3, 2);         // head
-    g.fillStyle = '#2b2b33';
-    g.fillRect(x + 1, y - 3, 1, 1);     // eye
+    const left = this.vx < 0;
+    drawArt(g, pixelArt('knight' + (left ? 'L' : 'R'), KNIGHT_ART,
+                        { '#': '#efe7d2', E: '#3c2a1e' }, left),
+            this.x, this.y);
   }
 }
 
@@ -2004,10 +2178,14 @@ function addEffect(kind, x, y, color, dir, spec) {
   // Rollback replays the same frame several times. Effects are cosmetic and
   // deliberately not part of a snapshot, so without this the same spark gets
   // spawned once per replay and the screen fills with duplicates.
-  if (netplay.resimulating) return;
-  effects.push({ kind, x, y, color, dir: dir || 1, spec, t: 0,
-                 life: kind === 'beam' ? 20 : kind === 'ring' ? 18 : 16,
-                 vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) });
+  if (netplay.resimulating) return null;
+  const e = { kind, x, y, color, dir: dir || 1, spec, t: 0,
+              life: kind === 'beam' ? 20 : kind === 'ring' ? 18 : 16,
+              vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) };
+  effects.push(e);
+  // Returned so a caller can aim it. Null while re-simulating, which is the
+  // signal that the effect was suppressed rather than created.
+  return e;
 }
 
 function updateEffects() {
@@ -2016,6 +2194,14 @@ function updateEffects() {
     e.t++;
     if (e.kind === 'spark' || e.kind === 'dust' || e.kind === 'puff') {
       e.x += e.vx; e.y += e.vy; e.vy += 0.08;
+    }
+    // Milk is heavier than a spark and thrown harder, so it arcs properly
+    // instead of drifting.
+    if (e.kind === 'milk') {
+      e.x += e.vx * 1.6; e.y += e.vy * 1.6; e.vy += 0.22;
+    }
+    if (e.kind === 'stick') {
+      e.x += e.vx; e.y += e.vy; e.vy += 0.16;
     }
     if (e.t >= e.life) effects.splice(i, 1);
   }
@@ -2051,6 +2237,44 @@ function drawEffects(g) {
         g.fillRect(lx - 2, ly, 5, 1);
         g.fillRect(lx - 1, ly - 1, 3, 1);
         g.fillRect(lx - 1, ly + 1, 3, 1);
+        g.globalAlpha = 1;
+        break;
+      }
+
+      case 'swipe': {
+        // The arc of the swing, brightest at the leading edge.
+        const dir = e.dir;
+        const n = SWING_ARC.length;
+        for (let i = 0; i < n; i++) {
+          const p = SWING_ARC[i];
+          g.globalAlpha = k * (0.25 + 0.75 * (i / n));
+          g.fillStyle = e.color;
+          g.fillRect(Math.round(e.x + p[0] * dir) - 1,
+                     Math.round(e.y + p[1]) - 1, 2, 2);
+        }
+        g.globalAlpha = 1;
+        break;
+      }
+
+      case 'stick': {
+        // A drumstick, thrown along the arc and tumbling out of it.
+        const art = pixelArt('stick' + (e.dir > 0 ? 'R' : 'L'), STICK_ART,
+                             { '#': e.color }, e.dir < 0);
+        g.globalAlpha = Math.min(1, k * 1.4);
+        drawArt(g, art, e.x, e.y);
+        g.globalAlpha = 1;
+        break;
+      }
+
+      case 'milk': {
+        // A droplet: fat in the middle, pointed top and bottom.
+        g.globalAlpha = Math.min(1, k * 1.3);
+        const mx = Math.round(e.x), my = Math.round(e.y);
+        g.fillStyle = '#f6f4ea';
+        g.fillRect(mx - 1, my - 1, 3, 3);
+        g.fillRect(mx, my - 2, 1, 5);
+        g.fillStyle = '#ffffff';
+        g.fillRect(mx, my - 1, 1, 1);
         g.globalAlpha = 1;
         break;
       }
@@ -3152,13 +3376,13 @@ function drawTitle() {
    player can see it -- the controls table lives on the website, which is no
    use in fullscreen. HELP puts it in the game. */
 const HELP_ROWS = [
-  ['MOVE', 'A  D', ''],
-  ['JUMP', 'W', 'again in the air for a second jump'],
-  ['DROP', 'S', 'S + W drops you through a platform'],
-  ['SPECIALS', 'Q F C', 'three separate moves, each costs mana'],
-  ['ULT', 'R', 'only once the ult bar is full'],
-  ['JAB', 'G', 'free -- it still works at zero mana'],
+  ['MOVE', 'A  D', 'left hand moves and blocks'],
+  ['JUMP', 'W / SPACE', 'again in the air for a second jump'],
+  ['DROP', 'S', 'with jump, drops you through a platform'],
   ['SHIELD', 'SHIFT', 'with a direction rolls, with S dodges'],
+  ['SPECIALS', 'H J K', 'right hand attacks; each costs mana'],
+  ['ULT', 'L', 'only once the ult bar is full'],
+  ['JAB', 'G', 'free -- it still works at zero mana'],
 ];
 
 function drawHelp() {
