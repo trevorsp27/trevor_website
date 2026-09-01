@@ -1084,11 +1084,11 @@ class Fighter {
     if (this.buffTimer > 0) this.buffTimer--;
     if (this.swordTimer > 0) {
       this.swordTimer--;
-      // It is a FLAMING sword, so it has to be visibly on fire even when he
-      // is standing still.
-      if (this.swordTimer % 4 === 0) {
-        addEffect('spark', this.x + this.facing * 8 + rand(-2, 2),
-                  this.y - 20 + rand(-4, 4), '#ff8a2a');
+      // The fire is drawn into the blade now, so this is just the odd ember
+      // coming off it rather than the whole effect.
+      if (this.swordTimer % 9 === 0) {
+        addEffect('spark', this.x + this.facing * rand(2, 10),
+                  this.y - rand(12, 30), '#ff7a1a');
       }
     }
     if (this.sinceHitFrames < 999) this.sinceHitFrames++;
@@ -1456,17 +1456,26 @@ class Fighter {
         break;
 
       // One swing of it, which throws a laser as well as cutting.
-      case 'laser':
+      case 'laser': {
+        const k = this.attackFrame - s.startup;
+        // An afterimage per frame of the arc.
+        if (k >= 0 && k < SWORD_SWING.length) {
+          const ghost = addEffect('blademark', swordHandX(this), swordHandY(this),
+                                  s.blade, this.facing, SWORD_SWING[k]);
+          if (ghost) ghost.life = 9;
+        }
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          addEffect('swipe', this.x, this.y - 10, s.tint, this.facing);
-          for (let i = 0; i < 4; i++) {
-            addEffect('spark', this.x + this.facing * rand(6, 16),
-                      this.y - rand(4, 18), s.blade);
+          for (let i = 0; i < 8; i++) {
+            addEffect('spark', this.x + this.facing * rand(6, 22),
+                      this.y - rand(2, 24), s.blade);
           }
-          if (s.beam) projectiles.push(new Laser(this, s.beam));
         }
+        // The bolt leaves at the bottom of the arc, off the tip, not on the
+        // first frame of the wind-up.
+        if (k === 2 && s.beam) projectiles.push(new Laser(this, s.beam));
         break;
+      }
 
       case 'buff':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
@@ -1938,21 +1947,322 @@ const VINE_ARC = [
   [128, 84], [135, 72], [141, 59], [146, 46], [150, 32],
 ];
 
-/* Trev's sword, held point-up. The blade is drawn in two tones so it reads
-   as lit rather than flat; the fire itself is sparks thrown off it. */
-const SWORD_ART = [
-  '..cc..',
-  '..cc..',
-  '..bb..',
-  '..bb..',
-  '..bb..',
-  '..bb..',
-  '..bb..',
-  '..bb..',
-  '.gggg.',
-  '..hh..',
-  '..hh..',
-];
+/* Trev's flaming laser sword.
+
+   Generated rather than hand-typed: a blade at five angles with the fire
+   baked into it, because typing nine 51x51 grids by hand is not a thing
+   anybody should do. Each frame is trimmed to the pixels that exist and
+   carries `fx`/`fy` -- where his fist sits inside that frame -- so the sword
+   pivots around his hand instead of around the middle of a sprite.
+
+   hold0..3  carrying it: the fire moves, the blade does not
+   wind      wound back over the shoulder
+   s1..s4    the swing, overhead down through to the follow-through
+*/
+const SWORD_FRAMES = {
+  hold0: { fx: 5, fy: 25, rows: [
+      '.......o.y......',
+      '.....rro.ywy..r.',
+      '....rrr..ywy....',
+      '........oywy.o.r',
+      '.....rooywyyoorr',
+      '....r..oywyoo...',
+      '....r.ooywyo.r..',
+      '....rr.oywyoor..',
+      '..r.rrooywyoo.rr',
+      '..rrrooywyooor..',
+      '.....ooywyo..r..',
+      '...rrooywyoorr..',
+      '...r..oywyoorr..',
+      '.r.r.ooywyoo.r..',
+      '....ooywyoo.....',
+      '...r.oywyo.r.r..',
+      '..rrooywyo......',
+      '.rr.ooywyo......',
+      '..rooywwyoo.....',
+      '.rr.oywyo.r.....',
+      'r..ooywyoorr....',
+      '.gggoywyo.......',
+      '.gg.ggggo.......',
+      '...ggggg.ggg....',
+      '....hhh.ggg.....',
+      '....hhh.........',
+      '....hhh.........',
+      '....hhh.........',
+      '...hhh..........',
+      '...hhh..........',
+      '...hhh..........',
+  ] },
+  hold1: { fx: 5, fy: 25, rows: [
+      '......r..y.......',
+      '.......o.ywy.....',
+      '.........ywy....r',
+      '......r.oywy.....',
+      '....r..oywyyoo...',
+      '.....rooywyo.rr..',
+      '...r...oywyo.rrr.',
+      '....r.ooywyoorrr.',
+      '...rrrooywyoorr..',
+      '...r..oywyoorrr..',
+      '..r.rooywyoo.rr..',
+      '..rrrooywyo.rr...',
+      '...rr.oywyoor.r..',
+      '.r.roooywyoorr...',
+      '...rooywyo.r..r..',
+      '..r.ooywyoo......',
+      '....ooywyoor.....',
+      '..rrooywyo..r....',
+      '..rooywwyoor.r...',
+      'rrr.oywyo........',
+      '.rrooywyo........',
+      '.gggoywyo........',
+      '.gg.ggggo........',
+      '...ggggg.ggg.....',
+      '....hhh.ggg......',
+      '....hhh..........',
+      '....hhh..........',
+      '....hhh..........',
+      '...hhh...........',
+      '...hhh...........',
+      '...hhh...........',
+  ] },
+  hold2: { fx: 4, fy: 25, rows: [
+      '........y.....r.',
+      '.....r..ywy.or..',
+      '....r.o.ywy.....',
+      '....rrooywy.orr.',
+      '...rrooywyyo.rrr',
+      '...rrooywyoor...',
+      '..rrr.oywyoo....',
+      '...r.ooywyo.r...',
+      '..r..ooywyo...r.',
+      '...rooywyo......',
+      '.rrrooywyoor....',
+      '....ooywyo......',
+      '.rr.ooywyoo.r...',
+      '..r.ooywyoor....',
+      '.rrooywyoo......',
+      '.rrooywyo.rr....',
+      'r.rooywyoorr....',
+      'r.rooywyoor.r...',
+      'rrooywwyoor.....',
+      'r..oywyo.r......',
+      '...oywyo.rrr....',
+      'gggoywyoo.......',
+      'gg.ggggo........',
+      '..ggggg.ggg.....',
+      '...hhh.ggg......',
+      '...hhh..........',
+      '...hhh..........',
+      '...hhh..........',
+      '..hhh...........',
+      '..hhh...........',
+      '..hhh...........',
+  ] },
+  hold3: { fx: 5, fy: 25, rows: [
+      '....r..o.y......',
+      '.....r.o.ywy..rr',
+      '.....rro.ywy.or.',
+      '.....rrooywy.orr',
+      '...r.r.oywyyo.r.',
+      '....rrooywyoor.r',
+      '....rrooywyoo.r.',
+      '....rr.oywyo...r',
+      '..rrr.ooywyoor..',
+      '.....ooywyoo.rr.',
+      '..r.rooywyoor...',
+      '.....ooywyoor...',
+      '...rrooywyo.rr..',
+      '..rrrooywyoo.r..',
+      '....ooywyo......',
+      '...r.oywyo.rr...',
+      '.....oywyo.rrr..',
+      '....ooywyoorrr..',
+      '.rrooywwyoo.r...',
+      'rr.ooywyoorr....',
+      '....oywyoor.....',
+      '.gggoywyo.r.....',
+      '.gg.ggggoorr....',
+      '...ggggg.ggg....',
+      '....hhh.ggg.....',
+      '....hhh.........',
+      '....hhh.........',
+      '....hhh.........',
+      '...hhh..........',
+      '...hhh..........',
+      '...hhh..........',
+  ] },
+  wind: { fx: 21, fy: 20, rows: [
+      '.....r.rr.................',
+      '....or.rr.................',
+      '......orrr................',
+      '..wyy..orrrr..............',
+      '..ywyyooorr.rr............',
+      '..yywyyooorrrr............',
+      'ro..ywyyooorrr............',
+      '...ooywwyoo.rr............',
+      'r.r.ooywwyooo.rr..........',
+      '.r....oywwyyooor..........',
+      '.......oywwyyooo..r.......',
+      '......o.oyywyyooor.r......',
+      '...r..ro.oyywyyooor.......',
+      '......rr.ooyywyyoo.rrrr...',
+      '.....rrrr..ooywyyooor.g...',
+      '........r..oooywyyooog.g..',
+      '........rr.roooywwyo.gg...',
+      '.........rr.r.ooywwygg....',
+      '..........r.r.oooy.gg.....',
+      '..............ro.oggghh...',
+      '..............rr.gg.hhhh..',
+      '................g.g.hhhhh.',
+      '...............ggg...hhhhh',
+      '.......................hhh',
+      '........................h.',
+  ] },
+  s1: { fx: 8, fy: 25, rows: [
+      '....ywy.o.r...',
+      '....ywy.o.....',
+      '.r...ywy.or...',
+      '...ooywyoorr..',
+      'rrr.oywyoorr..',
+      '.rrooywyo..rr.',
+      '..rooywyoo....',
+      '..rooywyoor...',
+      'r...oywyo.r.r.',
+      'r...oywyoo....',
+      '.rrooywyo.rr..',
+      '..rooywwyoor..',
+      '....ooywyoor..',
+      '....ooywyo..rr',
+      '...r.oywyo..r.',
+      '..rrooywyoor..',
+      '...r.oywyoorr.',
+      '...rooywyo.rr.',
+      '...rooywyoor..',
+      '.rrr.oywyoo...',
+      '.....oywyoo..r',
+      '......oywyoorg',
+      '....gggggggggg',
+      '...gggggggggg.',
+      '...g...hhh....',
+      '.......hhh....',
+      '.......hhh....',
+      '.......hhh....',
+      '.......hhh....',
+      '.......hhh....',
+      '.......hhhh...',
+  ] },
+  s2: { fx: 4, fy: 23, rows: [
+      '..................r......',
+      '.........................',
+      '.................r.......',
+      '................rrro.....',
+      '..............r.r....y...',
+      '................ro..yw...',
+      '............rr.roooywyy..',
+      '.............rr.ooywwy..o',
+      '...........r..oooywwy..o.',
+      '..........r.roooywwyoo.r.',
+      '..........rr.ooywwyoo.r.r',
+      '............ooywwyoo...rr',
+      '......r.rr..oywwyooor....',
+      '.....r..roooywwyoo.r.r...',
+      '.....r.ro.oywwyooo..rr...',
+      '....r.roooywwyoo.r.......',
+      '....rr.ooyywyooo.........',
+      '..g..rooyywyoo...r.......',
+      '..gg.ooyywyoo.r..........',
+      '...ggoywwyooo.r..........',
+      '....gg.wyooorr...........',
+      '.....ggy.oorrr...........',
+      '...hhgggo.r.rr...........',
+      '..hhhh.ggo...............',
+      '.hhhhh..ggg..............',
+      '.hhhh....g...............',
+      'hhhh.....................',
+      '.hh......................',
+  ] },
+  s3: { fx: 5, fy: 7, rows: [
+      '......................r..r....r',
+      '..............r.r.r...r.rr.rr..',
+      '.......gg.r...rr......rr.r.rr..',
+      '.......gg.rr.rrr.r.r..ooooo.ooo',
+      '.......gg.oo.ooooo.ooooooooo...',
+      '.......ggooooooooooyyyyyyyyyyyy',
+      'hhhhhhhggyyyyyyyyyywwwwwwwwwwww',
+      'hhhhhhhggwwwwwwwwwwwyyyyyyyyyyy',
+      'hhhhhhhggyyyyyyyyyyyoooooooo...',
+      '.......ggooooooooooo..o.ooo.oo.',
+      '.......ggo.o.oooo....rr.rrr....',
+      '.......gg.rrrrr.r.......rr.rrr.',
+      '.......gg....rr................',
+      '............r.r................',
+  ] },
+  s4: { fx: 5, fy: 4, rows: [
+      '..h.......r....................',
+      '.hhh......g....................',
+      'hhhhh....gg....................',
+      '..hhhhh.ggg....................',
+      '...hhhhgggor...................',
+      '....hhhggooo.r.................',
+      '......ggwyyo..r................',
+      '.....gggywyyooo..r.............',
+      '....gggoyywwyoo.or.............',
+      '...g.g.oo.ywwyoooo..r.r........',
+      '....g.ro.ooywwyyoo.rrr.........',
+      '.......rroooyywyyooo...r.......',
+      '.......r...ooyywwyoo..r........',
+      '........r.r.oooywwyyoo.r.rr....',
+      '........rrrr.oooyywyyoo.r...r..',
+      '.........r..r.oooyywwyooo.rr...',
+      '............rrrooooywwyyoo...rr',
+      '...........r..rr.oooyywyy..or..',
+      '..............rr...ooyywwy.....',
+      '..............r...r.ooyyww.....',
+      '...................ro..yy......',
+  ] },
+};
+const SWORD_PAL = {
+  w: '#fffcf0',   // white-hot core
+  y: '#ffd65c',
+  o: '#ff7a1a',
+  r: '#c62c10',   // the outer fire
+  g: '#787e94',   // guard
+  h: '#4a301e',   // grip
+};
+
+/* Four frames of the arc, then a beat on the follow-through. */
+const SWORD_SWING = ['s1', 's2', 's3', 's4', 's4'];
+
+/** Which frame of the sword to draw for a fighter holding one. */
+function swordFrameKey(f) {
+  if (f.state === 'ult' && f.swordSwing && f.def.ult.swing) {
+    const m = f.def.ult.swing;
+    const k = f.attackFrame - m.startup;
+    if (k < 0) return 'wind';
+    if (k < SWORD_SWING.length) return SWORD_SWING[k];
+    if (k < SWORD_SWING.length + 9) return 's4';
+  }
+  // Just carrying it: the fire animates on its own.
+  return 'hold' + (Math.floor(f.swordTimer / 5) & 3);
+}
+
+/** Draw a sword frame with its fist landing on (x, y). */
+function drawSwordFrame(g, key, x, y, facing, alpha) {
+  const fr = SWORD_FRAMES[key];
+  if (!fr) return;
+  const left = facing < 0;
+  const art = pixelArt('sw.' + key + (left ? 'L' : 'R'), fr.rows, SWORD_PAL, left);
+  // Mirroring moves the fist to the other side of the frame.
+  const fx = left ? art.width - 1 - fr.fx : fr.fx;
+  if (alpha !== undefined) g.globalAlpha = alpha;
+  g.drawImage(art, Math.round(x) - fx, Math.round(y) - fr.fy);
+  if (alpha !== undefined) g.globalAlpha = 1;
+}
+
+/** Where his fist is, in world coordinates. */
+function swordHandX(f) { return f.x + f.facing * 3; }
+function swordHandY(f) { return f.y - 9; }
 
 /* A drumstick, tip up and to the right. Mirrored for the other facing. */
 const STICK_ART = [
@@ -2286,20 +2596,25 @@ class Laser {
   }
 
   box() {
-    return { x: this.x - 7, y: this.y - 2, w: 14, h: 4 };
+    return { x: this.x - 8, y: this.y - 3, w: 16, h: 6 };
   }
 
   draw(g) {
     const x = Math.round(this.x), y = Math.round(this.y);
     const dir = this.vx < 0 ? -1 : 1;
-    // A hot white core inside a wider coloured bolt, with the tail trailing
-    // back the way it came.
-    g.fillStyle = '#ff8a2a';
-    g.fillRect(x - dir * 9, y - 2, 18, 4);
-    g.fillStyle = '#ffd76a';
-    g.fillRect(x - dir * 9, y - 1, 18, 2);
-    g.fillStyle = '#ffffff';
-    g.fillRect(x - dir * 4, y - 1, 9, 1);
+    // Four layers: a long dim tail dragging behind, the body of the bolt, a
+    // brighter middle and a white core. Same palette as the blade that threw
+    // it, so they read as the same thing.
+    g.globalAlpha = 0.45;
+    g.fillStyle = '#c62c10';
+    g.fillRect(x - (dir > 0 ? 26 : 0), y - 1, 26, 3);
+    g.globalAlpha = 1;
+    g.fillStyle = '#ff7a1a';
+    g.fillRect(x - (dir > 0 ? 16 : 0), y - 3, 16, 6);
+    g.fillStyle = '#ffd65c';
+    g.fillRect(x - (dir > 0 ? 16 : 0), y - 2, 16, 4);
+    g.fillStyle = '#fffcf0';
+    g.fillRect(x - (dir > 0 ? 14 : -2), y - 1, 13, 2);
   }
 }
 
@@ -2572,6 +2887,13 @@ function drawEffects(g) {
         g.fillRect(lx - 1, ly - 1, 3, 1);
         g.fillRect(lx - 1, ly + 1, 3, 1);
         g.globalAlpha = 1;
+        break;
+      }
+
+      case 'blademark': {
+        // A fading copy of the blade itself, so the swing trails the real
+        // shape rather than a generic smear.
+        drawSwordFrame(g, e.spec, e.x, e.y, e.dir, k * 0.5);
         break;
       }
 
@@ -3580,15 +3902,9 @@ function drawFighter(g, f) {
 
   // The sword is drawn after the sprite, because he is holding it.
   if (f.swordTimer > 0) {
-    const art = pixelArt('sword', SWORD_ART,
-                         { c: '#fff6d8', b: '#ff8a2a', g: '#8a5a2a', h: '#5a3a1e' });
-    drawArt(g, art, f.x + f.facing * 7, f.y - 18);
-    // Runs out with a flicker rather than just vanishing.
-    if (f.swordTimer < 60 && Math.floor(f.swordTimer / 4) % 2 === 0) {
-      g.globalAlpha = 0.4;
-      drawArt(g, art, f.x + f.facing * 7, f.y - 18);
-      g.globalAlpha = 1;
-    }
+    // Fades out over the last second rather than blinking out of existence.
+    const fade = f.swordTimer < 50 ? 0.35 + (f.swordTimer / 50) * 0.65 : undefined;
+    drawSwordFrame(g, swordFrameKey(f), swordHandX(f), swordHandY(f), f.facing, fade);
   }
 }
 
