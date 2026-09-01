@@ -3457,6 +3457,17 @@ function aiDecide(me, foe) {
   }
 
   // A charged ult is worth using; the CPU should not hoard it.
+  // A weapon already in hand: the ult button swings it and costs nothing, so
+  // there is no meter to wait for. Without this the CPU equips the sword and
+  // then never uses it, having spent a full ult for a prop.
+  if (me.swordTimer > 0 && me.def.ult && me.def.ult.swing && a.cooldown <= 0) {
+    if (adx < 30 && Math.abs(dy) < 20) {
+      pad.ult = true;
+      a.cooldown = 10;
+      return pad;
+    }
+  }
+
   if (me.def.ult && me.ultMeter >= COMBAT.ultMax && a.cooldown <= 0) {
     const k = me.def.ult.kind;
     const inRange =
