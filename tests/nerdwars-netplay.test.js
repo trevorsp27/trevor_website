@@ -511,3 +511,123 @@ test("leaving tells the other side and ends the match", async () => {
   assert.equal(a.nw.net.status.ended, "opponent left");
   assert.equal(a.nw.scene, "title");
 });
+
+/* A peer whose browser cannot hold 60fps.
+ *
+ * This is the thing that actually froze real matches, and it is not a network
+ * problem at all. If they produce 59 input frames a second and I consume 60,
+ * the gap between my frame and their newest input grows by one every second,
+ * without bound; twenty seconds later it crosses the rollback ceiling and I
+ * stall -- and then keep stalling, because nothing about stalling makes them
+ * catch up. Measured before the fix: a peer at 59fps froze the game 19.8% of
+ * the time, at 55fps 87%, while the worst network in the lab managed 0.1%.
+ *
+ * Adaptive delay cannot help and the numbers showed it: the slow side pegged
+ * its delay at the maximum and nothing changed. Delay is a fixed offset; this
+ * is a difference in rate. The fix is to pace the local clock so the faster
+ * machine gives frames back gradually and the two converge.
+ */
+test("a peer whose machine runs slow does not freeze the match", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+
+  const chars = ["kel", "trev"];
+  a.nw.net.start({ localSlot: 0, chars, stage: "swamp", delay: 1,
+                   send: (m) => b.nw.net.receive(m) });
+  b.nw.net.start({ localSlot: 1, chars, stage: "swamp", delay: 1,
+                   send: (m) => a.nw.net.receive(m) });
+
+  // B manages 57 of every 60 frames. Small enough that a person would call
+  // their machine fine; more than enough to wedge the old code permanently.
+  let credit = 0;
+  let stalledFrames = 0;
+  for (let t = 0; t < 1500; t++) {
+    a.pump(1);
+    credit += 57 / 60;
+    while (credit >= 1) { b.pump(1); credit -= 1; }
+    if (a.nw.net.status.stalling) stalledFrames++;
+  }
+
+  assert.equal(a.nw.net.status.desync, null, "pacing must not change the simulation");
+  assert.ok(
+    stalledFrames < 30,
+    `the fast side froze for ${stalledFrames} of 1500 frames; before frame ` +
+    "pacing this was over a thousand"
+  );
+  // Non-vacuous: the match has to have actually run, or "it never stalled" is
+  // true of a match that never started.
+  assert.ok(a.nw.net.status.frame > 1000,
+    `expected a real match, got frame ${a.nw.net.status.frame}`);
+});
+
+test("pacing does not slow a match down when both sides keep up", async () => {
+  // The trade this fix must not make: slowing healthy matches to rescue broken
+  // ones. On a link where nobody is behind, pacing must never engage.
+  const a = await bootGame();
+  const b = await bootGame();
+  const chars = ["kel", "trev"];
+  a.nw.net.start({ localSlot: 0, chars, stage: "swamp", delay: 1,
+                   send: (m) => b.nw.net.receive(m) });
+  b.nw.net.start({ localSlot: 1, chars, stage: "swamp", delay: 1,
+                   send: (m) => a.nw.net.receive(m) });
+
+  for (let t = 0; t < 600; t++) { a.pump(1); b.pump(1); }
+
+  assert.equal(a.nw.net.status.stalling, false);
+  assert.equal(a.nw.net.status.desync, null);
+  // Both machines ran every frame they were given: no frames were paced away.
+  assert.ok(a.nw.net.status.frame >= 595,
+    `healthy play should not lose frames, got ${a.nw.net.status.frame} of 600`);
+});
+
+/* Distance is not a fault, and must not be charged for.
+ *
+ * The first version of frame pacing keyed off "how far ahead am I of the
+ * newest input I hold from them", which latency depresses exactly as much as a
+ * slow peer does. So two perfectly healthy machines paced simply because they
+ * were far apart: measured at the time, a 334ms link lost about 9% of its
+ * frames permanently, in exchange for nothing -- a standing offset from
+ * latency is not a rate difference, and running slower cannot close it.
+ *
+ * That is the same reason input delay could not fix the original freeze, so it
+ * was a mistake worth pinning down. Pacing now keys off proximity to the
+ * rollback ceiling, which only a rate difference approaches.
+ *
+ * A zero-latency link cannot catch this: it is the one case where the old
+ * signal and the new one agree.
+ */
+test("a distant but healthy link is not slowed down", async () => {
+  for (const lag of [8, 16, 24]) {
+    const a = await bootGame();
+    const b = await bootGame();
+    const chars = ["kel", "trev"];
+    const wire = [];
+    const post = (to, m) => wire.push({ to, m, due: lag });
+    a.nw.net.start({ localSlot: 0, chars, stage: "swamp", delay: 1,
+                     send: (m) => post("b", m) });
+    b.nw.net.start({ localSlot: 1, chars, stage: "swamp", delay: 1,
+                     send: (m) => post("a", m) });
+
+    const TICKS = 900;
+    for (let t = 0; t < TICKS; t++) {
+      for (const e of wire) e.due--;
+      for (let k = wire.length - 1; k >= 0; k--) {
+        if (wire[k].due > 0) continue;
+        const { to, m } = wire[k];
+        wire.splice(k, 1);
+        (to === "a" ? a : b).nw.net.receive(m);
+      }
+      a.pump(1);
+      b.pump(1);
+    }
+
+    // Both machines hold a perfect 60fps here; the only variable is distance.
+    // Every real frame must still produce a simulated one.
+    const ran = a.nw.net.status.frame;
+    assert.ok(ran >= TICKS - 10,
+      `at ${lag} frames of one-way lag (~${Math.round(lag * 16.7)}ms) a healthy ` +
+      `match advanced only ${ran} of ${TICKS} frames -- pacing is charging for ` +
+      "distance, which it cannot fix and must not tax");
+    assert.equal(a.nw.net.status.desync, null);
+  }
+});

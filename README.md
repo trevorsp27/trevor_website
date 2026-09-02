@@ -120,14 +120,33 @@ slot bindings just meant the guest was on player two's arrow keys while reaching
 for WASD — jump and most specials silently did nothing. `tests/nerdwars-netplay.test.js`
 covers this now.
 
-Each side runs `delay` frames behind its own input (4 by default, so ~66ms):
-what you press now is scheduled for frame N+delay, which gives the packet that
-long to arrive. Frame N is simulated only once *both* sides' inputs for N are in
-hand - until then the game waits rather than guessing, because guessing is what
-rollback does and rollback needs to be able to rewind. That means a slow
-connection shows up as hitching, not as the two players seeing different fights.
+It runs **rollback**, not lockstep. A frame is simulated as soon as it comes
+up, using the other side's real input where it has arrived and a guess where it
+has not - the guess being "they are still holding what they were holding", which
+is why the wire carries held directions but never invents a fresh button press.
+When the real input turns up and contradicts the guess, the engine rewinds to
+that frame and replays everything since. A hundred rollbacks in a thirty-second
+match is normal; a thirty-frame replay costs well under a millisecond.
 
-Lockstep only works if the simulation is genuinely identical on both machines,
+That is why nobody waits for anybody. Input delay still exists but is one frame
+by default rather than four, and only rises if a link turns out to need it.
+
+Two things can still make it stutter, and neither is what people expect:
+
+- **The gap climbing.** If somebody's browser cannot hold 60fps, they produce
+  input frames slower than the other side consumes them, and the gap grows
+  without bound until it crosses the rollback ceiling and the simulation stops
+  dead. Measured: a peer at 59fps froze a match 19.8% of the time; a link with
+  230ms of latency, 200ms of jitter and 12% burst loss froze it 0.1%. The loop
+  therefore paces itself - when it gets near the ceiling it runs its clock slow
+  so the two machines converge on the slower one. Distance alone is never paced
+  for: a standing offset from latency is what prediction is for, and running
+  slower cannot close it.
+- **Everyone paying the worst link.** With more than two players the stall gate
+  and the delay tuner both take the worst peer, which is inherent to rollback
+  above two and not something a cleverer implementation avoids.
+
+Rollback only works if the simulation is genuinely identical on both machines,
 which constrains the engine:
 
 - **No runtime trig.** `Math.sin` and `Math.cos` are not guaranteed to agree to
