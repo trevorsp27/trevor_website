@@ -5359,6 +5359,17 @@ window.NerdWars = {
       x: Math.round(f.x), y: Math.round(f.y), state: f.state,
     }));
   },
+  // Everything currently in the air. `kind` is the class name and `shape` the
+  // variant for the ones that share a class, which together say what a move
+  // actually put on the stage rather than only that it was cast.
+  get projectiles() {
+    return projectiles.map((p) => ({
+      kind: p.constructor.name,
+      shape: p.shape || null,
+      owner: p.owner ? p.owner.slot : null,
+      x: Math.round(p.x), y: Math.round(p.y),
+    }));
+  },
 };
 
 loadAssets(() => {
