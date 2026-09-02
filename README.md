@@ -158,7 +158,19 @@ the page and is focused from the start.
 
 GitHub Pages serves everything with `Cache-Control: max-age=600`, so edits go live within
 ten minutes on their own. The `?v=<date>` tokens on script and stylesheet tags make a
-change appear immediately instead. When you edit a *shared* file such as
+change appear immediately **once the new HTML arrives** — which is the part worth being
+precise about, because the tokens live *inside* the page, and the page is under the same
+`max-age=600` as everything else. A returning visitor can still be up to ten minutes
+behind before they even see the new token strings, and a tab left open across a deploy
+stays on the old assets until it is reloaded. What the tokens actually buy you is that a
+fresh page never gets served stale assets against an unchanged URL — not that everybody
+updates the instant you push.
+
+That distinction matters for NerdWars online: `net.js` carries a `PEER_PREFIX` that is
+bumped whenever the wire format changes, so two people on different builds cannot connect
+at all. That is deliberate — connecting and then desyncing would be worse — but during
+the cache window it just looks like a bad room code, so the join-failure message names it
+as a possible cause. When you edit a *shared* file such as
 `assets/js/site-data.js`, bump its token in **every** page that loads it, or most of the
 site will keep reading a cached copy for up to ten minutes.
 

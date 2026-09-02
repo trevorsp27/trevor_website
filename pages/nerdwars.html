@@ -20,13 +20,13 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901d" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901e" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260901j" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260901s" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260901t" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="../assets/js/nerdwars/net.js?v=20260831a" defer></script>
+    <script src="../assets/js/nerdwars/net.js?v=20260901a" defer></script>
 
     <link rel="canonical" href="https://trevorspinosa.com/pages/nerdwars.html" />
     <meta property="og:type" content="website" />
@@ -87,6 +87,7 @@
 
           <p class="nw-room" data-when="room">
             Room code <strong id="nw-code">----</strong>
+            <span class="nw-room-hint">up to four players, one per machine</span>
           </p>
 
           <div class="nw-lobby" data-when="room">
@@ -95,8 +96,8 @@
               <div class="nw-picks" id="nw-chars"></div>
             </div>
             <div class="nw-lobby-row">
-              <span class="nw-lobby-label">Opponent</span>
-              <span class="nw-their" id="nw-their-pick">not here yet</span>
+              <span class="nw-lobby-label">In the room</span>
+              <ul class="nw-seats" id="nw-seats"></ul>
             </div>
             <div class="nw-lobby-row" id="nw-stage-row">
               <label class="nw-lobby-label" for="nw-stage-pick">Stage</label>

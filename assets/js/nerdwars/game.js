@@ -211,6 +211,49 @@ const STAGES = [
 // why every reference below reads through it rather than closing over one.
 let STAGE = STAGES[0];
 
+/* How many fighters a match can hold. Four is the ceiling because of the
+   screen, not the simulation: at 320x180 the HUD gets 62px per player across
+   the bottom, and four of those is already the whole width. The simulation
+   itself does not care -- resolveCombat, the win condition and the snapshot
+   all work off `fighters.length`. */
+const MAX_PLAYERS = 4;
+
+/* Where each fighter starts.
+
+   Two players keep the spawn points the stages were hand-placed around, so a
+   1v1 match is positioned exactly as it always was and its balance numbers
+   still mean something. Nobody ever drew spawns for three or four, so those
+   are spread across the main platform instead, inset from the ends far enough
+   that nobody starts hanging off the edge. */
+function spawnFor(slot, count) {
+  if (count === 2 && STAGE.spawns.length >= 2) return STAGE.spawns[slot];
+  const main = STAGE.platforms.find((p) => p.main) || STAGE.platforms[0];
+  const inset = Math.min(30, main.w * 0.17);
+  const left = main.x + inset;
+  const right = main.x + main.w - inset;
+  const t = count <= 1 ? 0.5 : slot / (count - 1);
+  return { x: Math.round(left + (right - left) * t), y: main.y };
+}
+
+/* The closest living opponent.
+
+   With two fighters "the other one" was a subtraction. With four it is a
+   question, and every part of the game that used to assume a single opponent
+   -- the CPU, and the ham picking somewhere to land -- has to ask it. Distance
+   is weighted so that someone directly overhead does not read as closer than
+   someone standing next to you. Ties break on slot order, never on anything
+   random, because this feeds the simulation and both machines have to agree. */
+function nearestFoe(me) {
+  let best = null;
+  let bestD = Infinity;
+  for (const f of fighters) {
+    if (f === me || f.eliminated) continue;
+    const d = Math.abs(f.x - me.x) + Math.abs(f.y - me.y) * 0.6;
+    if (d < bestD) { bestD = d; best = f; }
+  }
+  return best;
+}
+
 /* =====================================================================
    ROSTER
 
@@ -836,6 +879,115 @@ function tapped(code) { return held.has(code) && !prevHeld.has(code); }
 // Reads one player's control scheme into a neutral shape the Fighter and
 // the AI both understand -- which is what lets a CPU drive a Fighter
 // through the exact same code path a human does.
+/* =====================================================================
+   GAMEPADS
+
+   Two keyboard schemes is the keyboard's honest ceiling, so seats three and
+   four are pads. Standard mapping throughout: face buttons 0-3, shoulders
+   4-7, d-pad 12-15, left stick on axes 0 and 1.
+
+   Polled, not evented, so the state is snapshotted once a frame and the
+   previous snapshot is what makes an edge-triggered press detectable -- the
+   same shape as `held` and `prevHeld` for keys, and rolled forward at the
+   same guarded moment.
+   ===================================================================== */
+
+const GP_AXIS = 0.45;          // stick deflection that counts as a direction
+let gpNow = [];
+let gpPrev = [];
+
+/** Snapshot every connected pad. Cheap, and called once a frame. */
+function pollGamepads() {
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) {
+    gpNow = [];
+    return;
+  }
+  const list = navigator.getGamepads();
+  const out = [];
+  for (let i = 0; i < list.length && out.length < MAX_PLAYERS; i++) {
+    const g = list[i];
+    if (!g || !g.connected) continue;
+    const b = [];
+    for (let k = 0; k < g.buttons.length; k++) b.push(!!g.buttons[k].pressed);
+    out.push({ b: b, ax: g.axes[0] || 0, ay: g.axes[1] || 0 });
+  }
+  gpNow = out;
+}
+
+function gamepadCount() {
+  return gpNow.length;
+}
+
+/* The one place the game's actions are mapped onto a pad. Returns whether the
+   action is held now, and (via `was`) whether it was held last frame. */
+function gpState(g, action) {
+  if (!g) return false;
+  const b = g.b;
+  const on = (i) => !!b[i];
+  switch (action) {
+    case 'left':  return on(14) || g.ax < -GP_AXIS;
+    case 'right': return on(15) || g.ax > GP_AXIS;
+    case 'up':    return on(12) || g.ay < -GP_AXIS;
+    case 'down':  return on(13) || g.ay > GP_AXIS;
+    case 'jump':  return on(0)  || on(12) || g.ay < -GP_AXIS;
+    case 'attack':   return on(2);
+    case 'shield':   return on(4) || on(5);
+    case 'ult':      return on(3);
+    case 'spNeutral': return on(1);
+    case 'spDown':    return on(6);
+    case 'spUp':      return on(7);
+  }
+  return false;
+}
+
+function gpDown(i, action) {
+  return gpState(gpNow[i], action);
+}
+
+function gpTapped(i, action) {
+  return gpState(gpNow[i], action) && !gpState(gpPrev[i], action);
+}
+
+/** A pad in the same shape readPad() produces, so nothing downstream cares. */
+function readGamepad(i) {
+  const spN = gpTapped(i, 'spNeutral');
+  const spD = gpTapped(i, 'spDown');
+  const spU = gpTapped(i, 'spUp');
+  return {
+    left: gpDown(i, 'left'),
+    right: gpDown(i, 'right'),
+    up: gpDown(i, 'up'),
+    down: gpDown(i, 'down'),
+    jump: gpTapped(i, 'jump'),
+    attack: gpTapped(i, 'attack'),
+    spNeutral: spN,
+    spDown: spD,
+    spUp: spU,
+    special: spN || spD || spU,
+    shield: gpDown(i, 'shield'),
+    ult: gpTapped(i, 'ult'),
+  };
+}
+
+/* Which controller drives seat `i`: the two keyboard schemes first, then pads
+   in the order they were plugged in. */
+function schemeFor(i) {
+  return i < BINDS.length ? i : 'pad' + (i - BINDS.length);
+}
+
+/** One seat's input, whatever it happens to be plugged into. */
+function readPadFor(f) {
+  if (f.scheme === null || f.scheme === undefined) return Object.assign({}, NEUTRAL);
+  if (typeof f.scheme === 'number') return readPad(f.scheme);
+  return readGamepad(Number(f.scheme.slice(3)));
+}
+
+/* How many people could actually play right now: two on the keyboard plus a
+   pad each for the rest. Used to decide how many of a four-way are humans. */
+function humansAvailable() {
+  return Math.min(MAX_PLAYERS, BINDS.length + gamepadCount());
+}
+
 function readPad(idx) {
   const b = BINDS[idx];
   const any = (a, c) => down(a) || (c && down(c));
@@ -987,20 +1139,29 @@ const HURT_W = 9;
 const HURT_H = 14;
 
 class Fighter {
-  constructor(key, slot, cpu) {
+  constructor(key, slot, cpu, count, scheme) {
     this.key = key;
     this.def = ROSTER[key];
     this.slot = slot;
     this.cpu = cpu;
+    // How many are in this match, so spawn and respawn placement can spread
+    // to fit rather than assuming an opponent on the far side.
+    this.count = count || 2;
+    // Which control scheme drives this fighter: an index into BINDS for a
+    // keyboard player, 'pad0'..'pad3' for a gamepad, or null for a CPU.
+    this.scheme = scheme === undefined ? (cpu ? null : slot) : scheme;
     this.accent = SPRITES[key].accent;
 
-    const sp = STAGE.spawns[slot];
+    const sp = spawnFor(slot, this.count);
     this.x = sp.x;
     this.y = sp.y;
     this.prevY = sp.y;
     this.vx = 0;
     this.vy = 0;
-    this.facing = slot === 0 ? 1 : -1;
+    // Face the middle of the stage. For two players on their hand-placed
+    // spawns this is exactly the old `slot === 0 ? 1 : -1`; for four it is
+    // the only rule that still means anything.
+    this.facing = sp.x < VW / 2 ? 1 : -1;
     this.grounded = true;
 
     this.health = COMBAT.maxHealth;
@@ -1021,6 +1182,9 @@ class Fighter {
     this.combo = 0;
     this.sinceHitFrames = 999;
     this.volleyOf = null;
+    // Which fighter that volley belongs to. Two people can pick the same
+    // character now, and the move object alone cannot tell them apart.
+    this.volleyBy = -1;
     this.volleyHits = 0;
     this.volleySince = 999;
     this.mana = COMBAT.manaMax;
@@ -1119,7 +1283,10 @@ class Fighter {
   }
 
   /* ---- per-frame update ---- */
-  update(pad, foe) {
+  // No opponent argument: it used to be handed `fighters[1 - i]` and passed
+  // straight to updateFree(pad), which never declared it. Anything that
+  // genuinely needs a target -- the CPU, the ham -- calls nearestFoe().
+  update(pad) {
     if (this.hitstop > 0) { this.hitstop--; return; }
     if (this.eliminated) return;
 
@@ -1207,7 +1374,7 @@ class Fighter {
       return;
     }
 
-    this.updateFree(pad, foe);
+    this.updateFree(pad);
     this.checkBlastZones();
   }
 
@@ -1811,7 +1978,10 @@ class Fighter {
   }
 
   respawn() {
-    this.x = STAGE.respawn.x + (this.slot === 0 ? -22 : 22);
+    // Fan out around the respawn point so four people do not all drop onto
+    // the same pixel. Two players keep the +/-22 they always had.
+    const step = this.count === 2 ? 44 : 30;
+    this.x = STAGE.respawn.x + (this.slot - (this.count - 1) / 2) * step;
     this.y = STAGE.respawn.y;
     this.prevY = this.y;
     this.vx = 0;
@@ -1819,6 +1989,7 @@ class Fighter {
     this.health = COMBAT.maxHealth;
     this.combo = 0;
     this.volleyOf = null;
+    this.volleyBy = -1;
     this.shield = COMBAT.shieldMax;
     this.buffTimer = 0;
     this.buffStats = null;
@@ -2982,13 +3153,15 @@ class HamDrop {
   constructor(owner, spec) {
     this.owner = owner;
     this.spec = spec;
-    // Aimed at the opponent's feet, or straight ahead if there is somehow
-    // nobody left to aim at.
+    // Aimed at the nearest opponent's feet, or straight ahead if there is
+    // somehow nobody left to aim at. It used to take the first fighter that
+    // was not the owner, which with only two people was the same thing and
+    // with four would drop the ham on whoever happened to be earliest in the
+    // array rather than on anyone he was fighting.
     let tx = owner.x + owner.facing * 40;
     let ty = owner.y;
-    for (const f of fighters) {
-      if (f !== owner && !f.eliminated) { tx = f.x; ty = f.y; break; }
-    }
+    const mark = nearestFoe(owner);
+    if (mark) { tx = mark.x; ty = mark.y; }
     this.x = clamp(tx, 14, VW - 14);
     this.y = spec.fallFrom;
     this.vy = spec.fall;
@@ -3009,12 +3182,14 @@ class HamDrop {
     }
     if (!found) this.groundY = VH;
     this.pierce = true;
-    this.hitAt = [0, 0];
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
     this.dead = false;
   }
 
   update() {
-    for (let i = 0; i < 2; i++) if (this.hitAt[i] > 0) this.hitAt[i]--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
     this.y += this.vy;
     this.vy += this.spec.drop;
     this.t++;
@@ -3104,14 +3279,16 @@ class Swinger {
     this.ay = -37;
     this.step = 0;
     this.pierce = true;
-    this.hitAt = [0, 0];
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
     this.dead = false;
     this.x = this.ax + VINE_ARC[0][0] * this.dir;
     this.y = this.ay + VINE_ARC[0][1];
   }
 
   update() {
-    for (let i = 0; i < 2; i++) if (this.hitAt[i] > 0) this.hitAt[i]--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
     this.step++;
     // Two frames per point on the arc.
     const i = Math.min(VINE_ARC.length - 1, this.step >> 1);
@@ -3163,11 +3340,13 @@ class Ball {
     this.dead = false;
     // A loaded bar does not stop because it met somebody.
     this.pierce = !!spec.pierce;
-    this.hitAt = [0, 0];
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
   }
 
   update() {
-    for (let i = 0; i < 2; i++) if (this.hitAt[i] > 0) this.hitAt[i]--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
     const prevY = this.y;
     this.x += this.vx;
     this.y += this.vy;
@@ -3492,8 +3671,10 @@ function applyHit(attacker, defender, move, sourceX) {
   // A fan of projectiles is one input; without falloff a six-bone ult
   // would take more than half a health bar in a single press.
   if (move.count && move.count > 1) {
-    if (defender.volleyOf !== move || defender.volleySince > 40) {
+    if (defender.volleyOf !== move || defender.volleyBy !== attacker.slot ||
+        defender.volleySince > 40) {
       defender.volleyOf = move;
+      defender.volleyBy = attacker.slot;
       defender.volleyHits = 0;
     }
     const f = COMBAT.volleyFalloff;
@@ -3626,6 +3807,9 @@ function resolveCombat(fighters) {
    ===================================================================== */
 
 function aiDecide(me, foe) {
+  // nearestFoe returns null once everyone else is out, which can happen for a
+  // frame or two before the match notices it is over.
+  if (!foe) return Object.assign({}, NEUTRAL);
   const pad = Object.assign({}, NEUTRAL);
   if (me.eliminated || foe.eliminated) return pad;
 
@@ -3848,10 +4032,18 @@ let twoPlayer = true;
 let winnerKey = null;
 let stagePick = 0;
 
+/* How many fighters this match holds, and how many of them a person is
+   driving. Everyone from `humanCount` up is a CPU, so "2 of 4" is a free-for-
+   all with two friends and two bots. Two humans is the keyboard's honest
+   ceiling; a third and fourth person need gamepads. */
+let playerCount = 2;
+let humanCount = 2;
+
 const select = {
-  cursor: [0, 4],       // default highlights: AutisNick / Reese
-  locked: [false, false],
-  activeSlot: 0,        // in 1P mode, one player picks both sides
+  // Default highlights, one per seat: AutisNick / Reese / Kel / Trev.
+  cursor: [0, 4, 2, 5],
+  locked: [false, false, false, false],
+  activeSlot: 0,        // when one person is picking several seats in turn
 };
 
 const stars = [];
@@ -3884,10 +4076,16 @@ function startBattle() {
   banner = null;
   battleFrames = 0;
   winnerKey = null;
-  fighters = [
-    new Fighter(ORDER[select.cursor[0]], 0, false),
-    new Fighter(ORDER[select.cursor[1]], 1, !twoPlayer),
-  ];
+  // Never build a seat there is no character for. Somebody has to have got
+  // this wrong for the constructor to see ORDER[undefined], but failing to a
+  // playable match beats failing inside `new Fighter`.
+  const seats = Math.max(2, Math.min(playerCount, select.cursor.length));
+  fighters = [];
+  for (let i = 0; i < seats; i++) {
+    const pick = ORDER[select.cursor[i]] ? select.cursor[i] : 0;
+    const cpu = i >= humanCount;
+    fighters.push(new Fighter(ORDER[pick], i, cpu, seats, cpu ? null : schemeFor(i)));
+  }
   scene = 'battle';
   announce('GO!', '#ffffff');
 }
@@ -3898,10 +4096,26 @@ function startBattle() {
 
 let titleChoice = 0;
 
+/* `humans: null` means "as many as there are controllers for", which is two
+   on the keyboard plus one per pad. A four-way with nobody's pad plugged in
+   is still a four-way -- two friends and two bots. */
+const MODES = [
+  { label: '1 PLAYER  (vs CPU)', players: 2, humans: 1 },
+  { label: '2 PLAYERS  (local)', players: 2, humans: 2 },
+  { label: '4-PLAYER BRAWL', players: 4, humans: null },
+];
+
 // Shared by the keyboard and the START button, so the two can't drift apart.
 function enterSelect() {
-  twoPlayer = titleChoice === 1;
-  select.locked = [false, false];
+  const m = MODES[titleChoice] || MODES[0];
+  playerCount = m.players;
+  humanCount = m.humans === null
+    ? Math.max(1, Math.min(m.players, humansAvailable()))
+    : m.humans;
+  // Still read by the select screen, and it now means what it says: two
+  // people picking at the same time on one keyboard.
+  twoPlayer = playerCount === 2 && humanCount === 2;
+  select.locked = new Array(MAX_PLAYERS).fill(false);
   select.activeSlot = 0;
   scene = 'select';
 }
@@ -3910,8 +4124,11 @@ function updateTitle() {
   // The HELP button still works online -- it is a mouse action, so it sets
   // the scene without going through here.
   if (onlineOnly) return;      // the lobby drives everything here
-  if (tapped('KeyW') || tapped('ArrowUp') || tapped('KeyS') || tapped('ArrowDown')) {
-    titleChoice = 1 - titleChoice;
+  if (tapped('KeyW') || tapped('ArrowUp')) {
+    titleChoice = (titleChoice + MODES.length - 1) % MODES.length;
+  }
+  if (tapped('KeyS') || tapped('ArrowDown')) {
+    titleChoice = (titleChoice + 1) % MODES.length;
   }
   if (tapped('KeyH')) { scene = 'help'; return; }
   if (menuConfirm()) enterSelect();
@@ -3929,6 +4146,10 @@ function updateHelp() {
    SCENE: CHARACTER SELECT
    ===================================================================== */
 
+/* One colour per seat: player one blue and player two red as they have always
+   been, then green and amber. Also used by the HUD ordering. */
+const SEAT_COLORS = ['#59a5ff', '#ff5f5f', '#5fd46a', '#ffc14d'];
+
 const GRID_COLS = 3;
 
 function moveCursor(slot, dx, dy) {
@@ -3939,6 +4160,15 @@ function moveCursor(slot, dx, dy) {
   row = clamp(row + dy, 0, Math.ceil(ORDER.length / GRID_COLS) - 1);
   const n = row * GRID_COLS + col;
   if (n < ORDER.length) select.cursor[slot] = n;
+}
+
+/* One menu press, from whichever controller owns a seat. */
+function menuTap(scheme, action) {
+  if (typeof scheme === 'number') {
+    const b = BINDS[scheme];
+    return tapped(b[action]) || (b[action + '2'] && tapped(b[action + '2']));
+  }
+  return gpTapped(Number(scheme.slice(3)), action);
 }
 
 function updateSelect() {
@@ -3959,25 +4189,27 @@ function updateSelect() {
     }
     if (select.locked[0] && select.locked[1]) scene = 'stage';
   } else {
-    // Solo: player 1 picks their own fighter, then the CPU's.
+    // A seat at a time. Each human seat is driven by its own controller, so
+    // in a four-way everybody picks their own fighter; CPU seats fall to
+    // player one. This is the path solo mode already used -- pick yourself,
+    // then pick the CPU -- just counting further.
     const slot = select.activeSlot;
-    const b = BINDS[0];
-    if (tapped(b.left)) moveCursor(slot, -1, 0);
-    if (tapped(b.right)) moveCursor(slot, 1, 0);
-    if (tapped(b.up)) moveCursor(slot, 0, -1);
-    if (tapped(b.down)) moveCursor(slot, 0, 1);
-    if (tapped(b.attack) || menuConfirm()) {
+    const sch = slot < humanCount ? schemeFor(slot) : 0;
+    if (menuTap(sch, 'left')) moveCursor(slot, -1, 0);
+    if (menuTap(sch, 'right')) moveCursor(slot, 1, 0);
+    if (menuTap(sch, 'up')) moveCursor(slot, 0, -1);
+    if (menuTap(sch, 'down')) moveCursor(slot, 0, 1);
+    if (menuTap(sch, 'attack') || menuConfirm()) {
       select.locked[slot] = true;
-      if (slot === 0) {
-        select.activeSlot = 1;
-      } else {
-        scene = 'stage';
-      }
+      if (slot + 1 < playerCount) select.activeSlot = slot + 1;
+      else scene = 'stage';
+      return;
     }
-    if (tapped(b.shield) && slot === 1) {
-      select.activeSlot = 0;
-      select.locked[0] = false;
-      select.locked[1] = false;
+    // Back up a seat rather than starting over.
+    if (menuTap(sch, 'shield') && slot > 0) {
+      select.locked[slot] = false;
+      select.locked[slot - 1] = false;
+      select.activeSlot = slot - 1;
     }
   }
 }
@@ -3993,7 +4225,7 @@ function updateSelect() {
 function updateStageSelect() {
   if (menuBackOrShield()) {
     scene = 'select';
-    select.locked = [false, false];
+    select.locked = new Array(MAX_PLAYERS).fill(false);
     select.activeSlot = 0;
     return;
   }
@@ -4044,7 +4276,7 @@ function drawStageSelect() {
   text('← →  choose', VW - 10, 172, 6, '#4e5570', 'right', 500);
   drawButton('back', 44, 166, 52, () => {
     scene = 'select';
-    select.locked = [false, false];
+    select.locked = new Array(MAX_PLAYERS).fill(false);
     select.activeSlot = 0;
   });
 }
@@ -4063,18 +4295,20 @@ function updateBattle() {
       return;
     }
     scene = onlineOnly ? 'title' : 'select';
-    select.locked = [false, false];
+    select.locked = new Array(MAX_PLAYERS).fill(false);
     return;
   }
 
   if (freezeFrames > 0) { freezeFrames--; return; }
 
+  // One pad per fighter. A CPU builds its own from whoever is nearest; a
+  // person's comes from whichever scheme that seat was given.
   const pads = netplay.active && netplay.framePads
     ? netplay.framePads
-    : [readPad(0), twoPlayer ? readPad(1) : aiPad(fighters[1], fighters[0])];
+    : fighters.map((f) => (f.cpu ? aiPad(f, nearestFoe(f)) : readPadFor(f)));
 
   for (let i = 0; i < fighters.length; i++) {
-    fighters[i].update(pads[i], fighters[1 - i]);
+    fighters[i].update(pads[i]);
   }
   for (const b of projectiles) b.update();
   resolveCombat(fighters);
@@ -4092,10 +4326,24 @@ function updateBattle() {
 
   battleFrames++;
   if (battleFrames >= COMBAT.timeLimitFrames) {
-    const [a, b] = fighters;
-    if (a.stocks !== b.stocks) winnerKey = a.stocks > b.stocks ? a.key : b.key;
-    else if (a.health !== b.health) winnerKey = a.health > b.health ? a.key : b.key;
-    else winnerKey = null;
+    // Most stocks, then most health. With four people a draw is far more
+    // likely than it was head to head, so an outright tie for the lead is a
+    // draw rather than whoever happens to sort first.
+    let best = null;
+    let tied = false;
+    for (const f of alive) {
+      if (!best) { best = f; continue; }
+      if (f.stocks !== best.stocks) {
+        if (f.stocks > best.stocks) { best = f; tied = false; }
+        continue;
+      }
+      if (f.health !== best.health) {
+        if (f.health > best.health) { best = f; tied = false; }
+        continue;
+      }
+      tied = true;
+    }
+    winnerKey = best && !tied ? best.key : null;
     scene = 'results';
     resultTimer = 0;
   }
@@ -4111,7 +4359,7 @@ function updateResults() {
   resultTimer++;
   if (menuBack()) { scene = 'title'; return; }
   if (resultTimer > 40 && (menuConfirm())) {
-    select.locked = [false, false];
+    select.locked = new Array(MAX_PLAYERS).fill(false);
     select.activeSlot = 0;
     scene = onlineOnly ? 'title' : 'select';
   }
@@ -4336,6 +4584,20 @@ function drawFighter(g, f) {
   const im = f.sprite();
   if (!im) return;
 
+  // Whose is whose. Fighters do not collide with each other, so four of them
+  // can stand in exactly the same place, and everybody can pick the same
+  // character. Left off at two players, where the game has never needed it.
+  if (fighters.length > 2) {
+    const mx = Math.round(f.x);
+    const my = Math.round(f.y) - 24;
+    g.fillStyle = SEAT_COLORS[f.slot] || '#ffffff';
+    // A little downward arrow, widest at the top.
+    g.fillRect(mx - 3, my, 7, 1);
+    g.fillRect(mx - 2, my + 1, 5, 1);
+    g.fillRect(mx - 1, my + 2, 3, 1);
+    g.fillRect(mx, my + 3, 1, 1);
+  }
+
   // Respawn invulnerability blinks; roll/dodge invulnerability is solid
   // but dimmed, so you can read the difference at a glance.
   if (f.invuln > 0 && Math.floor(f.invuln / 4) % 2 === 0) return;
@@ -4433,11 +4695,17 @@ function drawHUD() {
   sctx.fillStyle = band;
   sctx.fillRect(0, px(VH - 32), view.width, px(32));
 
+  // Two players keep the corners they have always had. More than that get
+  // even shares of the width: at four, 62px of bar in an 80px slot, which is
+  // the whole reason MAX_PLAYERS is four and not six.
+  const n = fighters.length;
   const barW = 62;
 
-  for (let i = 0; i < fighters.length; i++) {
+  for (let i = 0; i < n; i++) {
     const f = fighters[i];
-    const cx = i === 0 ? 66 : VW - 66;
+    const cx = n <= 2
+      ? (i === 0 ? 66 : VW - 66)
+      : Math.round(VW * (i + 0.5) / n);
     const bx = cx - barW / 2;
     const hp = clamp(f.health / COMBAT.maxHealth, 0, 1);
 
@@ -4448,7 +4716,8 @@ function drawHUD() {
       : hp > 0.28 ? '#e8c341'
       : '#ff5f5f';
 
-    text(f.def.name, bx, nameY, 6, f.accent, 'left', 700);
+    const seatCol = n > 2 ? (SEAT_COLORS[i] || f.accent) : f.accent;
+    text(f.def.name, bx, nameY, 6, seatCol, 'left', 700);
     text(f.eliminated ? 'OUT' : String(Math.max(0, Math.ceil(f.health))),
          bx + barW, nameY, 7, hue, 'right', 800);
 
@@ -4464,7 +4733,7 @@ function drawHUD() {
     const total = COMBAT.stocks;
     for (let st = 0; st < total; st++) {
       const sx = bx + st * 5;
-      sctx.fillStyle = st < f.stocks ? f.accent : '#2c2f3d';
+      sctx.fillStyle = st < f.stocks ? seatCol : '#2c2f3d';
       sctx.fillRect(px(sx), px(stockY), px(3), px(3));
     }
 
@@ -4535,10 +4804,17 @@ function drawTitle() {
     return;
   }
 
-  const opts = ['1 PLAYER  (vs CPU)', '2 PLAYERS  (local)'];
-  opts.forEach((o, i) => {
+  MODES.forEach((m, i) => {
     const on = titleChoice === i;
-    text((on ? '> ' : '  ') + o, VW / 2, 134 + i * 10, 8,
+    let label = m.label;
+    // Say up front how a four-way will actually be filled, so nobody picks it
+    // expecting three friends and gets two bots without being told why.
+    if (m.humans === null) {
+      const h = Math.max(1, Math.min(m.players, humansAvailable()));
+      label += h >= m.players ? '  (4 people)'
+             : '  (' + h + ' of you + ' + (m.players - h) + ' CPU)';
+    }
+    text((on ? '> ' : '  ') + label, VW / 2, 130 + i * 9, 8,
          on ? '#ffffff' : '#5f6884', 'center', on ? 800 : 500);
   });
   // The buttons are 325x128 -- two and a half times wider than they are tall
@@ -4546,7 +4822,12 @@ function drawTitle() {
   // At 48 wide each is 18.9 tall, which is what sets everything above them.
   drawButton('start', VW / 2 - 30, 161, 48, enterSelect);
   drawButton('help', VW / 2 + 30, 161, 48, () => { scene = 'help'; });
-  text('W/S to choose', VW / 2, VH - 3, 5, '#454c66', 'center', 500);
+  // The bottom line does double duty: normally it says how to change the
+  // selection, but on a four-way that cannot be filled it says why.
+  const short = MODES[titleChoice] && MODES[titleChoice].humans === null &&
+                humansAvailable() < MAX_PLAYERS;
+  text(short ? 'plug in controllers for players 3 and 4' : 'W/S to choose',
+       VW / 2, VH - 3, 5, '#454c66', 'center', 500);
 }
 
 /* The keyboard half of the game has never been written down anywhere the
@@ -4603,11 +4884,15 @@ function drawSelect() {
     const cy = originY + row * cellH;
     const def = ROSTER[k];
 
-    const p1 = select.cursor[0] === i;
-    const p2 = select.cursor[1] === i;
+    // Which seats are pointing at this fighter. More than one gets white,
+    // because two rings on one cell at this size is just a thicker ring.
+    const on = [];
+    for (let seat = 0; seat < playerCount; seat++) {
+      if (select.cursor[seat] === i) on.push(seat);
+    }
 
-    if (p1 || p2) {
-      sctx.strokeStyle = p1 && p2 ? '#ffffff' : p1 ? '#59a5ff' : '#ff5f5f';
+    if (on.length) {
+      sctx.strokeStyle = on.length > 1 ? '#ffffff' : SEAT_COLORS[on[0]];
       sctx.lineWidth = Math.max(2, SCALE);
       sctx.strokeRect(px(cx - 32), px(cy - 6), px(64), px(46));
       sctx.lineWidth = 1;
@@ -4619,6 +4904,7 @@ function drawSelect() {
 
   // Detail panel for whichever character the active cursor is on.
   const focusSlot = twoPlayer ? 0 : select.activeSlot;
+  void focusSlot;
   const focus = ROSTER[ORDER[select.cursor[focusSlot]]];
   // Three states, not two. "Not drawn" used to print "placeholder", which
   // was wrong for Trev and for Lucas: their movesets come from the 2016
@@ -4643,9 +4929,22 @@ function drawSelect() {
          '  arrows+' + keyName(BINDS[1].attack),
          VW - 10, VH - 33, 6.5, select.locked[1] ? '#8fe08f' : '#ff5f5f', 'right', 700);
   } else {
-    text((select.activeSlot === 0 ? 'PICK YOURSELF' : 'NOW PICK THE CPU') +
-         '  -  WASD + ' + keyName(BINDS[0].attack),
-         10, VH - 33, 6.5, '#59a5ff', 'left', 700);
+    const slot = select.activeSlot;
+    const human = slot < humanCount;
+    const who = playerCount === 2
+      ? (slot === 0 ? 'PICK YOURSELF' : 'NOW PICK THE CPU')
+      : (human ? 'PLAYER ' + (slot + 1) + ', PICK YOUR FIGHTER'
+               : 'PICK CPU ' + (slot + 1));
+    const how = !human || typeof schemeFor(slot) !== 'number'
+      ? (human ? 'controller ' + (slot - BINDS.length + 1) : 'WASD + ' + keyName(BINDS[0].attack))
+      : (slot === 0 ? 'WASD + ' + keyName(BINDS[0].attack)
+                    : 'arrows + ' + keyName(BINDS[1].attack));
+    text(who + '  -  ' + how, 10, VH - 33, 6.5,
+         SEAT_COLORS[slot] || '#59a5ff', 'left', 700);
+    if (playerCount > 2) {
+      text('seat ' + (slot + 1) + ' of ' + playerCount, VW - 10, VH - 33, 6.5,
+           '#7d849c', 'right', 600);
+    }
   }
 }
 
@@ -4761,7 +5060,8 @@ const NET_LEVEL_BITS = 1 | 2 | 4 | 8 | 128;
    Everything reachable from the roster and the stage table is read-only
    data: move definitions, tuning, spawn points. Snapshots keep those by
    reference. Copying them every frame would be waste, and identity matters --
-   `volleyOf` is compared with === against a move object.
+   `volleyOf` is compared with === against a move object, and `volleyBy`
+   says which fighter that volley belongs to.
    --------------------------------------------------------------------- */
 let SIM_FROZEN = null;
 function simFrozen() {
@@ -4846,13 +5146,23 @@ function restoreSim(snap) {
   resultTimer = snap.resultTimer;
 }
 
+/** One input map per seat, however many seats there turn out to be. */
+function netMaps() {
+  const out = [];
+  for (let i = 0; i < MAX_PLAYERS; i++) out.push(new Map());
+  return out;
+}
+
 const netplay = {
   active: false,
   localSlot: 0,
+  // How many machines are in this match. Everything below loops to it rather
+  // than to two.
+  slots: 2,
   delay: 4,
   send: null,
   onEvent: null,
-  inputs: [new Map(), new Map()],
+  inputs: netMaps(),
   checks: new Map(),
   framePads: null,
   frame: 0,
@@ -4865,23 +5175,60 @@ const netplay = {
 
   // --- rollback bookkeeping ---
   snapshots: new Map(),      // frame -> state at the START of that frame
-  used: [new Map(), new Map()],     // what we actually fed the sim
-  guessed: [new Map(), new Map()],  // ...and whether it was a guess
-  lastReal: [0, 0],          // newest confirmed bits, the basis for a guess
+  used: netMaps(),           // what we actually fed the sim
+  guessed: netMaps(),        // ...and whether it was a guess
+  lastReal: new Array(MAX_PLAYERS).fill(0),  // newest confirmed bits, for a guess
   rollbackTo: null,          // earliest frame proven wrong, or null
   resimulating: false,
   confirmedFrame: 0,         // every frame below this ran on real input
   lastCheckedFrame: -1,
-  theirChecks: new Map(),
+  // One map per peer. A single map was right with one opponent; with three,
+  // every peer's hash for the same frame lands in the same key and the last
+  // to arrive wins -- so a peer that had genuinely diverged could have its
+  // hash overwritten by a healthy one and never be reported.
+  theirChecks: netMaps(),
   rollbacks: 0,
   resimFrames: 0,
 
   // --- adaptive delay ---
-  remoteNewest: -1,          // newest frame we hold opponent input for
+  // Newest frame we hold input for, per seat. This was a single number when
+  // there was a single opponent; with three of them the one that matters is
+  // whichever is furthest behind, so it has to be tracked separately and
+  // reduced at the point of use.
+  newest: new Array(MAX_PLAYERS).fill(-1),
   aheadPeak: 0,              // worst guess distance this reporting window
-  peerAhead: 0,              // what they last told us about theirs
+  peerAhead: new Array(MAX_PLAYERS).fill(0),  // what each of them reports
   delayChanges: 0,
 };
+
+/** Every seat in this match except mine. */
+function netRemoteSlots() {
+  const out = [];
+  for (let sl = 0; sl < netplay.slots; sl++) {
+    if (sl !== netplay.localSlot) out.push(sl);
+  }
+  return out;
+}
+
+/* The peer furthest behind. A rollback match runs at the pace of its slowest
+   link, and with four people that is a meaningfully worse deal than with two:
+   everybody pays the worst connection in the room. Inherent to the design,
+   not a shortcut. */
+function netWorstRemote() {
+  let worst = Infinity;
+  for (const sl of netRemoteSlots()) {
+    if (netplay.newest[sl] < worst) worst = netplay.newest[sl];
+  }
+  return worst === Infinity ? netplay.frame : worst;
+}
+
+/** Is anybody's input for frame f still outstanding? */
+function netMissingAt(f) {
+  for (const sl of netRemoteSlots()) {
+    if (!netplay.inputs[sl].has(f)) return true;
+  }
+  return false;
+}
 
 // Bit 64 used to be the single SPECIAL button. It is now three bits (512,
 // 1024, 2048), one per special, and `special` is derived from them rather
@@ -4948,7 +5295,10 @@ function netEmit(kind, detail) {
 }
 
 function netHaveFrame(f) {
-  return netplay.inputs[0].has(f) && netplay.inputs[1].has(f);
+  for (let sl = 0; sl < netplay.slots; sl++) {
+    if (!netplay.inputs[sl].has(f)) return false;
+  }
+  return true;
 }
 
 /* Capture this machine's input for frame+delay and put it on the wire with a
@@ -4981,16 +5331,25 @@ function netSubmitLocal() {
   for (let f = from; f <= netplay.submittedTo; f++) bits.push(mine.get(f) || 0);
   // `a` rides along: how far ahead we are having to guess. It costs two bytes
   // and saves the opponent from having to infer it.
-  netplay.send({ t: 'i', f: from, b: bits, a: netplay.aheadPeak });
+  // `s` is who this came from. With two machines that was implied; with four
+  // the host relays guests' packets to each other and the sender is the only
+  // way to tell whose buttons these are.
+  netplay.send({ t: 'i', s: netplay.localSlot, f: from, b: bits,
+                 a: netplay.aheadPeak });
 }
 
 /* Spend delay on the opponent's behalf, in single frames, rarely. */
 function netTuneDelay() {
   if (netplay.frame % NET_TUNE_EVERY) return;
-  if (netplay.peerAhead > NET_AHEAD_HIGH && netplay.delay < NET_MAX_DELAY) {
+  // Whoever is struggling most sets the delay for the room.
+  let worstAhead = 0;
+  for (const sl of netRemoteSlots()) {
+    if (netplay.peerAhead[sl] > worstAhead) worstAhead = netplay.peerAhead[sl];
+  }
+  if (worstAhead > NET_AHEAD_HIGH && netplay.delay < NET_MAX_DELAY) {
     netplay.delay++;
     netplay.delayChanges++;
-  } else if (netplay.peerAhead < NET_AHEAD_LOW && netplay.delay > 1) {
+  } else if (worstAhead < NET_AHEAD_LOW && netplay.delay > 1) {
     netplay.delay--;
     netplay.delayChanges++;
   }
@@ -5001,15 +5360,31 @@ function netReceive(msg) {
   if (!msg || !netplay.active) return;
 
   if (msg.t === 'i') {
-    const rs = 1 - netplay.localSlot;
+    // Older builds sent no sender at all, and in a two-player match there was
+    // only one thing it could have been.
+    const rs = typeof msg.s === 'number' ? msg.s : 1 - netplay.localSlot;
+    // A packet claiming to be from a seat that is not playing, or from us, is
+    // either a relay loop or a stale client. Written as `>= 0` rather than
+    // `< 0` on purpose: every comparison with NaN is false, so `!(rs < 0)`
+    // would wave a NaN slot straight through.
+    if (!(rs >= 0) || rs >= netplay.slots || rs !== Math.floor(rs)) return;
+    if (rs === netplay.localSlot) return;
+    // Nothing about the frame window is trusted either. A bad `f` would write
+    // Map keys at arbitrary offsets, and an enormous `b` would sit in the loop.
+    // The bound is deliberately loose rather than NET_REDUNDANCY: a peer that
+    // has been away sends a much longer catch-up window, and refusing it is
+    // how a recoverable stall becomes a permanent one. This only has to stop
+    // something absurd.
+    if (!Array.isArray(msg.b) || msg.b.length > 4096) return;
+    if (typeof msg.f !== 'number' || msg.f !== Math.floor(msg.f) || msg.f < 0) return;
     const remote = netplay.inputs[rs];
-    if (typeof msg.a === 'number') netplay.peerAhead = msg.a;
+    if (typeof msg.a === 'number') netplay.peerAhead[rs] = msg.a;
     for (let i = 0; i < msg.b.length; i++) {
       const f = msg.f + i;
       if (remote.has(f)) continue;
       const bits = msg.b[i];
       remote.set(f, bits);
-      if (f > netplay.remoteNewest) netplay.remoteNewest = f;
+      if (f > netplay.newest[rs]) netplay.newest[rs] = f;
 
       // Did we already run this frame on a guess?
       if (f < netplay.frame && netplay.guessed[rs].get(f)) {
@@ -5025,9 +5400,12 @@ function netReceive(msg) {
   }
 
   if (msg.t === 'c') {
-    // Keep it even if we have not reached that frame ourselves yet; the two
-    // sides confirm frames at different moments.
-    netplay.theirChecks.set(msg.f, msg.h);
+    // Keep it even if we have not reached that frame ourselves yet; machines
+    // confirm frames at different moments.
+    const cs = typeof msg.s === 'number' ? msg.s : 1 - netplay.localSlot;
+    if (!(cs >= 0) || cs >= netplay.slots || cs === netplay.localSlot) return;
+    if (typeof msg.f !== 'number' || typeof msg.h !== 'number') return;
+    netplay.theirChecks[cs].set(msg.f, msg.h);
     netCompareCheck(msg.f);
     return;
   }
@@ -5037,11 +5415,17 @@ function netReceive(msg) {
 
 function netCompareCheck(f) {
   const mine = netplay.checks.get(f);
-  const theirs = netplay.theirChecks.get(f);
-  if (mine === undefined || theirs === undefined) return;
-  if (mine !== theirs && !netplay.desync) {
-    netplay.desync = { frame: f, mine: mine, theirs: theirs };
-    netEmit('desync', netplay.desync);
+  if (mine === undefined) return;
+  // Every peer that has reported this frame, not just the most recent one.
+  for (let sl = 0; sl < netplay.slots; sl++) {
+    if (sl === netplay.localSlot) continue;
+    const theirs = netplay.theirChecks[sl].get(f);
+    if (theirs === undefined) continue;
+    if (theirs !== mine && !netplay.desync) {
+      netplay.desync = { frame: f, slot: sl, mine: mine, theirs: theirs };
+      netEmit('desync', netplay.desync);
+      return;
+    }
   }
 }
 
@@ -5054,7 +5438,7 @@ function netSimulateOne() {
   netplay.snapshots.set(f, saveSim());
 
   const pads = [];
-  for (let sl = 0; sl < 2; sl++) {
+  for (let sl = 0; sl < netplay.slots; sl++) {
     const known = netplay.inputs[sl];
     let bits, guessed = false;
     if (known.has(f)) {
@@ -5099,9 +5483,13 @@ function netRollback() {
    Only those can be hashed: a guessed frame legitimately differs between the
    two machines for a moment, and comparing it would cry desync. */
 function netAdvanceConfirmed() {
-  while (netplay.confirmedFrame < netplay.frame &&
-         !netplay.guessed[0].get(netplay.confirmedFrame) &&
-         !netplay.guessed[1].get(netplay.confirmedFrame)) {
+  // A frame is confirmed only when NOBODY's input for it was a guess.
+  while (netplay.confirmedFrame < netplay.frame) {
+    let anyGuessed = false;
+    for (let sl = 0; sl < netplay.slots; sl++) {
+      if (netplay.guessed[sl].get(netplay.confirmedFrame)) { anyGuessed = true; break; }
+    }
+    if (anyGuessed) break;
     netplay.confirmedFrame++;
   }
 
@@ -5110,7 +5498,9 @@ function netAdvanceConfirmed() {
     const h = stateHash(netplay.snapshots.get(target));
     netplay.lastCheckedFrame = target;
     netplay.checks.set(target, h);
-    if (netplay.send) netplay.send({ t: 'c', f: target, h: h });
+    if (netplay.send) {
+      netplay.send({ t: 'c', s: netplay.localSlot, f: target, h: h });
+    }
     netCompareCheck(target);
   }
 }
@@ -5137,7 +5527,8 @@ function netPrune() {
     }
   }
   const cutoff = netplay.frame - NET_CHECK_EVERY * 30;
-  for (const m of [netplay.checks, netplay.theirChecks]) {
+  const maps = [netplay.checks].concat(netplay.theirChecks);
+  for (const m of maps) {
     for (const k of m.keys()) if (k < cutoff) m.delete(k);
   }
 }
@@ -5156,8 +5547,8 @@ function netAdvance() {
   // Measured against the newest input we hold, NOT against confirmedFrame:
   // confirmedFrame stops dead at a permanently lost frame, and keying the
   // stall off it turned one unrecoverable packet into a permanent freeze.
-  if (!netplay.inputs[1 - netplay.localSlot].has(netplay.frame) &&
-      netplay.frame - netplay.remoteNewest > NET_MAX_ROLLBACK) {
+  if (netMissingAt(netplay.frame) &&
+      netplay.frame - netWorstRemote() > NET_MAX_ROLLBACK) {
     netplay.stalling = true;
     netplay.stalledFrames++;
     netplay.worstStall = Math.max(netplay.worstStall, netplay.stalledFrames);
@@ -5172,7 +5563,7 @@ function netAdvance() {
   // that actually matters, and it is measured rather than inferred from a
   // round-trip time: it already contains latency, jitter, packet loss and
   // whatever pace their machine is keeping.
-  const ahead = netplay.frame - netplay.remoteNewest;
+  const ahead = netplay.frame - netWorstRemote();
   if (ahead > netplay.aheadPeak) netplay.aheadPeak = ahead;
 
   netAdvanceConfirmed();
@@ -5184,20 +5575,32 @@ function netAdvance() {
 function netStart(opts) {
   const stageIdx = STAGES.findIndex((st) => st.key === opts.stage);
   stagePick = stageIdx < 0 ? 0 : stageIdx;
-  select.cursor = [
-    Math.max(0, ORDER.indexOf(opts.chars[0])),
-    Math.max(0, ORDER.indexOf(opts.chars[1])),
-  ];
-  twoPlayer = true;                 // both sides are human; no AI in netplay
+
+  // However many the lobby seated, clamped to what the screen can hold. The
+  // count comes from outside this file, so it is checked here rather than
+  // trusted: everything downstream loops to it.
+  const picks = Array.isArray(opts.chars) ? opts.chars : [];
+  const slots = Math.max(2, Math.min(MAX_PLAYERS, picks.length));
+  select.cursor = new Array(MAX_PLAYERS).fill(0);
+  for (let i = 0; i < slots; i++) {
+    select.cursor[i] = Math.max(0, ORDER.indexOf(picks[i]));
+  }
+  // Everybody online is a person. Setting these from `slots` is also what
+  // stops a four-player local brawl leaking into the next online match:
+  // startBattle loops to playerCount, and it used to be left at four.
+  playerCount = slots;
+  humanCount = slots;
+  twoPlayer = slots === 2;
 
   netplay.active = true;
-  netplay.localSlot = opts.localSlot === 1 ? 1 : 0;
+  netplay.slots = slots;
+  netplay.localSlot = Math.max(0, Math.min(slots - 1, opts.localSlot | 0));
   // One frame, not four. Rollback covers the network; the delay only exists
   // now to give a packet a free frame of travel before anything is guessed.
   netplay.delay = Math.max(1, Math.min(12, opts.delay == null ? 1 : opts.delay));
   netplay.send = opts.send || null;
   netplay.onEvent = opts.onEvent || null;
-  netplay.inputs = [new Map(), new Map()];
+  netplay.inputs = netMaps();
   netplay.checks = new Map();
   netplay.frame = 0;
   netplay.submittedTo = netplay.delay - 1;
@@ -5206,21 +5609,21 @@ function netStart(opts) {
   netplay.worstStall = 0;
   netplay.desync = null;
   netplay.ended = null;
-  netplay.framePads = [NEUTRAL, NEUTRAL];
+  netplay.framePads = new Array(slots).fill(NEUTRAL);
   netplay.snapshots = new Map();
-  netplay.used = [new Map(), new Map()];
-  netplay.guessed = [new Map(), new Map()];
-  netplay.lastReal = [0, 0];
+  netplay.used = netMaps();
+  netplay.guessed = netMaps();
+  netplay.lastReal = new Array(MAX_PLAYERS).fill(0);
   netplay.rollbackTo = null;
   netplay.resimulating = false;
   netplay.confirmedFrame = 0;
   netplay.lastCheckedFrame = -1;
-  netplay.theirChecks = new Map();
+  netplay.theirChecks = netMaps();
   netplay.rollbacks = 0;
   netplay.resimFrames = 0;
-  netplay.remoteNewest = -1;
+  netplay.newest = new Array(MAX_PLAYERS).fill(-1);
   netplay.aheadPeak = 0;
-  netplay.peerAhead = 0;
+  netplay.peerAhead = new Array(MAX_PLAYERS).fill(0);
   netplay.delayChanges = 0;
 
   // Only our own opening frames are primed. Seeding the opponent's from OUR
@@ -5235,7 +5638,7 @@ function netStart(opts) {
   startBattle();
   hasFocus = true;
   if (mount) mount.dataset.nerdwarsFocus = 'on';
-  netEmit('started', { slot: netplay.localSlot, stage: STAGE.key });
+  netEmit('started', { slot: netplay.localSlot, slots: slots, stage: STAGE.key });
 }
 
 function netStop(reason) {
@@ -5269,11 +5672,16 @@ function step() {
   // Not on a replayed frame. A rollback runs step() several times in one tick,
   // and advancing the edge state each time swallows anything pressed on that
   // tick -- Escape included, so the player could not quit.
-  if (!netplay.resimulating) prevHeld = new Set(held);
+  if (!netplay.resimulating) {
+    prevHeld = new Set(held);
+    gpPrev = gpNow;
+  }
 }
 
 function frame(now) {
   frameCount++;
+  // Once a frame, before anything reads a pad.
+  pollGamepads();
   if (!last) last = now;
   let dt = now - last;
   last = now;
@@ -5349,7 +5757,24 @@ window.NerdWars = {
         aheadPeak: netplay.aheadPeak,
         peerAhead: netplay.peerAhead,
         delayChanges: netplay.delayChanges,
-        buffered: netplay.inputs[1 - netplay.localSlot].size,
+        slots: netplay.slots,
+        // The newest frame this machine has hashed, and that hash. Every
+        // machine hashes the same frame numbers, so two machines reporting
+        // the same `checkedFrame` with different `checkedHash` have diverged
+        // -- which is the same thing `desync` reports, stated positively.
+        checkedFrame: netplay.lastCheckedFrame,
+        checkedHash: netplay.checks.get(netplay.lastCheckedFrame),
+        // The thinnest buffer of anyone we are waiting on: with four people
+        // the room moves at the pace of whoever is furthest behind.
+        buffered: (function () {
+          let least = 0;
+          for (let sl = 0; sl < netplay.slots; sl++) {
+            if (sl === netplay.localSlot) continue;
+            const n = netplay.inputs[sl].size;
+            if (!least || n < least) least = n;
+          }
+          return least;
+        })(),
       };
     },
   },
