@@ -631,3 +631,45 @@ test("a distant but healthy link is not slowed down", async () => {
     assert.equal(a.nw.net.status.desync, null);
   }
 });
+
+/* Pacing and the delay tuner read the same number for incompatible purposes.
+ *
+ * Input delay is spent on the opponent's behalf: when they report having to
+ * guess a long way, we add delay so they guess less. That works against
+ * latency and jitter. It does nothing at all once pacing has engaged, because
+ * pacing PINS the gap at whatever value makes our rate equal theirs -- a frame
+ * of delay that shrinks the gap makes us pace less, and it opens straight back
+ * up. Measured while writing this: delay 1 against delay 8 moved the
+ * prediction distance from 28.036 frames to 28.035.
+ *
+ * So a paced match used to walk the delay to the cap and park seven frames --
+ * 117ms -- of input lag on the machine already struggling, in exchange for
+ * nothing, and leave it there. In a fighting game that is a lot to pay for
+ * a measurement that was never a request for help.
+ */
+test("a paced match does not also pile on input delay", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+  const chars = ["kel", "trev"];
+  a.nw.net.start({ localSlot: 0, chars, stage: "swamp", delay: 1,
+                   send: (m) => b.nw.net.receive(m) });
+  b.nw.net.start({ localSlot: 1, chars, stage: "swamp", delay: 1,
+                   send: (m) => a.nw.net.receive(m) });
+
+  // Slow enough to be firmly inside the pacing band.
+  let credit = 0;
+  for (let t = 0; t < 1500; t++) {
+    a.pump(1);
+    credit += 55 / 60;
+    while (credit >= 1) { b.pump(1); credit -= 1; }
+  }
+
+  // Precondition: this is a paced match, not a healthy one that proves nothing.
+  assert.equal(a.nw.net.status.stalling, false, "pacing should have kept it running");
+  assert.ok(a.nw.net.status.frame > 1000, "the match has to have actually run");
+
+  const worst = Math.max(a.nw.net.status.delay, b.nw.net.status.delay);
+  assert.ok(worst <= 3,
+    `input delay reached ${worst} frames (~${Math.round(worst * 16.7)}ms) in a ` +
+    "paced match, where delay provably cannot reduce the prediction distance");
+});

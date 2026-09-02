@@ -5393,8 +5393,20 @@ function netSubmitLocal() {
   // `s` is who this came from. With two machines that was implied; with four
   // the host relays guests' packets to each other and the sender is the only
   // way to tell whose buttons these are.
+  // While pacing is engaged, `a` is not a request for help. The gap is being
+  // held open deliberately -- it is what makes our rate equal theirs -- and
+  // their delay cannot close it: a frame of delay that shrinks the gap makes
+  // us pace less, which opens it straight back to the same equilibrium.
+  // Measured, delay 1 against delay 8 moves the prediction distance from
+  // 28.036 frames to 28.035.
+  //
+  // Reporting it anyway walked them to NET_MAX_DELAY and parked seven frames
+  // -- 117ms -- of input lag on the machine already struggling, in exchange
+  // for nothing, and left it there even after their machine recovered. Since
+  // delay buys nothing here and costs input lag, say so and let it fall.
+  const paced = netPace() < 1;
   netplay.send({ t: 'i', s: netplay.localSlot, f: from, b: bits,
-                 a: netplay.aheadPeak });
+                 a: paced ? 0 : netplay.aheadPeak });
 }
 
 /* Spend delay on the opponent's behalf, in single frames, rarely. */
