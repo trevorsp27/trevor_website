@@ -297,7 +297,7 @@ const ROSTER = {
     name: 'JOHNNYHAM',
     tag: 'PLACEHOLDER',
     drawn: false,
-    blurb: 'Slams the ground. Bursts on both sides and launches straight up.',
+    blurb: 'Slams the ground, and orders in when that is not enough.',
     weight: 105, walk: 1.24, jump: 6.1, doubleJump: 5.6,
     jab: { startup: 5, active: 5, recovery: 11, damage: 6,
            base: 2.5, scale: 6.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829, ox: 2, oy: -9, w: 12, h: 10 },
@@ -322,11 +322,32 @@ const ROSTER = {
         ox: -8, oy: -12, w: 16, h: 18,
       },
     },
+    // The cast is only him pointing upwards, so it is over in half a second
+    // and everything after that belongs to the ham. None of this is a hitbox
+    // on him -- all three payloads are the ham's.
     ult: {
-      kind: 'shockwave', label: 'GROUND ZERO',
-      startup: 14, active: 12, recovery: 30,
-      damage: 16, base: 4, scale: 10.5, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
-      ox: -70, oy: -10, w: 140, h: 46,
+      kind: 'hamdrop', label: 'HONEY BAKED',
+      startup: 10, active: 4, recovery: 16,
+      // Off the top of the screen, and slow enough that the shadow is on the
+      // floor for about half a second before it arrives.
+      fallFrom: -40, fall: 0.8, drop: 0.28,
+      // Once per person: a second helping on the way past would make standing
+      // anywhere near the landing site simply fatal.
+      hitEvery: 90,
+      damage: 7, base: 3.4, scale: 9, angle: 78, kx: 0.20791169081775945, ky: 0.9781476007338056,
+      // The floor objects, both ways, the same way it does under Kel's
+      // dumbbell: it threatens where somebody is standing.
+      quake: {
+        speed: 3.6, life: 46, reach: 24,
+        damage: 4, base: 2.8, scale: 6, angle: 70, kx: 0.3420201433256688, ky: 0.9396926207859083,
+      },
+      // And it comes apart. Eight pieces that bounce off the floor and keep
+      // skittering, so the landing site stays unpleasant afterwards.
+      chunks: {
+        count: 8, speed: 0.85, spread: 0.55, lift: -3.2, drop: 0.22,
+        life: 100, bounce: 0.4, tints: ['#e48080'],
+        damage: 2, base: 2.2, scale: 5, angle: 56, kx: 0.5591929034707468, ky: 0.8290375725550417,
+      },
     },
   },
 
@@ -1072,7 +1093,7 @@ class Fighter {
       const s = this.moveFor(this.state);
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
-          s.kind === 'pizza' || s.kind === 'barrage' ||
+          s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain') return null;
       if (this.attackFrame < s.startup) return null;
@@ -1490,6 +1511,18 @@ class Fighter {
         }
         break;
 
+      // He points at the sky. What lands is not his problem.
+      case 'hamdrop':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new HamDrop(this, s));
+          addEffect('ring', this.x, this.y - 24, '#f7cd4a');
+          for (let i = 0; i < 10; i++) {
+            addEffect('spark', this.x + rand(-9, 9), this.y - rand(14, 32), '#f7cd4a');
+          }
+        }
+        break;
+
       // Somebody swings in out of the trees.
       case 'swingin':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
@@ -1873,6 +1906,14 @@ function drawArt(g, art, x, y) {
                    Math.round(y) - (art.height >> 1));
 }
 
+/** The same, blown up by a whole-number factor. Nearest-neighbour is already
+    on for this context, so a 23x19 sprite drawn at 3x stays a crisp 69x57
+    instead of turning to mush -- which is why the ham is stored small. */
+function drawArtBig(g, art, x, y, s) {
+  const w = art.width * s, h = art.height * s;
+  g.drawImage(art, Math.round(x) - (w >> 1), Math.round(y) - (h >> 1), w, h);
+}
+
 /* Trev's cereal is Cinnamon Toast Crunch specifically, so it has to look like
    it and not merely like "a cereal": a square with a dark crusted edge, a
    toasted face, and cinnamon sugar scattered across it. Three squares, so a
@@ -1975,6 +2016,57 @@ const SHIRT_ART = [
   '.#######.',
   '.##...##.',
 ];
+
+/* The ult itself, drawn rather than described: a scored, glazed holiday ham
+   with the bone still in it and a pineapple ring pinned to the front. Kept
+   small and blown up at draw time, because at 3x it is taller than the
+   fighter standing under it and the source would be unreadable at that size.
+
+   The crosshatch is what makes it read as a HAM and not as a slab of meat --
+   the diamond scoring is the single most recognisable thing about one. */
+const HAM_ART = [
+  '.........b.b...........',
+  '........bbbbb..........',
+  '.........bbb...........',
+  '.........bbb...........',
+  '........gggggg.........',
+  '......gghhdhhhgg.......',
+  '.....gdhhdhdhhdhg......',
+  '....ghhddhhhddhhhg.....',
+  '...ghhhddhhhddhhhdg....',
+  '..ghdhdhhdhdhhdhdhhg...',
+  '..ghhdhhhhdhhhhdhhhg...',
+  '.ghhdhdhhdppphdhdhhdg..',
+  '.gddhhhddppppphhhddhg..',
+  '.gddhhhdppcccpphhddhg..',
+  '.ghhdhdhhpppppdhdhhdg..',
+  '..ghhdhhhhppphhdhhhg...',
+  '..ghdhdhhdhdhhdhdhg....',
+  '...gghhddhhhddhhgg.....',
+  '.....gggggggggg........',
+];
+
+/* What is left of it afterwards. */
+const HAM_CHUNK_ART = [
+  '.hh.',
+  'hddh',
+  'ghhh',
+  '.gg.',
+];
+
+const HAM_PAL = {
+  b: '#f2eee2',   // bone
+  h: '#e48080',   // meat
+  d: '#983e3e',   // the scoring, cut into the glaze
+  g: '#c67836',   // caramelised crust
+  p: '#f7cd4a',   // pineapple
+  c: '#c42a34',   // and the cherry in the middle of it
+};
+
+const HAM_SCALE = 3;
+// Half the drawn height, so the ham can be landed on its underside instead of
+// sinking to its middle in the floor.
+const HAM_FOOT = (HAM_ART.length * HAM_SCALE) >> 1;
 
 /* "mike Tyson flies in from trees, sounds of rainforest" -- the 2016 note,
    finally drawn. Gloves up on the vine and out in front, and deliberately
@@ -2679,6 +2771,10 @@ class Pellet {
                           { w: '#565a68', b: '#9aa0b4' }), this.x, this.y);
       return;
     }
+    if (this.shape === 'hamchunk') {
+      drawArt(g, pixelArt('hamchunk', HAM_CHUNK_ART, HAM_PAL), this.x, this.y);
+      return;
+    }
     if (this.shape === 'shirt') {
       // Tumbles, because a thrown shirt does.
       const spin = Math.floor(this.life / 5) % 2;
@@ -2818,6 +2914,9 @@ class Shock {
     this.vx = dir * spec.speed;
     this.life = spec.life;
     this.t = 0;
+    // How high the wave stands. A dropped dumbbell throws up a wave you can
+    // hop over; a ham the size of a car does not, so the ult overrides it.
+    this.reach = spec.reach || 14;
     this.dead = false;
   }
 
@@ -2833,7 +2932,7 @@ class Shock {
   }
 
   box() {
-    return { x: this.x - 5, y: this.y - 13, w: 10, h: 14 };
+    return { x: this.x - 5, y: this.y - (this.reach - 1), w: 10, h: this.reach };
   }
 
   draw(g) {
@@ -2841,23 +2940,145 @@ class Shock {
     // back down as it runs out of energy.
     const x = Math.round(this.x), y = Math.round(this.y);
     const fade = 1 - this.t / this.spec.life;
+    // Drawn to whatever height it actually hits to, so a bigger wave looks
+    // bigger instead of quietly catching things it appears to pass under.
+    const k = this.reach / 14;
     // Tallest at the leading edge and trailing back behind it, so it reads as
     // the floor being pushed up and out rather than as a row of fence posts.
     g.fillStyle = '#8a6a44';
     for (let i = 0; i < 6; i++) {
-      const h = Math.max(1, Math.round((16 - i * 2.6) * fade));
+      const h = Math.max(1, Math.round((16 - i * 2.6) * k * fade));
       g.fillRect(x - this.dir * (i * 4) - 2, y - h, 4, h);
     }
     g.fillStyle = '#c9a06a';
     for (let i = 0; i < 6; i++) {
-      const h = Math.max(1, Math.round((14 - i * 2.6) * fade));
+      const h = Math.max(1, Math.round((14 - i * 2.6) * k * fade));
       g.fillRect(x - this.dir * (i * 4) - 1, y - h, 2, h);
     }
     // A bright chip of floor thrown off the front of it.
     g.globalAlpha = 0.75 * fade;
     g.fillStyle = '#f0d6a8';
-    g.fillRect(x + this.dir * 2 - 1, y - Math.max(3, Math.round(18 * fade)), 3, 4);
+    g.fillRect(x + this.dir * 2 - 1, y - Math.max(3, Math.round(18 * k * fade)), 3, 4);
     g.globalAlpha = 1;
+  }
+}
+
+/* =====================================================================
+   HAMDROP - JohnnyHam's ult.
+
+   His other three moves are all him hitting the floor himself. This one he
+   delegates: he points at the sky and a glazed holiday ham the size of a car
+   arrives from off the top of the screen.
+
+   It locks onto where you were STANDING when he pointed rather than tracking
+   you down, which is the whole reason the shadow on the floor is worth
+   drawing -- a warning you cannot outrun is not a warning. It also falls
+   THROUGH people rather than stopping on the first one, because everything
+   interesting about the move happens when it reaches the ground: the floor
+   kicks out both ways, and the ham comes apart.
+   ===================================================================== */
+
+class HamDrop {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    // Aimed at the opponent's feet, or straight ahead if there is somehow
+    // nobody left to aim at.
+    let tx = owner.x + owner.facing * 40;
+    let ty = owner.y;
+    for (const f of fighters) {
+      if (f !== owner && !f.eliminated) { tx = f.x; ty = f.y; break; }
+    }
+    this.x = clamp(tx, 14, VW - 14);
+    this.y = spec.fallFrom;
+    this.vy = spec.fall;
+    this.t = 0;
+    // The surface it is coming down on, decided here rather than by whatever
+    // platform it happens to cross first. Aiming at an x and landing on the
+    // first thing under it put the ham on the balcony over the target's head:
+    // on the second stage that balcony starts exactly on the spawn point, so
+    // the crater, both shockwaves and every chunk went off a storey up and
+    // the whole ult did nothing. Platforms above their feet are ignored and
+    // it drops straight through them.
+    this.groundY = 0;
+    let found = false;
+    for (const p of STAGE.platforms) {
+      if (this.x < p.x || this.x > p.x + p.w) continue;
+      if (p.y < ty - 2) continue;
+      if (!found || p.y < this.groundY) { this.groundY = p.y; found = true; }
+    }
+    if (!found) this.groundY = VH;
+    this.pierce = true;
+    this.hitAt = [0, 0];
+    this.dead = false;
+  }
+
+  update() {
+    for (let i = 0; i < 2; i++) if (this.hitAt[i] > 0) this.hitAt[i]--;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+    this.t++;
+    // Glaze coming off it on the way down.
+    if (this.t % 3 === 0) {
+      addEffect('spark', this.x + rand(-16, 16), this.y + rand(-10, 22), '#f7cd4a');
+    }
+    if (this.y + HAM_FOOT >= this.groundY) { this.land(this.groundY); return; }
+    if (this.y > VH + 80) this.dead = true;
+  }
+
+  land(surfaceY) {
+    this.dead = true;
+    for (let i = 0; i < 22; i++) {
+      addEffect('dust', this.x + rand(-34, 34), surfaceY - rand(0, 12), '#c9a06a');
+    }
+    addEffect('ring', this.x, surfaceY - 8, '#f7cd4a');
+    addEffect('ring', this.x, surfaceY - 22, '#e48080');
+
+    const q = this.spec.quake;
+    if (q) {
+      projectiles.push(new Shock(this.owner, q, this.x, surfaceY, -1));
+      projectiles.push(new Shock(this.owner, q, this.x, surfaceY, 1));
+    }
+
+    const c = this.spec.chunks;
+    if (!c) return;
+    // A fixed fan, not a scatter: chunks are simulation state, and rand() is
+    // Math.random, so a random spray would land differently on each machine.
+    // The middle pieces go highest and the outside ones go widest.
+    for (let i = 0; i < c.count; i++) {
+      const k = i - (c.count - 1) / 2;
+      projectiles.push(new Pellet(this.owner, c, 0, {
+        x: this.x + k * 3,
+        y: surfaceY - 12,
+        vx: k * c.speed,
+        vy: c.lift + Math.abs(k) * c.spread,
+        shape: 'hamchunk',
+      }, i));
+    }
+  }
+
+  box() {
+    // The meat, not the bone sticking out of the top of it, and inset from
+    // the drawn edge so it catches what it looks like it catches.
+    return { x: this.x - 26, y: this.y + HAM_FOOT - 40, w: 52, h: 40 };
+  }
+
+  draw(g) {
+    // The warning. It tightens and darkens as the ham gets closer, so how
+    // long you have left is readable without looking up.
+    const drop = this.groundY - (this.y + HAM_FOOT);
+    if (drop > 0 && this.groundY < VH + 40) {
+      const near = 1 - Math.min(1, drop / 150);
+      g.globalAlpha = 0.16 + near * 0.44;
+      g.fillStyle = '#170a0d';
+      const w = Math.round(22 + near * 46);
+      const h = Math.max(2, Math.round(2 + near * 5));
+      g.fillRect(Math.round(this.x) - (w >> 1), Math.round(this.groundY) - h, w, h);
+      g.globalAlpha = 1;
+    }
+    // It rocks on the way down, because something that size would.
+    const tilt = Math.sin(this.t * 0.19) * 2;
+    drawArtBig(g, pixelArt('ham', HAM_ART, HAM_PAL), this.x + tilt, this.y, HAM_SCALE);
   }
 }
 
