@@ -722,7 +722,13 @@ function tradeBlows(engines, rounds, onRound) {
 test("an engine with audio and one without stay in identical states", async () => {
   const loud = await bootGame({ audio: true });
   const mute = await bootGame();
-  loud.press("KeyZ");
+  // Unlocking directly, rather than loud.press("KeyZ"), means the two
+  // engines are fed strictly identical input throughout the test: a
+  // one-sided keypress is inert at the title screen today, but it is a
+  // trap waiting for KeyZ to mean something there later, and unlock()
+  // touches only AUDIO.ac/master, never `held`, so there is nothing for it
+  // to feed unevenly in the first place.
+  loud.nw.audio.unlock();
 
   for (const g of [loud, mute]) enterTwoPlayerBattle(g);
   for (const g of [loud, mute]) {
@@ -764,17 +770,46 @@ test("an engine with audio and one without stay in identical states", async () =
 });
 
 /* This is the only test that runs audioVoice against a live battle, so it is
-   the one that most needs a propagation window rather than an immediate
-   before/after snapshot: a write into hitstop, shield, ultMeter, combo or
-   volleyHits -- precisely the fields stateHash cannot see either, per this
-   task's own rationale -- would not show up in position or health until
-   later frames let it play out. Comparing against a mute twin fed an
-   identical script after that window catches it regardless of which field
-   it lands in. */
+   the one built to catch a write the moment it happens rather than after
+   the frames being compared have already settled.
+
+   An earlier version of this test let ~60 idle frames pass after the flush
+   before comparing (both attack keys released, nothing held). Measured with
+   an actual write injected into audioVoice: a position/velocity-class write
+   (vx += 0.001, x += 0.5) was visible in stateHash right after the flush,
+   but an idle window let the physics settle both engines back to the same
+   resting state -- vx snaps to exactly 0 when grounded with no input held,
+   which erased a vx perturbation outright before the comparison ever ran.
+   So this checks stateHash immediately after the flush, while a
+   position/velocity-class write is still there to see, in addition to the
+   check at the end.
+
+   The remaining window is active rather than idle -- a few more rounds of
+   tradeBlows(), not a bare pump() -- for the same reason from the other
+   direction: a write into a field like hitstop only becomes observable if
+   there is ongoing behavior for it to alter (an extra frozen frame shifts
+   the timing of whatever swing comes next); against two characters standing
+   still there is nothing happening for it to change. Measured: with the
+   idle window, an injected `hitstop = 1` write was invisible at every
+   checkpoint. With this active window it is caught -- and specifically by
+   stateHash, not by `fighters`, which still agreed at that point; the
+   `fighters` comparison only diverged for genuinely bigger writes.
+
+   Measured against all five fields this task's rationale names: this test
+   now catches a write into hitstop, in addition to position/velocity-class
+   writes. It does NOT catch a write into shield, ultMeter, combo, or
+   volleyHits -- nothing in this script blocks, casts an ult, or holds a
+   combo open long enough for any of those four to affect what happens next,
+   so a write into any of them passes both checkpoints below undetected. Test
+   1 above is not affected by this gap: it emits throughout an unbroken 30
+   rounds of tradeBlows with no idle stretch at all, so no perturbation of
+   any kind gets a chance to settle out before the comparison at the end. */
 test("flushing a cue mid-match does not change the simulation", async () => {
   const wired = await bootGame({ audio: true });
   const mute = await bootGame();
-  wired.press("KeyZ");
+  // See the comment in the test above: unlock directly so both engines get
+  // strictly identical input.
+  wired.nw.audio.unlock();
 
   for (const g of [wired, mute]) enterTwoPlayerBattle(g);
   for (const g of [wired, mute]) {
@@ -795,11 +830,19 @@ test("flushing a cue mid-match does not change the simulation", async () => {
   wired.nw.audio.emit("test-a", { slot: 0, frame: 1 });
   wired.nw.audio.flush();
 
-  // Propagation window: let ~60 more frames pass, identically on both
-  // engines, so a write into a field neither `fighters` nor `stateHash`
-  // exposes still has time to surface as a behavioral difference.
-  wired.pump(60);
-  mute.pump(60);
+  // Checked here, before anything else runs, because a position/velocity
+  // class write is exactly the kind of thing ongoing physics settles away
+  // (see the comment above) -- this is the one place it is still visible.
+  assert.equal(
+    wired.nw.__test.stateHash(),
+    mute.nw.__test.stateHash(),
+    "state must be identical immediately after the flush"
+  );
+
+  // Active propagation window: more rounds of tradeBlows, not an idle
+  // pump(), so a field like hitstop has real behavior to alter rather than
+  // two characters standing still with nothing happening for it to change.
+  tradeBlows([wired, mute], 8);
 
   assert.deepEqual(
     JSON.parse(JSON.stringify(wired.nw.fighters)),
