@@ -124,20 +124,29 @@ function recordingAudioContext() {
 }
 
 /**
- * Like recordingAudioContext, but its createOscillator throws on the Nth
- * call (1-indexed) instead of returning a node. The recording fake above
- * accepts any recipe without complaint, so this is how a test gets
- * something for audioFlush's inner per-item try/catch to actually catch --
- * standing in for a malformed recipe hitting a real Web Audio API (an
- * invalid oscillator type, a non-finite frequency, and so on).
+ * Like recordingAudioContext, but createOscillator throws exactly once: on
+ * the next call after `ctx.arm()` is invoked, not simply "the Nth call ever
+ * made". Counting calls from context creation would silently retarget the
+ * throw at whatever oscillator API happens to run first -- a future
+ * startup chime, say -- leaving the test passing while it exercises
+ * something other than what it claims to. Arming immediately before the
+ * call under test pins the throw to that call and nothing else. The
+ * recording fake above accepts any recipe without complaint, so this is
+ * how a test gets something for audioFlush's inner per-item try/catch to
+ * actually catch -- standing in for a malformed recipe hitting a real Web
+ * Audio API (an invalid oscillator type, a non-finite frequency, and so
+ * on).
  */
-function throwingAudioContext(throwOnNthOscillator) {
+function throwingAudioContext() {
   const ctx = recordingAudioContext();
   const realCreateOscillator = ctx.createOscillator;
-  let calls = 0;
+  let armed = false;
+  ctx.arm = () => {
+    armed = true;
+  };
   ctx.createOscillator = () => {
-    calls++;
-    if (calls === throwOnNthOscillator) {
+    if (armed) {
+      armed = false;
       throw new Error("simulated malformed recipe");
     }
     return realCreateOscillator();
@@ -150,6 +159,9 @@ function throwingAudioContext(throwOnNthOscillator) {
  * @param {object} [opts]
  * @param {boolean} [opts.audio] install a recording AudioContext (default off,
  *   which is the important case: the engine must survive without one)
+ * @param {function} [opts.makeAudioContext] factory for the fake AudioContext
+ *   to install when opts.audio is set (default recordingAudioContext) --
+ *   how a test swaps in throwingAudioContext instead
  */
 async function bootGame(opts) {
   const withAudio = !!(opts && opts.audio);
@@ -648,63 +660,152 @@ function enterTwoPlayerBattle(g) {
   g.pump(4);
 }
 
+/**
+ * Walk both seats toward each other -- seat 0 with KeyD, seat 1 with
+ * ArrowLeft, their spawns face each other across the middle of the stage --
+ * for 29 frames, then let go. Run identically across every engine in
+ * `engines`.
+ */
+function bringIntoContact(engines) {
+  for (const g of engines) {
+    g.press("KeyD");
+    g.press("ArrowLeft");
+  }
+  for (const g of engines) g.pump(29);
+  for (const g of engines) {
+    g.release("KeyD");
+    g.release("ArrowLeft");
+  }
+}
+
+/**
+ * Trade jabs for `rounds` rounds, identically across every engine in
+ * `engines`: both seats' attack key held for 2 frames then released, then 6
+ * frames to let the swing (and, when it connects, hitstun) play out before
+ * the next one. A plain walk-and-swing script mostly whiffs a jab's few-
+ * frame-active hitbox as the fighters keep walking past each other; closing
+ * the distance once with bringIntoContact() and then holding position while
+ * trading blows here is what actually connects. Verified empirically: with
+ * this stage's spawn points, one seat's jab starts landing (health 100 ->
+ * 90) within the first ~15 rounds and the fight is deterministic -- 3
+ * consecutive runs of this exact script produced byte-identical fighter
+ * state and stateHash every time. Always leaves both attack keys released,
+ * whatever `rounds` is, so a caller can chain more rounds or a plain
+ * `pump()` afterward without an attack key stuck down.
+ *
+ * `onRound`, if given, runs once per round with the round index -- the hook
+ * the audio tests use to emit cues without duplicating this script.
+ */
+function tradeBlows(engines, rounds, onRound) {
+  for (let r = 0; r < rounds; r++) {
+    for (const g of engines) {
+      g.press("KeyG");
+      g.press("Comma");
+    }
+    for (const g of engines) g.pump(2);
+    for (const g of engines) {
+      g.release("KeyG");
+      g.release("Comma");
+    }
+    for (const g of engines) g.pump(6);
+    if (onRound) onRound(r);
+  }
+}
+
 /* The whole safety argument in one test: two engines fed identical inputs must
    reach identical state, whether or not either of them is making noise. If
    audio ever reads a value it then writes back, this is what catches it --
-   stateHash will not, because it covers only eleven fighter fields. */
+   `fighters` is a legible six-field readout for when this fails, but
+   `stateHash` is the assertion with teeth: bit-exact floats across all
+   eleven fighter fields stateHash covers, plus every projectile position,
+   none of which `fighters` exposes. */
 test("an engine with audio and one without stay in identical states", async () => {
   const loud = await bootGame({ audio: true });
   const mute = await bootGame();
   loud.press("KeyZ");
 
   for (const g of [loud, mute]) enterTwoPlayerBattle(g);
-  assert.equal(
-    loud.nw.scene,
-    "battle",
-    "the script above should have started a real fight"
-  );
-
-  const before = JSON.parse(JSON.stringify(loud.nw.fighters));
-
-  const script = ["KeyD", "KeyW", "KeyF", "KeyA", "KeyG", "KeyS", "KeyF"];
-  for (let i = 0; i < 400; i++) {
-    const k = script[i % script.length];
-    for (const g of [loud, mute]) {
-      if (i % 7 === 0) g.press(k);
-      if (i % 7 === 3) g.release(k);
-      g.pump(1);
-    }
+  for (const g of [loud, mute]) {
+    assert.equal(
+      g.nw.scene,
+      "battle",
+      "the script above should have started a real fight"
+    );
   }
 
-  assert.notDeepEqual(
-    JSON.parse(JSON.stringify(loud.nw.fighters)),
-    before,
-    "both engines should actually have fought, not sat idle"
+  bringIntoContact([loud, mute]);
+  // Emit on the loud engine only, varying slot and x every round so cue(),
+  // audioVoice(), the pan math and the voice limiter all genuinely execute
+  // during the frames being compared -- not just audioFlush pruning an
+  // empty batch.
+  tradeBlows([loud, mute], 30, (r) => {
+    loud.nw.audio.emit("test-a", { slot: r % 2, x: (r * 11) % 320 });
+  });
+
+  const fighters = loud.nw.fighters;
+  assert.ok(
+    fighters.some((f) => f.health < 100),
+    "the script above should have landed a real hit, not just moved around"
   );
   assert.deepEqual(
-    JSON.parse(JSON.stringify(loud.nw.fighters)),
+    JSON.parse(JSON.stringify(fighters)),
     JSON.parse(JSON.stringify(mute.nw.fighters)),
     "audio must be invisible to the simulation"
   );
-  assert.ok(loud.audioLog.length > 0, "the loud engine really did make sound");
+  assert.equal(
+    loud.nw.__test.stateHash(),
+    mute.nw.__test.stateHash(),
+    "audio must be invisible to the simulation, bit for bit"
+  );
+  assert.ok(
+    voiceCount(loud.audioLog) > 0,
+    "the loud engine really did make sound"
+  );
 });
 
-test("disabling audio mid-match does not change the simulation", async () => {
-  const g = await bootGame({ audio: true });
-  g.press("KeyZ");
-  enterTwoPlayerBattle(g);
-  assert.equal(
-    g.nw.scene,
-    "battle",
-    "the script above should have started a real fight"
+/* This is the only test that runs audioVoice against a live battle, so it is
+   the one that most needs a propagation window rather than an immediate
+   before/after snapshot: a write into hitstop, shield, ultMeter, combo or
+   volleyHits -- precisely the fields stateHash cannot see either, per this
+   task's own rationale -- would not show up in position or health until
+   later frames let it play out. Comparing against a mute twin fed an
+   identical script after that window catches it regardless of which field
+   it lands in. */
+test("flushing a cue mid-match does not change the simulation", async () => {
+  const wired = await bootGame({ audio: true });
+  const mute = await bootGame();
+  wired.press("KeyZ");
+
+  for (const g of [wired, mute]) enterTwoPlayerBattle(g);
+  for (const g of [wired, mute]) {
+    assert.equal(
+      g.nw.scene,
+      "battle",
+      "the script above should have started a real fight"
+    );
+  }
+
+  bringIntoContact([wired, mute]);
+  tradeBlows([wired, mute], 15); // real mid-match state: a hit has landed
+  assert.ok(
+    wired.nw.fighters.some((f) => f.health < 100),
+    "expected a real hit to have landed before the flush under test"
   );
-  g.press("KeyD");
-  g.pump(30);
-  g.release("KeyD");
-  const before = JSON.parse(JSON.stringify(g.nw.fighters));
-  g.nw.audio.emit("test-a", { slot: 0, frame: 1 });
-  g.nw.audio.flush();
-  assert.deepEqual(JSON.parse(JSON.stringify(g.nw.fighters)), before);
+
+  wired.nw.audio.emit("test-a", { slot: 0, frame: 1 });
+  wired.nw.audio.flush();
+
+  // Propagation window: let ~60 more frames pass, identically on both
+  // engines, so a write into a field neither `fighters` nor `stateHash`
+  // exposes still has time to surface as a behavioral difference.
+  wired.pump(60);
+  mute.pump(60);
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(wired.nw.fighters)),
+    JSON.parse(JSON.stringify(mute.nw.fighters))
+  );
+  assert.equal(wired.nw.__test.stateHash(), mute.nw.__test.stateHash());
 });
 
 /* The existing "no Web Audio at all" test above only pumps frames -- it never
@@ -725,7 +826,13 @@ test("a key press and a canvas click do not throw with no Web Audio at all", asy
     "no AudioContext exists anywhere, so audio can never become ready"
   );
   g.pump(60);
-  assert.ok(g.nw.frames > 0, "the loop should keep running after the gesture");
+  // >= 55, not merely > 0: a loop that ran once and then stalled would pass
+  // a bare ">0" check. The file's first test holds itself to the same bar
+  // (> 100 after pump(120)).
+  assert.ok(
+    g.nw.frames >= 55,
+    "the loop should keep running after the gesture, not stall after one tick"
+  );
 });
 
 /* audioFlush wraps each item's audioVoice call in its own try/catch for one
@@ -733,14 +840,16 @@ test("a key press and a canvas click do not throw with no Web Audio at all", asy
    requestAnimationFrame from ever being called again. Nothing in the suite
    above ever drives a recipe through that catch, because the recording fake
    context accepts any input without complaint. throwingAudioContext exists
-   to make one specific call fail -- here, the very first oscillator built --
-   while a second cue in the same flush must still reach the graph. */
+   to make one specific call fail -- the next oscillator built after the test
+   arms it -- while a second cue in the same flush must still reach the
+   graph. */
 test("a cue that throws inside audioVoice does not stop the rest of the flush", async () => {
   const g = await bootGame({
     audio: true,
-    makeAudioContext: () => throwingAudioContext(1),
+    makeAudioContext: throwingAudioContext,
   });
   g.press("KeyZ");
+  g.recorder.arm(); // only the very next oscillator built will throw
   g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
   g.nw.audio.emit("test-a", { slot: 1, frame: 100 });
   assert.doesNotThrow(

@@ -6203,6 +6203,13 @@ window.NerdWars = {
     // outside a test called it: addEffect stays suppressed forever, so
     // every visual effect in the game silently stops spawning.
     setResimulating: function (v) { netplay.resimulating = !!v; },
+    // The bit-exact hash netplay's own desync detector trusts, over the
+    // live simulation rather than a snapshot -- stateHash(snap) falls back
+    // to the live fighters/projectiles when snap is falsy. `fighters` above
+    // is easier to read when a test fails, but it is six rounded fields;
+    // this is the one with teeth, covering float bits across eleven fighter
+    // fields plus every projectile position.
+    stateHash: function () { return stateHash(); },
   },
 };
 
