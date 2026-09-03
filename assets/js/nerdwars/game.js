@@ -3667,6 +3667,12 @@ function audioPrune() {
   }
 }
 
+/* Cap on identical voices per flush. Four copies of the same recipe on the
+   same frame sum coherently -- same waveform, same phase -- into +12dB and a
+   comb filter, not a fatter hit, so past this the extra copies are dropped
+   rather than piled on. */
+const AUDIO_MAX_VOICES = 3;
+
 /* Play everything emitted since the last flush. Called once per animation
    frame, after the step loop and before render()/requestAnimationFrame(), so
    anything this throws would stop the loop from ever being requested again --
@@ -3686,12 +3692,25 @@ function audioFlush() {
   if (!audioBatch.length) return;
   if (!AUDIO.ac) { audioBatch.length = 0; return; }
   const now = AUDIO.ac.currentTime;
+  // How many of each recipe we have already scheduled this flush. Identical
+  // waveforms fired together sum in phase, which is a spike and a flange
+  // rather than a louder hit, so the third copy is the last one worth having.
+  const seen = new Map();
   try {
     for (const c of audioBatch) {
       const recipe = AUDIO_RECIPES[c.name];
       if (!recipe) continue;
+      const n = (seen.get(c.name) || 0) + 1;
+      seen.set(c.name, n);
+      if (n > AUDIO_MAX_VOICES) continue;
       try {
-        audioVoice(recipe, now, c.gain, c.pan);
+        // 1/sqrt(n): the sum of n equal-power voices, so stacking reads as
+        // one bigger hit rather than n hits. Duplicates past the first are
+        // also detuned apart so they do not stay phase-aligned.
+        const shaped = n === 1
+          ? recipe
+          : Object.assign({}, recipe, { detune: (n - 1) * 11 });
+        audioVoice(shaped, now, c.gain / Math.sqrt(n), c.pan);
       } catch (e) { /* one malformed recipe must not silence the rest */ }
     }
   } finally {

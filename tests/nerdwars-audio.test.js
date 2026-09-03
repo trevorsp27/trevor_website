@@ -486,3 +486,43 @@ test("a cue older than the rollback window may play again", async () => {
     before + 1
   );
 });
+
+test("at most three voices of one recipe play in a single flush", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  for (let slot = 0; slot < 8; slot++) {
+    g.nw.audio.emit("test-a", { slot, frame: 100 });
+  }
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 3, "eight emissions, three voices");
+});
+
+test("different recipes in one flush are not capped against each other", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  for (let slot = 0; slot < 4; slot++) {
+    g.nw.audio.emit("test-a", { slot, frame: 100 });
+    g.nw.audio.emit("test-b", { slot, frame: 100 });
+  }
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 6, "three of each");
+});
+
+test("stacked voices are attenuated and detuned", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  for (let slot = 0; slot < 3; slot++) {
+    g.nw.audio.emit("test-a", { slot, frame: 100 });
+  }
+  g.nw.audio.flush();
+
+  const peaks = g.audioLog
+    .filter((e) => e.node === "gain" && e.param === "gain" && e.op === "exp")
+    .map((e) => e.value)
+    .filter((v) => v > 0.01);
+  assert.ok(peaks[0] > peaks[1], "the second voice should be quieter");
+  assert.ok(peaks[1] > peaks[2], "and the third quieter still");
+
+  const detunes = g.audioLog.filter((e) => e.param === "detune");
+  assert.ok(detunes.length >= 2, "duplicates should be detuned apart");
+});
