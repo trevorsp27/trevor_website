@@ -3511,6 +3511,83 @@ function audioUnlock() {
   }
 }
 
+/* One short burst of white noise, built once and reused. Cheaper than a new
+   buffer per hit, and the reuse is inaudible at these durations. */
+let audioNoiseBuf = null;
+
+function audioNoise() {
+  if (audioNoiseBuf) return audioNoiseBuf;
+  const ac = AUDIO.ac;
+  const len = Math.floor(ac.sampleRate * 0.5);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  // Math.random is safe here for the same reason it is safe in addEffect:
+  // nothing below ever reaches game state.
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  audioNoiseBuf = buf;
+  return buf;
+}
+
+/* Turn one recipe into one voice. Everything is scheduled against `when` and
+   torn down by its own stop time, so nothing accumulates. */
+function audioVoice(recipe, when, gain, pan) {
+  const ac = AUDIO.ac;
+  if (!ac) return;
+  const dur = recipe.dur || 0.15;
+  // exponentialRampToValueAtTime throws on zero, and a silent voice is a
+  // legitimate thing to ask for, so the floor is a real number.
+  const peak = Math.max(0.0001, (recipe.gain == null ? 1 : recipe.gain) * gain);
+
+  const out = ac.createGain();
+  out.gain.setValueAtTime(0.0001, when);
+  out.gain.exponentialRampToValueAtTime(peak, when + 0.004);
+  out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+
+  let tail = out;
+  if (pan) {
+    const panner = ac.createStereoPanner();
+    panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), when);
+    out.connect(panner);
+    tail = panner;
+  }
+  tail.connect(AUDIO.master);
+
+  if (recipe.osc) {
+    const osc = ac.createOscillator();
+    osc.type = recipe.osc;
+    osc.frequency.setValueAtTime(recipe.f0, when);
+    if (recipe.f1 != null && recipe.f1 !== recipe.f0) {
+      if (recipe.curve === 'lin') {
+        osc.frequency.linearRampToValueAtTime(recipe.f1, when + dur);
+      } else {
+        osc.frequency.exponentialRampToValueAtTime(
+          Math.max(0.0001, recipe.f1), when + dur);
+      }
+    }
+    if (recipe.detune) osc.detune.setValueAtTime(recipe.detune, when);
+    osc.connect(out);
+    osc.start(when);
+    osc.stop(when + dur + 0.02);
+  }
+
+  if (recipe.noise) {
+    const n = recipe.noise;
+    const src = ac.createBufferSource();
+    src.buffer = audioNoise();
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(n.lp || 4000, when);
+    if (n.lp1 != null) {
+      lp.frequency.exponentialRampToValueAtTime(
+        Math.max(0.0001, n.lp1), when + (n.dur || dur));
+    }
+    src.connect(lp);
+    lp.connect(out);
+    src.start(when);
+    src.stop(when + (n.dur || dur) + 0.02);
+  }
+}
+
 /* =====================================================================
    EFFECTS - anything that was never drawn is code-drawn, so the original
    art is never mixed with generated pixels.
@@ -5891,6 +5968,9 @@ window.NerdWars = {
     // that has no other -- netStart sets hasFocus programmatically, so an
     // online-only embed never sees a local click or key.
     unlock: audioUnlock,
+    // Plays one recipe immediately. The sound-test overlay in phase 3 and
+    // the tests both drive recipes through here.
+    test: function (recipe) { audioVoice(recipe, AUDIO.ac ? AUDIO.ac.currentTime : 0, 1, 0); },
   },
   net: {
     start: netStart,

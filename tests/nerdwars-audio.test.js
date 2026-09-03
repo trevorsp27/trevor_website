@@ -274,3 +274,56 @@ test("unlocking twice does not build a second context", async () => {
   g.press("KeyX");
   assert.equal(g.recorder, first, "the context should be created once");
 });
+
+test("a recipe with a pitch sweep builds an oscillator that ramps", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.test({ osc: "sine", f0: 180, f1: 34, dur: 0.4, curve: "exp", gain: 0.9 });
+
+  const log = g.audioLog;
+  const osc = log.filter((e) => e.node === "osc");
+  assert.ok(osc.some((e) => e.op === "start"), "the oscillator should start");
+  assert.ok(osc.some((e) => e.op === "stop"), "and be stopped, not left running");
+
+  const freq = log.filter((e) => e.node === "osc" && e.param === "frequency");
+  assert.equal(freq[0].value, 180, "should start at f0");
+  assert.equal(freq[freq.length - 1].value, 34, "and end at f1");
+});
+
+test("a recipe with no f1 holds a steady pitch", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.test({ osc: "square", f0: 440, dur: 0.1, gain: 0.5 });
+
+  const freq = g.audioLog.filter((e) => e.node === "osc" && e.param === "frequency");
+  assert.equal(freq.length, 1, "one set, no ramp");
+  assert.equal(freq[0].value, 440);
+});
+
+test("a noise burst builds a buffer source through a lowpass", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.test({ noise: { dur: 0.09, lp: 900 }, dur: 0.09, gain: 0.8 });
+
+  const log = g.audioLog;
+  assert.ok(log.some((e) => e.node === "bufsrc" && e.op === "start"), "noise source");
+  const cutoff = log.filter((e) => e.node === "filter" && e.param === "frequency");
+  assert.equal(cutoff[0].value, 900, "lowpass at the recipe's cutoff");
+});
+
+test("gain is never scheduled as zero, which would throw on an exponential ramp", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.test({ osc: "sine", f0: 200, dur: 0.2, gain: 0 });
+
+  const gains = g.audioLog.filter((e) => e.param === "gain" && e.op === "exp");
+  for (const e of gains) {
+    assert.ok(e.value > 0, "exponentialRamp to " + e.value + " would throw");
+  }
+});
+
+test("playing a recipe with audio locked does nothing and does not throw", async () => {
+  const g = await bootGame({ audio: true });
+  g.nw.audio.test({ osc: "sine", f0: 200, dur: 0.2, gain: 0.5 });
+  assert.equal(g.audioLog.length, 0, "no context, no nodes");
+});
