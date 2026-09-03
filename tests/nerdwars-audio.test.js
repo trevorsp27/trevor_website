@@ -368,23 +368,29 @@ test("the same cue on a later frame plays again", async () => {
 test("a cue that appears only during resimulation still plays", async () => {
   const g = await bootGame({ audio: true });
   g.press("KeyZ");
-  g.nw.audio.setResimulating(true);
+  g.nw.__test.setResimulating(true);
   g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
-  g.nw.audio.setResimulating(false);
+  g.nw.__test.setResimulating(false);
   g.nw.audio.flush();
   assert.equal(voiceCount(g.audioLog), 1, "the corrected timeline must be audible");
 });
 
-test("a cue already played on the first run is not replayed by a rollback", async () => {
+/* Despite the name of its setup, this does not drive a real rollback --
+   cue() never reads netplay.resimulating, so the two setResimulating calls
+   below are inert. What it actually verifies is that a key stays remembered
+   across a flush boundary, which is what a real rollback also depends on:
+   the second emission has to find the first one's key still in audioPlayed
+   after audioBatch has already been cleared out from under it. */
+test("dedupe survives a flush boundary", async () => {
   const g = await bootGame({ audio: true });
   g.press("KeyZ");
   g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
   g.nw.audio.flush();
-  g.nw.audio.setResimulating(true);
+  g.nw.__test.setResimulating(true);
   g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
-  g.nw.audio.setResimulating(false);
+  g.nw.__test.setResimulating(false);
   g.nw.audio.flush();
-  assert.equal(voiceCount(g.audioLog), 1, "one hit, one sound, however many replays");
+  assert.equal(voiceCount(g.audioLog), 1, "one hit, one sound, however many flushes");
 });
 
 test("an unknown cue name is ignored rather than throwing", async () => {
@@ -402,4 +408,47 @@ test("cues emitted with audio locked are dropped, not queued up", async () => {
   g.press("KeyZ");
   g.nw.audio.flush();
   assert.equal(voiceCount(g.audioLog), 0, "no burst of backlog on unlock");
+});
+
+/* Every test above passes an explicit frame, so audioNow() -- the code path
+   a real cue actually takes -- never ran. That gap is how the mismatch
+   between audioNow()'s and frame()'s idea of which clock is live got past
+   review the first time. g.pump() drives the real animation-frame loop, so
+   the offline step counter advances for real between the two emissions.
+
+   It does not advance by exactly one tick per pump(), though: frame()'s
+   accumulator is timed off floating-point deltas, so a given pump() can
+   land zero or two ticks as well as one (confirmed by instrumenting the
+   loop directly). So this polls for the next tick rather than assuming a
+   fixed pump count -- a bounded number of tries, not a sleep, over a
+   deterministic clock. */
+test("a cue emitted with no explicit frame is keyed by the simulated tick", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0 });
+  g.nw.audio.flush();
+  const before = voiceCount(g.audioLog);
+  let after = before;
+  for (let i = 0; i < 20 && after === before; i++) {
+    g.pump(1);
+    g.nw.audio.emit("test-a", { slot: 0 });
+    g.nw.audio.flush();
+    after = voiceCount(g.audioLog);
+  }
+  assert.equal(after, before + 1, "a later simulated tick is a new voice");
+});
+
+test("panning follows x: opposite edges of the stage pan opposite ways", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  // VW, the engine's stage width, is 320.
+  g.nw.audio.emit("test-a", { slot: 0, frame: 300, x: 0 });
+  g.nw.audio.emit("test-a", { slot: 1, frame: 300, x: 320 });
+  g.nw.audio.flush();
+  const pans = g.audioLog
+    .filter((e) => e.node === "panner" && e.param === "pan" && e.op === "set")
+    .map((e) => e.value);
+  assert.equal(pans.length, 2, "both voices should be panned");
+  assert.ok(pans[0] < 0, "the left edge should pan negative");
+  assert.ok(pans[1] > 0, "the right edge should pan positive");
 });

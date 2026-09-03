@@ -3484,6 +3484,13 @@ const AUDIO = {
   enabled: true,
   volume: 0.7,
   step: 0,               // our own monotonic step counter, for offline keying
+  // Which clock frame() actually advanced on the tick now running. Written
+  // by frame() itself, right before it calls into the simulation, so
+  // audioNow() never has to re-derive it -- re-deriving it from
+  // netplay.active alone is what caused it to disagree with frame()'s real
+  // branch condition (scene, rollbackTo) once a match ended but netplay
+  // stayed active through the menus.
+  netClock: false,
 };
 
 /* Build the context. Called from every plausible first gesture, so it has to
@@ -3597,17 +3604,23 @@ const AUDIO_RECIPES = {
 
 /* Cues emitted during the current batch of simulation steps, and the keys we
    have already played. Module-level, never on a Fighter: restoreSim deletes
-   any field it does not recognise, so per-fighter audio state would vanish at
+   any field it does not recognize, so per-fighter audio state would vanish at
    the first rollback. */
 const audioBatch = [];
 const audioPlayed = new Map();   // key -> sim frame it was played for
 
-/* The frame a cue belongs to. Online this is the frame being simulated, which
-   is stable across the first run and every replay -- netSimulateOne sets pads,
-   calls step(), then increments. Offline nothing ever replays, so our own
-   counter is enough and is always distinct. */
+/* The frame a cue belongs to. Reads AUDIO.netClock rather than checking
+   netplay.active itself: which clock is live is frame()'s call (it also
+   decides whether scene and rollbackTo allow netplay to advance this tick),
+   and re-deriving that condition here is exactly the kind of two-places-
+   agree-by-hand bug that let a menu cue go silent once netplay stayed active
+   past the end of a match. When AUDIO.netClock is true this is the frame
+   being simulated online, which is stable across the first run and every
+   replay -- netSimulateOne sets pads, calls step(), then increments.
+   Otherwise nothing ever replays, so our own counter is enough and is always
+   distinct. */
 function audioNow() {
-  return netplay.active ? netplay.frame : AUDIO.step;
+  return AUDIO.netClock ? netplay.frame : AUDIO.step;
 }
 
 /* Emit a cue. Deliberately NOT guarded on netplay.resimulating: see the note
@@ -3628,17 +3641,30 @@ function cue(name, opts) {
 }
 
 /* Play everything emitted since the last flush. Called once per animation
-   frame, after the step loop. */
+   frame, after the step loop and before render()/requestAnimationFrame(), so
+   anything this throws would stop the loop from ever being requested again --
+   a frozen screen. Phase 2 onward fills AUDIO_RECIPES with dozens more
+   entries than the two hand-checked ones here, any of which could hand
+   real Web Audio a bad oscillator type, a non-finite frequency, or call
+   createStereoPanner on a browser that lacks it. Same reasoning as the
+   try/catch in audioUnlock: audio is never allowed to stop the engine
+   running, so one bad cue is swallowed rather than allowed to take the rest
+   of the batch, and the frame, down with it. */
 function audioFlush() {
   if (!audioBatch.length) return;
   if (!AUDIO.ac) { audioBatch.length = 0; return; }
   const now = AUDIO.ac.currentTime;
-  for (const c of audioBatch) {
-    const recipe = AUDIO_RECIPES[c.name];
-    if (!recipe) continue;
-    audioVoice(recipe, now, c.gain, c.pan);
+  try {
+    for (const c of audioBatch) {
+      const recipe = AUDIO_RECIPES[c.name];
+      if (!recipe) continue;
+      try {
+        audioVoice(recipe, now, c.gain, c.pan);
+      } catch (e) { /* one malformed recipe must not silence the rest */ }
+    }
+  } finally {
+    audioBatch.length = 0;
   }
-  audioBatch.length = 0;
 }
 
 /* =====================================================================
@@ -5900,6 +5926,13 @@ function netStart(opts) {
   netplay.peerAhead = new Array(MAX_PLAYERS).fill(0);
   netplay.delayChanges = 0;
 
+  // A fresh match starts on a clean key space. Without this, match 2 replays
+  // frame 0 against a `audioPlayed` map that already has a `0|...` key from
+  // match 1, and any cue keyed on a fixed frame number (a countdown, a
+  // round-start stinger) is silent for the rest of the session.
+  audioBatch.length = 0;
+  audioPlayed.clear();
+
   // Only our own opening frames are primed. Seeding the opponent's from OUR
   // delay is a hole nothing can fill if the two sides start on different
   // numbers, and rollback does not need it anyway: their opening frames are
@@ -5921,6 +5954,10 @@ function netStop(reason) {
   netplay.ended = reason || 'ended';
   netplay.framePads = null;
   scene = 'title';
+  // Same reasoning as the reset in netStart: leaving keys from this match in
+  // place would carry them into whatever starts next, online or off.
+  audioBatch.length = 0;
+  audioPlayed.clear();
   netEmit('stopped', { reason: netplay.ended });
 }
 
@@ -5971,8 +6008,13 @@ function frame(now) {
     // left the battle: a match ended by a mispredicted KO is exactly the case
     // that needs rewinding, and gating on scene alone made it permanent.
     if (netplay.active && (scene === 'battle' || netplay.rollbackTo !== null)) {
+      // Set before netAdvance(), not after: a pending rollback replays
+      // several frames of step() from inside that call, and every cue() any
+      // of them emits has to see the net clock as live already.
+      AUDIO.netClock = true;
       if (!netAdvance()) break;
     } else {
+      AUDIO.netClock = false;
       step();
       AUDIO.step++;
     }
@@ -6028,9 +6070,6 @@ window.NerdWars = {
     test: function (recipe) { audioVoice(recipe, AUDIO.ac ? AUDIO.ac.currentTime : 0, 1, 0); },
     emit: cue,
     flush: audioFlush,
-    // Tests need to drive the resimulating flag directly: reproducing a real
-    // rollback would need two engines and a wire, and this is a bus test.
-    setResimulating: function (v) { netplay.resimulating = !!v; },
   },
   net: {
     start: netStart,
@@ -6091,6 +6130,18 @@ window.NerdWars = {
       owner: p.owner ? p.owner.slot : null,
       x: Math.round(p.x), y: Math.round(p.y),
     }));
+  },
+  // Everything above this line is documented as enough to check what the
+  // game is doing without exposing anything that could poke it into an
+  // inconsistent state. This namespace is the deliberate exception: state
+  // mutation the test suite needs and nothing else should ever call.
+  __test: {
+    // Reproducing a real rollback would need two engines and a wire, and
+    // this is what the cue-bus tests use to drive the resimulating flag
+    // directly instead. Leaving it true would be a real bug if anything
+    // outside a test called it: addEffect stays suppressed forever, so
+    // every visual effect in the game silently stops spawning.
+    setResimulating: function (v) { netplay.resimulating = !!v; },
   },
 };
 
