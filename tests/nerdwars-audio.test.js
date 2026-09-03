@@ -452,3 +452,37 @@ test("panning follows x: opposite edges of the stage pan opposite ways", async (
   assert.ok(pans[0] < 0, "the left edge should pan negative");
   assert.ok(pans[1] > 0, "the right edge should pan positive");
 });
+
+test("the played set does not grow without bound", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  for (let f = 0; f < 2000; f++) {
+    g.nw.audio.emit("test-a", { slot: 0, frame: f });
+    g.nw.audio.flush();
+  }
+  // NET_MAX_ROLLBACK is 36; the set holds a small multiple of that, not 2000.
+  assert.ok(
+    g.nw.audio.pending < 200,
+    "played set held " + g.nw.audio.pending + " keys after 2000 frames"
+  );
+});
+
+test("a cue older than the rollback window may play again", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 0 });
+  g.nw.audio.flush();
+  for (let f = 1; f < 400; f++) {
+    g.nw.audio.emit("test-b", { slot: 0, frame: f });
+    g.nw.audio.flush();
+  }
+  const before = g.audioLog.filter((e) => e.op === "start").length;
+  // No rollback can reach frame 0 any more, so its key is gone and this is a
+  // new sound rather than a suppressed duplicate.
+  g.nw.audio.emit("test-a", { slot: 0, frame: 0 });
+  g.nw.audio.flush();
+  assert.equal(
+    g.audioLog.filter((e) => e.op === "start").length,
+    before + 1
+  );
+});

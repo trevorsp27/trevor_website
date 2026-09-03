@@ -3640,6 +3640,33 @@ function cue(name, opts) {
   });
 }
 
+/* Drop keys no rollback can reach again. NET_MAX_ROLLBACK is the deepest a
+   replay ever goes, so anything further back than a small multiple of it is
+   settled forever. The multiple is slack, not necessity: the set is tiny and
+   scanning it often is cheaper than being wrong at the boundary.
+
+   "Now" is the later of audioNow() and the newest frame already sitting in
+   audioPlayed, not audioNow() alone. audioNow() is what keeps this moving
+   through a quiet stretch of a real match -- ticks with nothing to play
+   would otherwise never advance the horizon at all, and the set would sit at
+   its high-water mark. But a key can also be logged for a frame ahead of
+   audioNow() (an explicit frame, which is how a caller can log a cue for a
+   frame other than the one live right now), and audioNow() alone would never
+   catch up to that either. Deriving the fallback from audioPlayed itself
+   rather than a separate counter means it needs no reset of its own: it is
+   already empty wherever netStart/netStop already clear the map. */
+function audioPrune() {
+  let latest = audioNow();
+  for (const frame of audioPlayed.values()) {
+    if (frame > latest) latest = frame;
+  }
+  const horizon = latest - NET_MAX_ROLLBACK * 3;
+  if (horizon <= 0) return;
+  for (const [key, frame] of audioPlayed) {
+    if (frame < horizon) audioPlayed.delete(key);
+  }
+}
+
 /* Play everything emitted since the last flush. Called once per animation
    frame, after the step loop and before render()/requestAnimationFrame(), so
    anything this throws would stop the loop from ever being requested again --
@@ -3649,8 +3676,13 @@ function cue(name, opts) {
    createStereoPanner on a browser that lacks it. Same reasoning as the
    try/catch in audioUnlock: audio is never allowed to stop the engine
    running, so one bad cue is swallowed rather than allowed to take the rest
-   of the batch, and the frame, down with it. */
+   of the batch, and the frame, down with it.
+
+   Pruning runs first and unconditionally, before either early return, so a
+   silent stretch still ages keys out -- otherwise the played set would sit
+   at its high-water mark until the next cue happened to fire. */
 function audioFlush() {
+  audioPrune();
   if (!audioBatch.length) return;
   if (!AUDIO.ac) { audioBatch.length = 0; return; }
   const now = AUDIO.ac.currentTime;
@@ -6061,6 +6093,9 @@ window.NerdWars = {
     get ready() { return !!AUDIO.ac; },
     get enabled() { return AUDIO.enabled; },
     get volume() { return AUDIO.volume; },
+    // Test hook for the pruning horizon: how many played keys are still
+    // held. Not used by the game itself.
+    get pending() { return audioPlayed.size; },
     // The site lobby's join button is a real user gesture on the one path
     // that has no other -- netStart sets hasFocus programmatically, so an
     // online-only embed never sees a local click or key.
