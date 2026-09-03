@@ -3588,6 +3588,59 @@ function audioVoice(recipe, when, gain, pan) {
   }
 }
 
+/* The recipe table. Phase 2 fills it; two entries exist now so the bus has
+   something real to play. */
+const AUDIO_RECIPES = {
+  'test-a': { osc: 'square', f0: 440, dur: 0.06, gain: 0.4 },
+  'test-b': { noise: { dur: 0.05, lp: 3000 }, dur: 0.05, gain: 0.4 },
+};
+
+/* Cues emitted during the current batch of simulation steps, and the keys we
+   have already played. Module-level, never on a Fighter: restoreSim deletes
+   any field it does not recognise, so per-fighter audio state would vanish at
+   the first rollback. */
+const audioBatch = [];
+const audioPlayed = new Map();   // key -> sim frame it was played for
+
+/* The frame a cue belongs to. Online this is the frame being simulated, which
+   is stable across the first run and every replay -- netSimulateOne sets pads,
+   calls step(), then increments. Offline nothing ever replays, so our own
+   counter is enough and is always distinct. */
+function audioNow() {
+  return netplay.active ? netplay.frame : AUDIO.step;
+}
+
+/* Emit a cue. Deliberately NOT guarded on netplay.resimulating: see the note
+   on the bus above. Cheap enough to call unconditionally from the simulation. */
+function cue(name, opts) {
+  if (!AUDIO.enabled || !AUDIO.ac) return;
+  const o = opts || {};
+  const frame = o.frame == null ? audioNow() : o.frame;
+  const slot = o.slot == null ? -1 : o.slot;
+  const key = frame + '|' + slot + '|' + name;
+  if (audioPlayed.has(key)) return;
+  audioPlayed.set(key, frame);
+  audioBatch.push({
+    name: name, frame: frame,
+    gain: o.gain == null ? 1 : o.gain,
+    pan: o.x == null ? 0 : Math.max(-1, Math.min(1, (o.x - VW / 2) / (VW / 2))) * 0.6,
+  });
+}
+
+/* Play everything emitted since the last flush. Called once per animation
+   frame, after the step loop. */
+function audioFlush() {
+  if (!audioBatch.length) return;
+  if (!AUDIO.ac) { audioBatch.length = 0; return; }
+  const now = AUDIO.ac.currentTime;
+  for (const c of audioBatch) {
+    const recipe = AUDIO_RECIPES[c.name];
+    if (!recipe) continue;
+    audioVoice(recipe, now, c.gain, c.pan);
+  }
+  audioBatch.length = 0;
+}
+
 /* =====================================================================
    EFFECTS - anything that was never drawn is code-drawn, so the original
    art is never mixed with generated pixels.
@@ -5921,12 +5974,14 @@ function frame(now) {
       if (!netAdvance()) break;
     } else {
       step();
+      AUDIO.step++;
     }
     acc -= STEP;
     guard++;
   }
   // A long wait must not become a long fast-forward once input arrives.
   if (netplay.stalling) acc = Math.min(acc, STEP * 12);
+  audioFlush();
   render();
   requestAnimationFrame(frame);
 }
@@ -5971,6 +6026,11 @@ window.NerdWars = {
     // Plays one recipe immediately. The sound-test overlay in phase 3 and
     // the tests both drive recipes through here.
     test: function (recipe) { audioVoice(recipe, AUDIO.ac ? AUDIO.ac.currentTime : 0, 1, 0); },
+    emit: cue,
+    flush: audioFlush,
+    // Tests need to drive the resimulating flag directly: reproducing a real
+    // rollback would need two engines and a wire, and this is a bus test.
+    setResimulating: function (v) { netplay.resimulating = !!v; },
   },
   net: {
     start: netStart,

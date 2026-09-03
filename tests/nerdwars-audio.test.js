@@ -327,3 +327,79 @@ test("playing a recipe with audio locked does nothing and does not throw", async
   g.nw.audio.test({ osc: "sine", f0: 200, dur: 0.2, gain: 0.5 });
   assert.equal(g.audioLog.length, 0, "no context, no nodes");
 });
+
+/** Count how many voices reached the graph. */
+function voiceCount(log) {
+  return log.filter((e) => e.op === "start").length;
+}
+
+test("the same cue on the same frame for the same slot plays once", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 1, "three emissions, one voice");
+});
+
+test("the same cue for different slots plays once each", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-a", { slot: 1, frame: 100 });
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 2, "two fighters, two sounds");
+});
+
+test("the same cue on a later frame plays again", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.flush();
+  g.nw.audio.emit("test-a", { slot: 0, frame: 101 });
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 2, "a repeated jab is two jabs");
+});
+
+/* The whole reason the bus does not copy addEffect's guard. A hit that only
+   the corrected timeline contains is emitted only during the replay; if
+   replays were suppressed it would be silent forever. */
+test("a cue that appears only during resimulation still plays", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.setResimulating(true);
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.setResimulating(false);
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 1, "the corrected timeline must be audible");
+});
+
+test("a cue already played on the first run is not replayed by a rollback", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.flush();
+  g.nw.audio.setResimulating(true);
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.setResimulating(false);
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 1, "one hit, one sound, however many replays");
+});
+
+test("an unknown cue name is ignored rather than throwing", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("no-such-cue", { slot: 0, frame: 1 });
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 0);
+});
+
+test("cues emitted with audio locked are dropped, not queued up", async () => {
+  const g = await bootGame({ audio: true });
+  g.nw.audio.emit("test-a", { slot: 0, frame: 1 });
+  g.nw.audio.flush();
+  g.press("KeyZ");
+  g.nw.audio.flush();
+  assert.equal(voiceCount(g.audioLog), 0, "no burst of backlog on unlock");
+});
