@@ -3692,6 +3692,12 @@ function audioFlush() {
   if (!audioBatch.length) return;
   if (!AUDIO.ac) { audioBatch.length = 0; return; }
   const now = AUDIO.ac.currentTime;
+  // Up to eight simulation frames can land between two paints, and after a
+  // tab switch the accumulator drains a longer burst still. Scheduling them
+  // all at `now` would collapse a jab's startup onto its impact, so each cue
+  // keeps its offset from the earliest frame in the batch.
+  let first = audioBatch[0].frame;
+  for (const c of audioBatch) if (c.frame < first) first = c.frame;
   // How many of each recipe we have already scheduled this flush. Identical
   // waveforms fired together sum in phase, which is a spike and a flange
   // rather than a louder hit, so the third copy is the last one worth having.
@@ -3710,7 +3716,8 @@ function audioFlush() {
         const shaped = n === 1
           ? recipe
           : Object.assign({}, recipe, { detune: (n - 1) * 11 });
-        audioVoice(shaped, now, c.gain / Math.sqrt(n), c.pan);
+        const when = now + (c.frame - first) * STEP / 1000;
+        audioVoice(shaped, when, c.gain / Math.sqrt(n), c.pan);
       } catch (e) { /* one malformed recipe must not silence the rest */ }
     }
   } finally {

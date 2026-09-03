@@ -526,3 +526,44 @@ test("stacked voices are attenuated and detuned", async () => {
   const detunes = g.audioLog.filter((e) => e.param === "detune");
   assert.ok(detunes.length >= 2, "duplicates should be detuned apart");
 });
+
+test("cues from different frames in one flush keep their spacing", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-b", { slot: 0, frame: 104 });
+  g.nw.audio.flush();
+
+  const starts = g.audioLog.filter((e) => e.op === "start").map((e) => e.time);
+  assert.equal(starts.length, 2);
+  const gap = Math.abs(starts[1] - starts[0]);
+  const expected = 4 * (1000 / 60) / 1000;   // four frames, in seconds
+  assert.ok(
+    Math.abs(gap - expected) < 0.002,
+    "expected ~" + expected.toFixed(4) + "s apart, got " + gap.toFixed(4)
+  );
+});
+
+test("cues on the same frame are simultaneous", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-b", { slot: 1, frame: 100 });
+  g.nw.audio.flush();
+
+  const starts = g.audioLog.filter((e) => e.op === "start").map((e) => e.time);
+  assert.equal(starts[0], starts[1], "one frame, one instant");
+});
+
+test("scheduling never lands in the past", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 200 });
+  g.nw.audio.emit("test-b", { slot: 0, frame: 100 });   // out of order
+  g.nw.audio.flush();
+
+  const now = g.recorder.currentTime;
+  for (const e of g.audioLog.filter((x) => x.op === "start")) {
+    assert.ok(e.time >= now, "scheduled at " + e.time + " but now is " + now);
+  }
+});
