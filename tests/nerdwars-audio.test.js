@@ -718,7 +718,17 @@ function tradeBlows(engines, rounds, onRound) {
    `fighters` is a legible six-field readout for when this fails, but
    `stateHash` is the assertion with teeth: bit-exact floats across all
    eleven fighter fields stateHash covers, plus every projectile position,
-   none of which `fighters` exposes. */
+   none of which `fighters` exposes.
+
+   Measured, the same way as the test below: emitting throughout an
+   unbroken 30 rounds of tradeBlows with no idle stretch catches `combo`
+   for a sufficiently non-idempotent write (confirmed with combo forced to
+   99; forcing it to 1 was not enough, since real combat already passes
+   through 1 on its own early in the fight, making that particular write a
+   no-op most of the time it lands). It shares the test below's blind spot
+   for `ultMeter` and `volleyHits` regardless -- nothing in this script
+   casts an ult, so neither is ever read, no matter how long the fight
+   runs. */
 test("an engine with audio and one without stay in identical states", async () => {
   const loud = await bootGame({ audio: true });
   const mute = await bootGame();
@@ -773,37 +783,51 @@ test("an engine with audio and one without stay in identical states", async () =
    the one built to catch a write the moment it happens rather than after
    the frames being compared have already settled.
 
-   An earlier version of this test let ~60 idle frames pass after the flush
-   before comparing (both attack keys released, nothing held). Measured with
-   an actual write injected into audioVoice: a position/velocity-class write
-   (vx += 0.001, x += 0.5) was visible in stateHash right after the flush,
-   but an idle window let the physics settle both engines back to the same
-   resting state -- vx snaps to exactly 0 when grounded with no input held,
-   which erased a vx perturbation outright before the comparison ever ran.
-   So this checks stateHash immediately after the flush, while a
-   position/velocity-class write is still there to see, in addition to the
-   check at the end.
+   An earlier version let ~60 idle frames pass after the flush before
+   comparing (every key released). Measured with an actual write injected
+   into audioVoice: an idle window erased a position/velocity-class write
+   outright -- vx snaps to exactly 0 when grounded with no input held -- and
+   never made a hitstop-class write observable at all, since nothing was
+   happening for an extra frozen frame to shift the timing of. Fixed by
+   checking stateHash immediately after the flush, before anything can
+   settle a position/velocity write away, and by replacing the idle window
+   with more rounds of tradeBlows(), so hitstop has real behavior to alter.
 
-   The remaining window is active rather than idle -- a few more rounds of
-   tradeBlows(), not a bare pump() -- for the same reason from the other
-   direction: a write into a field like hitstop only becomes observable if
-   there is ongoing behavior for it to alter (an extra frozen frame shifts
-   the timing of whatever swing comes next); against two characters standing
-   still there is nothing happening for it to change. Measured: with the
-   idle window, an injected `hitstop = 1` write was invisible at every
-   checkpoint. With this active window it is caught -- and specifically by
-   stateHash, not by `fighters`, which still agreed at that point; the
-   `fighters` comparison only diverged for genuinely bigger writes.
+   Adding a shield hold to also catch `shield` turned out not to be a matter
+   of just inserting it: placed before tradeBlows() (right after the flush,
+   which is also the only place shield is still close to whatever the write
+   left it at, since it regenerates every frame it is not held), it reliably
+   erased the hitstop-class divergence before tradeBlows() ever got to
+   develop it -- measured directly, and confirmed the trigger is timing, not
+   the shield mechanic specifically: even a few idle frames inserted in that
+   same spot, with no shield involved at all, erased hitstop just as
+   completely. tradeBlows() has to run immediately after the flush with
+   nothing between them for that check to mean anything. So the hold runs
+   after tradeBlows() instead, checked separately -- costing nothing, since
+   measurement showed seat 0's shield regenerates only to ~2.7 (of a max of
+   100) over those 8 rounds, most of them spent attacking rather than idle.
 
-   Measured against all five fields this task's rationale names: this test
-   now catches a write into hitstop, in addition to position/velocity-class
-   writes. It does NOT catch a write into shield, ultMeter, combo, or
-   volleyHits -- nothing in this script blocks, casts an ult, or holds a
-   combo open long enough for any of those four to affect what happens next,
-   so a write into any of them passes both checkpoints below undetected. Test
-   1 above is not affected by this gap: it emits throughout an unbroken 30
-   rounds of tradeBlows with no idle stretch at all, so no perturbation of
-   any kind gets a chance to settle out before the comparison at the end. */
+   What is and is not caught, measured field by field against the fields
+   this task's own rationale names, by injecting a write into audioVoice
+   and running the real suite against it:
+     - vx, x (position/velocity-class): caught, by the immediate hash check.
+     - hitstop: caught, by the hash after the active window -- specifically
+       the hash, not `fighters`, which still agreed at that point.
+     - shield: caught, by the hold after that -- specifically by the
+       `fighters` deepEqual, via `state` ("break" vs "shield"), which stays
+       different even once stateHash's own numeric fields (y, vy, grounded)
+       reconverge from the landing. This is the case the `fighters`
+       comparison exists for: legible, and catching what the hash alone
+       would have let through by then.
+     - ultMeter, volleyHits: NOT caught. Nothing in this script casts an
+       ult, so ultMeter is never read; volleyHits needs a multi-projectile
+       move only an ult provides, so nothing ever produces a volley to
+       register a hit against. A write into either ships undetected here.
+     - combo: NOT caught here, but IS caught by the test above for a
+       sufficiently non-idempotent write (measured with combo forced to 99;
+       forcing it to 1 was not enough to diverge, since real combat already
+       passes through 1 early on) -- see that test's own comment for why
+       the two differ on this one field. */
 test("flushing a cue mid-match does not change the simulation", async () => {
   const wired = await bootGame({ audio: true });
   const mute = await bootGame();
@@ -829,6 +853,10 @@ test("flushing a cue mid-match does not change the simulation", async () => {
 
   wired.nw.audio.emit("test-a", { slot: 0, frame: 1 });
   wired.nw.audio.flush();
+  assert.ok(
+    voiceCount(wired.audioLog) > 0,
+    "the cue under test should have actually produced a voice"
+  );
 
   // Checked here, before anything else runs, because a position/velocity
   // class write is exactly the kind of thing ongoing physics settles away
@@ -842,7 +870,41 @@ test("flushing a cue mid-match does not change the simulation", async () => {
   // Active propagation window: more rounds of tradeBlows, not an idle
   // pump(), so a field like hitstop has real behavior to alter rather than
   // two characters standing still with nothing happening for it to change.
+  // This has to run right here, with nothing between it and the flush
+  // above: measured that even a few idle frames inserted before it are
+  // enough to let a hitstop-class divergence resolve itself before
+  // tradeBlows ever presses a key, which is exactly the kind of thing this
+  // window exists to prevent.
   tradeBlows([wired, mute], 8);
+
+  // Checked again here, because this is the window a hitstop-class write
+  // actually surfaces in: measured with hitstop injected, this checkpoint
+  // catches it via stateHash while `fighters` below still agrees.
+  assert.equal(
+    wired.nw.__test.stateHash(),
+    mute.nw.__test.stateHash(),
+    "state must be identical after the active window"
+  );
+
+  // Hold seat 0's shield key so a write into `shield` is live: the drain
+  // only reads it, and only trips the break branch, while the key is
+  // actually held. This runs after tradeBlows(8) rather than before it, so
+  // it cannot cost the hitstop check above -- and it still works from
+  // here: measured that seat 0's shield regenerates only to ~2.7 (of a max
+  // 100) over those 8 rounds, since most of them are spent attacking, not
+  // idle, and the same measurement showed the first several held frames
+  // are still spent finishing whatever attack was in progress -- shield is
+  // only read once a fighter returns to its free state. 20 frames covers
+  // that startup and still breaks seat 0 with room to spare, while the
+  // other seat's untouched shield (100) is nowhere close to breaking. The
+  // break shows up in the `fighters` comparison below via `state`
+  // ("break" vs "shield") even after stateHash's own numeric fields (y,
+  // vy, grounded) have reconverged from the landing -- exactly the
+  // "legible readout catches what the hash alone would miss" case the
+  // `fighters` comparison exists for.
+  for (const g of [wired, mute]) g.press("ShiftLeft");
+  for (const g of [wired, mute]) g.pump(20);
+  for (const g of [wired, mute]) g.release("ShiftLeft");
 
   assert.deepEqual(
     JSON.parse(JSON.stringify(wired.nw.fighters)),
