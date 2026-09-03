@@ -124,6 +124,28 @@ function recordingAudioContext() {
 }
 
 /**
+ * Like recordingAudioContext, but its createOscillator throws on the Nth
+ * call (1-indexed) instead of returning a node. The recording fake above
+ * accepts any recipe without complaint, so this is how a test gets
+ * something for audioFlush's inner per-item try/catch to actually catch --
+ * standing in for a malformed recipe hitting a real Web Audio API (an
+ * invalid oscillator type, a non-finite frequency, and so on).
+ */
+function throwingAudioContext(throwOnNthOscillator) {
+  const ctx = recordingAudioContext();
+  const realCreateOscillator = ctx.createOscillator;
+  let calls = 0;
+  ctx.createOscillator = () => {
+    calls++;
+    if (calls === throwOnNthOscillator) {
+      throw new Error("simulated malformed recipe");
+    }
+    return realCreateOscillator();
+  };
+  return ctx;
+}
+
+/**
  * Boot one engine.
  * @param {object} [opts]
  * @param {boolean} [opts.audio] install a recording AudioContext (default off,
@@ -131,6 +153,7 @@ function recordingAudioContext() {
  */
 async function bootGame(opts) {
   const withAudio = !!(opts && opts.audio);
+  const makeAudioContext = (opts && opts.makeAudioContext) || recordingAudioContext;
   const view = stubCanvas(960, 540);
   const winListeners = new Map();
   const docListeners = new Map();
@@ -199,7 +222,7 @@ async function bootGame(opts) {
 
   if (withAudio) {
     sandbox.AudioContext = function () {
-      recorder = recordingAudioContext();
+      recorder = makeAudioContext();
       return recorder;
     };
   }
@@ -566,4 +589,167 @@ test("scheduling never lands in the past", async () => {
   for (const e of g.audioLog.filter((x) => x.op === "start")) {
     assert.ok(e.time >= now, "scheduled at " + e.time + " but now is " + now);
   }
+});
+
+/**
+ * Navigate from the title screen into a real two-human battle.
+ *
+ * The task brief that first specified these tests reached this point with
+ * two Enter taps, on the assumption that the default title selection puts
+ * an engine straight into a fight. It does not: MODES[0], the default, is
+ * "1 PLAYER (vs CPU)" and needs four confirms -- title, lock seat 0, lock
+ * seat 1, stage -- to reach `battle` at all. With only two, an engine
+ * silently sits on the character-select screen for the rest of the test,
+ * `fighters` stays `[]` the whole time, and a determinism assertion after it
+ * compares two empty arrays -- passing without ever exercising a fight.
+ * Confirmed by instrumenting the two given tests directly: with the
+ * brief's original two-tap script, nw.scene was still "select" and
+ * nw.fighters.length was 0 after all 400 scripted frames.
+ *
+ * Simply pressing through to a CPU match does not fix that either. The CPU
+ * brain (aiThink, around line 4132 of src/nerdwars.js) calls Math.random()
+ * directly with no seed shared between processes, so two independently
+ * booted engines with a CPU-controlled fighter diverge from each other on
+ * their own -- confirmed by fighting two silent, audio-free engines against
+ * this same script and watching the CPU seat's position and state disagree
+ * between them. That divergence is real, but it has nothing to do with
+ * audio, and folding a CPU seat into this test would make it fail (or pass)
+ * for reasons unrelated to what it exists to prove.
+ *
+ * So this selects MODES[1], "2 PLAYERS (local)": both seats are driven by
+ * the scripted keys the tests already send, nothing in the fight is left to
+ * chance, and a mismatch between two engines fed the same script can only
+ * mean one of them wrote something the other didn't. The KeyS/Enter/KeyG/
+ * Comma/Enter sequence below matches startMatch()'s mode-1 branch in
+ * nerdwars-fourplayer.test.js, an independent confirmation that this is
+ * really how the suite already reaches a two-human local match.
+ */
+function enterTwoPlayerBattle(g) {
+  g.pump(2);
+  g.press("KeyS"); // move the title cursor onto "2 PLAYERS (local)"
+  g.pump(2);
+  g.release("KeyS");
+  g.pump(2);
+  g.press("Enter"); // confirm at title -> enterSelect()
+  g.pump(2);
+  g.release("Enter");
+  g.pump(2);
+  g.press("KeyG"); // seat 0's attack key locks seat 0's pick
+  g.pump(2);
+  g.release("KeyG");
+  g.pump(2);
+  g.press("Comma"); // seat 1's attack key locks seat 1's pick -> scene = 'stage'
+  g.pump(2);
+  g.release("Comma");
+  g.pump(2);
+  g.press("Enter"); // confirm at stage select -> startBattle()
+  g.pump(2);
+  g.release("Enter");
+  g.pump(4);
+}
+
+/* The whole safety argument in one test: two engines fed identical inputs must
+   reach identical state, whether or not either of them is making noise. If
+   audio ever reads a value it then writes back, this is what catches it --
+   stateHash will not, because it covers only eleven fighter fields. */
+test("an engine with audio and one without stay in identical states", async () => {
+  const loud = await bootGame({ audio: true });
+  const mute = await bootGame();
+  loud.press("KeyZ");
+
+  for (const g of [loud, mute]) enterTwoPlayerBattle(g);
+  assert.equal(
+    loud.nw.scene,
+    "battle",
+    "the script above should have started a real fight"
+  );
+
+  const before = JSON.parse(JSON.stringify(loud.nw.fighters));
+
+  const script = ["KeyD", "KeyW", "KeyF", "KeyA", "KeyG", "KeyS", "KeyF"];
+  for (let i = 0; i < 400; i++) {
+    const k = script[i % script.length];
+    for (const g of [loud, mute]) {
+      if (i % 7 === 0) g.press(k);
+      if (i % 7 === 3) g.release(k);
+      g.pump(1);
+    }
+  }
+
+  assert.notDeepEqual(
+    JSON.parse(JSON.stringify(loud.nw.fighters)),
+    before,
+    "both engines should actually have fought, not sat idle"
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(loud.nw.fighters)),
+    JSON.parse(JSON.stringify(mute.nw.fighters)),
+    "audio must be invisible to the simulation"
+  );
+  assert.ok(loud.audioLog.length > 0, "the loud engine really did make sound");
+});
+
+test("disabling audio mid-match does not change the simulation", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  enterTwoPlayerBattle(g);
+  assert.equal(
+    g.nw.scene,
+    "battle",
+    "the script above should have started a real fight"
+  );
+  g.press("KeyD");
+  g.pump(30);
+  g.release("KeyD");
+  const before = JSON.parse(JSON.stringify(g.nw.fighters));
+  g.nw.audio.emit("test-a", { slot: 0, frame: 1 });
+  g.nw.audio.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(g.nw.fighters)), before);
+});
+
+/* The existing "no Web Audio at all" test above only pumps frames -- it never
+   presses a key or clicks the canvas, so audioUnlock()'s actual behavior with
+   no AudioContext in scope (the real case on a browser with audio blocked)
+   never runs. Both keydown and mousedown call audioUnlock() unconditionally,
+   before anything else, so this drives that exact path and checks it leaves
+   the game exactly as untouched as inspection alone suggested. */
+test("a key press and a canvas click do not throw with no Web Audio at all", async () => {
+  const g = await bootGame();
+  assert.doesNotThrow(() => {
+    g.press("KeyZ");
+    g.click();
+  }, "audioUnlock must survive a missing AudioContext constructor");
+  assert.equal(
+    g.nw.audio.ready,
+    false,
+    "no AudioContext exists anywhere, so audio can never become ready"
+  );
+  g.pump(60);
+  assert.ok(g.nw.frames > 0, "the loop should keep running after the gesture");
+});
+
+/* audioFlush wraps each item's audioVoice call in its own try/catch for one
+   reason: a single malformed recipe must not throw out of frame() and stop
+   requestAnimationFrame from ever being called again. Nothing in the suite
+   above ever drives a recipe through that catch, because the recording fake
+   context accepts any input without complaint. throwingAudioContext exists
+   to make one specific call fail -- here, the very first oscillator built --
+   while a second cue in the same flush must still reach the graph. */
+test("a cue that throws inside audioVoice does not stop the rest of the flush", async () => {
+  const g = await bootGame({
+    audio: true,
+    makeAudioContext: () => throwingAudioContext(1),
+  });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-a", { slot: 1, frame: 100 });
+  assert.doesNotThrow(
+    () => g.nw.audio.flush(),
+    "one bad voice must not freeze the loop"
+  );
+  assert.equal(
+    voiceCount(g.audioLog),
+    1,
+    "the second, valid cue should still have played"
+  );
 });
