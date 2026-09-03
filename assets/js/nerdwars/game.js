@@ -849,6 +849,9 @@ const BINDS = [
 ];
 
 window.addEventListener('keydown', (e) => {
+  // Before the focus check on purpose: this is a user gesture whatever the
+  // game does with the key, and it is the only chance to start the context.
+  audioUnlock();
   if (!hasFocus) return;
   // Stop the browser scrolling the page out from under the game.
   if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code.startsWith('Numpad')) {
@@ -1046,6 +1049,7 @@ function buttonAt(mx, my) {
 }
 
 view.addEventListener('mousedown', (e) => {
+  audioUnlock();
   const p = viewPoint(e);
   const b = buttonAt(p[0], p[1]);
   if (b) b.action();
@@ -3460,6 +3464,54 @@ class KnightPiece {
 }
 
 /* =====================================================================
+   AUDIO
+
+   Presentation, in exactly the sense `effects` is: the simulation emits
+   cues, nothing here is ever snapshotted, and no line below writes back
+   into game state. Audio therefore cannot desync a match -- but note that
+   `stateHash` covers only eleven fighter fields, so it would not catch a
+   write-back either. The rule is structural, not policed.
+
+   The context is built on the first user gesture and never at load. A
+   browser will not start one without a gesture, and the headless test
+   harness has no AudioContext at all; both cases must leave a game that
+   runs perfectly and says nothing.
+   ===================================================================== */
+
+const AUDIO = {
+  ac: null,              // AudioContext, null until a gesture unlocks it
+  master: null,          // master GainNode
+  enabled: true,
+  volume: 0.7,
+  step: 0,               // our own monotonic step counter, for offline keying
+};
+
+/* Build the context. Called from every plausible first gesture, so it has to
+   be cheap and idempotent. Any failure leaves ac null and the game silent
+   rather than broken: audio is never allowed to stop the engine booting. */
+function audioUnlock() {
+  if (AUDIO.ac) {
+    // Chrome can suspend an existing context when a tab is backgrounded.
+    if (AUDIO.ac.state === 'suspended') AUDIO.ac.resume();
+    return;
+  }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    const ac = new AC();
+    const master = ac.createGain();
+    master.gain.value = AUDIO.volume;
+    master.connect(ac.destination);
+    AUDIO.ac = ac;
+    AUDIO.master = master;
+    if (ac.state === 'suspended') ac.resume();
+  } catch (e) {
+    AUDIO.ac = null;
+    AUDIO.master = null;
+  }
+}
+
+/* =====================================================================
    EFFECTS - anything that was never drawn is code-drawn, so the original
    art is never mixed with generated pixels.
    ===================================================================== */
@@ -5831,6 +5883,15 @@ window.NerdWars = {
   get frames() { return frameCount; },
   get fullscreen() { return fullscreenActive(); },
   toggleFullscreen: toggleFullscreen,
+  audio: {
+    get ready() { return !!AUDIO.ac; },
+    get enabled() { return AUDIO.enabled; },
+    get volume() { return AUDIO.volume; },
+    // The site lobby's join button is a real user gesture on the one path
+    // that has no other -- netStart sets hasFocus programmatically, so an
+    // online-only embed never sees a local click or key.
+    unlock: audioUnlock,
+  },
   net: {
     start: netStart,
     stop: netStop,
