@@ -380,3 +380,33 @@ test("smoke turns a victim's walk backwards, then wears off", async () => {
       clear.toFixed(2) + "px"
   );
 });
+
+/* Spot dodge used to have no cooldown at all: eighteen frames of animation
+   with invulnerability from frame 3 to 12, and nothing stopping another the
+   instant it ended. Holding down was ten invulnerable frames out of every
+   eighteen, indefinitely. */
+test("spot dodge cannot be spammed", async () => {
+  const g = await bootGame();
+  startAs(g, "johnnyham", "reese");
+
+  // Hold down for four seconds and count how many dodges actually start.
+  let dodges = 0, wasDodging = false;
+  g.press("ShiftLeft");            // shield, which is what down+shield does
+  g.press("KeyS");
+  for (let i = 0; i < 240; i++) {
+    g.pump(1);
+    const now = g.nw.fighters[0].state === "dodge";
+    if (now && !wasDodging) dodges++;
+    wasDodging = now;
+  }
+  g.release("KeyS");
+  g.release("ShiftLeft");
+
+  // 240 frames at one per 46 is at most 6; the old behaviour managed 13.
+  assert.ok(dodges > 0, "holding down while shielding should still dodge");
+  assert.ok(
+    dodges <= 6,
+    "four seconds of holding down produced " + dodges + " dodges; the " +
+      "cooldown should cap it around five"
+  );
+});

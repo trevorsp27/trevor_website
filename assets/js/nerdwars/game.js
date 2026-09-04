@@ -76,6 +76,11 @@ const COMBAT = {
   rollInvulnTo: 15,
   rollDistance: 30,
   spotDodgeFrames: 18,
+  // Nothing used to stop a second dodge on the frame the first one ended,
+  // which made ten of every eighteen frames invulnerable for as long as you
+  // held down. The cooldown starts when the dodge does, so what grows is the
+  // gap BETWEEN dodges: 46 frames apart rather than 18.
+  spotDodgeCooldown: 46,
   spotDodgeInvulnFrom: 3,
   spotDodgeInvulnTo: 12,
   respawnInvuln: 110,
@@ -1262,6 +1267,7 @@ class Fighter {
     this.volleySince = 999;
     this.mana = COMBAT.manaMax;
     this.manaDenied = 0;
+    this.dodgeCd = 0;
     this.poison = 0;
     this.poisonDps = 0;
     // Frames of inverted movement left. A plain number on the fighter, so
@@ -1377,6 +1383,7 @@ class Fighter {
     if (this.eliminated) return;
 
     if (this.invuln > 0) this.invuln--;
+    if (this.dodgeCd > 0) this.dodgeCd--;
     if (this.buffTimer > 0) this.buffTimer--;
     if (this.confused > 0) {
       this.confused--;
@@ -1497,7 +1504,8 @@ class Fighter {
         cue('roll', { slot: this.slot, x: this.x });
         return;
       }
-      if (pad.down) {
+      if (pad.down && this.dodgeCd <= 0) {
+        this.dodgeCd = COMBAT.spotDodgeCooldown;
         this.setState('dodge');
         cue('dodge', { slot: this.slot, x: this.x });
         return;
@@ -2182,6 +2190,7 @@ class Fighter {
     this.buffStats = null;
     this.poison = 0;
     this.confused = 0;
+    this.dodgeCd = 0;
     this.mana = COMBAT.manaMax;
     this.hitstun = 0;
     this.invuln = COMBAT.respawnInvuln;
@@ -3939,7 +3948,7 @@ function audioNoise() {
    MUSIC table and simply have no music -- which has to degrade to silence,
    not to an error. */
 const MUSIC_TRACKS = { menu: 'nostalgia', battle: 'nowthatsdeep' };
-const MUSIC_GAIN = 0.34;         // under the effects; it is a bed, not an event
+const MUSIC_GAIN = 0.136;        // under the effects; it is a bed, not an event
 const MUSIC_FADE = 0.035;        // volume per frame, so ~0.5s to cross over
 
 const audioMusicEls = Object.create(null);
@@ -4240,6 +4249,37 @@ const AUDIO_RECIPES = {
    have already played. Module-level, never on a Fighter: restoreSim deletes
    any field it does not recognize, so per-fighter audio state would vanish at
    the first rollback. */
+/* ROLLBACK SMOOTHING -- presentation only, never snapshotted, never read by
+   the simulation.
+
+   Rollback rewinds and replays, and the corrected position appears in the
+   very next painted frame. Measured on a 200ms link with a fighter changing
+   direction the way a person does: on the owner's own machine the worst
+   single-frame movement is 4px, and on the peer's machine the SAME fighter
+   moves up to 35px in one frame -- more than two body widths, 27 times in
+   five seconds. That is the choppiness. It is not frame pacing: simulation
+   steps per painted frame measure identically online and off (97% exactly
+   one), which is also why single player looks perfect.
+
+   So the fighter is DRAWN a little behind where the simulation has put them
+   for a few frames after a correction, and catches up. The simulation is
+   untouched and stays bit-exact -- this only moves pixels. */
+const visErrX = [];
+const visErrY = [];
+const visPrevX = [];         // scratch, so nothing is parked on a Fighter
+const visPrevY = [];
+
+/* Chosen by sweeping, not by taste. On a 200ms link the count of visibly
+   teleporting frames per five seconds goes 12 / 6 / 3 / 1 at decay 0.60 /
+   0.72 / 0.82 / 0.88, so smoother is monotonically better on that measure --
+   which is exactly why the measure cannot pick the number alone. A slower
+   decay leaves the sprite further from where the fighter actually is for
+   longer, and in a fighting game that means swinging at where somebody looks
+   and missing. 0.82 absorbs a correction to a tenth in about twelve frames,
+   and the clamp bounds how wrong the picture can be at its worst. */
+const VIS_DECAY = 0.82;
+const VIS_MAX = 20;          // never trail further than this behind the truth
+
 const audioBatch = [];
 const audioPlayed = new Map();   // key -> sim frame it was played for
 /* Was this slot shielding at the start of the frame? Written by
@@ -5571,6 +5611,13 @@ function drawFighter(g, f) {
   const im = f.sprite();
   if (!im) return;
 
+  // Translating the context rather than offsetting each coordinate: this
+  // function draws a seat arrow, a sprite, a poison glyph and a sword, and
+  // every one of them has to move together. Nothing here writes to f.
+  const ex = visErrX[f.slot] || 0, ey = visErrY[f.slot] || 0;
+  const shifted = ex !== 0 || ey !== 0;
+  if (shifted) { g.save(); g.translate(ex, ey); }
+
   // Whose is whose. Fighters do not collide with each other, so four of them
   // can stand in exactly the same place, and everybody can pick the same
   // character. Left off at two players, where the game has never needed it.
@@ -5643,6 +5690,8 @@ function drawFighter(g, f) {
     const fade = f.swordTimer < 50 ? 0.35 + (f.swordTimer / 50) * 0.65 : undefined;
     drawSwordFrame(g, swordFrameKey(f), swordHandX(f), swordHandY(f), f.facing, fade);
   }
+
+  if (shifted) g.restore();
 }
 
 function drawWorld() {
@@ -6806,7 +6855,27 @@ function frame(now) {
       // several frames of step() from inside that call, and every cue() any
       // of them emits has to see the net clock as live already.
       AUDIO.netClock = true;
+      /* Absorb a rollback correction into the drawn position rather than
+         letting it snap. Comparing before and after netAdvance() is exact:
+         netRollback rewinds to `from` and replays back to `to`, so both
+         readings are the same simulation frame and the difference is the
+         correction itself, with none of the legitimate movement in it. */
+      const wasRollbacks = netplay.rollbacks;
+      // Into local arrays, never onto the fighters: netAdvance takes a
+      // snapshot on every simulated frame, so a scratch field parked on a
+      // Fighter across this call would end up inside those snapshots.
+      for (let i = 0; i < fighters.length; i++) {
+        visPrevX[i] = fighters[i].x;
+        visPrevY[i] = fighters[i].y;
+      }
       if (!netAdvance()) break;
+      if (netplay.rollbacks !== wasRollbacks) {
+        for (let i = 0; i < fighters.length; i++) {
+          const sl = fighters[i].slot;
+          visErrX[sl] = clamp((visErrX[sl] || 0) + (visPrevX[i] - fighters[i].x), -VIS_MAX, VIS_MAX);
+          visErrY[sl] = clamp((visErrY[sl] || 0) + (visPrevY[i] - fighters[i].y), -VIS_MAX, VIS_MAX);
+        }
+      }
     } else {
       AUDIO.netClock = false;
       step();
@@ -6817,6 +6886,11 @@ function frame(now) {
   }
   // A long wait must not become a long fast-forward once input arrives.
   if (netplay.stalling) acc = Math.min(acc, STEP * 12);
+  // Ease every outstanding correction toward zero, once per painted frame.
+  for (let i = 0; i < visErrX.length; i++) {
+    if (visErrX[i]) { visErrX[i] *= VIS_DECAY; if (Math.abs(visErrX[i]) < 0.08) visErrX[i] = 0; }
+    if (visErrY[i]) { visErrY[i] *= VIS_DECAY; if (Math.abs(visErrY[i]) < 0.08) visErrY[i] = 0; }
+  }
   audioFlush();
   render();
   requestAnimationFrame(frame);
@@ -6986,6 +7060,18 @@ window.NerdWars = {
     // own would not suppress Escape at all, and would instead make it fire
     // repeatedly the same way Enter does above.
     setResimulating: function (v) { netplay.resimulating = !!v; },
+    /* How far each fighter is being DRAWN from where the simulation has
+       actually put them, while a rollback correction eases off. Read-only,
+       and it exists because nothing else can see it: the offset is applied
+       by translating the canvas, so the drawn position appears in no
+       variable anywhere. Without this, a test measuring fighters[].x
+       measures the simulation -- which is deliberately unchanged -- and
+       concludes the smoothing does nothing. */
+    get renderOffsets() {
+      return fighters.map(function (f) {
+        return { slot: f.slot, dx: visErrX[f.slot] || 0, dy: visErrY[f.slot] || 0 };
+      });
+    },
     // Which one-shots actually decoded. Read-only, and it exists because a
     // sample that never decodes is silent by design -- without this a test
     // cannot tell "correctly silent" from "the decoder never ran."

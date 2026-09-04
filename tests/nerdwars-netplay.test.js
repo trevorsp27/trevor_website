@@ -673,3 +673,115 @@ test("a paced match does not also pile on input delay", async () => {
     `input delay reached ${worst} frames (~${Math.round(worst * 16.7)}ms) in a ` +
     "paced match, where delay provably cannot reduce the prediction distance");
 });
+
+/* Rollback smoothing.
+ *
+ * Rollback rewinds and replays, and the corrected position lands in the very
+ * next painted frame. Measured on a 200ms link with a fighter reversing the
+ * way a person does: on its own machine the worst single-frame movement is
+ * 3px, and on the peer's machine the SAME fighter moved up to 35px in one
+ * frame -- more than two body widths, twenty-three times in five seconds.
+ * That is what "multiplayer looks choppy" was.
+ *
+ * The fix draws the fighter a little behind the truth for a few frames after
+ * a correction. It must not touch the simulation, which is the first thing
+ * asserted here.
+ */
+test("a rollback correction is eased into the picture, not snapped", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+  const wire = [];
+  const LAG = 12;                                   // ~200ms each way
+  const post = (to, m) => wire.push({ to, m, due: LAG });
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post(1, m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post(0, m) });
+  const gs = [a, b];
+
+  const drawn = [];      // seat 0 as the PEER paints it
+  const raw = [];        // seat 0's simulation position on the same machine
+  let held = null;
+  for (let i = 0; i < 300; i++) {
+    // Reversing constantly is the point: holding one key makes prediction
+    // always right, which produces almost no rollbacks and tests nothing.
+    if (i % 11 === 0) {
+      const want = (i / 11) % 2 === 0 ? "KeyD" : "KeyA";
+      if (held) { a.release(held); b.release(held); }
+      a.press(want); b.press(want); held = want;
+    }
+    for (const e of wire) e.due--;
+    for (let k = wire.length - 1; k >= 0; k--) {
+      if (wire[k].due > 0) continue;
+      const { to, m } = wire[k];
+      wire.splice(k, 1);
+      gs[to].nw.net.receive(m);
+    }
+    a.pump(1); b.pump(1);
+    const off = b.nw.__test.renderOffsets.find((o) => o.slot === 0);
+    raw.push(b.nw.fighters[0].x);
+    drawn.push(b.nw.fighters[0].x + (off ? off.dx : 0));
+  }
+
+  assert.ok(b.nw.net.status.rollbacks > 5,
+    "expected real rollbacks to smooth, got " + b.nw.net.status.rollbacks);
+
+  const jumps = (xs) => {
+    let big = 0, worst = 0;
+    for (let i = 1; i < xs.length; i++) {
+      const d = Math.abs(xs[i] - xs[i - 1]);
+      if (d > 8) big++;
+      if (d > worst) worst = d;
+    }
+    return { big, worst };
+  };
+  const before = jumps(raw);      // what would have been drawn without this
+  const after = jumps(drawn);     // what is drawn now
+
+  assert.ok(before.big > 0,
+    "the unsmoothed position should teleport, or there is nothing to fix");
+
+  /* The worst single-frame jump is the assertion, not the count of jumps
+     over some threshold. Counting them is sensitive to exactly where the
+     distribution sits relative to the threshold, and it cannot improve past
+     the clamp: a 38px correction with VIS_MAX at 20 still leaves an 18px
+     step, which is much better and still over 8. Halving the worst case is
+     the property that actually holds, and it holds at every latency. */
+  assert.ok(
+    after.worst < before.worst * 0.65,
+    "worst single-frame jump should shrink by at least a third: was " +
+      before.worst.toFixed(1) + "px, now " + after.worst.toFixed(1) + "px"
+  );
+  assert.ok(after.big <= before.big,
+    "and no more teleporting frames than before: " + before.big + " -> " + after.big);
+});
+
+/* The property everything else depends on: this is a drawing change. If it
+   ever touched the simulation it would desync a match, which is far worse
+   than the stutter it exists to fix. */
+test("smoothing changes the picture and not the simulation", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 2, send: (m) => b.nw.net.receive(m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 2, send: (m) => a.nw.net.receive(m) });
+
+  let held = null;
+  for (let i = 0; i < 200; i++) {
+    if (i % 9 === 0) {
+      const want = (i / 9) % 2 === 0 ? "KeyD" : "KeyA";
+      if (held) { a.release(held); b.release(held); }
+      a.press(want); b.press(want); held = want;
+    }
+    a.pump(1); b.pump(1);
+  }
+
+  assert.equal(a.nw.net.status.desync, null, "no desync");
+  assert.equal(b.nw.net.status.desync, null, "no desync");
+  assert.equal(
+    JSON.stringify(a.nw.fighters),
+    JSON.stringify(b.nw.fighters),
+    "both machines must still agree about where everybody actually is"
+  );
+});

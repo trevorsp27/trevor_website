@@ -1486,7 +1486,15 @@ test("music starts on the menu and crosses over into a match", async () => {
   // On the title screen the menu track plays and the battle track does not.
   g.pump(40);
   assert.ok(menu().playing, "the menu track should be playing at the title");
-  assert.ok(menu().volume > 0.2, "and audible, not stuck at zero");
+  /* Audible, and settled -- rather than a hardcoded level. This used to
+     assert `> 0.2`, which quietly encoded the music gain of the day and
+     failed the moment the music was turned down; the property that actually
+     matters is that it ramped up off zero and then held, not what number it
+     landed on. */
+  const lifted = menu().volume;
+  assert.ok(lifted > 0.02, "should have ramped up off zero, got " + lifted);
+  g.pump(30);
+  assert.equal(menu().volume, lifted, "and then held at its target");
   assert.ok(!battle().playing, "the battle track should not be");
 
   // Into a fight: the two swap.
@@ -1494,7 +1502,7 @@ test("music starts on the menu and crosses over into a match", async () => {
   assert.equal(g.nw.scene, "battle");
   g.pump(60);
   assert.ok(battle().playing, "the battle track should take over in a match");
-  assert.ok(battle().volume > 0.2, "and be audible");
+  assert.ok(battle().volume > 0.02, "and be audible, got " + battle().volume);
   assert.equal(menu().volume, 0, "while the menu track has faded out");
   assert.ok(!menu().playing, "and stopped rather than looping silently");
 });
