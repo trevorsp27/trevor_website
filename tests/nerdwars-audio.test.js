@@ -522,7 +522,12 @@ test("a cue older than the rollback window may play again", async () => {
   );
 });
 
-test("at most three voices of one recipe play in a single flush", async () => {
+// The bucket key and `when` are both keyed on the same frame (100) here, so
+// this test alone cannot tell the current per-bucket cap apart from the
+// simpler per-flush-by-name cap it replaced -- see the two tests below for
+// that. What this one still pins down: eight voices on the exact same
+// instant are capped to three.
+test("at most three voices of one recipe play on the same instant", async () => {
   const g = await bootGame({ audio: true });
   g.press("KeyZ");
   for (let slot = 0; slot < 8; slot++) {
@@ -541,6 +546,69 @@ test("different recipes in one flush are not capped against each other", async (
   }
   g.nw.audio.flush();
   assert.equal(voiceCount(g.audioLog), 6, "three of each");
+});
+
+// Distinguishes the per-bucket cap from the simpler per-flush-by-name cap it
+// replaced. Six emissions of one recipe, two each 50ms time bucket (offsets
+// 0-1, 3-4, 6-7 frames from the batch's earliest frame) -- more than
+// AUDIO_MAX_VOICES (3) in the flush overall, but never more than 2 in any
+// one bucket. A cap that counted by name across the whole flush, ignoring
+// time, would drop three of these; the real rule caps within a bucket, so
+// none should be dropped.
+test("cues of one recipe spread across time buckets are not pooled into one cap", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("test-a", { slot: 0, frame: 100 });
+  g.nw.audio.emit("test-a", { slot: 1, frame: 101 });
+  g.nw.audio.emit("test-a", { slot: 2, frame: 103 });
+  g.nw.audio.emit("test-a", { slot: 3, frame: 104 });
+  g.nw.audio.emit("test-a", { slot: 4, frame: 106 });
+  g.nw.audio.emit("test-a", { slot: 5, frame: 107 });
+  g.nw.audio.flush();
+  assert.equal(
+    voiceCount(g.audioLog),
+    6,
+    "six cues in three distinct time buckets, none should be dropped"
+  );
+});
+
+// The blocker this wave fixes: the voice-cap bucket and `when` used to
+// disagree about time past AUDIO_MAX_BATCH_STEPS -- the bucket kept
+// splitting a same-clock spread into new buckets by its raw, unclamped
+// offset, while `when` collapsed every one of those cues onto the same
+// clamped instant. Eleven emissions of one recipe, 3 frames (50ms) apart,
+// reproduces a rollback replaying many frames of one clock inside a single
+// frame() loop iteration. Against the pre-fix code this piled eight
+// identical voices onto one instant (2.6x AUDIO_MAX_VOICES) -- exactly the
+// coherent-summing spike the cap exists to prevent. The fix computes the
+// clamped offset once and reuses it for both the bucket key and `when`, so
+// no single instant can ever collect more than AUDIO_MAX_VOICES voices.
+test("a same-clock spread past the batch clamp does not pile voices onto one instant", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  for (let f = 0; f <= 30; f += 3) {
+    g.nw.audio.emit("test-a", { slot: 0, frame: f });
+  }
+  g.nw.audio.flush();
+
+  const starts = g.audioLog.filter((e) => e.op === "start").map((e) => e.time);
+  const byTime = new Map();
+  for (const t of starts) byTime.set(t, (byTime.get(t) || 0) + 1);
+  for (const [t, n] of byTime) {
+    assert.ok(
+      n <= 3,
+      "time " + t + " has " + n + " voices, past the cap of 3"
+    );
+  }
+  // Pinned to the exact shape the clamp produces: two buckets of one voice
+  // each (offsets 0 and 3 frames), then the third bucket -- offset 6 plus
+  // everything from offset 9 on, clamped to 8 -- capped at three, so two of
+  // its nine candidates are dropped rather than all nine playing.
+  assert.equal(
+    starts.length,
+    5,
+    "11 emissions, capped down to 5 voices across three time buckets"
+  );
 });
 
 test("stacked voices are attenuated and detuned", async () => {
@@ -975,5 +1043,50 @@ test("a cue that throws inside audioVoice does not stop the rest of the flush", 
     voiceCount(g.audioLog),
     1,
     "the second, valid cue should still have played"
+  );
+});
+
+/* The extended determinism test above ("an engine with audio and one without
+   stay in identical states") does exercise the noise path -- test-b is a
+   noise recipe -- but two-human mode never calls aiThink, so nothing in the
+   frames it compares ever reads the shared random stream, and no amount of
+   consumption there would be observable. What that test proves is the
+   write-back property, which the oscillator recipe already covers on its
+   own; it does not prove audioNoise() leaves Math.random untouched.
+
+   This closes that directly: wrap Math.random, flush a noise-bearing cue,
+   and assert it was never called. audioNoise() fills its buffer with a
+   local xorshift32 generator specifically so it never touches the stream
+   aiThink() reads for every CPU decision (see the comment on audioNoise()
+   in src/nerdwars.js) -- consuming even one draw from that stream would
+   shift every CPU decision downstream of the first noise-bearing cue in a
+   session. Confirmed this actually catches a regression: pointed at a copy
+   of audioNoise() with the xorshift loop swapped back for
+   `data[i] = Math.random() * 2 - 1`, this test recorded 24,000 draws (one
+   per sample in the half-second buffer) and failed; against the real
+   xorshift32 implementation it records zero. */
+test("filling the noise buffer draws nothing from Math.random", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  const realRandom = Math.random;
+  let draws = 0;
+  Math.random = function (...args) {
+    draws++;
+    return realRandom.apply(this, args);
+  };
+  try {
+    g.nw.audio.emit("test-b", { slot: 0, frame: 1 }); // test-b is the noise recipe
+    g.nw.audio.flush();
+  } finally {
+    Math.random = realRandom;
+  }
+  assert.ok(
+    voiceCount(g.audioLog) > 0,
+    "the noise cue under test should have actually produced a voice"
+  );
+  assert.equal(
+    draws,
+    0,
+    "audioNoise() drew from Math.random " + draws + " time(s)"
   );
 });

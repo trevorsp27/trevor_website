@@ -3737,26 +3737,36 @@ function audioFlush() {
   for (const c of audioBatch) if (c.frame < first[c.clock]) first[c.clock] = c.frame;
   // Defense in depth, independent of the per-clock split above: even a
   // correctly computed offset should never place a cue more than a handful
-  // of frames out. frame()'s own loop never runs more than 8 iterations of
-  // one clock per call, so 8 is already generous for legitimate same-clock
-  // spread; it exists so that if a future change ever lets a clock mismatch
-  // slip past the tagging in cue() anyway, the failure mode is a cue a few
-  // frames early rather than one scheduled minutes late.
+  // of frames out. netAdvance() calls netRollback(), which can replay many
+  // frames of a single clock inside one frame() loop iteration -- measured
+  // at 13 frames on a 200ms link, and it can reach NET_MAX_ROLLBACK (36) --
+  // so a live frame's cue should not be scheduled hundreds of milliseconds
+  // out behind a replayed one. Clamping the offset caps how far out any one
+  // cue lands; it is applied once below and reused for both the voice-cap
+  // bucket and the schedule time so the two agree about what "same instant"
+  // means.
   const AUDIO_MAX_BATCH_STEPS = 8;
   // How many of each recipe we have already scheduled this flush, bucketed
-  // by name AND a 50ms time window (spec 5.5), not by name alone. A flush
-  // can span up to 8 frames (133ms) after batch scheduling, plus a drained
-  // accumulator, so counting per flush rather than per window let a
-  // rapid-fire move -- pellets 33ms apart, which do not phase-sum -- lose
-  // voices for no acoustic reason. Identical waveforms fired together sum
-  // in phase, which is a spike and a flange rather than a louder hit, so
-  // the third copy within one 50ms window is the last one worth having.
+  // by name AND a 50ms-wide slot on a fixed grid (spec 5.5), not by name
+  // alone. A flush can span up to 8 frames (133ms) after batch scheduling,
+  // plus a drained accumulator, so counting per flush rather than per slot
+  // let a rapid-fire move -- pellets 33ms apart, which do not phase-sum --
+  // lose voices for no acoustic reason. Identical waveforms fired together
+  // sum in phase, which is a spike and a flange rather than a louder hit,
+  // so the third copy landing in the same 50ms grid slot is the last one
+  // worth having.
   const seen = new Map();
   try {
     for (const c of audioBatch) {
       const recipe = AUDIO_RECIPES[c.name];
       if (!recipe) continue;
-      const offset = c.frame - first[c.clock];
+      // Clamped once so the voice-cap bucket and the schedule time agree
+      // about what "same instant" means -- otherwise a same-clock spread
+      // past AUDIO_MAX_BATCH_STEPS keeps splitting into distinct buckets by
+      // its raw (unclamped) offset while `when` collapses every one of them
+      // onto the same clamped timestamp, so the cap stops capping exactly
+      // when the pile-up it exists to prevent shows up.
+      const offset = Math.min(c.frame - first[c.clock], AUDIO_MAX_BATCH_STEPS);
       const bucket = c.name + '|' + Math.floor(offset * STEP / 50);
       const n = (seen.get(bucket) || 0) + 1;
       seen.set(bucket, n);
@@ -3772,7 +3782,7 @@ function audioFlush() {
           ? recipe
           : Object.assign({}, recipe,
               { detune: (recipe.detune || 0) + (n - 1) * 11 });
-        const when = now + Math.min(offset, AUDIO_MAX_BATCH_STEPS) * STEP / 1000;
+        const when = now + offset * STEP / 1000;
         audioVoice(shaped, when, c.gain / Math.sqrt(n), c.pan);
       } catch (e) { /* one malformed recipe must not silence the rest */ }
     }
@@ -6259,14 +6269,21 @@ window.NerdWars = {
   },
   // Most of what's above this line is read-only, enough to check what the
   // game is doing without exposing anything that could poke it into an
-  // inconsistent state -- with one exception already in scope above:
-  // audio.unlock, audio.emit, audio.flush and audio.test all mutate
-  // AUDIO/audioPlayed/audioBatch. emit in particular can pre-seed
-  // audioPlayed with an arbitrary key, silently suppressing a real cue for
-  // up to NET_MAX_ROLLBACK * 3 (108) frames. None of the four can reach
-  // simulation state, though -- __test below is the actual deliberate
-  // exception for that: state mutation the test suite needs and nothing
-  // else should ever call.
+  // inconsistent state -- with exceptions already in scope above.
+  // audio.unlock, audio.emit and audio.flush all mutate AUDIO/audioPlayed/
+  // audioBatch (emit in particular can pre-seed audioPlayed with an
+  // arbitrary key, silently suppressing a real cue for up to
+  // NET_MAX_ROLLBACK * 3 (108) frames); audio.test mutates none of those
+  // three -- it calls audioVoice directly, bypassing both the batch and
+  // the played set -- but it does mutate audioNoiseBuf, filling that cache
+  // on the first noise-bearing recipe it is handed. None of the four
+  // reaches simulation state, but they are not the whole exception: net.
+  // start, net.stop, net.receive and toggleFullscreen, all also above this
+  // line, mutate too, and unlike the audio four they DO reach simulation
+  // state directly -- net.start alone was measured taking `scene` from
+  // `title` to `battle` and creating two fighters. __test below is the one
+  // property whose entire job is that: state mutation the test suite
+  // needs and nothing else should ever call.
   __test: {
     // Reproducing a real rollback would need two engines and a wire, and
     // this is what the cue-bus tests use to drive the resimulating flag
@@ -6274,9 +6291,22 @@ window.NerdWars = {
     // outside a test called it: addEffect stays suppressed forever, so
     // every visual effect in the game silently stops spawning, and step()
     // (the `if (!netplay.resimulating)` guard around prevHeld/gpPrev, just
-    // above frame()) stops updating input edge state at all -- every
-    // tapped()/gpTapped() reads as still-held-from-last-frame, so the
-    // player could not even press Escape to quit.
+    // above frame()) freezes prevHeld/gpPrev at whatever they held the
+    // instant the flag stuck. tapped()/gpTapped() diff `held` against that
+    // frozen snapshot, so the fallout splits in two: a key that WAS held at
+    // that instant can never register a new press again, since it stays in
+    // the frozen set forever -- but a key that was NOT held then reads as
+    // freshly tapped on every single frame it is held afterward, because
+    // the frozen set never catches up to include it (measured: with the
+    // flag stuck and Enter held from the title screen, the engine reaches
+    // select by the second held frame, stage by the fourth, and battle by
+    // the fifth -- as if Enter were newly pressed every one of those
+    // frames, not once). Escape looks unusable here too,
+    // but for a different reason: updateBattle's own quit guard, `if
+    // (!netplay.resimulating && menuBack())`, short-circuits on the stuck
+    // flag before menuBack() is ever reached -- the frozen snapshot on its
+    // own would not suppress Escape at all, and would instead make it fire
+    // repeatedly the same way Enter does above.
     setResimulating: function (v) { netplay.resimulating = !!v; },
     // The bit-exact hash netplay's own desync detector trusts, over the
     // live simulation rather than a snapshot -- stateHash(snap) falls back
