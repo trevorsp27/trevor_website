@@ -5136,8 +5136,21 @@ function aiDecide(me, foe) {
   // falling into the blast zone.
   if (!onStage || belowStage || driftingOut) {
     const home = stage.x + stage.w / 2;
-    if (me.x < home - 2) pad.right = true;
-    else if (me.x > home + 2) pad.left = true;
+    /* Steer by the direction that will RESULT, for the same reason aiPad
+       probes that way: the swap in Fighter.update lands after this. Pressing
+       toward home while confused flew the CPU into the blast zone instead,
+       which is most of why a smoke cloud won matches outright rather than
+       costing somebody their footing -- JohnnyHam went 96.0% to 55.0% over
+       1200 CPU matches on this line and the ledge probe together.
+
+       This is deliberately the ONLY place the AI compensates. Falling to your
+       death is enough to notice you are holding the wrong way; nothing below
+       gets that courtesy, so the cloud still turns every approach, retreat and
+       dodge around, and still costs its victim the exchange. */
+    const want = me.x < home - 2 ? 1 : me.x > home + 2 ? -1 : 0;
+    const steer = me.confused > 0 ? -want : want;
+    if (steer > 0) pad.right = true;
+    else if (steer < 0) pad.left = true;
     // Recovery is urgent: spend air jumps as soon as you start descending
     // rather than sitting on the normal hesitation cooldown.
     if (me.vy > 0.4 && (me.jumpsLeft > 0 || me.grounded) && a.jumpCd <= 0 &&
@@ -5302,9 +5315,15 @@ const AI_TUNE = { rangedIdeal: 18, rangedCrowd: 8 };
 
 function aiPad(me, foe) {
   const pad = aiDecide(me, foe);
+  /* Confusion swaps left and right in Fighter.update, which runs after this.
+     A pad bit therefore produces the opposite of the direction it names, so
+     probing the named one checks the wrong ledge entirely: the CPU asked
+     whether walking right was safe, was told yes, and walked left off the
+     stage. Probe what will happen rather than what was requested. */
+  const flip = me.confused > 0 ? -1 : 1;
   if (me.grounded) {
-    if (pad.left && !walkIsSafe(me, -1)) { pad.left = false; pad.shield = false; }
-    if (pad.right && !walkIsSafe(me, 1)) { pad.right = false; pad.shield = false; }
+    if (pad.left && !walkIsSafe(me, -flip)) { pad.left = false; pad.shield = false; }
+    if (pad.right && !walkIsSafe(me, flip)) { pad.right = false; pad.shield = false; }
   }
   return pad;
 }
@@ -5892,6 +5911,36 @@ function drawStage(g) {
   }
 }
 
+/* A duck, six pixels across, for the confused overlay.
+
+   At this size a bird silhouette alone reads as a blob, so the bill is doing
+   all of the work and gets its own color -- drop it and this is a pigeon, a
+   moth, or nothing at all. The eye is one dark pixel and is the difference
+   between a duck and a croissant. */
+const DUCK_ROWS = [
+  '...bb.',
+  '...beo',
+  '.bbbb.',
+  'bbbbb.',
+  '.bbb..',
+];
+const DUCK_INK = { b: '#fff6d8', e: '#3a2f22', o: '#ff9d2e' };
+
+// Drawn around (x, y) rather than from a corner, because the caller is placing
+// it on an orbit and wants the center to be the thing that follows the math.
+function drawDuck(g, x, y, facing) {
+  for (let r = 0; r < DUCK_ROWS.length; r++) {
+    const row = DUCK_ROWS[r];
+    for (let c = 0; c < row.length; c++) {
+      const ch = row.charAt(c);
+      if (ch === '.') continue;
+      g.fillStyle = DUCK_INK[ch];
+      const col = facing > 0 ? c : row.length - 1 - c;
+      g.fillRect(x + col - 3, y + r - 2, 1, 1);
+    }
+  }
+}
+
 function drawFighter(g, f) {
   if (f.eliminated) return;
   const im = f.sprite();
@@ -5975,6 +6024,48 @@ function drawFighter(g, f) {
     // Fades out over the last second rather than blinking out of existence.
     const fade = f.swordTimer < 50 ? 0.35 + (f.swordTimer / 50) * 0.65 : undefined;
     drawSwordFrame(g, swordFrameKey(f), swordHandX(f), swordHandY(f), f.facing, fade);
+  }
+
+  /* Confused had no tell at all. The only way to find out your controls were
+     inverted was to walk the wrong way off a ledge, which is a lesson that
+     arrives one stock too late -- and it is a four second status, so a victim
+     could spend it never understanding what was happening to them.
+
+     Circling birds is the one dazed idiom that survives being six pixels tall.
+
+     The orbit is an ellipse seen from slightly above, which wants a sine on
+     one axis and a cosine on the other. build.py refuses to build if the
+     cosine call appears anywhere in this file -- it scans the whole text,
+     comments included -- because the simulation shares its arithmetic with
+     another machine over the wire and the trig functions are not bit-identical
+     between engines. A quarter turn of phase is the same number under a
+     different name, and this is render code no peer ever sees besides.
+
+     Everything below is read out of `confused` and writes nothing back. */
+  if (f.confused > 0) {
+    const QUARTER = Math.PI / 2;
+    const cx = f.x;
+    // The seat arrow owns f.y-24 through f.y-21 whenever there are more than
+    // two fighters, and a duck crossing it hides the one mark that says which
+    // one of these is you. In a four-way that matters more than the ducks do,
+    // so the orbit climbs above it rather than sharing the space.
+    const cy = f.y - (fighters.length > 2 ? 31 : 23);
+    // Thin out over the last two thirds of a second. Knowing it is about to
+    // end is worth more than knowing it began -- you can plan the next input.
+    const fade = Math.min(1, f.confused / 40);
+    for (let i = 0; i < 3; i++) {
+      // Negated so the phase advances as the counter runs down; three ducks a
+      // third of a turn apart never bunch up at the front of the orbit.
+      const ph = i * 2.0943951023931953 - f.confused * 0.085;
+      // +1 at the near side of the orbit, -1 at the far side. It doubles as
+      // the heading: a duck at the front of a counterclockwise orbit is the
+      // one travelling right, so nothing has to track velocity separately.
+      const depth = Math.sin(ph + QUARTER);
+      g.globalAlpha = fade * (depth > 0 ? 0.95 : 0.4);
+      drawDuck(g, Math.round(cx + Math.sin(ph) * 9), Math.round(cy + depth * 3),
+               depth > 0 ? 1 : -1);
+    }
+    g.globalAlpha = 1;
   }
 
   if (shifted) g.restore();
