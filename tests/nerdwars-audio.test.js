@@ -1090,3 +1090,129 @@ test("filling the noise buffer draws nothing from Math.random", async () => {
     "audioNoise() drew from Math.random " + draws + " time(s)"
   );
 });
+
+/* ---------------------------------------------------------------------------
+   Phase 2: the first two real sounds.
+
+   `OUT OF THE TREES` plays a recorded one-shot; `THE STROKES` plays a
+   synthesized arpeggio. Between them they add the two capabilities phase 1
+   deliberately left out -- sample playback and a note sequence -- and the
+   first cue() call sites that live in game logic rather than in a test.
+   ------------------------------------------------------------------------ */
+
+test("an arpeggio plays one voice per note, rising then falling", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("ult-strokes", { slot: 0, frame: 10 });
+  g.nw.audio.flush();
+
+  const starts = g.audioLog.filter((e) => e.node === "osc" && e.op === "start");
+  assert.equal(starts.length, 6, "six notes in the sequence, six voices");
+
+  const freqs = g.audioLog
+    .filter((e) => e.node === "osc" && e.param === "frequency" && e.op === "set")
+    .map((e) => e.value);
+  assert.equal(freqs.length, 6);
+  // E minor: root, minor third, fifth, octave, and back down.
+  const semis = freqs.map((f) => Math.round(12 * Math.log2(f / freqs[0])));
+  assert.deepEqual(semis, [0, 3, 7, 12, 7, 3]);
+});
+
+test("the arpeggio's notes are spaced, not simultaneous", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  g.nw.audio.emit("ult-strokes", { slot: 0, frame: 10 });
+  g.nw.audio.flush();
+
+  const t = g.audioLog
+    .filter((e) => e.node === "osc" && e.op === "start")
+    .map((e) => e.time);
+  for (let i = 1; i < t.length; i++) {
+    const gap = t[i] - t[i - 1];
+    assert.ok(
+      Math.abs(gap - 0.055) < 0.001,
+      "note " + i + " landed " + gap.toFixed(4) + "s after the last"
+    );
+  }
+});
+
+/* The reason the arpeggio is one cue rather than one cue per note. The voice
+   limiter caps three copies of a recipe in a 50ms bucket; six notes emitted
+   as six cues would lose half of them. */
+test("an arpeggio is one cue, so the voice limiter never truncates it", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  // Three separate ults on one frame: 3 cues, 18 notes, none capped away.
+  g.nw.audio.emit("ult-strokes", { slot: 0, frame: 10 });
+  g.nw.audio.emit("ult-strokes", { slot: 1, frame: 10 });
+  g.nw.audio.emit("ult-strokes", { slot: 2, frame: 10 });
+  g.nw.audio.flush();
+
+  const starts = g.audioLog.filter((e) => e.node === "osc" && e.op === "start");
+  assert.equal(starts.length, 18, "three arpeggios of six notes each");
+});
+
+test("a sample cue is silent, not fatal, when nothing has decoded", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  // The harness has no atob and no decodeAudioData, so audioLoadSamples
+  // declines and every sample stays undecoded -- the same situation as a
+  // browser that cannot decode the file.
+  assert.doesNotThrow(() => {
+    g.nw.audio.emit("ult-trees", { slot: 0, frame: 10 });
+    g.nw.audio.flush();
+  });
+  assert.equal(voiceCount(g.audioLog), 0, "no buffer, no voice");
+  g.pump(10);
+  assert.ok(g.nw.frames > 0, "and the loop is still running");
+});
+
+test("unlocking without atob or decodeAudioData does not throw", async () => {
+  // Guards the boot path: audioLoadSamples runs inside audioUnlock, so a
+  // browser missing either API must still reach a playable game.
+  const g = await bootGame({ audio: true });
+  assert.doesNotThrow(() => g.press("KeyZ"));
+  assert.equal(g.nw.audio.ready, true);
+  g.pump(30);
+  assert.ok(g.nw.frames >= 25);
+});
+
+/* An unknown cue name is ignored by design -- audioFlush skips a recipe it
+   cannot find. That makes a typo in a cue() call permanently and silently
+   inaudible, with no error anywhere. This is the only thing that would catch
+   it, and it covers every call site phases 2-6 add, not just today's two. */
+test("every cue name used in the engine has a recipe", async () => {
+  const names = new Set();
+  const call = /\bcue\(\s*'([^']+)'/g;
+  let m;
+  while ((m = call.exec(GAME)) !== null) names.add(m[1]);
+  assert.ok(names.size >= 2, "expected the phase-2 call sites, found " + names.size);
+
+  const g = await bootGame({ audio: true });
+  const known = new Set(g.nw.audio.recipeNames);
+  // Checked against the recipe table rather than by playing each one: a
+  // sample recipe is legitimately silent until its buffer decodes, and this
+  // harness has no decoder, so "did it make a sound" would fail for a cue
+  // that is perfectly correct.
+  for (const name of names) {
+    assert.ok(
+      known.has(name),
+      "cue('" + name + "') is called by the engine but names no recipe, " +
+        "so it would be silent forever with no error"
+    );
+  }
+});
+
+test("the build inlines the sample into the bundle", async () => {
+  assert.match(
+    SPRITES,
+    /const SAMPLES = \{/,
+    "sprites.js should carry a SAMPLES table"
+  );
+  assert.match(SPRITES, /tyson: "data:audio\/mpeg;base64,/, "tyson.mp3 inlined");
+  assert.match(
+    GAME,
+    /SAMPLES = __A\.SAMPLES/,
+    "game.js should pull SAMPLES out of the shared namespace"
+  );
+});
