@@ -728,7 +728,10 @@ function tradeBlows(engines, rounds, onRound) {
    no-op most of the time it lands). It shares the test below's blind spot
    for `ultMeter` and `volleyHits` regardless -- nothing in this script
    casts an ult, so neither is ever read, no matter how long the fight
-   runs. */
+   runs -- and it has a third blind spot of its own: `shield`. Neither seat
+   ever holds a shield key here, so a write into it goes unread; measured
+   directly with `shield = 0` injected into audioVoice, this test still
+   passes. */
 test("an engine with audio and one without stay in identical states", async () => {
   const loud = await bootGame({ audio: true });
   const mute = await bootGame();
@@ -753,9 +756,15 @@ test("an engine with audio and one without stay in identical states", async () =
   // Emit on the loud engine only, varying slot and x every round so cue(),
   // audioVoice(), the pan math and the voice limiter all genuinely execute
   // during the frames being compared -- not just audioFlush pruning an
-  // empty batch.
+  // empty batch. Both recipes, not just test-a: test-b is the only noise
+  // recipe, and audioNoise() is the one audio code path that draws from an
+  // RNG stream to build what it plays, so it needs its own turn inside a
+  // real two-engine comparison rather than being asserted safe only by
+  // the same "nothing here writes back" reasoning that covers everything
+  // else in this file.
   tradeBlows([loud, mute], 30, (r) => {
     loud.nw.audio.emit("test-a", { slot: r % 2, x: (r * 11) % 320 });
+    loud.nw.audio.emit("test-b", { slot: (r + 1) % 2, x: (r * 7) % 320 });
   });
 
   const fighters = loud.nw.fighters;
@@ -813,12 +822,12 @@ test("an engine with audio and one without stay in identical states", async () =
      - vx, x (position/velocity-class): caught, by the immediate hash check.
      - hitstop: caught, by the hash after the active window -- specifically
        the hash, not `fighters`, which still agreed at that point.
-     - shield: caught, by the hold after that -- specifically by the
-       `fighters` deepEqual, via `state` ("break" vs "shield"), which stays
-       different even once stateHash's own numeric fields (y, vy, grounded)
-       reconverge from the landing. This is the case the `fighters`
-       comparison exists for: legible, and catching what the hash alone
-       would have let through by then.
+     - shield: caught, by the hold after that. Measured with the `fighters`
+       deepEqual removed: stateHash alone still fails at this same
+       checkpoint (the failure output shows y: 119 vs 130, a hashed field
+       still diverging by then), so the deepEqual is not uniquely catching
+       this one -- it only runs first in the test, ahead of the final
+       stateHash() call, so it is the assertion that actually throws.
      - ultMeter, volleyHits: NOT caught. Nothing in this script casts an
        ult, so ultMeter is never read; volleyHits needs a multi-projectile
        move only an ult provides, so nothing ever produces a volley to
@@ -898,10 +907,11 @@ test("flushing a cue mid-match does not change the simulation", async () => {
   // that startup and still breaks seat 0 with room to spare, while the
   // other seat's untouched shield (100) is nowhere close to breaking. The
   // break shows up in the `fighters` comparison below via `state`
-  // ("break" vs "shield") even after stateHash's own numeric fields (y,
-  // vy, grounded) have reconverged from the landing -- exactly the
-  // "legible readout catches what the hash alone would miss" case the
-  // `fighters` comparison exists for.
+  // ("break" vs "shield"). Measured with that deepEqual removed: the final
+  // stateHash() check below still fails at this same point too -- a hashed
+  // field is still diverging here, not just `state` -- so `fighters` is
+  // not catching something the hash would have missed; it is just the
+  // assertion that runs first.
   for (const g of [wired, mute]) g.press("ShiftLeft");
   for (const g of [wired, mute]) g.pump(20);
   for (const g of [wired, mute]) g.release("ShiftLeft");

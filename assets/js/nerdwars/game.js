@@ -3498,8 +3498,10 @@ const AUDIO = {
    rather than broken: audio is never allowed to stop the engine booting. */
 function audioUnlock() {
   if (AUDIO.ac) {
-    // Chrome can suspend an existing context when a tab is backgrounded.
-    if (AUDIO.ac.state === 'suspended') AUDIO.ac.resume();
+    // Chrome can suspend an existing context when a tab is backgrounded. A
+    // rejected resume() must not become an unhandled promise rejection --
+    // same "audio never breaks the game" rule as everywhere else here.
+    if (AUDIO.ac.state === 'suspended') AUDIO.ac.resume().catch(() => {});
     return;
   }
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -3511,7 +3513,7 @@ function audioUnlock() {
     master.connect(ac.destination);
     AUDIO.ac = ac;
     AUDIO.master = master;
-    if (ac.state === 'suspended') ac.resume();
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
   } catch (e) {
     AUDIO.ac = null;
     AUDIO.master = null;
@@ -3528,9 +3530,23 @@ function audioNoise() {
   const len = Math.floor(ac.sampleRate * 0.5);
   const buf = ac.createBuffer(1, len, ac.sampleRate);
   const data = buf.getChannelData(0);
-  // Math.random is safe here for the same reason it is safe in addEffect:
-  // nothing below ever reaches game state.
-  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  // NOT Math.random: that draws from the same global stream aiThink() reads
+  // for every CPU decision, and every one of those decisions is inside
+  // updateBattle and covered by stateHash. The hazard was never a write --
+  // nothing here does reach game state, same as addEffect -- it is
+  // consumption: 24,000 draws from a stream something else depends on would
+  // shift every CPU decision downstream of the first noise-bearing cue in a
+  // session. A tiny local generator, seeded to a constant, can never touch
+  // that stream, so this is unconditionally safe rather than safe only
+  // because nothing yet calls cue() with a noise recipe. xorshift32, not for
+  // quality -- only for staying off Math.random entirely.
+  let s = 0x9e3779b9;
+  for (let i = 0; i < len; i++) {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    data[i] = s / 0x80000000;
+  }
   audioNoiseBuf = buf;
   return buf;
 }
@@ -3540,7 +3556,7 @@ function audioNoise() {
 function audioVoice(recipe, when, gain, pan) {
   const ac = AUDIO.ac;
   if (!ac) return;
-  const dur = recipe.dur || 0.15;
+  const dur = recipe.dur == null ? 0.15 : recipe.dur;
   // exponentialRampToValueAtTime throws on zero, and a silent voice is a
   // legitimate thing to ask for, so the floor is a real number.
   const peak = Math.max(0.0001, (recipe.gain == null ? 1 : recipe.gain) * gain);
@@ -3583,15 +3599,15 @@ function audioVoice(recipe, when, gain, pan) {
     src.buffer = audioNoise();
     const lp = ac.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(n.lp || 4000, when);
+    lp.frequency.setValueAtTime(n.lp == null ? 4000 : n.lp, when);
     if (n.lp1 != null) {
       lp.frequency.exponentialRampToValueAtTime(
-        Math.max(0.0001, n.lp1), when + (n.dur || dur));
+        Math.max(0.0001, n.lp1), when + (n.dur == null ? dur : n.dur));
     }
     src.connect(lp);
     lp.connect(out);
     src.start(when);
-    src.stop(when + (n.dur || dur) + 0.02);
+    src.stop(when + (n.dur == null ? dur : n.dur) + 0.02);
   }
 }
 
@@ -3628,13 +3644,23 @@ function audioNow() {
 function cue(name, opts) {
   if (!AUDIO.enabled || !AUDIO.ac) return;
   const o = opts || {};
+  // Which clock this cue's frame number belongs to, not just its value.
+  // netplay.frame and AUDIO.step are two unrelated counters -- one can sit
+  // near 10800 three minutes into a match while the other is a few hundred,
+  // since it only counts offline ticks since load -- and frame() can take
+  // one branch on one iteration of its accumulator loop and the other branch
+  // on the next, landing cues from both clocks in the same batch (see the
+  // note on `first` in audioFlush). Tagging the clock here keeps a
+  // netplay-clock cue and an offline-clock cue from ever being compared or
+  // minimized against each other downstream.
+  const clock = AUDIO.netClock ? 'n' : 'o';
   const frame = o.frame == null ? audioNow() : o.frame;
   const slot = o.slot == null ? -1 : o.slot;
-  const key = frame + '|' + slot + '|' + name;
+  const key = clock + '|' + frame + '|' + slot + '|' + name;
   if (audioPlayed.has(key)) return;
   audioPlayed.set(key, frame);
   audioBatch.push({
-    name: name, frame: frame,
+    name: name, frame: frame, clock: clock,
     gain: o.gain == null ? 1 : o.gain,
     pan: o.x == null ? 0 : Math.max(-1, Math.min(1, (o.x - VW / 2) / (VW / 2))) * 0.6,
   });
@@ -3695,28 +3721,58 @@ function audioFlush() {
   // Up to eight simulation frames can land between two paints, and after a
   // tab switch the accumulator drains a longer burst still. Scheduling them
   // all at `now` would collapse a jab's startup onto its impact, so each cue
-  // keeps its offset from the earliest frame in the batch.
-  let first = audioBatch[0].frame;
-  for (const c of audioBatch) if (c.frame < first) first = c.frame;
-  // How many of each recipe we have already scheduled this flush. Identical
-  // waveforms fired together sum in phase, which is a spike and a flange
-  // rather than a louder hit, so the third copy is the last one worth having.
+  // keeps its offset from the earliest frame of its OWN clock in the batch.
+  //
+  // Per clock, not one shared minimum: netplay.frame and AUDIO.step are two
+  // unrelated counters (see the tag cue() attaches to each entry), and
+  // frame()'s accumulator loop can take the netplay branch on one iteration
+  // and the offline branch on the next, landing one of each in this same
+  // batch -- a match-ending KO cue keyed on netplay.frame (~10800 three
+  // minutes in) alongside a menu cue keyed on AUDIO.step (a few hundred). A
+  // single shared `first` would subtract one clock's frame number from the
+  // other's and schedule whichever is larger minutes into the future. Seeded
+  // from Infinity, not audioBatch[0].frame -- the previous seed then
+  // rechecked index 0 against itself for no reason.
+  const first = { n: Infinity, o: Infinity };
+  for (const c of audioBatch) if (c.frame < first[c.clock]) first[c.clock] = c.frame;
+  // Defense in depth, independent of the per-clock split above: even a
+  // correctly computed offset should never place a cue more than a handful
+  // of frames out. frame()'s own loop never runs more than 8 iterations of
+  // one clock per call, so 8 is already generous for legitimate same-clock
+  // spread; it exists so that if a future change ever lets a clock mismatch
+  // slip past the tagging in cue() anyway, the failure mode is a cue a few
+  // frames early rather than one scheduled minutes late.
+  const AUDIO_MAX_BATCH_STEPS = 8;
+  // How many of each recipe we have already scheduled this flush, bucketed
+  // by name AND a 50ms time window (spec 5.5), not by name alone. A flush
+  // can span up to 8 frames (133ms) after batch scheduling, plus a drained
+  // accumulator, so counting per flush rather than per window let a
+  // rapid-fire move -- pellets 33ms apart, which do not phase-sum -- lose
+  // voices for no acoustic reason. Identical waveforms fired together sum
+  // in phase, which is a spike and a flange rather than a louder hit, so
+  // the third copy within one 50ms window is the last one worth having.
   const seen = new Map();
   try {
     for (const c of audioBatch) {
       const recipe = AUDIO_RECIPES[c.name];
       if (!recipe) continue;
-      const n = (seen.get(c.name) || 0) + 1;
-      seen.set(c.name, n);
+      const offset = c.frame - first[c.clock];
+      const bucket = c.name + '|' + Math.floor(offset * STEP / 50);
+      const n = (seen.get(bucket) || 0) + 1;
+      seen.set(bucket, n);
       if (n > AUDIO_MAX_VOICES) continue;
       try {
         // 1/sqrt(n): the sum of n equal-power voices, so stacking reads as
         // one bigger hit rather than n hits. Duplicates past the first are
-        // also detuned apart so they do not stay phase-aligned.
+        // also detuned apart so they do not stay phase-aligned -- additive
+        // with whatever detune the recipe already authors, so a recipe that
+        // detunes itself for pitch still stacks as one sound instead of
+        // three different ones.
         const shaped = n === 1
           ? recipe
-          : Object.assign({}, recipe, { detune: (n - 1) * 11 });
-        const when = now + (c.frame - first) * STEP / 1000;
+          : Object.assign({}, recipe,
+              { detune: (recipe.detune || 0) + (n - 1) * 11 });
+        const when = now + Math.min(offset, AUDIO_MAX_BATCH_STEPS) * STEP / 1000;
         audioVoice(shaped, when, c.gain / Math.sqrt(n), c.pan);
       } catch (e) { /* one malformed recipe must not silence the rest */ }
     }
@@ -6127,8 +6183,17 @@ window.NerdWars = {
     // online-only embed never sees a local click or key.
     unlock: audioUnlock,
     // Plays one recipe immediately. The sound-test overlay in phase 3 and
-    // the tests both drive recipes through here.
-    test: function (recipe) { audioVoice(recipe, AUDIO.ac ? AUDIO.ac.currentTime : 0, 1, 0); },
+    // the tests both drive recipes through here. Same reasoning as the
+    // try/catch in audioFlush: this is a button handler auditioning ~70
+    // recipes nobody has heard yet, and a malformed one (a missing f0, say)
+    // must not throw out of it -- one bad recipe is swallowed rather than
+    // breaking the overlay. Also covers `AUDIO.ac` being null, so the old
+    // `AUDIO.ac ? AUDIO.ac.currentTime : 0` guard is gone: audioVoice
+    // already returns early when ac is null, and this catches the
+    // TypeError from reading .currentTime off it beforehand instead.
+    test: function (recipe) {
+      try { audioVoice(recipe, AUDIO.ac.currentTime, 1, 0); } catch (e) { /* see above */ }
+    },
     emit: cue,
     flush: audioFlush,
   },
@@ -6192,16 +6257,26 @@ window.NerdWars = {
       x: Math.round(p.x), y: Math.round(p.y),
     }));
   },
-  // Everything above this line is documented as enough to check what the
+  // Most of what's above this line is read-only, enough to check what the
   // game is doing without exposing anything that could poke it into an
-  // inconsistent state. This namespace is the deliberate exception: state
-  // mutation the test suite needs and nothing else should ever call.
+  // inconsistent state -- with one exception already in scope above:
+  // audio.unlock, audio.emit, audio.flush and audio.test all mutate
+  // AUDIO/audioPlayed/audioBatch. emit in particular can pre-seed
+  // audioPlayed with an arbitrary key, silently suppressing a real cue for
+  // up to NET_MAX_ROLLBACK * 3 (108) frames. None of the four can reach
+  // simulation state, though -- __test below is the actual deliberate
+  // exception for that: state mutation the test suite needs and nothing
+  // else should ever call.
   __test: {
     // Reproducing a real rollback would need two engines and a wire, and
     // this is what the cue-bus tests use to drive the resimulating flag
     // directly instead. Leaving it true would be a real bug if anything
     // outside a test called it: addEffect stays suppressed forever, so
-    // every visual effect in the game silently stops spawning.
+    // every visual effect in the game silently stops spawning, and step()
+    // (the `if (!netplay.resimulating)` guard around prevHeld/gpPrev, just
+    // above frame()) stops updating input edge state at all -- every
+    // tapped()/gpTapped() reads as still-held-from-last-frame, so the
+    // player could not even press Escape to quit.
     setResimulating: function (v) { netplay.resimulating = !!v; },
     // The bit-exact hash netplay's own desync detector trusts, over the
     // live simulation rather than a snapshot -- stateHash(snap) falls back
