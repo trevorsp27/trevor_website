@@ -266,8 +266,17 @@ function nearestFoe(me) {
    Two more (Trev, Ladeane) come from the movesets we wrote down in 2016:
    real ideas, just with no drawn art behind them.
 
-   One is still a PLACEHOLDER chosen to cover an archetype -- JohnnyHam.
-   Swap the `specials` block to re-theme him; nothing else needs to change.
+   JohnnyHam was a placeholder for a long time -- an archetype standing in
+   until a real personality turned up. It has: smoke that inverts your
+   controls, a dog, and a gun that pins whoever it catches mid-swing, from
+   Trev in 2026 rather than from anybody's 2016 notebook. Reese was rewritten
+   the same day and now sits between the two categories: the shirtless ult
+   really is drawn into the original sprites, his three specials are not.
+
+   Which is why each character carries an explicit `origin` rather than the
+   screen guessing from whether a tag reads 'PLACEHOLDER' -- see the select
+   screen, where that guess would have started crediting John's dog to a
+   notebook that never mentioned one.
    ===================================================================== */
 
 /* Every move carries `kx` and `ky` alongside `angle`: they are the cosine and
@@ -279,11 +288,19 @@ function nearestFoe(me) {
    angle without updating them is a build error rather than a desync.
 
    Each character has three specials -- neutral, down and up -- plus one ult
-   fired from a full meter. Moves marked PLACEHOLDER are mine, not theirs, and
-   are meant to be replaced as real ones turn up. */
+   fired from a full meter. There is no side special: the pad has spNeutral,
+   spDown and spUp and nothing else, so a fourth entry here would be priced,
+   exported, and unreachable.
+
+   `mana` is never authored. It is derived from the spec by moveCost at load
+   and overwrites whatever is typed, so a status field that moveCost does not
+   know about is free -- add a term there when adding one. `count` is
+   especially not a free field name: it multiplies damage AND triggers the
+   volley falloff in applyHit. */
 const ROSTER = {
   autisnick: {
     name: 'AUTISNICK',
+    origin: 'sprites',
     tag: 'PIZZA, RAINBOWS, KISSES',
     drawn: true,
     blurb: 'Pizza forward, a kiss that keeps hurting, a rainbow lobbed over cover.',
@@ -339,31 +356,54 @@ const ROSTER = {
 
   johnnyham: {
     name: 'JOHNNYHAM',
-    tag: 'PLACEHOLDER',
+    origin: 'fresh',
+    tag: 'SMOKE, DOG, SIDEARM',
     drawn: false,
-    blurb: 'Slams the ground, and orders in when that is not enough.',
+    blurb: 'Fights dirty: you cannot see, your controls are backwards, and there is a dog.',
     weight: 105, walk: 1.24, jump: 6.1, doubleJump: 5.6,
     jab: { startup: 5, active: 5, recovery: 11, damage: 6,
            base: 2.5, scale: 6.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829, ox: 2, oy: -9, w: 12, h: 10 },
     specials: {
+      /* The damage is almost an afterthought -- three points and a shove.
+         What you are buying is four seconds of somebody walking the wrong
+         way, which in a game about edges is worse than anything the ham
+         does to them. It hangs where it lands, so it also just denies a
+         piece of the stage. */
       neutral: {
-        kind: 'shockwave', label: 'SLAM',
-        startup: 10, active: 8, recovery: 15,
-        damage: 9, base: 2.5, scale: 8, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
-        ox: -26, oy: -8, w: 52, h: 18,
+        kind: 'cloud', label: 'SMOKESCREEN',
+        startup: 9, active: 4, recovery: 18,
+        speed: 2.6, lift: -0.5, drop: 0.02, friction: 0.93,
+        life: 200, ahead: 12, high: 9, r0: 8, r1: 15,
+        hitEvery: 40, cue: 'smoke',
+        tints: ['#9aa0a6', '#c8ccd0', '#7d838a'],
+        confuse: { frames: 240 },
+        damage: 3, base: 1.6, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
       },
+      /* Points, and it goes. It runs the ground rather than flying, so it is
+         answered by jumping -- which is exactly what the smoke and the gun
+         want you doing. */
       down: {
-        kind: 'shockwave', label: 'STOMP',
-        startup: 6, active: 6, recovery: 11,
-        damage: 8, base: 2.2, scale: 6.2, angle: 60, kx: 0.50000000000000011, ky: 0.8660254037844386,
-        ox: -20, oy: -4, w: 40, h: 12,
+        kind: 'dog', label: "SIC 'EM",
+        startup: 11, active: 5, recovery: 20,
+        speed: 2.1, life: 170,
+        hitEvery: 34, cue: 'bark',
+        damage: 6, base: 2.2, scale: 5.4, angle: 35, kx: 0.81915204428899180, ky: 0.57357643635104605,
       },
+      /* Replaces HEAVE, which was his recovery, so the recoil has to do that
+         job instead: fired in the air it kicks him back and up, and hands him
+         an air jump back if he had none. Fired on the ground it only shoves
+         him, so it is not a free retreat.
+
+         `punish` is the move. An ordinary hit is an ordinary hit; catching
+         somebody mid-swing pins them for a second and a quarter, which is a
+         read rather than a poke. */
       up: {
-        kind: 'uppercut', label: 'HEAVE',
-        startup: 6, active: 10, recovery: 19,
-        rise: -5.2, drift: 0.7,
-        damage: 9, base: 2.3, scale: 6.6, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-        ox: -8, oy: -12, w: 16, h: 18,
+        kind: 'gun', label: 'SIDEARM',
+        startup: 8, active: 3, recovery: 21,
+        speed: 6.2, life: 46, tint: '#ffd76a',
+        kickX: 1.9, kickY: 4.6, cue: 'gunshot',
+        punish: { stun: 48 },
+        damage: 7, base: 2.4, scale: 5.8, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
       },
     },
     // The cast is only him pointing upwards, so it is over in half a second
@@ -397,6 +437,7 @@ const ROSTER = {
 
   kel: {
     name: 'KEL',
+    origin: 'sprites',
     tag: 'BONES & BARBELLS',
     drawn: true,
     blurb: 'A bone he made himself, and the rest of it out of the gym.',
@@ -464,6 +505,7 @@ const ROSTER = {
   // mine and is gone.
   ladeane: {
     name: 'LADEANE',
+    origin: 'notes',
     tag: 'SOCCER, DRUMS & THE STROKES',
     drawn: false,
     blurb: 'Soccerball along the floor, drumsticks up close, notes overhead.',
@@ -519,6 +561,7 @@ const ROSTER = {
 
   reese: {
     name: 'REESE',
+    origin: 'mixed',
     tag: 'SHIRTS OPTIONAL',
     drawn: true,
     blurb: 'Never still. Everything is fast, nothing is committed. Ult loses the shirt.',
@@ -530,24 +573,43 @@ const ROSTER = {
       // than damage. Three frames to begin, single figures to finish, and
       // less on every hit than anyone else: he throws far more than the rest
       // of the roster and commits to none of it.
+
+      /* Close range and nothing else -- it reaches barely past his own
+         shoulder, which is the price of being the fastest thing he has that
+         actually launches. A melee kind, so the hitbox comes from ox/oy/w/h
+         rather than a projectile, and 'belch' is deliberately NOT in
+         hitbox()'s exclusion list for that reason. */
       neutral: {
+        kind: 'belch', label: 'BELCH',
+        startup: 4, active: 5, recovery: 12,
+        damage: 8, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
+        ox: -2, oy: -12, w: 20, h: 15,
+      },
+      /* The fart. Same class as John's smoke and the same hitEvery pacing --
+         the difference is entirely the payload: this one carries `poison`,
+         which applyHit already knew how to apply, so it needed no new code
+         at all. Dropped at his feet and left behind, so it covers a retreat
+         rather than opening an attack. */
+      down: {
+        kind: 'cloud', label: 'CROP DUST',
+        startup: 5, active: 4, recovery: 13,
+        speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,
+        life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
+        hitEvery: 45, cue: 'belch',
+        tints: ['#9dc25a', '#c3dd86', '#7fa347'],
+        poison: { frames: 150, dps: 0.11 },
+        damage: 3, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+      },
+      /* JITTERS keeps its name and moves to `up`, because BOUNCE was his
+         recovery and this now has to be. It gains a vertical kick that only
+         applies in the air, so on the ground it is still the flat, committed
+         dash it always was. */
+      up: {
         kind: 'dash', label: 'JITTERS',
-        startup: 3, active: 9, recovery: 8, speed: 5.4,
+        startup: 3, active: 9, recovery: 10, speed: 5.4,
+        airRise: 4.4,
         damage: 6, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
         ox: -4, oy: -9, w: 14, h: 12,
-      },
-      down: {
-        kind: 'shockwave', label: 'TWITCH',
-        startup: 3, active: 4, recovery: 9,
-        damage: 5, base: 1.9, scale: 5.2, angle: 60, kx: 0.5000000000000001, ky: 0.8660254037844386,
-        ox: -18, oy: -6, w: 36, h: 12,
-      },
-      up: {
-        kind: 'uppercut', label: 'BOUNCE',
-        startup: 3, active: 8, recovery: 14,
-        rise: -6.2, drift: 1.2,
-        damage: 6, base: 1.9, scale: 5.4, angle: 84, kx: 0.10452846326765346, ky: 0.9945218953682733,
-        ox: -7, oy: -12, w: 14, h: 18,
       },
     },
     // Still the shirt coming off -- there is a whole shirtless sprite set,
@@ -570,6 +632,7 @@ const ROSTER = {
 
   trev: {
     name: 'TREV',
+    origin: 'notes',
     tag: 'CEREAL & LASER SWORD',
     drawn: false,
     blurb: 'Cereal, a chess knight that turns a corner, milk to get home.',
@@ -652,6 +715,11 @@ function moveCost(m) {
 
   // Damage over time is still damage; count all of it.
   if (m.poison) power += m.poison.frames * m.poison.dps;
+  // New statuses have to be priced here or they are free: moveCost derives
+  // every special's mana from this function at load, and it only knows about
+  // the terms it is told about.
+  if (m.confuse) power += m.confuse.frames * 0.07;
+  if (m.punish) power += m.punish.stun * 0.18;
   if (m.quake) power += m.quake.damage * 2;   // it lands twice, one each way
 
   // A buff does no damage itself, so price it by how much it multiplies
@@ -1196,6 +1264,10 @@ class Fighter {
     this.manaDenied = 0;
     this.poison = 0;
     this.poisonDps = 0;
+    // Frames of inverted movement left. A plain number on the fighter, so
+    // saveSim's reflective sweep snapshots it and restoreSim puts it back
+    // with no registration anywhere -- the same contract poison relies on.
+    this.confused = 0;
 
     this.shield = COMBAT.shieldMax;
     this.shieldBroken = 0;
@@ -1264,7 +1336,8 @@ class Fighter {
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
-          s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain') return null;
+          s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
+          s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -1305,6 +1378,25 @@ class Fighter {
 
     if (this.invuln > 0) this.invuln--;
     if (this.buffTimer > 0) this.buffTimer--;
+    if (this.confused > 0) {
+      this.confused--;
+      /* Swap left and right on a COPY. Never in place: netStart fills
+         netplay.framePads with the one shared NEUTRAL object, so mutating a
+         pad here could write through to the module-level literal and poison
+         every Object.assign({}, NEUTRAL) for the rest of the session.
+
+         This is also the only safe PLACE. Inverting at readPad or in
+         netSubmitLocal would flip the bits before they reached the wire, so
+         two machines would disagree about which way somebody walked. Here it
+         is derived from `confused`, which is snapshotted, so every peer
+         computes the same swap from the same state.
+
+         Only left/right. `up` rides the wire but no fighter code reads it,
+         and `down` is not purely directional -- it also drives fast-fall,
+         platform drop-through and spot-dodge-versus-roll, so flipping it
+         would break three things to gain nothing. */
+      pad = Object.assign({}, pad, { left: pad.right, right: pad.left });
+    }
     if (this.rainTimer > 0) {
       this.rainTimer--;
       const r = this.rainSpec;
@@ -1632,6 +1724,59 @@ class Fighter {
         }
         break;
 
+      // A cloud of it, hanging where it was thrown. Both gas moves are this
+      // case; whether it confuses or poisons is entirely in the spec.
+      case 'cloud':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Cloud(this, s));
+          addEffect('puff', this.x + this.facing * 10, this.y - 10,
+                    (s.tints && s.tints[0]) || '#9aa0a6');
+          cue(s.cue || 'hit', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      /* One shot, and it shoves the shooter. The recoil is the reason this
+         move sits on `up`: it is John's only way back to the stage now that
+         his uppercut is gone, so firing it in the air has to buy height. On
+         the ground it just plants him. */
+      case 'gun':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Slug(this, s));
+          this.vx -= this.facing * (s.kickX || 0);
+          if (!this.grounded) {
+            this.vy = Math.min(this.vy, 0) - (s.kickY || 0);
+            this.jumpsLeft = Math.max(this.jumpsLeft, 1);
+          }
+          addEffect('spark', this.x + this.facing * 12, this.y - 11, '#ffd76a');
+          cue(s.cue || 'hit', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      // Point, and it goes.
+      case 'dog':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Dog(this, s));
+          addEffect('puff', this.x + this.facing * 10, this.y - 3, '#55555c');
+          cue(s.cue || 'hit', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      // Melee, so the hitbox comes from relBox and this case exists purely
+      // to make it look and sound like something.
+      case 'belch':
+        if (this.attackFrame === s.startup) {
+          addEffect('ring', this.x + this.facing * 8, this.y - 10, '#b9d97a');
+          for (let i = 0; i < 3; i++) {
+            addEffect('puff', this.x + this.facing * (8 + i * 4),
+                      this.y - 11 + i, '#c3dd86');
+          }
+          cue('belch', { slot: this.slot, x: this.x });
+        }
+        break;
+
       case 'knight':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
@@ -1778,7 +1923,18 @@ class Fighter {
         break;
 
       case 'dash':
-        if (this.attackFrame === s.startup) this.dashStopped = false;
+        if (this.attackFrame === s.startup) {
+          this.dashStopped = false;
+          /* A vertical kick on the first frame only, and only off the ground.
+             Reese's dash is his recovery now that BOUNCE is gone, so it has
+             to buy height -- but a grounded dash that also hopped would stop
+             being the flat commitment it has always been. Set once rather
+             than every active frame, or holding it would be a jetpack. */
+          if (s.airRise && !this.grounded) {
+            this.vy = -s.airRise;
+            this.jumpsLeft = Math.max(this.jumpsLeft, 1);
+          }
+        }
         if (this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active) {
           // A dash that starts on the ground stops at the ledge instead of
@@ -2025,6 +2181,7 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.poison = 0;
+    this.confused = 0;
     this.mana = COMBAT.manaMax;
     this.hitstun = 0;
     this.invuln = COMBAT.respawnInvuln;
@@ -3436,6 +3593,190 @@ class Ball {
    way none of the straight or arcing shots can.
    ===================================================================== */
 
+/* A cloud that hangs where it was thrown and keeps working on anyone standing
+   in it. Both of the new gas moves are this class -- John's smoke and Reese's
+   fart -- because the difference between them is entirely in the spec: one
+   carries `confuse`, the other carries `poison`, and applyHit already applies
+   either to whoever it lands on. The tint and the drift differ; nothing else.
+
+   It is the first lingering AREA effect in the game. Everything before it was
+   either an instant hitbox or a projectile that dies on contact, so it leans
+   on the pierce contract: hitAt gates re-hits per victim, and, like every
+   other pierce class, it decrements its own counters -- resolveCombat sets
+   them and nothing centralised takes them down. */
+class Cloud {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * (spec.ahead == null ? 12 : spec.ahead);
+    this.y = owner.y - (spec.high == null ? 10 : spec.high);
+    this.vx = owner.facing * (spec.speed || 0);
+    this.vy = spec.lift || 0;
+    this.life = spec.life || 180;
+    this.age = 0;
+    this.dead = false;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+  }
+
+  update() {
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.age++;
+    this.life--;
+    // Slows to a hover rather than travelling: a cloud is a place, not a shot.
+    this.vx *= this.spec.friction == null ? 0.90 : this.spec.friction;
+    this.vy += this.spec.drop || 0;
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -30 || this.x > VW + 30 || this.y > VH + 30) this.dead = true;
+  }
+
+  /* Grows for the first third of its life, then holds. The hitbox is the
+     drawn size, so a cloud that looks bigger genuinely covers more. */
+  radius() {
+    const grow = Math.min(1, this.age / Math.max(1, this.life * 0.5 + this.age * 0.5));
+    const r0 = this.spec.r0 == null ? 5 : this.spec.r0;
+    const r1 = this.spec.r1 == null ? 13 : this.spec.r1;
+    return r0 + (r1 - r0) * grow;
+  }
+
+  box() {
+    const r = this.radius();
+    return { x: this.x - r, y: this.y - r, w: r * 2, h: r * 2 };
+  }
+
+  draw(g) {
+    const r = this.radius();
+    // Fades out over the last third rather than vanishing mid-air.
+    const left = this.life / Math.max(1, this.spec.life || 180);
+    g.globalAlpha = Math.max(0, Math.min(0.62, left * 1.8)) * 0.9;
+    const tints = this.spec.tints || ['#9aa0a6', '#c8ccd0'];
+    // Three offset blobs so it reads as a cloud and not a circle. The offsets
+    // are fixed, never random: this is drawn from snapshotted state and has to
+    // look the same on every machine replaying the same frame.
+    const puffs = [[0, 0, 1], [-r * 0.55, -r * 0.25, 0.72], [r * 0.5, r * 0.2, 0.66]];
+    for (let i = 0; i < puffs.length; i++) {
+      g.fillStyle = tints[i % tints.length];
+      const pr = r * puffs[i][2];
+      g.fillRect(Math.round(this.x + puffs[i][0] - pr),
+                 Math.round(this.y + puffs[i][1] - pr),
+                 Math.round(pr * 2), Math.round(pr * 2));
+    }
+    g.globalAlpha = 1;
+  }
+}
+
+/* The bullet. Flat, fast, and gone on contact -- the whole move is the read,
+   not the projectile, so it does as little as possible. */
+class Slug {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 9;
+    this.y = owner.y - 11;
+    this.vx = owner.facing * spec.speed;
+    this.life = spec.life || 40;
+    this.dead = false;
+  }
+
+  update() {
+    this.life--;
+    this.x += this.vx;
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -12 || this.x > VW + 12) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 3, y: this.y - 2, w: 6, h: 4 };
+  }
+
+  draw(g) {
+    g.fillStyle = this.spec.tint || '#ffd76a';
+    g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 1, 6, 2);
+    g.fillStyle = '#8a6a20';
+    g.fillRect(Math.round(this.x) + (this.vx > 0 ? -4 : 2), Math.round(this.y) - 1, 2, 2);
+  }
+}
+
+/* The dog. Runs along the ground in the direction it was pointed and bites
+   whatever it reaches, several times, until it runs out of road or life.
+
+   Nothing in the game summoned anything before this -- Trev's KNIGHT looks
+   like a summon and is really a projectile with a scripted turn -- so this is
+   a projectile too. It just happens to be a projectile that walks: it falls
+   until it finds a platform, then follows it, which is enough to read as a
+   dog and avoids inventing pathfinding for a four-second attack. */
+class Dog {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.dir = owner.facing;
+    this.x = owner.x + this.dir * 10;
+    this.y = owner.y - 2;
+    this.vy = 0;
+    this.life = spec.life || 150;
+    this.step = 0;
+    this.dead = false;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+  }
+
+  update() {
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.life--;
+    this.step++;
+    this.x += this.dir * this.spec.speed;
+
+    // Fall onto whatever is under it, then ride that surface.
+    const prevY = this.y;
+    this.vy += 0.4;
+    this.y += this.vy;
+    for (const p of STAGE.platforms) {
+      if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
+      if (prevY <= p.y + 1 && this.y >= p.y) {
+        this.y = p.y;
+        this.vy = 0;
+        break;
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -14 || this.x > VW + 14 || this.y > VH + 30) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 7, y: this.y - 9, w: 14, h: 9 };
+  }
+
+  draw(g) {
+    // Black and grey, and its legs alternate every six frames so it reads as
+    // running rather than sliding. Step parity is derived from the frame
+    // count, which is snapshotted -- no timers of its own, nothing random.
+    const trot = Math.floor(this.step / 6) % 2 === 0;
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const back = this.dir > 0 ? -7 : 1;
+    const head = this.dir > 0 ? 3 : -7;
+    g.fillStyle = '#2b2b2f';                       // body
+    g.fillRect(x - 6, y - 7, 12, 5);
+    g.fillStyle = '#55555c';                       // haunch
+    g.fillRect(x + back, y - 8, 5, 5);
+    g.fillStyle = '#2b2b2f';                       // head
+    g.fillRect(x + head, y - 9, 4, 4);
+    g.fillStyle = '#8d8d95';                       // muzzle
+    g.fillRect(x + head + (this.dir > 0 ? 3 : -1), y - 7, 2, 2);
+    g.fillStyle = '#1b1b1f';                       // legs
+    g.fillRect(x - 5, y - 2, 2, 2);
+    g.fillRect(x + 3, y - 2, 2, 2);
+    g.fillStyle = trot ? '#55555c' : '#1b1b1f';
+    g.fillRect(x - 1, y - 2, 2, 2);
+  }
+}
+
 class KnightPiece {
   constructor(owner, spec) {
     this.owner = owner;
@@ -3877,6 +4218,15 @@ const AUDIO_RECIPES = {
   go:     { osc: 'square', f0: 1046.5, dur: 0.20, gain: 0.38 },
   'match-end': { osc: 'triangle', f0: 523.25, gain: 0.34,
                  seq: [0, 4, 7, 12], step: 0.11, dur: 0.10 },
+
+  // John and Reese's new kit.
+  belch:  { osc: 'sawtooth', f0: 155, f1: 68, dur: 0.30, gain: 0.40,
+            noise: { dur: 0.22, lp: 950, lp1: 280 } },
+  smoke:  { noise: { dur: 0.34, lp: 5200, lp1: 700 }, dur: 0.34, gain: 0.22 },
+  gunshot: { osc: 'square', f0: 290, f1: 55, dur: 0.13, gain: 0.50,
+             noise: { dur: 0.10, lp: 7200, lp1: 520 } },
+  bark:   { osc: 'sawtooth', f0: 430, f1: 170, dur: 0.13, gain: 0.42,
+            noise: { dur: 0.05, lp: 2400 } },
 
   // Menus. Quietest things in the game: you hear them while deciding, not
   // while playing.
@@ -4326,6 +4676,14 @@ function applyHit(attacker, defender, move, sourceX) {
     defender.poisonBy = attacker.slot;
   }
 
+  // Smoke. Left and right swap for a while -- see Fighter.update, which does
+  // the swapping on a COPY of the pad. Applied here beside poison, and after
+  // the shield return above for the same reason poison is: blocking it should
+  // mean blocking all of it.
+  if (move.confuse) {
+    defender.confused = move.confuse.frames;
+  }
+
   // Pushback, not knockback. It no longer kills anyone, so it no longer
   // scales with how hurt they are -- it exists so a hit visibly lands. A weak
   // move shoves a little, an ult a lot, and heavier characters move less.
@@ -4356,6 +4714,21 @@ function applyHit(attacker, defender, move, sourceX) {
   const decay = Math.max(COMBAT.comboDecayFloor,
                          1 - COMBAT.comboDecayPerHit * defender.combo);
   defender.hitstun = Math.min(30, Math.round((6 + kb * 2.2) * decay));
+
+  /* Catching someone mid-swing. A `punish` move does ordinary damage on an
+     ordinary hit and pins the victim if they were committed to an attack when
+     it landed -- the gun is a read, not a poke.
+
+     Deliberately written into hitstun rather than into a new stun field:
+     hitstun is one of the eleven values stateHash covers, so if two machines
+     ever disagreed about a stunlock the desync check would catch it. A
+     bespoke timer would be snapshotted correctly and hashed by nothing. The
+     min() above is skipped on purpose -- a longer pin than a normal hit can
+     produce is the entire move. */
+  if (move.punish && (defender.state === 'attack' ||
+                      defender.state === 'special' || defender.state === 'ult')) {
+    defender.hitstun = Math.max(defender.hitstun, move.punish.stun);
+  }
 
   if (defender.health <= 0) {
     // The blow that takes the stock is the one place launch still runs free:
@@ -5541,15 +5914,30 @@ function drawSelect() {
   // Three states, not two. "Not drawn" used to print "placeholder", which
   // was wrong for Trev and for Lucas: their movesets come from the 2016
   // notes, there is just no drawn art of them throwing a chess piece.
-  const fromNotes = !focus.drawn && focus.tag !== 'PLACEHOLDER';
+  /* Where a kit came from, stated per character rather than inferred.
+
+     This used to be derived from whether `tag` happened to equal the string
+     'PLACEHOLDER', which meant renaming a tag silently changed a claim about
+     provenance -- and it would have: giving JohnnyHam a real moveset flipped
+     this line to credit his kit to notes written in 2016 that never mentioned
+     a dog or a gun. Reese needed a fourth answer besides, since his shirtless
+     ult really is drawn into the original sprites while his three specials
+     were written later. This file is careful about what is original and what
+     is invented; the screen should be too. */
+  const origin = focus.origin || (focus.drawn ? 'sprites' : 'notes');
+  const ORIGIN_LINE = {
+    sprites: 'this moveset is drawn into the original sprites',
+    notes: 'from the movesets we wrote down in 2016',
+    mixed: 'the ult is drawn into the sprites, the rest written later',
+    fresh: 'written later, not from the 2016 notes',
+  };
+  const ORIGIN_TINT = {
+    sprites: '#8fe08f', notes: '#c8a05a', mixed: '#8fe08f', fresh: '#7d849c',
+  };
   text(focus.tag, VW / 2, VH - 22, 7,
-       focus.drawn ? '#8fe08f' : fromNotes ? '#c8a05a' : '#7d849c', 'center', 700);
+       ORIGIN_TINT[origin] || '#7d849c', 'center', 700);
   text(focus.blurb, VW / 2, VH - 13, 6, '#98a0bc', 'center', 500);
-  text(focus.drawn
-        ? 'this moveset is drawn into the original sprites'
-        : fromNotes
-          ? 'from the movesets we wrote down in 2016'
-          : 'placeholder — swap in a real personality later',
+  text(ORIGIN_LINE[origin] || ORIGIN_LINE.notes,
        VW / 2, VH - 5, 5.5, '#5a6280', 'center', 500);
 
   // Player status line.
@@ -6448,7 +6836,9 @@ window.NerdWars = {
   get roster() {
     return ORDER.map((k) => ({
       key: k, name: ROSTER[k].name, tag: ROSTER[k].tag,
-      blurb: ROSTER[k].blurb, drawn: !!ROSTER[k].drawn, accent: SPRITES[k].accent,
+      blurb: ROSTER[k].blurb, drawn: !!ROSTER[k].drawn,
+      origin: ROSTER[k].origin || (ROSTER[k].drawn ? 'sprites' : 'notes'),
+      accent: SPRITES[k].accent,
       moves: Object.keys(ROSTER[k].specials).map((slot) => ({
         slot: slot, label: ROSTER[k].specials[slot].label,
         mana: ROSTER[k].specials[slot].mana,
