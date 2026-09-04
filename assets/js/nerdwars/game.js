@@ -849,6 +849,9 @@ const BINDS = [
 ];
 
 window.addEventListener('keydown', (e) => {
+  // Before the focus check on purpose: this is a user gesture whatever the
+  // game does with the key, and it is the only chance to start the context.
+  audioUnlock();
   if (!hasFocus) return;
   // Stop the browser scrolling the page out from under the game.
   if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code.startsWith('Numpad')) {
@@ -1046,6 +1049,7 @@ function buttonAt(mx, my) {
 }
 
 view.addEventListener('mousedown', (e) => {
+  audioUnlock();
   const p = viewPoint(e);
   const b = buttonAt(p[0], p[1]);
   if (b) b.action();
@@ -3460,6 +3464,334 @@ class KnightPiece {
 }
 
 /* =====================================================================
+   AUDIO
+
+   Presentation, in exactly the sense `effects` is: the simulation emits
+   cues, nothing here is ever snapshotted, and no line below writes back
+   into game state. Audio therefore cannot desync a match -- but note that
+   `stateHash` covers only eleven fighter fields, so it would not catch a
+   write-back either. The rule is structural, not policed.
+
+   The context is built on the first user gesture and never at load. A
+   browser will not start one without a gesture, and the headless test
+   harness has no AudioContext at all; both cases must leave a game that
+   runs perfectly and says nothing.
+   ===================================================================== */
+
+const AUDIO = {
+  ac: null,              // AudioContext, null until a gesture unlocks it
+  master: null,          // master GainNode
+  enabled: true,
+  volume: 0.7,
+  step: 0,               // our own monotonic step counter, for offline keying
+  // Which clock frame() actually advanced on the tick now running. Written
+  // by frame() itself, right before it calls into the simulation, so
+  // audioNow() never has to re-derive it -- re-deriving it from
+  // netplay.active alone is what caused it to disagree with frame()'s real
+  // branch condition (scene, rollbackTo) once a match ended but netplay
+  // stayed active through the menus.
+  netClock: false,
+};
+
+/* Build the context. Called from every plausible first gesture, so it has to
+   be cheap and idempotent. Any failure leaves ac null and the game silent
+   rather than broken: audio is never allowed to stop the engine booting. */
+function audioUnlock() {
+  if (AUDIO.ac) {
+    // Chrome can suspend an existing context when a tab is backgrounded. A
+    // rejected resume() must not become an unhandled promise rejection --
+    // same "audio never breaks the game" rule as everywhere else here.
+    if (AUDIO.ac.state === 'suspended') AUDIO.ac.resume().catch(() => {});
+    return;
+  }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    const ac = new AC();
+    const master = ac.createGain();
+    master.gain.value = AUDIO.volume;
+    master.connect(ac.destination);
+    AUDIO.ac = ac;
+    AUDIO.master = master;
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
+  } catch (e) {
+    AUDIO.ac = null;
+    AUDIO.master = null;
+  }
+}
+
+/* One short burst of white noise, built once and reused. Cheaper than a new
+   buffer per hit, and the reuse is inaudible at these durations. */
+let audioNoiseBuf = null;
+
+function audioNoise() {
+  if (audioNoiseBuf) return audioNoiseBuf;
+  const ac = AUDIO.ac;
+  const len = Math.floor(ac.sampleRate * 0.5);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  // NOT Math.random: that draws from the same global stream aiThink() reads
+  // for every CPU decision, and every one of those decisions is inside
+  // updateBattle and covered by stateHash. The hazard was never a write --
+  // nothing here does reach game state, same as addEffect -- it is
+  // consumption: 24,000 draws from a stream something else depends on would
+  // shift every CPU decision downstream of the first noise-bearing cue in a
+  // session. A tiny local generator, seeded to a constant, can never touch
+  // that stream, so this is unconditionally safe rather than safe only
+  // because nothing yet calls cue() with a noise recipe. xorshift32, not for
+  // quality -- only for staying off Math.random entirely.
+  let s = 0x9e3779b9;
+  for (let i = 0; i < len; i++) {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    data[i] = s / 0x80000000;
+  }
+  audioNoiseBuf = buf;
+  return buf;
+}
+
+/* Turn one recipe into one voice. Everything is scheduled against `when` and
+   torn down by its own stop time, so nothing accumulates. */
+function audioVoice(recipe, when, gain, pan) {
+  const ac = AUDIO.ac;
+  if (!ac) return;
+  const dur = recipe.dur == null ? 0.15 : recipe.dur;
+  // exponentialRampToValueAtTime throws on zero, and a silent voice is a
+  // legitimate thing to ask for, so the floor is a real number.
+  const peak = Math.max(0.0001, (recipe.gain == null ? 1 : recipe.gain) * gain);
+
+  const out = ac.createGain();
+  out.gain.setValueAtTime(0.0001, when);
+  out.gain.exponentialRampToValueAtTime(peak, when + 0.004);
+  out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+
+  let tail = out;
+  if (pan) {
+    const panner = ac.createStereoPanner();
+    panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), when);
+    out.connect(panner);
+    tail = panner;
+  }
+  tail.connect(AUDIO.master);
+
+  if (recipe.osc) {
+    const osc = ac.createOscillator();
+    osc.type = recipe.osc;
+    osc.frequency.setValueAtTime(recipe.f0, when);
+    if (recipe.f1 != null && recipe.f1 !== recipe.f0) {
+      if (recipe.curve === 'lin') {
+        osc.frequency.linearRampToValueAtTime(recipe.f1, when + dur);
+      } else {
+        osc.frequency.exponentialRampToValueAtTime(
+          Math.max(0.0001, recipe.f1), when + dur);
+      }
+    }
+    if (recipe.detune) osc.detune.setValueAtTime(recipe.detune, when);
+    osc.connect(out);
+    osc.start(when);
+    osc.stop(when + dur + 0.02);
+  }
+
+  if (recipe.noise) {
+    const n = recipe.noise;
+    const src = ac.createBufferSource();
+    src.buffer = audioNoise();
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(n.lp == null ? 4000 : n.lp, when);
+    if (n.lp1 != null) {
+      lp.frequency.exponentialRampToValueAtTime(
+        Math.max(0.0001, n.lp1), when + (n.dur == null ? dur : n.dur));
+    }
+    src.connect(lp);
+    lp.connect(out);
+    src.start(when);
+    src.stop(when + (n.dur == null ? dur : n.dur) + 0.02);
+  }
+}
+
+/* The recipe table. Phase 2 fills it; two entries exist now so the bus has
+   something real to play. */
+const AUDIO_RECIPES = {
+  'test-a': { osc: 'square', f0: 440, dur: 0.06, gain: 0.4 },
+  'test-b': { noise: { dur: 0.05, lp: 3000 }, dur: 0.05, gain: 0.4 },
+};
+
+/* Cues emitted during the current batch of simulation steps, and the keys we
+   have already played. Module-level, never on a Fighter: restoreSim deletes
+   any field it does not recognize, so per-fighter audio state would vanish at
+   the first rollback. */
+const audioBatch = [];
+const audioPlayed = new Map();   // key -> sim frame it was played for
+
+/* The frame a cue belongs to. Reads AUDIO.netClock rather than checking
+   netplay.active itself: which clock is live is frame()'s call (it also
+   decides whether scene and rollbackTo allow netplay to advance this tick),
+   and re-deriving that condition here is exactly the kind of two-places-
+   agree-by-hand bug that let a menu cue go silent once netplay stayed active
+   past the end of a match. When AUDIO.netClock is true this is the frame
+   being simulated online, which is stable across the first run and every
+   replay -- netSimulateOne sets pads, calls step(), then increments.
+   Otherwise nothing ever replays, so our own counter is enough and is always
+   distinct. */
+function audioNow() {
+  return AUDIO.netClock ? netplay.frame : AUDIO.step;
+}
+
+/* Emit a cue. Deliberately NOT guarded on netplay.resimulating: see the note
+   on the bus above. Cheap enough to call unconditionally from the simulation. */
+function cue(name, opts) {
+  if (!AUDIO.enabled || !AUDIO.ac) return;
+  const o = opts || {};
+  // Which clock this cue's frame number belongs to, not just its value.
+  // netplay.frame and AUDIO.step are two unrelated counters -- one can sit
+  // near 10800 three minutes into a match while the other is a few hundred,
+  // since it only counts offline ticks since load -- and frame() can take
+  // one branch on one iteration of its accumulator loop and the other branch
+  // on the next, landing cues from both clocks in the same batch (see the
+  // note on `first` in audioFlush). Tagging the clock here keeps a
+  // netplay-clock cue and an offline-clock cue from ever being compared or
+  // minimized against each other downstream.
+  const clock = AUDIO.netClock ? 'n' : 'o';
+  const frame = o.frame == null ? audioNow() : o.frame;
+  const slot = o.slot == null ? -1 : o.slot;
+  const key = clock + '|' + frame + '|' + slot + '|' + name;
+  if (audioPlayed.has(key)) return;
+  audioPlayed.set(key, frame);
+  audioBatch.push({
+    name: name, frame: frame, clock: clock,
+    gain: o.gain == null ? 1 : o.gain,
+    pan: o.x == null ? 0 : Math.max(-1, Math.min(1, (o.x - VW / 2) / (VW / 2))) * 0.6,
+  });
+}
+
+/* Drop keys no rollback can reach again. NET_MAX_ROLLBACK is the deepest a
+   replay ever goes, so anything further back than a small multiple of it is
+   settled forever. The multiple is slack, not necessity: the set is tiny and
+   scanning it often is cheaper than being wrong at the boundary.
+
+   "Now" is the later of audioNow() and the newest frame already sitting in
+   audioPlayed, not audioNow() alone. audioNow() is what keeps this moving
+   through a quiet stretch of a real match -- ticks with nothing to play
+   would otherwise never advance the horizon at all, and the set would sit at
+   its high-water mark. But a key can also be logged for a frame ahead of
+   audioNow() (an explicit frame, which is how a caller can log a cue for a
+   frame other than the one live right now), and audioNow() alone would never
+   catch up to that either. Deriving the fallback from audioPlayed itself
+   rather than a separate counter means it needs no reset of its own: it is
+   already empty wherever netStart/netStop already clear the map. */
+function audioPrune() {
+  let latest = audioNow();
+  for (const frame of audioPlayed.values()) {
+    if (frame > latest) latest = frame;
+  }
+  const horizon = latest - NET_MAX_ROLLBACK * 3;
+  if (horizon <= 0) return;
+  for (const [key, frame] of audioPlayed) {
+    if (frame < horizon) audioPlayed.delete(key);
+  }
+}
+
+/* Cap on identical voices per flush. Four copies of the same recipe on the
+   same frame sum coherently -- same waveform, same phase -- into +12dB and a
+   comb filter, not a fatter hit, so past this the extra copies are dropped
+   rather than piled on. */
+const AUDIO_MAX_VOICES = 3;
+
+/* Play everything emitted since the last flush. Called once per animation
+   frame, after the step loop and before render()/requestAnimationFrame(), so
+   anything this throws would stop the loop from ever being requested again --
+   a frozen screen. Phase 2 onward fills AUDIO_RECIPES with dozens more
+   entries than the two hand-checked ones here, any of which could hand
+   real Web Audio a bad oscillator type, a non-finite frequency, or call
+   createStereoPanner on a browser that lacks it. Same reasoning as the
+   try/catch in audioUnlock: audio is never allowed to stop the engine
+   running, so one bad cue is swallowed rather than allowed to take the rest
+   of the batch, and the frame, down with it.
+
+   Pruning runs first and unconditionally, before either early return, so a
+   silent stretch still ages keys out -- otherwise the played set would sit
+   at its high-water mark until the next cue happened to fire. */
+function audioFlush() {
+  audioPrune();
+  if (!audioBatch.length) return;
+  if (!AUDIO.ac) { audioBatch.length = 0; return; }
+  const now = AUDIO.ac.currentTime;
+  // Up to eight simulation frames can land between two paints, and after a
+  // tab switch the accumulator drains a longer burst still. Scheduling them
+  // all at `now` would collapse a jab's startup onto its impact, so each cue
+  // keeps its offset from the earliest frame of its OWN clock in the batch.
+  //
+  // Per clock, not one shared minimum: netplay.frame and AUDIO.step are two
+  // unrelated counters (see the tag cue() attaches to each entry), and
+  // frame()'s accumulator loop can take the netplay branch on one iteration
+  // and the offline branch on the next, landing one of each in this same
+  // batch -- a match-ending KO cue keyed on netplay.frame (~10800 three
+  // minutes in) alongside a menu cue keyed on AUDIO.step (a few hundred). A
+  // single shared `first` would subtract one clock's frame number from the
+  // other's and schedule whichever is larger minutes into the future. Seeded
+  // from Infinity, not audioBatch[0].frame -- the previous seed then
+  // rechecked index 0 against itself for no reason.
+  const first = { n: Infinity, o: Infinity };
+  for (const c of audioBatch) if (c.frame < first[c.clock]) first[c.clock] = c.frame;
+  // Defense in depth, independent of the per-clock split above: even a
+  // correctly computed offset should never place a cue more than a handful
+  // of frames out. netAdvance() calls netRollback(), which can replay many
+  // frames of a single clock inside one frame() loop iteration -- measured
+  // at 13 frames on a 200ms link, and it can reach NET_MAX_ROLLBACK (36) --
+  // so a live frame's cue should not be scheduled hundreds of milliseconds
+  // out behind a replayed one. Clamping the offset caps how far out any one
+  // cue lands; it is applied once below and reused for both the voice-cap
+  // bucket and the schedule time so the two agree about what "same instant"
+  // means.
+  const AUDIO_MAX_BATCH_STEPS = 8;
+  // How many of each recipe we have already scheduled this flush, bucketed
+  // by name AND a 50ms-wide slot on a fixed grid (spec 5.5), not by name
+  // alone. A flush can span up to 8 frames (133ms) after batch scheduling,
+  // plus a drained accumulator, so counting per flush rather than per slot
+  // let a rapid-fire move -- pellets 33ms apart, which do not phase-sum --
+  // lose voices for no acoustic reason. Identical waveforms fired together
+  // sum in phase, which is a spike and a flange rather than a louder hit,
+  // so the third copy landing in the same 50ms grid slot is the last one
+  // worth having.
+  const seen = new Map();
+  try {
+    for (const c of audioBatch) {
+      const recipe = AUDIO_RECIPES[c.name];
+      if (!recipe) continue;
+      // Clamped once so the voice-cap bucket and the schedule time agree
+      // about what "same instant" means -- otherwise a same-clock spread
+      // past AUDIO_MAX_BATCH_STEPS keeps splitting into distinct buckets by
+      // its raw (unclamped) offset while `when` collapses every one of them
+      // onto the same clamped timestamp, so the cap stops capping exactly
+      // when the pile-up it exists to prevent shows up.
+      const offset = Math.min(c.frame - first[c.clock], AUDIO_MAX_BATCH_STEPS);
+      const bucket = c.name + '|' + Math.floor(offset * STEP / 50);
+      const n = (seen.get(bucket) || 0) + 1;
+      seen.set(bucket, n);
+      if (n > AUDIO_MAX_VOICES) continue;
+      try {
+        // 1/sqrt(n): the sum of n equal-power voices, so stacking reads as
+        // one bigger hit rather than n hits. Duplicates past the first are
+        // also detuned apart so they do not stay phase-aligned -- additive
+        // with whatever detune the recipe already authors, so a recipe that
+        // detunes itself for pitch still stacks as one sound instead of
+        // three different ones.
+        const shaped = n === 1
+          ? recipe
+          : Object.assign({}, recipe,
+              { detune: (recipe.detune || 0) + (n - 1) * 11 });
+        const when = now + offset * STEP / 1000;
+        audioVoice(shaped, when, c.gain / Math.sqrt(n), c.pan);
+      } catch (e) { /* one malformed recipe must not silence the rest */ }
+    }
+  } finally {
+    audioBatch.length = 0;
+  }
+}
+
+/* =====================================================================
    EFFECTS - anything that was never drawn is code-drawn, so the original
    art is never mixed with generated pixels.
    ===================================================================== */
@@ -5718,6 +6050,13 @@ function netStart(opts) {
   netplay.peerAhead = new Array(MAX_PLAYERS).fill(0);
   netplay.delayChanges = 0;
 
+  // A fresh match starts on a clean key space. Without this, match 2 replays
+  // frame 0 against a `audioPlayed` map that already has a `0|...` key from
+  // match 1, and any cue keyed on a fixed frame number (a countdown, a
+  // round-start stinger) is silent for the rest of the session.
+  audioBatch.length = 0;
+  audioPlayed.clear();
+
   // Only our own opening frames are primed. Seeding the opponent's from OUR
   // delay is a hole nothing can fill if the two sides start on different
   // numbers, and rollback does not need it anyway: their opening frames are
@@ -5739,6 +6078,10 @@ function netStop(reason) {
   netplay.ended = reason || 'ended';
   netplay.framePads = null;
   scene = 'title';
+  // Same reasoning as the reset in netStart: leaving keys from this match in
+  // place would carry them into whatever starts next, online or off.
+  audioBatch.length = 0;
+  audioPlayed.clear();
   netEmit('stopped', { reason: netplay.ended });
 }
 
@@ -5789,15 +6132,22 @@ function frame(now) {
     // left the battle: a match ended by a mispredicted KO is exactly the case
     // that needs rewinding, and gating on scene alone made it permanent.
     if (netplay.active && (scene === 'battle' || netplay.rollbackTo !== null)) {
+      // Set before netAdvance(), not after: a pending rollback replays
+      // several frames of step() from inside that call, and every cue() any
+      // of them emits has to see the net clock as live already.
+      AUDIO.netClock = true;
       if (!netAdvance()) break;
     } else {
+      AUDIO.netClock = false;
       step();
+      AUDIO.step++;
     }
     acc -= STEP;
     guard++;
   }
   // A long wait must not become a long fast-forward once input arrives.
   if (netplay.stalling) acc = Math.min(acc, STEP * 12);
+  audioFlush();
   render();
   requestAnimationFrame(frame);
 }
@@ -5831,6 +6181,32 @@ window.NerdWars = {
   get frames() { return frameCount; },
   get fullscreen() { return fullscreenActive(); },
   toggleFullscreen: toggleFullscreen,
+  audio: {
+    get ready() { return !!AUDIO.ac; },
+    get enabled() { return AUDIO.enabled; },
+    get volume() { return AUDIO.volume; },
+    // Test hook for the pruning horizon: how many played keys are still
+    // held. Not used by the game itself.
+    get pending() { return audioPlayed.size; },
+    // The site lobby's join button is a real user gesture on the one path
+    // that has no other -- netStart sets hasFocus programmatically, so an
+    // online-only embed never sees a local click or key.
+    unlock: audioUnlock,
+    // Plays one recipe immediately. The sound-test overlay in phase 3 and
+    // the tests both drive recipes through here. Same reasoning as the
+    // try/catch in audioFlush: this is a button handler auditioning ~70
+    // recipes nobody has heard yet, and a malformed one (a missing f0, say)
+    // must not throw out of it -- one bad recipe is swallowed rather than
+    // breaking the overlay. Also covers `AUDIO.ac` being null, so the old
+    // `AUDIO.ac ? AUDIO.ac.currentTime : 0` guard is gone: audioVoice
+    // already returns early when ac is null, and this catches the
+    // TypeError from reading .currentTime off it beforehand instead.
+    test: function (recipe) {
+      try { audioVoice(recipe, AUDIO.ac.currentTime, 1, 0); } catch (e) { /* see above */ }
+    },
+    emit: cue,
+    flush: audioFlush,
+  },
   net: {
     start: netStart,
     stop: netStop,
@@ -5890,6 +6266,55 @@ window.NerdWars = {
       owner: p.owner ? p.owner.slot : null,
       x: Math.round(p.x), y: Math.round(p.y),
     }));
+  },
+  // Most of what's above this line is read-only, enough to check what the
+  // game is doing without exposing anything that could poke it into an
+  // inconsistent state -- with exceptions already in scope above.
+  // audio.unlock, audio.emit and audio.flush all mutate AUDIO/audioPlayed/
+  // audioBatch (emit in particular can pre-seed audioPlayed with an
+  // arbitrary key, silently suppressing a real cue for up to
+  // NET_MAX_ROLLBACK * 3 (108) frames); audio.test mutates none of those
+  // three -- it calls audioVoice directly, bypassing both the batch and
+  // the played set -- but it does mutate audioNoiseBuf, filling that cache
+  // on the first noise-bearing recipe it is handed. None of the four
+  // reaches simulation state, but they are not the whole exception: net.
+  // start, net.stop, net.receive and toggleFullscreen, all also above this
+  // line, mutate too, and unlike the audio four they DO reach simulation
+  // state directly -- net.start alone was measured taking `scene` from
+  // `title` to `battle` and creating two fighters. __test below is the one
+  // property whose entire job is that: state mutation the test suite
+  // needs and nothing else should ever call.
+  __test: {
+    // Reproducing a real rollback would need two engines and a wire, and
+    // this is what the cue-bus tests use to drive the resimulating flag
+    // directly instead. Leaving it true would be a real bug if anything
+    // outside a test called it: addEffect stays suppressed forever, so
+    // every visual effect in the game silently stops spawning, and step()
+    // (the `if (!netplay.resimulating)` guard around prevHeld/gpPrev, just
+    // above frame()) freezes prevHeld/gpPrev at whatever they held the
+    // instant the flag stuck. tapped()/gpTapped() diff `held` against that
+    // frozen snapshot, so the fallout splits in two: a key that WAS held at
+    // that instant can never register a new press again, since it stays in
+    // the frozen set forever -- but a key that was NOT held then reads as
+    // freshly tapped on every single frame it is held afterward, because
+    // the frozen set never catches up to include it (measured: with the
+    // flag stuck and Enter held from the title screen, the engine reaches
+    // select by the second held frame, stage by the fourth, and battle by
+    // the fifth -- as if Enter were newly pressed every one of those
+    // frames, not once). Escape looks unusable here too,
+    // but for a different reason: updateBattle's own quit guard, `if
+    // (!netplay.resimulating && menuBack())`, short-circuits on the stuck
+    // flag before menuBack() is ever reached -- the frozen snapshot on its
+    // own would not suppress Escape at all, and would instead make it fire
+    // repeatedly the same way Enter does above.
+    setResimulating: function (v) { netplay.resimulating = !!v; },
+    // The bit-exact hash netplay's own desync detector trusts, over the
+    // live simulation rather than a snapshot -- stateHash(snap) falls back
+    // to the live fighters/projectiles when snap is falsy. `fighters` above
+    // is easier to read when a test fails, but it is six rounded fields;
+    // this is the one with teeth, covering float bits across eleven fighter
+    // fields plus every projectile position.
+    stateHash: function () { return stateHash(); },
   },
 };
 
