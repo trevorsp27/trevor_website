@@ -428,3 +428,180 @@ test("neither evasion can be spammed, and alternating them does not help", async
     );
   }
 });
+
+/* Trev's rebuilt kit and Kel's ult.
+ *
+ * The guillotine is the only grab in the game and the only thing that beats a
+ * raised shield, so both of those are asserted rather than assumed. The
+ * dangerous failure is not that it fails to grab -- it is a victim left held
+ * for the rest of the match because the link broke at one end and nothing let
+ * go at the other, which is why every case here ends by checking nobody is
+ * still stuck.
+ */
+function waitOutSpawnInvuln(g) {
+  g.pump(130);                      // COMBAT.respawnInvuln is 110
+}
+
+function closeIn(g, frames) {
+  g.press("KeyD"); g.press("ArrowLeft");
+  g.pump(frames);
+  g.release("KeyD"); g.release("ArrowLeft");
+  g.pump(3);
+}
+
+test("Trev's kit is the knight's move and the guillotine", async () => {
+  const g = await bootGame();
+  const trev = g.nw.roster.find((c) => c.key === "trev");
+  assert.deepEqual(
+    trev.moves.map((m) => m.slot + ":" + m.label).sort(),
+    ["down:GUILLOTINE", "neutral:CEREAL", "up:KNIGHT"]
+  );
+  assert.equal(trev.ult, "LASER SWORD", "the sword stays");
+});
+
+test("the knight move goes up twice as far as it goes across", async () => {
+  const g = await bootGame();
+  startAs(g, "trev", "reese");
+  const f = () => g.nw.fighters[0];
+  const y0 = f().y, x0 = f().x;
+  g.press("KeyK"); g.pump(2); g.release("KeyK");
+  let peak = y0;
+  for (let i = 0; i < 44; i++) { g.pump(1); if (f().y < peak) peak = f().y; }
+  const up = y0 - peak, across = Math.abs(f().x - x0);
+  assert.ok(up > 40, "it is his only recovery; it rose " + up.toFixed(0) + "px");
+  assert.ok(
+    up / across > 1.4 && up / across < 3,
+    "a knight goes two squares then one, so this should be roughly 2:1 -- " +
+      "rose " + up.toFixed(0) + "px, moved " + across.toFixed(0) + "px across"
+  );
+});
+
+test("the guillotine grabs through a raised shield and always lets go", async () => {
+  for (const shielding of [false, true]) {
+    const g = await bootGame();
+    startAs(g, "trev", "reese");
+    waitOutSpawnInvuln(g);
+    closeIn(g, 26);
+    const V = () => g.nw.fighters[1];
+    const hp0 = V().health;
+
+    if (shielding) g.press("ShiftRight");
+    g.press("KeyJ"); g.pump(3); g.release("KeyJ");
+    let grabbed = false;
+    for (let i = 0; i < 120; i++) {
+      g.pump(1);
+      if (V().state === "grabbed") grabbed = true;
+    }
+    if (shielding) g.release("ShiftRight");
+
+    assert.ok(grabbed, "should grab even while " + (shielding ? "shielding" : "idle"));
+    assert.ok(V().health < hp0, "and hurt them");
+    assert.notEqual(V().state, "grabbed",
+      "nobody may still be held after the throw -- that would lock them out " +
+        "of the rest of the match");
+  }
+});
+
+test("the throw goes where it is aimed", async () => {
+  const outcomes = {};
+  for (const [name, key] of [["forward", null], ["up", "KeyW"], ["back", "KeyA"]]) {
+    const g = await bootGame();
+    startAs(g, "trev", "reese");
+    waitOutSpawnInvuln(g);
+    closeIn(g, 26);
+    const V = () => g.nw.fighters[1];
+
+    g.press("KeyJ"); g.pump(3); g.release("KeyJ");
+    if (key) g.press(key);
+    let released = null;
+    for (let i = 0; i < 120; i++) {
+      g.pump(1);
+      if (released === null && V().state === "grabbed") released = "held";
+      if (released === "held" && V().state !== "grabbed") {
+        released = { x: V().x, y: V().y, at: i };
+      }
+    }
+    // Where they ended up a dozen frames after being let go.
+    outcomes[name] = { dx: V().x - released.x, dy: V().y - released.y };
+    if (key) g.release(key);
+  }
+  assert.ok(outcomes.forward.dx > 5, "forward should send them forward");
+  assert.ok(outcomes.back.dx < -5,
+    "back should send them the other way, got dx=" + outcomes.back.dx.toFixed(0));
+  assert.ok(Math.abs(outcomes.up.dx) < Math.abs(outcomes.forward.dx),
+    "up should be more vertical than forward");
+});
+
+/* Kel's ult: the floor comes up, and only the people standing on it care.
+ *
+ * This one has to earn its meter the hard way -- there is no test hook to
+ * fill it, and adding one would be production surface for a test. Two things
+ * make it possible at all: the MATRIX stage, which is the only fully enclosed
+ * arena, so nobody can be knocked out and end the match early; and a dense
+ * jab loop, because on an open stage Kel just launches his opponent away and
+ * the meter plateaus around 38.
+ */
+async function kelWithFullMeter() {
+  const g = await bootGame();
+  assert.equal(g.nw.scene, "title");
+  g.tap("KeyS"); g.tap("Enter");
+  g.tap("KeyD"); g.tap("KeyD");            // seat 0 -> kel
+  g.tap("KeyG");
+  g.tap("Comma");                          // seat 1 defaults to reese
+  g.tap("KeyD"); g.tap("KeyD");            // stage -> matrix, the enclosed one
+  g.tap("Enter");
+  assert.equal(g.nw.scene, "battle");
+  assert.equal(g.nw.fighters[0].key, "kel");
+  g.pump(130);
+
+  const K = () => g.nw.fighters[0], V = () => g.nw.fighters[1];
+  for (let round = 0; round < 420 && K().ult < 100; round++) {
+    const gap = V().x - K().x;
+    if (Math.abs(gap) > 11) {
+      const k = gap > 0 ? "KeyD" : "KeyA";
+      g.press(k); g.pump(4); g.release(k);
+    }
+    g.press("KeyG"); g.pump(2); g.release("KeyG"); g.pump(11);
+  }
+  assert.equal(K().ult, 100, "could not fill the ult meter, so nothing below means anything");
+  return g;
+}
+
+test("LEG DAY launches whoever is standing and spares whoever is not", async () => {
+  // On the ground.
+  {
+    const g = await kelWithFullMeter();
+    const V = () => g.nw.fighters[1];
+    g.pump(30);
+    const hp0 = V().health;
+    g.press("KeyL"); g.pump(3); g.release("KeyL");
+    for (let i = 0; i < 60; i++) g.pump(1);
+    assert.ok(V().health < hp0,
+      "somebody standing on the floor should be hit, took " + (hp0 - V().health));
+  }
+  // In the air.
+  {
+    const g = await kelWithFullMeter();
+    const V = () => g.nw.fighters[1];
+    g.pump(30);
+    /* Order matters and so does the count. The ult has 20 frames of startup,
+       so the jump has to still be in the air when the floor moves -- and the
+       first version of this pumped only 10 frames after pressing it, which
+       meant the ult had not fired yet and the assertion passed for the wrong
+       reason. Ult first, jump into its startup, then let it land. */
+    const hp0 = V().health;
+    g.press("KeyL"); g.pump(3); g.release("KeyL");
+    g.pump(8);
+    g.press("ArrowUp"); g.pump(2); g.release("ArrowUp");
+    let airborneWhenItLanded = null;
+    for (let i = 0; i < 30; i++) {
+      g.pump(1);
+      if (i === 9) airborneWhenItLanded = V().state === "air";
+    }
+    assert.ok(airborneWhenItLanded,
+      "the victim has to actually be off the ground when the floor moves, " +
+        "or this proves nothing");
+    assert.equal(V().health, hp0,
+      "jumping is the answer to it -- an airborne fighter should take nothing");
+  }
+});

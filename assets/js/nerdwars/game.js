@@ -495,15 +495,18 @@ const ROSTER = {
         ox: -9, oy: -26, w: 18, h: 22,
       },
     },
-    // A loaded bar, put down and left to roll. It crosses the whole stage,
-    // bounces off nothing, and is the widest hitbox in the game.
+    /* He picks the stage up and drops it.
+       LEG DAY used to be a barbell rolling across the floor, which made it a
+       fourth projectile on a character who already throws a bone, drops a
+       dumbbell and presses a barbell -- the only ult on the roster that did
+       not change anything. This one hits everybody STANDING ON THE GROUND at
+       once and leaves anyone in the air untouched, which is the first move in
+       the game that rewards being airborne. */
     ult: {
-      kind: 'ball', label: 'LEG DAY',
-      art: 'barbell', boxW: 20, boxH: 8,
-      pierce: true, hitEvery: 40,
-      startup: 14, active: 1, recovery: 28, maxAlive: 1,
-      speed: 2.7, lift: -0.3, drop: 0.16, bounce: 0.42, life: 420,
-      damage: 16, base: 4.0, scale: 9, angle: 24, kx: 0.9135454576426009, ky: 0.4067366430758002,
+      kind: 'deadlift', label: 'LEG DAY',
+      startup: 20, active: 3, recovery: 30,
+      freeze: 10,
+      damage: 19, base: 4.6, scale: 9.5, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
     },
   },
 
@@ -664,26 +667,48 @@ const ROSTER = {
         tints: ['#e8b060'],
         damage: 4, base: 1.4, scale: 4, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
       },
-      // "something creative with chess pieces". A knight moves two squares
-      // one way then one across, so this runs flat and then breaks hard
-      // downward. Nothing else in the game turns a corner.
+      /* The only grab in the game, and the only thing that beats a raised
+         shield. That is a lot of power for one button, so everything else
+         about it is a liability: eleven frames of startup, a hitbox that
+         barely reaches past his own arm, and if it misses he is stood in
+         place for twenty-two frames doing nothing.
+
+         Land it and he chokes them for half a second -- then throws them
+         wherever he is holding. Forward, up, down, or back over his own
+         shoulder, which is the one that puts somebody off the ledge they
+         were standing safely on. */
       down: {
-        kind: 'knight', label: 'KNIGHT',
-        startup: 7, active: 1, recovery: 16, maxAlive: 2,
-        speed: 3.6, turnAfter: 18, turnSpeed: 3.0, life: 140,
-        damage: 10, base: 2.3, scale: 6.4, angle: 64, kx: 0.43837114678907746, ky: 0.89879404629916704,
+        kind: 'guillotine', label: 'GUILLOTINE',
+        startup: 11, active: 4, recovery: 22,
+        ox: 1, oy: -13, w: 13, h: 13,
+        grab: { hold: 34, damage: 6 },
+        // Never read for knockback -- applyHit returns at the grab branch
+        // long before it computes any. Present because the throws below are
+        // where the force actually is.
+        damage: 0, base: 0, scale: 0,
+        throwFwd: { damage: 12, base: 3.6, scale: 7.4, angle: 32,
+                    kx: 0.84804809615642596, ky: 0.52991926423320490 },
+        throwUp: { damage: 10, base: 3.5, scale: 8.2, angle: 84,
+                   kx: 0.10452846326765346, ky: 0.99452189536827329 },
+        throwDown: { damage: 14, base: 3.4, scale: 6.2, angle: 12,
+                     kx: 0.97814760073380569, ky: 0.20791169081775934 },
       },
       // His recovery, kept as the rising attack it always was so the balance
       // around it is untouched.
       // He rides a column of milk. It had no visual at all before -- the
       // uppercut only draws when a move names a blade colour, and this one
       // never did, so the move called MILK showed nothing whatsoever.
+      /* The knight's move, performed rather than thrown: two squares up,
+         then one across, with the piece held over his head the whole way so
+         it is obvious what it is. This replaced MILK, which was his only way
+         back to the stage, so the vertical half is deliberately generous --
+         he commits to a direction only after he has the height. */
       up: {
-        kind: 'uppercut', label: 'MILK', blade: '#f6f4ea', spray: true,
-        startup: 5, active: 11, recovery: 24,
-        rise: -5.6, drift: 0.9,
-        damage: 8, base: 2.2, scale: 6.8, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-        ox: -7, oy: -12, w: 14, h: 18,
+        kind: 'knightmove', label: 'KNIGHT',
+        startup: 5, active: 22, recovery: 20,
+        rise: 4.6, riseFrames: 13, side: 2.4, sideFrames: 9,
+        damage: 9, base: 2.4, scale: 6.4, angle: 72, kx: 0.30901699437494745, ky: 0.95105651629515353,
+        ox: -8, oy: -20, w: 16, h: 26,
       },
     },
     // "newtons flaming lazer swords" -- their note. Not a single lunge: he
@@ -1276,6 +1301,20 @@ class Fighter {
     this.mana = COMBAT.manaMax;
     this.manaDenied = 0;
     this.evadeCd = 0;
+    /* The guillotine links two fighters. Both ends are SLOT INDICES rather
+       than Fighter references, for the reason poisonBy is: snapValue keeps a
+       Fighter by pointer inside a snapshot, and a stale pointer survives a
+       rewind while a stale index is merely inert. -1 is nobody. */
+    this.grabbing = -1;
+    this.grabbedBy = -1;
+    this.grabTimer = 0;
+    this.throwAim = 0;          // which vector: 0 flat, 1 up, 2 down
+    /* Which way along the floor, as an ABSOLUTE sign rather than "forward".
+       The choke outlives the animation, so by the time the throw happens the
+       grabber is back in updateFree and holding left has already turned him
+       around -- resolving "backward" against his facing at that moment threw
+       people the way they were already going. Captured when aimed. */
+    this.throwDirX = 1;
     this.poison = 0;
     this.poisonDps = 0;
     // Frames of inverted movement left. A plain number on the fighter, so
@@ -1351,7 +1390,8 @@ class Fighter {
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
-          s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog') return null;
+          s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
+          s.kind === 'deadlift') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -1393,6 +1433,14 @@ class Fighter {
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
     if (this.buffTimer > 0) this.buffTimer--;
+    /* The choke, ticked wherever the grabber happens to be.
+
+       It cannot live in runSpecial: the special is 37 frames end to end and
+       the hold is 34 starting around frame 15, so the animation finishes
+       first, runSpecial stops being called, and the victim would be held for
+       the rest of the match. It is a state that outlives its own move. */
+    if (this.grabbing >= 0) this.tickGrab();
+
     if (this.confused > 0) {
       this.confused--;
       /* Swap left and right on a COPY. Never in place: netStart fills
@@ -1486,6 +1534,25 @@ class Fighter {
       this.checkBlastZones();
       return;
     }
+    /* Held. No gravity, no input, no timers of its own -- the grabber's
+       runSpecial owns the whole exchange and this only keeps the victim
+       parked where the animation says they are. */
+    if (this.state === 'grabbed') {
+      const by = fighters[this.grabbedBy];
+      if (!by || by.grabbing !== this.slot || by.eliminated) {
+        this.grabbedBy = -1;
+        this.setState(this.grounded ? 'idle' : 'air');
+        return;
+      }
+      this.x = by.x + by.facing * 11;
+      this.y = by.y - 1;
+      this.facing = -by.facing;
+      this.vx = 0;
+      this.vy = 0;
+      this.checkBlastZones();
+      return;
+    }
+
     if (this.state === 'roll') { this.updateRoll(); return; }
     if (this.state === 'dodge') { this.updateDodge(); return; }
     if (this.state === 'attack' || this.state === 'special' ||
@@ -1659,16 +1726,62 @@ class Fighter {
          : this.def.specials[this.specialSlot || 'neutral'];
   }
 
+  /* Hold, then throw wherever they aimed. Runs from update() every frame the
+     grab is live, in whatever state the grabber is in. */
+  tickGrab() {
+    const victim = fighters[this.grabbing];
+    if (!victim || victim.grabbedBy !== this.slot || victim.eliminated ||
+        this.eliminated || this.state === 'hitstun' || this.state === 'break') {
+      // Hit out of it, or the link broke at the far end. Let go.
+      releaseGrab(this);
+      return;
+    }
+    const s = this.def.specials.down;
+    this.vx = 0;
+    if (!this.grounded) this.vy = Math.min(this.vy, 0.6);
+    if (this.grabTimer % 7 === 0) {
+      addEffect('spark', this.x + this.facing * 10, this.y - 12, '#d24b4b');
+    }
+    this.grabTimer--;
+    if (this.grabTimer > 0) return;
+
+    const spec = this.throwAim === 1 ? s.throwUp
+               : this.throwAim === 2 ? s.throwDown : s.throwFwd;
+    // applyHit reads its direction from which side of the victim sourceX
+    // sits, so throwing somebody left means standing to their right.
+    const from = victim.x - this.throwDirX * 40;
+    victim.grabbedBy = -1;
+    victim.setState('air');
+    victim.grounded = false;
+    releaseGrab(this);
+    applyHit(this, victim, spec, from);
+    addEffect('ring', victim.x, victim.y - 9, '#d24b4b');
+    cue('throw', { slot: this.slot, x: this.x });
+  }
+
   updateAttack(pad) {
     const m = this.moveFor(this.state);
     const total = m.startup + m.active + m.recovery;
     this.attackFrame++;
 
+    /* Aim, while the choke is on. runSpecial gets no pad, so the direction
+       is read here and remembered -- the throw uses whatever was last held,
+       which is what "then you throw them where you pick" means. */
+    if (this.grabbing >= 0 && pad) {
+      if (pad.up) { this.throwAim = 1; this.throwDirX = this.facing; }
+      else if (pad.down) { this.throwAim = 2; this.throwDirX = this.facing; }
+      else if (pad.left || pad.right) {
+        this.throwAim = 0;
+        this.throwDirX = pad.left ? -1 : 1;    // absolute, not relative
+      }
+    }
+
     if (this.state === 'special' || this.state === 'ult') this.runSpecial(m);
 
     // Roots and dashes control their own horizontal motion.
     const rooted = (this.state === 'special' || this.state === 'ult') &&
-      ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut');
+      ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut' ||
+       m.kind === 'knightmove' || m.kind === 'guillotine');
     if (!rooted) {
       if (this.grounded) this.vx *= PHYS.groundFriction;
       else if (pad && (pad.left || pad.right)) {
@@ -1993,6 +2106,37 @@ class Fighter {
         }
         break;
 
+      /* Two squares up, then one across -- the move the piece is named for,
+         performed by him rather than thrown. It replaced MILK, which was his
+         recovery, so the vertical half has to be reliable enough to get him
+         home before the sideways half commits him to a direction. */
+      case 'knightmove': {
+        const k = this.attackFrame - s.startup;
+        if (k === 0) {
+          this.grounded = false;
+          this.vy = -s.rise;
+          this.vx = 0;
+        } else if (k > 0 && k < s.riseFrames) {
+          // Held, not impulsed: gravity would otherwise eat the second square.
+          this.vy = -s.rise;
+          this.vx = 0;
+        } else if (k >= s.riseFrames && k < s.riseFrames + s.sideFrames) {
+          // And then the turn. Hanging at the top for a beat is what makes
+          // the L legible instead of looking like a diagonal.
+          this.vy = k === s.riseFrames ? 0 : this.vy * 0.6;
+          this.vx = this.facing * s.side;
+        } else if (k === s.riseFrames + s.sideFrames) {
+          // Kill the sideways momentum at the end of the hop. Left running it
+          // carried him nearly twice as far across as he had gone up, which
+          // is the wrong shape: a knight goes two squares and then one.
+          this.vx *= 0.25;
+        }
+        if (k >= 0 && k < s.riseFrames + s.sideFrames) {
+          addEffect('piece', this.x, this.y - 26, '#efe7d2');
+        }
+        break;
+      }
+
       case 'uppercut':
         if (s.blade && this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active && this.attackFrame % 2 === 0) {
@@ -2023,6 +2167,53 @@ class Fighter {
           this.vx = this.facing * s.drift;
           this.grounded = false;
         }
+        break;
+
+      /* The floor comes up and goes back down. Everyone touching it is
+         launched; everyone in the air is fine.
+
+         It resolves itself rather than spawning a hitbox, because the
+         condition is "is this fighter standing on the ground", which no
+         hitbox can express. applyHit still does the actual damage, so combo
+         decay, hitstop, mana, ult meter and the audio cue all behave exactly
+         as they do for every other hit -- including being blocked by a raised
+         shield, which is deliberate. Shielding is the answer to almost
+         everything else here and should not stop working for the biggest
+         move in the game. */
+      case 'deadlift':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          // The game has no screen shake -- only freezeFrames, the same
+          // brief hold a KO uses. A moment of everything stopping is what
+          // sells the floor landing.
+          freezeFrames = Math.max(freezeFrames, s.freeze || 8);
+          for (const other of fighters) {
+            if (other === this || other.eliminated) continue;
+            if (!other.grounded) continue;          // the whole point
+            applyHit(this, other, s, this.x);
+          }
+          // Dust the length of whatever they are standing on.
+          const plat = STAGE.platforms[0];
+          for (let i = 0; i < 14; i++) {
+            addEffect('dust', plat.x + (plat.w / 13) * i, plat.y - rand(0, 5), '#c9a06a');
+          }
+          for (let i = 0; i < 6; i++) {
+            addEffect('spark', this.x + rand(-18, 18), this.y - rand(2, 16), '#9aa0b4');
+          }
+          addEffect('ring', this.x, this.y - 8, '#9aa0b4');
+          cue('deadlift', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      /* The guillotine. Startup is slow and the reach is short, because it
+         goes through a shield and a move that beats every defensive option
+         has to lose to being seen coming.
+
+         The hold runs on its own timer rather than on attackFrame, so the
+         throw happens when the choke ends and not when the animation does. */
+      case 'guillotine':
+        // The choke itself is ticked by tickGrab() in update(), not here.
+        // This case exists only for the frames before it connects.
         break;
 
       case 'shockwave':
@@ -2167,6 +2358,10 @@ class Fighter {
   }
 
   koed() {
+    // Whatever was happening, it is over. Both ends: he might have been
+    // holding somebody, or been the one held.
+    releaseGrab(this);
+    if (this.grabbedBy >= 0) releaseGrab(fighters[this.grabbedBy]);
     this.stocks--;
     this.setState('ko');
     this.timer = 0;
@@ -4237,6 +4432,16 @@ const AUDIO_RECIPES = {
   'match-end': { osc: 'triangle', f0: 523.25, gain: 0.34,
                  seq: [0, 4, 7, 12], step: 0.11, dur: 0.10 },
 
+  // The choke going on, and the throw at the end of it.
+  grab:  { osc: 'square', f0: 190, f1: 96, dur: 0.10, gain: 0.34,
+           noise: { dur: 0.06, lp: 1500 } },
+  throw: { osc: 'sine', f0: 300, f1: 120, dur: 0.20, gain: 0.44,
+           noise: { dur: 0.10, lp: 2600, lp1: 500 } },
+
+  // The floor coming up and going back down.
+  deadlift: { osc: 'sine', f0: 120, f1: 28, dur: 0.5, curve: 'exp', gain: 0.5,
+              noise: { dur: 0.28, lp: 1400, lp1: 150 } },
+
   // John and Reese's new kit.
   belch:  { osc: 'sawtooth', f0: 155, f1: 68, dur: 0.30, gain: 0.40,
             noise: { dur: 0.22, lp: 950, lp1: 280 } },
@@ -4556,6 +4761,16 @@ function drawEffects(g) {
         break;
       }
 
+      // The chess piece itself, held over his head for the whole hop, so
+      // that a move whose entire idea is "this is a knight" looks like one.
+      case 'piece': {
+        g.globalAlpha = Math.min(1, k * 1.8);
+        drawArt(g, pixelArt('knightU', KNIGHT_ART,
+                            { '#': '#efe7d2', E: '#3c2a1e' }), e.x, e.y);
+        g.globalAlpha = 1;
+        break;
+      }
+
       case 'swipe': {
         // The arc of the swing, brightest at the leading edge.
         const dir = e.dir;
@@ -4673,6 +4888,20 @@ function drawEffects(g) {
    COMBAT
    ===================================================================== */
 
+/* Let go, from either end. Called when the throw lands, when the choke
+   times out, when either fighter is KO'd, and when the grabber is hit out of
+   it -- so it has to be safe to call when the link is already half broken. */
+function releaseGrab(grabber) {
+  if (!grabber) return;
+  const victim = fighters[grabber.grabbing];
+  if (victim && victim.grabbedBy === grabber.slot) {
+    victim.grabbedBy = -1;
+    if (victim.state === 'grabbed') victim.setState(victim.grounded ? 'idle' : 'air');
+  }
+  grabber.grabbing = -1;
+  grabber.grabTimer = 0;
+}
+
 function applyHit(attacker, defender, move, sourceX) {
   let dmg = move.damage * attacker.damageMul;
 
@@ -4699,6 +4928,28 @@ function applyHit(attacker, defender, move, sourceX) {
   }
 
   // Shield eats the hit if it's up and facing the right way.
+  /* The choke goes through a shield. It is the only thing in the game that
+     does, which is the whole reason to throw it out -- and why it is slow,
+     short and leaves Trev standing still if it misses. Deliberately ahead of
+     the shield branch below rather than inside it. */
+  if (move.grab) {
+    if (defender.eliminated || defender.grabbedBy >= 0 || attacker.grabbing >= 0) return;
+    attacker.grabbing = defender.slot;
+    attacker.grabTimer = move.grab.hold;
+    attacker.throwAim = 0;
+    defender.grabbedBy = attacker.slot;
+    defender.setState('grabbed');
+    defender.hitstun = 0;
+    defender.vx = 0;
+    defender.vy = 0;
+    defender.health -= move.grab.damage;
+    attacker.hitstop = COMBAT.hitstopLight;
+    addEffect('hit', defender.x, defender.y - 9, '#d24b4b');
+    cue('grab', { slot: defender.slot, x: defender.x });
+    if (defender.health <= 0) releaseGrab(attacker);
+    return;
+  }
+
   if (defender.state === 'shield' && defender.shield > 0) {
     defender.shield -= dmg * 2.4;
     defender.vx += Math.sign(defender.x - sourceX) * 0.6;
@@ -4762,6 +5013,9 @@ function applyHit(attacker, defender, move, sourceX) {
   defender.sinceHitFrames = 0;
   const decay = Math.max(COMBAT.comboDecayFloor,
                          1 - COMBAT.comboDecayPerHit * defender.combo);
+  // Hit out of a choke: whoever he was holding goes free.
+  if (defender.grabbing >= 0) releaseGrab(defender);
+
   defender.hitstun = Math.min(30, Math.round((6 + kb * 2.2) * decay));
 
   /* Catching someone mid-swing. A `punish` move does ordinary damage on an
@@ -7014,6 +7268,8 @@ window.NerdWars = {
   get fighters() {
     return fighters.map((f) => ({
       key: f.key, health: Math.round(f.health), stocks: f.stocks,
+      // Already drawn in the HUD, so this exposes nothing the screen does not.
+      ult: Math.round(f.ultMeter),
       x: Math.round(f.x), y: Math.round(f.y), state: f.state,
     }));
   },
