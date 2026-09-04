@@ -1346,3 +1346,65 @@ test("every sample a recipe names is actually in the bundle", async () => {
     );
   }
 });
+
+/* The regression this whole set exists for.
+
+   Phase 2 first shipped two sounds, both ults, both on two of six
+   characters, both behind a full meter. The audio system was provably
+   working and an ordinary match was still completely silent -- which is
+   indistinguishable from broken, and no test could tell the difference
+   because every test drove cues by hand. This one plays the game. */
+test("an ordinary fight makes noise without anybody using an ult", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  enterTwoPlayerBattle(g);
+  assert.equal(g.nw.scene, "battle");
+
+  const atStart = voiceCount(g.audioLog);
+  bringIntoContact([g]);
+  // Its own script rather than tradeBlows, which only walks and swings --
+  // no jump, no landing, no shield, so it exercises a fraction of what a
+  // real match does. This is what a person actually presses.
+  const p1 = ["KeyW", "KeyG", "ShiftLeft", "KeyD"];
+  const p2 = ["ArrowUp", "Comma", "ShiftRight", "ArrowLeft"];
+  for (let round = 0; round < 20; round++) {
+    const a = p1[round % p1.length];
+    const b = p2[round % p2.length];
+    g.press(a);
+    g.press(b);
+    g.pump(3);
+    g.release(a);
+    g.release(b);
+    g.pump(9);          // long enough for a jump to come back down
+  }
+
+  const made = voiceCount(g.audioLog) - atStart;
+  assert.ok(
+    made > 10,
+    "twenty rounds of a real fight produced " + made + " voices. Movement " +
+      "and contact have to make sound on their own -- an ult nobody has " +
+      "charged yet cannot be the only thing you can hear."
+  );
+  // Nobody ulted, so neither ult cue can be responsible for any of it.
+  assert.ok(
+    g.nw.fighters.every((f) => f.health <= 100),
+    "sanity: the fight actually happened"
+  );
+});
+
+test("landing and jumping are audible on their own", async () => {
+  const g = await bootGame({ audio: true });
+  g.press("KeyZ");
+  enterTwoPlayerBattle(g);
+
+  const before = voiceCount(g.audioLog);
+  // Jump, then wait for the landing.
+  g.press("KeyW");
+  g.pump(2);
+  g.release("KeyW");
+  g.pump(60);
+  assert.ok(
+    voiceCount(g.audioLog) > before,
+    "a jump and its landing should be audible with no opponent involved"
+  );
+});

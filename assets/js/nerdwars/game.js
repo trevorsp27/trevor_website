@@ -1292,6 +1292,14 @@ class Fighter {
   // straight to updateFree(pad), which never declared it. Anything that
   // genuinely needs a target -- the CPU, the ham -- calls nearestFoe().
   update(pad) {
+    // Raising a shield has no setState edge to hook -- updateFree just
+    // re-assigns this.state every frame the button is held -- so the cue
+    // needs to know what the state was coming in. Captured here, at the top,
+    // because update() returns early on half a dozen paths below. It lives
+    // in a module-level array rather than on the fighter: restoreSim deletes
+    // any key it does not find in the snapshot, so a field here would vanish
+    // at the first rollback.
+    audioShieldWas[this.slot] = this.state === 'shield';
     if (this.hitstop > 0) { this.hitstop--; return; }
     if (this.eliminated) return;
 
@@ -1334,6 +1342,7 @@ class Fighter {
     if (this.poison > 0) {
       this.poison--;
       this.health -= this.poisonDps;
+      cue('poison', { slot: this.slot, x: this.x });
       if (this.health <= 0) { this.knockOut(); return; }
       const by = fighters[this.poisonBy];
       if (by && by !== this) {
@@ -1393,10 +1402,18 @@ class Fighter {
         this.facing = pad.left ? -1 : 1;
         this.rollDir = pad.left ? -1 : 1;
         this.setState('roll');
+        cue('roll', { slot: this.slot, x: this.x });
         return;
       }
-      if (pad.down) { this.setState('dodge'); return; }
+      if (pad.down) {
+        this.setState('dodge');
+        cue('dodge', { slot: this.slot, x: this.x });
+        return;
+      }
 
+      if (audioShieldWas[this.slot] !== true) {
+        cue('shield-up', { slot: this.slot, x: this.x });
+      }
       this.state = 'shield';
       this.vx *= PHYS.groundFriction;
       this.shield -= COMBAT.shieldDrain;
@@ -1476,10 +1493,12 @@ class Fighter {
         this.y += 1;
       } else if (this.grounded) {
         this.vy = -d.jump;
+        cue('jump', { slot: this.slot, x: this.x });
         this.grounded = false;
         this.jumpsLeft = PHYS.airJumps;
       } else if (this.jumpsLeft > 0) {
         this.vy = -d.doubleJump;
+        cue('airjump', { slot: this.slot, x: this.x });
         this.jumpsLeft--;
         addEffect('puff', this.x, this.y, this.accent);
       }
@@ -1915,6 +1934,7 @@ class Fighter {
     if (this.invuln > 0) return;
 
     this.health -= hz.damage;
+    cue('hazard', { slot: this.slot, x: this.x });
     if (this.health <= 0) { this.knockOut(); return; }
     this.vy = hz.launch;
     this.vx *= 0.4;
@@ -1946,6 +1966,7 @@ class Fighter {
         if (!wasGrounded) {
           this.landLag = PHYS.landLag;
           addEffect('dust', this.x, this.y, '#ffffff');
+          cue('land', { slot: this.slot, x: this.x });
         }
         return;
       }
@@ -1978,6 +1999,9 @@ class Fighter {
     this.timer = 0;
     freezeFrames = 12;
     announce(this.def.name + ' KO!', this.accent);
+    // Not hung off announce(): banner IS snapshot state, so announce re-runs
+    // on every replayed frame of a rollback. koed() is the single funnel.
+    cue(this.stocks <= 0 ? 'eliminate' : 'ko', { slot: this.slot, x: this.x });
     if (this.stocks <= 0) {
       this.eliminated = true;
       this.state = 'gone';
@@ -3729,6 +3753,68 @@ const AUDIO_RECIPES = {
     osc: 'square', f0: 164.81, gain: 0.42,
     seq: [0, 3, 7, 12, 7, 3], step: 0.055, dur: 0.05,
   },
+
+  /* The universal set: everything that happens in an ordinary match,
+     whoever you picked. These are the ones you hear in the first three
+     seconds, and shipping the two ults above without them is what made a
+     working audio system sound like a broken one.
+
+     Gains are deliberately low. A hit fires several times a second and an
+     ult fires twice a match, so the loud thing must be the rare thing --
+     the master is 0.7 with no limiter before the destination, and whatever
+     is loudest here is what clips first. */
+
+  // Contact. Light and heavy split on the same kb > 7 the game already uses
+  // for hitstop, so the ear and the hitstop agree about which blows are big.
+  hit:        { osc: 'sine', f0: 210, f1: 90, dur: 0.07, gain: 0.34,
+                noise: { dur: 0.045, lp: 2600, lp1: 900 } },
+  'hit-big':  { osc: 'sine', f0: 170, f1: 48, dur: 0.17, gain: 0.46,
+                noise: { dur: 0.09, lp: 1500, lp1: 320 } },
+  whiff:      { noise: { dur: 0.10, lp: 3200, lp1: 620 }, dur: 0.10, gain: 0.16 },
+
+  // Shields. The break is the loudest thing in this block on purpose: it is
+  // a disaster and should read as one.
+  'shield-up':    { osc: 'sine', f0: 300, f1: 540, dur: 0.07, gain: 0.20 },
+  'shield-hit':   { osc: 'sine', f0: 430, f1: 300, dur: 0.07, gain: 0.28,
+                    noise: { dur: 0.03, lp: 1100 } },
+  'shield-break': { osc: 'square', f0: 700, f1: 90, dur: 0.34, gain: 0.44,
+                    noise: { dur: 0.22, lp: 6500, lp1: 380 } },
+
+  // Movement. Short and quiet -- these fire constantly and are texture, not
+  // events. The air jump sits a fifth above the ground jump so the two are
+  // distinguishable without being separate ideas.
+  jump:     { osc: 'square', f0: 220, f1: 430, dur: 0.08, gain: 0.17 },
+  airjump:  { osc: 'square', f0: 330, f1: 640, dur: 0.06, gain: 0.15 },
+  land:     { osc: 'sine', f0: 150, f1: 55, dur: 0.07, gain: 0.20,
+              noise: { dur: 0.035, lp: 800 } },
+  drop:     { noise: { dur: 0.05, lp: 600 }, dur: 0.05, gain: 0.13 },
+  roll:     { noise: { dur: 0.13, lp: 2400, lp1: 700 }, dur: 0.13, gain: 0.15 },
+  dodge:    { noise: { dur: 0.08, lp: 2900, lp1: 1000 }, dur: 0.08, gain: 0.15 },
+
+  // Damage that never goes through applyHit.
+  poison:  { osc: 'square', f0: 880, f1: 660, dur: 0.03, gain: 0.11 },
+  hazard:  { noise: { dur: 0.17, lp: 1900, lp1: 500 }, dur: 0.17, gain: 0.30 },
+
+  // The match. A KO is the one moment worth being loud about.
+  ko:        { osc: 'sine', f0: 320, f1: 38, dur: 0.55, curve: 'exp', gain: 0.55,
+               noise: { dur: 0.18, lp: 2200, lp1: 200 } },
+  eliminate: { osc: 'sine', f0: 260, f1: 30, dur: 0.85, curve: 'exp', gain: 0.6,
+               noise: { dur: 0.30, lp: 1600, lp1: 140 } },
+  respawn:   { osc: 'triangle', f0: 420, f1: 840, dur: 0.16, gain: 0.24 },
+
+  // Countdown, then the start. GO is the same note an octave up, which is
+  // the oldest trick there is and still the clearest.
+  count:  { osc: 'square', f0: 523.25, dur: 0.09, gain: 0.30 },
+  go:     { osc: 'square', f0: 1046.5, dur: 0.20, gain: 0.38 },
+  'match-end': { osc: 'triangle', f0: 523.25, gain: 0.34,
+                 seq: [0, 4, 7, 12], step: 0.11, dur: 0.10 },
+
+  // Menus. Quietest things in the game: you hear them while deciding, not
+  // while playing.
+  'menu-move': { osc: 'square', f0: 560, dur: 0.025, gain: 0.13 },
+  'menu-ok':   { osc: 'square', f0: 660, gain: 0.17, seq: [0, 7], step: 0.055,
+                 dur: 0.05 },
+  'menu-back': { osc: 'square', f0: 460, f1: 300, dur: 0.06, gain: 0.13 },
 };
 
 /* Cues emitted during the current batch of simulation steps, and the keys we
@@ -3737,6 +3823,14 @@ const AUDIO_RECIPES = {
    the first rollback. */
 const audioBatch = [];
 const audioPlayed = new Map();   // key -> sim frame it was played for
+/* Was this slot shielding at the start of the frame? Written by
+   Fighter.update, read by the shield-raise cue, because raising a shield is
+   a bare re-assignment rather than a setState edge. Module-level for the
+   same reason everything else here is: restoreSim strips unknown keys off a
+   fighter, so this could not live on one. A rollback replays with whatever
+   value the pre-rollback frames left, which can cost a shield blip on a
+   replayed raise -- a missing tick, never a wrong sound. */
+const audioShieldWas = [];
 
 /* The frame a cue belongs to. Reads AUDIO.netClock rather than checking
    netplay.active itself: which clock is live is frame()'s call (it also
@@ -4142,12 +4236,14 @@ function applyHit(attacker, defender, move, sourceX) {
     attacker.hitstop = COMBAT.hitstopLight;
     defender.hitstop = COMBAT.hitstopLight;
     addEffect('hit', defender.x, defender.y - 7, '#8fd6ff');
+    cue('shield-hit', { slot: defender.slot, x: defender.x });
     if (defender.shield <= 0) {
       defender.shield = 0;
       defender.setState('break');
       defender.vy = -3.4;
       defender.grounded = false;
       announce('SHIELD BREAK', '#8fd6ff');
+      cue('shield-break', { slot: defender.slot, x: defender.x });
     }
     return;
   }
@@ -4202,6 +4298,9 @@ function applyHit(attacker, defender, move, sourceX) {
   const stop = kb > 7 ? COMBAT.hitstopHeavy : COMBAT.hitstopLight;
   attacker.hitstop = stop;
   defender.hitstop = stop;
+  // Same kb > 7 the hitstop splits on, so what you hear and what you feel
+  // agree about which blows were the big ones.
+  cue(kb > 7 ? 'hit-big' : 'hit', { slot: defender.slot, x: defender.x });
   addEffect('hit', defender.x, defender.y - 7, '#ffffff');
   for (let i = 0; i < 4; i++) addEffect('spark', defender.x, defender.y - 7, attacker.accent);
 }
