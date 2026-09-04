@@ -4361,8 +4361,9 @@ const AUDIO_RECIPES = {
   'test-b': { noise: { dur: 0.05, lp: 3000 }, dur: 0.05, gain: 0.4 },
 
   // AutisNick's OUT OF THE TREES. The 2016 note was "mike Tyson flies in
-  // from trees, sounds of rainforest"; this is a second of a clip Nick sent
-  // of the group on a video call. Its own length governs -- no `dur`.
+  // from trees, sounds of rainforest"; this is 1.24s of a clip Nick sent of
+  // the group on a video call. Its own length governs -- no `dur` -- so
+  // recutting the file longer is the whole change, no code involved.
   // 0.75 rather than the 0.95 this started at: the master gain is 0.7 and
   // there is no limiter between it and the destination, so the loudest
   // recipe is what clips first once phase 3 adds hit sounds under it.
