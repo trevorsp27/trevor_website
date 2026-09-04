@@ -3517,11 +3517,15 @@ function audioUnlock() {
     AUDIO.ac = ac;
     AUDIO.master = master;
     if (ac.state === 'suspended') ac.resume().catch(() => {});
-    audioLoadSamples();
   } catch (e) {
     AUDIO.ac = null;
     AUDIO.master = null;
   }
+  // Deliberately outside the try: that catch discards the context, and this
+  // is the one line here that iterates data the build supplied. If it ever
+  // threw we would throw away a working AudioContext and orphan a new one on
+  // every later gesture until the browser's context cap silenced the game.
+  audioLoadSamples();
 }
 
 /* One short burst of white noise, built once and reused. Cheaper than a new
@@ -3580,8 +3584,14 @@ function audioLoadSamples() {
       const bin = atob(uri.slice(uri.indexOf(',') + 1));
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const p = ac.decodeAudioData(bytes.buffer);
-      // Older Safari hands back undefined and takes callbacks instead.
+      // Older Safari returns undefined and takes callbacks instead of a
+      // promise, so both forms are supplied: whichever the browser honors
+      // fills the same slot, and a browser that honors neither is silent.
+      const p = ac.decodeAudioData(
+        bytes.buffer,
+        function (buf) { audioSamples[name] = buf; },
+        function () {}
+      );
       if (p && p.then) {
         p.then(function (buf) { audioSamples[name] = buf; }, function () {});
       }
@@ -3615,8 +3625,9 @@ function audioVoice(recipe, when, gain, pan) {
     return;
   }
 
-  // A sample governs its own length unless the recipe overrides it, so the
-  // envelope cannot cut a recording off early.
+  // A sample governs its own length unless the recipe overrides it, and gets
+  // a hold-then-release envelope below rather than the single decay a
+  // synthesized blip wants.
   const sampleBuf = recipe.sample ? audioSamples[recipe.sample] : null;
   if (recipe.sample && !sampleBuf) return;   // not decoded yet, or failed
   const dur = recipe.dur == null
@@ -3629,7 +3640,18 @@ function audioVoice(recipe, when, gain, pan) {
   const out = ac.createGain();
   out.gain.setValueAtTime(0.0001, when);
   out.gain.exponentialRampToValueAtTime(peak, when + 0.004);
-  out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  if (sampleBuf) {
+    /* A recording needs hold-then-release, not the single long decay a
+       synthesized blip wants. The one-ramp envelope below is percussive over
+       50ms and a fade-to-nothing over 600: measured on this clip it was -6dB
+       by 51ms and -40dB by 314ms, so only the first sixth was audible. Hold
+       the peak until just before the end, then get out of the way. */
+    const rel = Math.min(0.03, dur * 0.25);
+    out.gain.setValueAtTime(peak, when + Math.max(0.004, dur - rel));
+    out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  } else {
+    out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  }
 
   let tail = out;
   if (pan) {
@@ -3694,7 +3716,10 @@ const AUDIO_RECIPES = {
   // AutisNick's OUT OF THE TREES. The 2016 note was "mike Tyson flies in
   // from trees, sounds of rainforest"; this is a second of a clip Nick sent
   // of the group on a video call. Its own length governs -- no `dur`.
-  'ult-trees': { sample: 'tyson', gain: 0.95 },
+  // 0.75 rather than the 0.95 this started at: the master gain is 0.7 and
+  // there is no limiter between it and the destination, so the loudest
+  // recipe is what clips first once phase 3 adds hit sounds under it.
+  'ult-trees': { sample: 'tyson', gain: 0.75 },
 
   // Ladeane's THE STROKES. An E minor arpeggio rather than a lick off a
   // record: E-G-B-E and back down, six notes at 55ms, square wave for the
@@ -6402,6 +6427,19 @@ window.NerdWars = {
     // own would not suppress Escape at all, and would instead make it fire
     // repeatedly the same way Enter does above.
     setResimulating: function (v) { netplay.resimulating = !!v; },
+    // Which one-shots actually decoded. Read-only, and it exists because a
+    // sample that never decodes is silent by design -- without this a test
+    // cannot tell "correctly silent" from "the decoder never ran."
+    get decodedSamples() {
+      return Object.keys(audioSamples).filter((k) => audioSamples[k]);
+    },
+    // The sample a recipe names, or null. Lets a test check every recipe's
+    // sample against what the build inlined: a renamed or mistyped audio
+    // file is the same silent-forever failure as a mistyped cue name.
+    recipeSample: function (name) {
+      const r = AUDIO_RECIPES[name];
+      return r && r.sample ? r.sample : null;
+    },
     // The bit-exact hash netplay's own desync detector trusts, over the
     // live simulation rather than a snapshot -- stateHash(snap) falls back
     // to the live fighters/projectiles when snap is falsy. `fighters` above

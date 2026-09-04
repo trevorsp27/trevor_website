@@ -166,6 +166,7 @@ function throwingAudioContext() {
 async function bootGame(opts) {
   const withAudio = !!(opts && opts.audio);
   const makeAudioContext = (opts && opts.makeAudioContext) || recordingAudioContext;
+  const decodeSeconds = opts && opts.decode != null ? opts.decode : null;
   const view = stubCanvas(960, 540);
   const winListeners = new Map();
   const docListeners = new Map();
@@ -235,8 +236,35 @@ async function bootGame(opts) {
   if (withAudio) {
     sandbox.AudioContext = function () {
       recorder = makeAudioContext();
+      // A working decoder, when a test asks for one. Most tests deliberately
+      // run without: a machine that cannot decode is a real case and the
+      // engine must survive it. But every sample assertion in that mode is
+      // "silent, not fatal", which is trivially true -- and that is exactly
+      // how an envelope that faded a recording to inaudibility once shipped
+      // with a green suite. opts.decode is how the sample path gets actually
+      // exercised.
+      if (decodeSeconds != null) {
+        const rate = recorder.sampleRate;
+        const buf = {
+          duration: decodeSeconds,
+          length: Math.round(decodeSeconds * rate),
+          numberOfChannels: 1,
+          sampleRate: rate,
+          getChannelData: () => new Float32Array(Math.round(decodeSeconds * rate)),
+        };
+        recorder.decodeAudioData = function (_bytes, ok) {
+          if (typeof ok === "function") ok(buf);
+          return Promise.resolve(buf);
+        };
+      }
       return recorder;
     };
+    if (decodeSeconds != null) {
+      // The engine base64-decodes the inlined data URI itself, so it needs
+      // atob. Absent by default, which is the case that proves unlocking
+      // without it does not throw.
+      sandbox.atob = (b64) => Buffer.from(b64, "base64").toString("binary");
+    }
   }
 
   sandbox.window = sandbox;
@@ -266,6 +294,10 @@ async function bootGame(opts) {
         clock += 1000 / 60;
         for (const cb of due) cb(clock);
       }
+    },
+    /** Let pending decode promises settle. */
+    async settle() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
     },
     press: (code) =>
       fire(winListeners, "keydown", { code, preventDefault() {} }),
@@ -1183,7 +1215,10 @@ test("unlocking without atob or decodeAudioData does not throw", async () => {
    it, and it covers every call site phases 2-6 add, not just today's two. */
 test("every cue name used in the engine has a recipe", async () => {
   const names = new Set();
-  const call = /\bcue\(\s*'([^']+)'/g;
+  // Both quote styles and template literals, and tolerant of whitespace: a
+  // single-quote-only pattern would silently cover nothing new the first
+  // time someone writes cue("x"), while the >= 2 floor below still passed.
+  const call = /\bcue\(\s*['"`]([^'"`]+)['"`]/g;
   let m;
   while ((m = call.exec(GAME)) !== null) names.add(m[1]);
   assert.ok(names.size >= 2, "expected the phase-2 call sites, found " + names.size);
@@ -1215,4 +1250,99 @@ test("the build inlines the sample into the bundle", async () => {
     /SAMPLES = __A\.SAMPLES/,
     "game.js should pull SAMPLES out of the shared namespace"
   );
+});
+
+/* A harness with a working decoder.
+
+   Every sample assertion above is of the "silent, not fatal" kind, which is
+   trivially true where nothing can decode -- and that is exactly how a
+   sample envelope that faded the recording to inaudibility shipped with a
+   green suite. These boot with atob and a decodeAudioData that resolves to a
+   buffer of a stated length, so the sample path is actually exercised. */
+function decodingBoot(seconds) {
+  return {
+    audio: true,
+    decode: seconds == null ? 0.62 : seconds,
+  };
+}
+
+/** Level of the gain envelope at `t` seconds after the voice started. */
+function envelopeAt(log, t) {
+  const ev = log
+    .filter((e) => e.node === "gain" && e.param === "gain" && e.time != null)
+    .sort((a, b) => a.time - b.time);
+  if (!ev.length) return null;
+  const t0 = ev[0].time;
+  let prev = ev[0];
+  for (const e of ev) {
+    const at = e.time - t0;
+    if (at >= t) {
+      if (e.op === "set") return at === t ? e.value : prev.value;
+      // exponential between prev and e
+      const span = e.time - prev.time;
+      if (span <= 0) return e.value;
+      const k = (t - (prev.time - t0)) / span;
+      return prev.value * Math.pow(e.value / prev.value, k);
+    }
+    prev = e;
+  }
+  return prev.value;
+}
+
+test("a decoded sample plays at level instead of fading out under itself", async () => {
+  const g = await bootGame(decodingBoot(0.62));
+  g.press("KeyZ");
+  await g.settle();
+  assert.ok(g.nw.__test.decodedSamples.includes("tyson"), "the sample should have decoded");
+
+  g.nw.audio.emit("ult-trees", { slot: 0, frame: 10 });
+  g.nw.audio.flush();
+  assert.ok(voiceCount(g.audioLog) > 0, "a decoded sample should produce a voice");
+
+  const peak = envelopeAt(g.audioLog, 0.01);
+  // The bug this exists to catch: a single decay across the whole clip put
+  // it 6dB down by 51ms and 40dB down by 314ms of a 620ms recording, so
+  // roughly the first sixth was audible. Anything past -3dB at the
+  // three-quarter mark is that bug back again.
+  const late = envelopeAt(g.audioLog, 0.45);
+  const dB = 20 * Math.log10(late / peak);
+  assert.ok(
+    dB > -3,
+    "at 450ms of a 620ms clip the envelope is " + dB.toFixed(1) +
+      "dB below peak -- the recording is being faded out under itself"
+  );
+});
+
+test("a decoded sample still releases rather than clicking off", async () => {
+  const g = await bootGame(decodingBoot(0.62));
+  g.press("KeyZ");
+  await g.settle();
+  g.nw.audio.emit("ult-trees", { slot: 0, frame: 10 });
+  g.nw.audio.flush();
+
+  const peak = envelopeAt(g.audioLog, 0.01);
+  const end = envelopeAt(g.audioLog, 0.62);
+  assert.ok(end < peak * 0.01, "the envelope should be closed by the end");
+});
+
+/* The same silent-forever failure as a mistyped cue name, one level down:
+   rename or mistype an audio file and the recipe that names it plays
+   nothing, with no error anywhere. */
+test("every sample a recipe names is actually in the bundle", async () => {
+  const g = await bootGame({ audio: true });
+  const inBundle = new Set();
+  const key = /^\s*([A-Za-z_$][A-Za-z0-9_$]*): "data:audio\//gm;
+  let m;
+  while ((m = key.exec(SPRITES)) !== null) inBundle.add(m[1]);
+  assert.ok(inBundle.size > 0, "expected at least one inlined sample");
+
+  for (const name of g.nw.audio.recipeNames) {
+    const s = g.nw.__test.recipeSample(name);
+    if (!s) continue;
+    assert.ok(
+      inBundle.has(s),
+      "recipe '" + name + "' names sample '" + s + "', which the build did " +
+        "not inline -- it would be silent forever with no error"
+    );
+  }
 });
