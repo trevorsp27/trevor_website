@@ -1408,3 +1408,40 @@ test("landing and jumping are audible on their own", async () => {
     "a jump and its landing should be audible with no opponent involved"
   );
 });
+
+/* Music.
+
+   Streamed through <audio> elements rather than decoded, because the two
+   tracks are 4.2MB on disk and would be ~50MB of PCM resident. That is also
+   why they are website-only: build.py copies them beside the page instead of
+   inlining them, so the standalone gets an empty table and no music. */
+
+test("the site bundle carries both music tracks", async () => {
+  assert.match(SPRITES, /const MUSIC = \{/, "sprites.js should carry a MUSIC table");
+  for (const track of ["nostalgia", "nowthatsdeep"]) {
+    assert.match(
+      SPRITES,
+      new RegExp(track + ': "\.\./assets/audio/nerdwars/' + track + '\.mp3"'),
+      track + " should resolve one directory up from the page"
+    );
+  }
+  assert.match(GAME, /MUSIC = __A\.MUSIC/, "game.js should pull MUSIC from the namespace");
+});
+
+/* The harness has no Audio constructor, which is also a real browser with
+   media disabled. Music has to be absent, not fatal -- and it must not stop
+   the sound effects, which do not depend on it. */
+test("no Audio constructor means no music and no damage", async () => {
+  const g = await bootGame({ audio: true });
+  assert.equal(typeof g.nw, "object");
+  assert.doesNotThrow(() => g.press("KeyZ"));
+  assert.equal(g.nw.audio.ready, true, "effects should still unlock");
+
+  g.pump(30);
+  assert.ok(g.nw.frames >= 25, "and the loop keeps running");
+
+  // Effects still work with music unavailable.
+  g.nw.audio.emit("hit", { slot: 0, frame: 5 });
+  g.nw.audio.flush();
+  assert.ok(voiceCount(g.audioLog) > 0, "effects are independent of music");
+});

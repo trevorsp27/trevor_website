@@ -2,7 +2,7 @@
 (function () {
 var __A = window.NERDWARS_ASSETS || {};
 var SPRITES = __A.SPRITES, TILES = __A.TILES, UI = __A.UI,
-    SAMPLES = __A.SAMPLES || {};
+    SAMPLES = __A.SAMPLES || {}, MUSIC = __A.MUSIC || {};
 /* =====================================================================
    NerdWars - a platform fighter built on a 2016 sprite set.
 
@@ -3550,6 +3550,7 @@ function audioUnlock() {
   // threw we would throw away a working AudioContext and orphan a new one on
   // every later gesture until the browser's context cap silenced the game.
   audioLoadSamples();
+  audioMusicInit();
 }
 
 /* One short burst of white noise, built once and reused. Cheaper than a new
@@ -3581,6 +3582,74 @@ function audioNoise() {
   }
   audioNoiseBuf = buf;
   return buf;
+}
+
+/* Music.
+
+   Streamed through <audio> elements rather than decoded into AudioBuffers
+   like the one-shots are, and the reason is memory: the two tracks are 67
+   and 110 seconds of 192kbps stereo, about 4.2MB on disk, which as raw PCM
+   would be roughly 50MB resident. An <audio> element streams and seeks and
+   loops without ever holding the whole thing.
+
+   It is also why music is website-only. A sample is 8KB and inlines into
+   every build; these are five hundred times that, so build.py copies them
+   beside the page instead. The standalone and the artifact get an empty
+   MUSIC table and simply have no music -- which has to degrade to silence,
+   not to an error. */
+const MUSIC_TRACKS = { menu: 'nostalgia', battle: 'nowthatsdeep' };
+const MUSIC_GAIN = 0.34;         // under the effects; it is a bed, not an event
+const MUSIC_FADE = 0.035;        // volume per frame, so ~0.5s to cross over
+
+const audioMusicEls = Object.create(null);
+let audioMusicReady = false;
+
+/* Which track a scene wants. Everything that is not a fight is the menu. */
+function audioMusicRole() {
+  return scene === 'battle' ? 'battle' : 'menu';
+}
+
+/* Build the elements. Called from the same gesture that unlocks the context,
+   because an <audio> element is under the same autoplay rule. */
+function audioMusicInit() {
+  if (audioMusicReady) return;
+  if (typeof Audio !== 'function') return;      // headless harness: no music
+  const table = typeof MUSIC === 'undefined' ? null : MUSIC;
+  if (!table) return;
+  for (const role of Object.keys(MUSIC_TRACKS)) {
+    const url = table[MUSIC_TRACKS[role]];
+    if (!url) continue;                          // no music in this build
+    try {
+      const el = new Audio(url);
+      el.loop = true;
+      el.preload = 'auto';
+      el.volume = 0;
+      audioMusicEls[role] = el;
+    } catch (e) {
+      // A build without music, or a browser that will not have it. Silence.
+    }
+  }
+  audioMusicReady = true;
+}
+
+/* Ease whichever track the scene wants up, and the other down. Called once
+   per animation frame from audioFlush -- presentation, outside step(), so it
+   reads `scene` and writes nothing the simulation can see. */
+function audioMusicUpdate() {
+  if (!audioMusicReady) return;
+  const want = AUDIO.enabled ? audioMusicRole() : null;
+  for (const role of Object.keys(audioMusicEls)) {
+    const el = audioMusicEls[role];
+    const target = role === want ? MUSIC_GAIN * AUDIO.volume : 0;
+    if (el.volume < target) el.volume = Math.min(target, el.volume + MUSIC_FADE);
+    else if (el.volume > target) el.volume = Math.max(target, el.volume - MUSIC_FADE);
+    if (target > 0 && el.paused) {
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {});        // never an unhandled rejection
+    } else if (target === 0 && el.volume === 0 && !el.paused) {
+      el.pause();
+    }
+  }
 }
 
 /* Decoded one-shots, keyed by the name they have in SAMPLES. Undefined means
@@ -3921,6 +3990,7 @@ const AUDIO_MAX_VOICES = 3;
    silent stretch still ages keys out -- otherwise the played set would sit
    at its high-water mark until the next cue happened to fire. */
 function audioFlush() {
+  audioMusicUpdate();
   audioPrune();
   if (!audioBatch.length) return;
   if (!AUDIO.ac) { audioBatch.length = 0; return; }
