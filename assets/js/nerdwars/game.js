@@ -5647,12 +5647,34 @@ let resultTimer = 0;
 
 function updateResults() {
   resultTimer++;
-  if (menuBack()) { scene = 'title'; return; }
-  if (resultTimer > 40 && (menuConfirm())) {
-    select.locked = new Array(MAX_PLAYERS).fill(false);
-    select.activeSlot = 0;
-    scene = onlineOnly ? 'title' : 'select';
-  }
+
+  /* Leaving the results of an ONLINE match has to tell the page about it.
+
+     Nothing used to. updateBattle sets scene to 'results' and this function
+     sets it back to 'title', and neither touches netplay.active -- netStop
+     was only ever reachable from the host page, which had no way of knowing
+     the match had finished. So the room stayed "playing" forever, the lobby
+     never came back, and the only way to have another go with the same people
+     was to build a new room and swap the code again.
+
+     It also left netplay.active true through every menu afterwards, which is
+     what froze audioNow()'s clock on the results screen.
+
+     Stopping here rather than the moment somebody wins is deliberate: a
+     mispredicted KO still has to be able to roll back, and netAdvance keeps
+     running through a pending rollback even once the scene has left the
+     battle. By the time anybody has pressed a key on this screen, the result
+     is settled. */
+  const backOut = menuBack();
+  const carryOn = resultTimer > 40 && menuConfirm();
+  if (!backOut && !carryOn) return;
+
+  if (netplay.active) netStop('match over');
+  select.locked = new Array(MAX_PLAYERS).fill(false);
+  select.activeSlot = 0;
+  // Escape still means the title and confirm still means the character
+  // select, exactly as before. Only the netStop above is new.
+  scene = (backOut || onlineOnly) ? 'title' : 'select';
 }
 
 /* =====================================================================

@@ -536,3 +536,97 @@ test("backing out of a match keeps your seat in the room", async () => {
   assert.notEqual(ms[1].phase(), "idle",
     "the guest who backed out should still be in the room, not thrown out");
 });
+
+/* Playing again with the same people.
+ *
+ * A finished match used to be the end of the room. updateBattle set the scene
+ * to 'results' and updateResults set it back to 'title', and neither touched
+ * netplay.active -- netStop was only reachable from this page, which had no
+ * way of knowing the match had ended. So the room stayed "playing" forever
+ * and the only way to have another go was to build a new room and swap codes
+ * again. The lobby already knew how to re-seat and re-start; nothing ever
+ * told it to.
+ */
+
+/** Walk seat 0 off the side until the match is decided. */
+function playToTheEnd(machines) {
+  LAG = 2;
+  for (let t = 0; t < 3000; t++) {
+    tick();
+    // Straight off the left edge, over and over. Three stocks is three trips.
+    if (t % 90 === 0) machines[0].press("KeyA");
+    if (t % 90 === 80) machines[0].release("KeyA");
+    for (const m of machines) m.pump(1);
+    if (machines.every((m) => m.nw.scene === "results")) break;
+  }
+  machines[0].release("KeyA");
+  LAG = 0;
+  flush(60);
+}
+
+test("a finished match returns everyone to the room they were already in", async () => {
+  const { ms } = await room(["kel", "trev"]);
+  ms[0].start();
+  flush();
+  assert.ok(ms.every((m) => m.nw.net.active), "the match should have started");
+
+  playToTheEnd(ms);
+  assert.ok(
+    ms.every((m) => m.nw.scene === "results"),
+    "expected the match to finish; scenes were " + ms.map((m) => m.nw.scene).join(", ")
+  );
+
+  // Everyone presses on past the result screen.
+  for (const m of ms) {
+    for (let i = 0; i < 50; i++) m.pump(1);
+    m.press("Enter"); m.pump(2); m.release("Enter"); m.pump(2);
+  }
+  flush(60);
+
+  assert.ok(
+    ms.every((m) => !m.nw.net.active),
+    "netplay should have stopped on every machine once the match was over"
+  );
+  assert.ok(
+    ms.every((m) => m.phase() === "lobby"),
+    "everyone should be back in the lobby, phases were " +
+      ms.map((m) => m.phase()).join(", ")
+  );
+  assert.equal(filledSeats(ms[0]), 2, "and both seats should still be taken");
+});
+
+test("the same room can start a second match with different fighters", async () => {
+  const { ms } = await room(["kel", "trev"]);
+  ms[0].start();
+  flush();
+  playToTheEnd(ms);
+  for (const m of ms) {
+    for (let i = 0; i < 50; i++) m.pump(1);
+    m.press("Enter"); m.pump(2); m.release("Enter"); m.pump(2);
+  }
+  flush(60);
+  assert.ok(ms.every((m) => m.phase() === "lobby"), "back in the lobby first");
+
+  // Pick somebody else and go again -- no new room, no new code.
+  ms[0].pick("johnnyham");
+  ms[1].pick("reese");
+  flush();
+  assert.equal(ms[0].startDisabled(), false, "the host should be able to start again");
+  ms[0].start();
+  flush();
+
+  assert.ok(ms.every((m) => m.nw.net.active), "a second match should be running");
+  assert.equal(
+    JSON.stringify(ms[0].nw.fighters.map((f) => f.key)),
+    JSON.stringify(["johnnyham", "reese"]),
+    "and with the fighters they picked the second time"
+  );
+  assert.equal(
+    new Set(ms.map((m) => JSON.stringify(m.nw.fighters.map((f) => f.key)))).size, 1,
+    "both machines should have built the same pair"
+  );
+
+  // And it is a real match, not a stalled one.
+  playOut(ms, 240, 3);
+  assertAgreed(ms, "the second match");
+});

@@ -393,13 +393,20 @@
               ", so the match was stopped."
           );
         } else if (kind === "stopped" && state.phase === "playing") {
-          endMatch(detail && detail.reason ? "Match ended: " + detail.reason + "." : "");
+          var reason = detail && detail.reason;
+          if (reason === "match over") {
+            // The normal ending. Everybody is back in the room they were
+            // already in, so this is an invitation rather than a warning.
+            endMatch("Good game. Pick a fighter and go again.", "ok");
+          } else {
+            endMatch(reason ? "Match ended: " + reason + "." : "");
+          }
         }
       },
     });
   }
 
-  function endMatch(message) {
+  function endMatch(message, kind) {
     // Back in the room, a guest is its SEAT again rather than the fighter
     // index the match compacted it to.
     if (state.role === "guest" && state.lobbySlot !== null) {
@@ -408,7 +415,7 @@
     if (state.phase === "playing") {
       setPhase(state.conns.some(function (c) { return c && c.open; }) ? "lobby" : "idle");
     }
-    if (message) say(message, "warn");
+    if (message) say(message, kind || "warn");
     renderLobby();
   }
 
