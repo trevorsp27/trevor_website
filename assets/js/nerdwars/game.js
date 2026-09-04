@@ -76,11 +76,19 @@ const COMBAT = {
   rollInvulnTo: 15,
   rollDistance: 30,
   spotDodgeFrames: 18,
-  // Nothing used to stop a second dodge on the frame the first one ended,
-  // which made ten of every eighteen frames invulnerable for as long as you
-  // held down. The cooldown starts when the dodge does, so what grows is the
-  // gap BETWEEN dodges: 46 frames apart rather than 18.
-  spotDodgeCooldown: 46,
+  /* ONE cooldown shared by both evasions, and it has to be shared.
+
+     The shield button does two things: pressed with a direction it rolls, 20
+     frames with invulnerability from 4 to 15; pressed with down it spot
+     dodges, 18 frames invulnerable from 3 to 12. Neither had a cooldown, so
+     either could be held forever. Measured over four seconds: the dodge was
+     invulnerable 56% of the time and the ROLL 40% -- and the roll's window is
+     the longer of the two, so capping only the dodge just moved everyone onto
+     the better option.
+
+     Separate timers would be no better: roll, dodge, roll alternates two
+     cooldowns and beats both. One timer, set by either. */
+  evadeCooldown: 48,
   spotDodgeInvulnFrom: 3,
   spotDodgeInvulnTo: 12,
   respawnInvuln: 110,
@@ -1267,7 +1275,7 @@ class Fighter {
     this.volleySince = 999;
     this.mana = COMBAT.manaMax;
     this.manaDenied = 0;
-    this.dodgeCd = 0;
+    this.evadeCd = 0;
     this.poison = 0;
     this.poisonDps = 0;
     // Frames of inverted movement left. A plain number on the fighter, so
@@ -1383,7 +1391,7 @@ class Fighter {
     if (this.eliminated) return;
 
     if (this.invuln > 0) this.invuln--;
-    if (this.dodgeCd > 0) this.dodgeCd--;
+    if (this.evadeCd > 0) this.evadeCd--;
     if (this.buffTimer > 0) this.buffTimer--;
     if (this.confused > 0) {
       this.confused--;
@@ -1497,15 +1505,16 @@ class Fighter {
 
     // --- shield / roll / spot dodge ---
     if (pad.shield && this.grounded && this.landLag <= 0) {
-      if (pad.left || pad.right) {
+      if ((pad.left || pad.right) && this.evadeCd <= 0) {
+        this.evadeCd = COMBAT.evadeCooldown;
         this.facing = pad.left ? -1 : 1;
         this.rollDir = pad.left ? -1 : 1;
         this.setState('roll');
         cue('roll', { slot: this.slot, x: this.x });
         return;
       }
-      if (pad.down && this.dodgeCd <= 0) {
-        this.dodgeCd = COMBAT.spotDodgeCooldown;
+      if (pad.down && this.evadeCd <= 0) {
+        this.evadeCd = COMBAT.evadeCooldown;
         this.setState('dodge');
         cue('dodge', { slot: this.slot, x: this.x });
         return;
@@ -2190,7 +2199,7 @@ class Fighter {
     this.buffStats = null;
     this.poison = 0;
     this.confused = 0;
-    this.dodgeCd = 0;
+    this.evadeCd = 0;
     this.mana = COMBAT.manaMax;
     this.hitstun = 0;
     this.invuln = COMBAT.respawnInvuln;

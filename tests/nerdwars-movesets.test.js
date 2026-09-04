@@ -381,32 +381,50 @@ test("smoke turns a victim's walk backwards, then wears off", async () => {
   );
 });
 
-/* Spot dodge used to have no cooldown at all: eighteen frames of animation
-   with invulnerability from frame 3 to 12, and nothing stopping another the
-   instant it ended. Holding down was ten invulnerable frames out of every
-   eighteen, indefinitely. */
-test("spot dodge cannot be spammed", async () => {
-  const g = await bootGame();
-  startAs(g, "johnnyham", "reese");
-
-  // Hold down for four seconds and count how many dodges actually start.
-  let dodges = 0, wasDodging = false;
-  g.press("ShiftLeft");            // shield, which is what down+shield does
-  g.press("KeyS");
+/* Evasion uptime.
+ *
+ * The shield button does two things -- with a direction it rolls, with down
+ * it spot dodges -- and neither had a cooldown, so either could be held
+ * forever. The first attempt at this capped only the dodge, which did work
+ * and changed nothing anybody could feel: the roll has the LONGER
+ * invulnerability window (12 frames of 20 against 10 of 18), so capping the
+ * dodge alone just moved everyone onto the better option. Measured over four
+ * seconds it was dodge 56%, roll 40%.
+ *
+ * Hence one shared timer. Separate ones would let roll, dodge, roll alternate
+ * two cooldowns and beat both.
+ */
+function evasionStarts(g, drive) {
+  let starts = 0, prev = null;
+  g.press("ShiftLeft");
   for (let i = 0; i < 240; i++) {
+    drive(i);
     g.pump(1);
-    const now = g.nw.fighters[0].state === "dodge";
-    if (now && !wasDodging) dodges++;
-    wasDodging = now;
+    const st = g.nw.fighters[0].state;
+    if ((st === "roll" || st === "dodge") && st !== prev) starts++;
+    prev = st;
   }
-  g.release("KeyS");
   g.release("ShiftLeft");
+  return starts;
+}
 
-  // 240 frames at one per 46 is at most 6; the old behaviour managed 13.
-  assert.ok(dodges > 0, "holding down while shielding should still dodge");
-  assert.ok(
-    dodges <= 6,
-    "four seconds of holding down produced " + dodges + " dodges; the " +
-      "cooldown should cap it around five"
-  );
+test("neither evasion can be spammed, and alternating them does not help", async () => {
+  for (const [label, drive, cap] of [
+    ["spot dodge", (g) => (i) => { if (i === 0) g.press("KeyS"); }, 6],
+    ["roll", (g) => (i) => { if (i === 0) g.press("KeyD"); }, 6],
+    ["alternating", (g) => (i) => {
+      if (i % 20 === 0) { g.release("KeyS"); g.press("KeyD"); }
+      if (i % 20 === 10) { g.release("KeyD"); g.press("KeyS"); }
+    }, 6],
+  ]) {
+    const g = await bootGame();
+    startAs(g, "johnnyham", "reese");
+    const n = evasionStarts(g, drive(g));
+    assert.ok(n > 0, label + " should still be usable at all");
+    assert.ok(
+      n <= cap,
+      "four seconds of " + label + " produced " + n + " evasions; the shared " +
+        "cooldown should cap it near five. Uncapped, roll manages 8."
+    );
+  }
 });
