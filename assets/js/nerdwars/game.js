@@ -6609,6 +6609,22 @@ window.NerdWars = {
       const r = AUDIO_RECIPES[name];
       return r && r.sample ? r.sample : null;
     },
+    /* What the music is actually doing. Read-only, and it exists because
+       nothing else can see it: `new Audio()` returns a DETACHED element, so
+       it is not in the DOM and cannot be found by querySelector -- which
+       means neither a test nor a person with a console can tell "playing"
+       from "downloaded and sitting there silent at volume zero". */
+    get musicState() {
+      return Object.keys(audioMusicEls).map(function (role) {
+        const el = audioMusicEls[role];
+        return {
+          role: role,
+          playing: !el.paused,
+          volume: Math.round(el.volume * 1000) / 1000,
+          at: Math.round(el.currentTime * 100) / 100,
+        };
+      });
+    },
     // The bit-exact hash netplay's own desync detector trusts, over the
     // live simulation rather than a snapshot -- stateHash(snap) falls back
     // to the live fighters/projectiles when snap is falsy. `fighters` above

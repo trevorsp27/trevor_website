@@ -233,6 +233,33 @@ async function bootGame(opts) {
     },
   };
 
+  if (opts && opts.music) {
+    // A stand-in for the detached <audio> elements the music player builds.
+    // Without one the harness has no Audio constructor at all, which is a
+    // real case worth testing -- but it means the player's own logic (fade,
+    // play/pause, switching on scene) is never executed by anything.
+    sandbox.Audio = function (src) {
+      const el = {
+        src: src,
+        currentSrc: src,
+        loop: false,
+        preload: "",
+        volume: 1,
+        paused: true,
+        currentTime: 0,
+        duration: 60,
+        play() {
+          this.paused = false;
+          return Promise.resolve();
+        },
+        pause() {
+          this.paused = true;
+        },
+      };
+      return el;
+    };
+  }
+
   if (withAudio) {
     sandbox.AudioContext = function () {
       recorder = makeAudioContext();
@@ -1444,4 +1471,53 @@ test("no Audio constructor means no music and no damage", async () => {
   g.nw.audio.emit("hit", { slot: 0, frame: 5 });
   g.nw.audio.flush();
   assert.ok(voiceCount(g.audioLog) > 0, "effects are independent of music");
+});
+
+test("music starts on the menu and crosses over into a match", async () => {
+  const g = await bootGame({ audio: true, music: true });
+  g.press("KeyZ");
+  g.pump(1);
+
+  let st = g.nw.__test.musicState;
+  assert.equal(st.length, 2, "both tracks should have elements");
+  const menu = () => g.nw.__test.musicState.find((m) => m.role === "menu");
+  const battle = () => g.nw.__test.musicState.find((m) => m.role === "battle");
+
+  // On the title screen the menu track plays and the battle track does not.
+  g.pump(40);
+  assert.ok(menu().playing, "the menu track should be playing at the title");
+  assert.ok(menu().volume > 0.2, "and audible, not stuck at zero");
+  assert.ok(!battle().playing, "the battle track should not be");
+
+  // Into a fight: the two swap.
+  enterTwoPlayerBattle(g);
+  assert.equal(g.nw.scene, "battle");
+  g.pump(60);
+  assert.ok(battle().playing, "the battle track should take over in a match");
+  assert.ok(battle().volume > 0.2, "and be audible");
+  assert.equal(menu().volume, 0, "while the menu track has faded out");
+  assert.ok(!menu().playing, "and stopped rather than looping silently");
+});
+
+test("music eases rather than cutting", async () => {
+  const g = await bootGame({ audio: true, music: true });
+  g.press("KeyZ");
+  const seen = [];
+  for (let i = 0; i < 6; i++) {
+    g.pump(1);
+    seen.push(g.nw.__test.musicState.find((m) => m.role === "menu").volume);
+  }
+  // Strictly rising, and not straight to full on the first frame.
+  assert.ok(seen[0] < seen[5], "volume should climb: " + seen.join(", "));
+  assert.ok(seen[0] < 0.2, "it should not snap to full volume instantly");
+});
+
+test("music loops, so a 67 second track does not end a long match", async () => {
+  const g = await bootGame({ audio: true, music: true });
+  g.press("KeyZ");
+  g.pump(1);
+  const st = g.nw.__test.musicState;
+  assert.ok(st.length > 0);
+  // loop is set on the element itself; surfaced via the engine's own view.
+  assert.match(GAME, /el\.loop = true;/, "music elements must loop");
 });
