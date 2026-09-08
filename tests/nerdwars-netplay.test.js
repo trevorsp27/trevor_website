@@ -785,3 +785,79 @@ test("smoothing changes the picture and not the simulation", async () => {
     "both machines must still agree about where everybody actually is"
   );
 });
+
+/* Input delay is the one cost the player feels directly, so it has to be
+   earned. It is only worth paying when it prevents a stall -- and measured
+   against a lossy, jittery link in a four-player room, it never did: the room
+   stalls zero frames whether the cap is 2 or 8, because past about 150ms the
+   pacing path gives the delay back anyway.
+   
+   What the old cap of 8 actually did was park 110ms on the stick within the
+   first few seconds and leave it there, because the tuner raises delay while
+   peers look far ahead and a lossy link never stops looking that way.
+   
+   This drives exactly that condition and asserts the delay stays low. It fails
+   if NET_MAX_DELAY goes back up, and it fails if the tuner is changed to climb
+   faster -- both of which would be invisible in every other test here. */
+test("a lossy link does not park input delay on the stick", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+
+  // Deterministic loss and jitter: a flaky result here would be worse than
+  // no test, because the thing it guards is a tuning constant.
+  let seed = 20260908;
+  const rand = () => {
+    seed ^= seed << 13; seed >>>= 0;
+    seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0;
+    return seed / 4294967296;
+  };
+
+  let now = 0;
+  const wire = { ab: [], ba: [] };
+  const blocked = { ab: -1, ba: -1 };
+  const LAT = 7;                       // ~115ms, a friend two time zones away
+  /* Ordered-reliable delivery, which is what the PeerJS channel gives us: a
+     lost packet is retransmitted and everything behind it waits. That queueing
+     is what makes peers look far ahead and drives the tuner up. */
+  const post = (k, m) => {
+    let at = now + LAT + Math.floor(rand() * 2);
+    if (rand() < 0.07) { at = now + LAT * 3; blocked[k] = Math.max(blocked[k], at); }
+    else if (at < blocked[k]) at = blocked[k];
+    wire[k].push({ at, m });
+  };
+  const flush = (k, dest) => {
+    for (let i = wire[k].length - 1; i >= 0; i--) {
+      if (wire[k][i].at <= now) dest.nw.net.receive(wire[k].splice(i, 1)[0].m);
+    }
+  };
+
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("ab", m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("ba", m) });
+
+  const keys = ["KeyD", "KeyA", "KeyW", "KeyG"];
+  let worstDelay = 0;
+  let stalls = 0;
+  for (let f = 0; f < 900; f++) {
+    now = f;
+    flush("ab", b); flush("ba", a);
+    if (f % 7 === 0) a.press(keys[(f / 7 | 0) % keys.length]);
+    if (f % 7 === 4) a.release(keys[(f / 7 | 0) % keys.length]);
+    if (f % 9 === 0) b.press(keys[(f / 9 | 0) % keys.length]);
+    if (f % 9 === 5) b.release(keys[(f / 9 | 0) % keys.length]);
+    a.pump(1); b.pump(1);
+    worstDelay = Math.max(worstDelay, a.nw.net.status.delay, b.nw.net.status.delay);
+    if (a.nw.net.status.stalling || b.nw.net.status.stalling) stalls++;
+  }
+
+  assert.equal(stalls, 0, "a 115ms link with 7% loss should never stall the sim");
+  assert.ok(
+    worstDelay <= 3,
+    "input delay climbed to " + worstDelay + " frames (" +
+      Math.round(worstDelay * 16.67) + "ms) on a link that never needed it. " +
+      "Delay is only worth paying to prevent a stall, and there were none."
+  );
+  assert.equal(a.nw.net.status.desync, null, "no desync");
+  assert.equal(b.nw.net.status.desync, null, "no desync");
+});

@@ -6513,8 +6513,40 @@ const NET_PACE_MIN = 0.55;
 
 const NET_AHEAD_HIGH = 12;   // guessing this far is close to the cliff
 const NET_AHEAD_LOW = 8;     // ...back under here, give the frame back
-const NET_MAX_DELAY = 8;     // past here, let rollback carry the rest
 const NET_TUNE_EVERY = 45;   // frames between adjustments
+
+/* Was 8, and 8 was buying nothing anywhere it was measured.
+
+   Delay only earns its keep if it prevents a stall, and in four-player
+   matches over a simulated link it never did: at 30-100ms with 1-6% loss the
+   room stalls zero frames at every cap from 2 to 8. All the extra delay does
+   there is sit on the controls. Worse, it is sticky -- the tuner raises it
+   while peers look far ahead and the condition persists, so it climbs to the
+   cap in the first few seconds and parks there for the rest of the match.
+
+   And on links bad enough to stall, the cap stops mattering: past ~150ms the
+   pacing path reports `a: 0` deliberately (see netSubmitLocal) and the delay
+   falls to 1 on its own. Caps 2, 3, 4 and 8 produce byte-identical stall
+   counts at 150ms/6% and at 200ms/10%.
+
+   So the whole range 4..8 is lag with no upside. Measured at 60ms/3% loss,
+   four players, guests relayed through the host:
+
+       cap 8 -> 6.6 frames of delay   (110ms on the stick)
+       cap 4 -> 3.7
+       cap 3 -> 2.8 frames            (47ms)
+       cap 2 -> 1.9
+
+   The price is resimulation, and resimulation is free here: step() costs
+   0.0013ms, about 0.01% of a frame, and even a 32-deep rollback comes to
+   0.6% of one -- dominated by the snapshot, not the steps. Trading a frame of
+   input lag for several hundred more resimulated frames is a bargain in one
+   direction only.
+
+   3 rather than 2 leaves the tuner two steps to actually adapt with, for the
+   conditions a model does not capture: a machine that drops to 30fps, a
+   backgrounded tab, a burst of jitter longer than the window. */
+const NET_MAX_DELAY = 3;
 
 /* Which bits are a button being HELD rather than newly pressed.
 
