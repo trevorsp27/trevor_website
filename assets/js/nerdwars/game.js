@@ -1653,15 +1653,22 @@ class Fighter {
       if (s && s.kind === 'pole') {
         if (this.attackFrame < s.startup) return null;
         if (this.attackFrame >= s.startup + s.active) return null;
-        const cast = poleCast(this, s);
-        const near = this.facing > 0 ? this.x + s.ox : this.x - s.ox - cast.fwd;
+        /* Walk the line and hand back a box around the first thing it passes
+           through, rather than one rectangle bounding the whole arc.
+
+           The bounding box was the bug. On flat ground the line is nearly
+           level and the two are the same thing, so it looked right; from a
+           jump the arc falls 60 pixels and the box became 67 wide by 63 tall
+           -- a third of the screen height -- grabbing people nowhere near the
+           line that was drawn. The move caught things it visibly missed.
+
+           Same integrator poleCast runs, so what catches you is the line you
+           can see, point for point. Reading `fighters` here is safe for the
+           same reason reading STAGE is: it is snapshotted, so a rollback
+           walks the identical path. */
+        const hook = polePoint(this, s);
         return {
-          box: {
-            x: near,
-            y: this.y + s.oy - s.h / 2,
-            w: cast.fwd,
-            h: s.h + (cast.up - s.oy),
-          },
+          box: { x: hook.x - 4, y: hook.y - 4, w: 8, h: 8 },
           move: s,
         };
       }
@@ -1782,7 +1789,11 @@ class Fighter {
     if (this.poison > 0) {
       this.poison--;
       this.health -= this.poisonDps;
-      cue('poison', { slot: this.slot, x: this.x });
+      /* Once every twenty frames, not every frame. Keyed off the counter
+         itself so it stays deterministic and every machine ticks on the same
+         frames -- and off the counter DOWN rather than a separate timer, so
+         there is nothing new for a snapshot to carry. */
+      if (this.poison % 20 === 0) cue('poison', { slot: this.slot, x: this.x });
       if (this.health <= 0) { this.knockOut(); return; }
       const by = fighters[this.poisonBy];
       if (by && by !== this) {
@@ -1798,6 +1809,8 @@ class Fighter {
     if (this.burn > 0) {
       this.burn--;
       this.health -= this.burnDps;
+      // Same throttle as the poison above, and for the same reason.
+      if (this.burn % 20 === 0) cue('burn', { slot: this.slot, x: this.x });
       if (this.health <= 0) { this.knockOut(); return; }
     }
     if (this.dropThrough > 0) this.dropThrough--;
@@ -3711,6 +3724,42 @@ function poleCast(f, s) {
   return { fwd: fwd, up: s.oy + drop };
 }
 
+/* Where along the line the hook actually is this frame: the first point that
+   touches somebody, or the far end if it touches nobody.
+
+   Returning the end when nothing is hit keeps the move honestly "active" for
+   its six frames -- resolveCombat wants a box either way -- and puts it where
+   the lure is drawn, which is the only place a miss should be able to catch
+   anything on the following frame. */
+function polePoint(f, s) {
+  let fwd = 0;
+  let drop = 0;
+  let vx = POLE_V0;
+  let vy = 0;
+  for (let n = 0; n < POLE_MAX; n++) {
+    vx *= POLE_DRAG;
+    vy += POLE_GRAV;
+    fwd += vx;
+    drop += vy;
+    const x = f.x + f.facing * (s.ox + fwd);
+    const y = f.y + s.oy + drop;
+    for (const other of fighters) {
+      if (other === f || other.eliminated) continue;
+      if (other.invulnerable || other.state === 'ko') continue;
+      const hb = other.hurtbox();
+      if (x >= hb.x && x <= hb.x + hb.w && y >= hb.y && y <= hb.y + hb.h) {
+        return { x: x, y: y };
+      }
+    }
+    for (const pl of STAGE.platforms) {
+      if (pl.y < f.y + s.oy) continue;
+      if (x < pl.x || x > pl.x + pl.w) continue;
+      if (y >= pl.y) return { x: x, y: y };
+    }
+  }
+  return { x: f.x + f.facing * (s.ox + fwd), y: f.y + s.oy + drop };
+}
+
 /** The rod, the line and the lure, for whoever is casting or holding one. */
 function drawPole(g, f) {
   const s = f.def.specials && f.def.specials.down;
@@ -5441,7 +5490,19 @@ const AUDIO_RECIPES = {
   dodge:    { noise: { dur: 0.08, lp: 2900, lp1: 1000 }, dur: 0.08, gain: 0.15 },
 
   // Damage that never goes through applyHit.
-  poison:  { osc: 'square', f0: 880, f1: 660, dur: 0.03, gain: 0.11 },
+  /* Quieter and rarer. This used to fire on EVERY frame of a poison -- 350
+     cues in four seconds, measured, which at 880Hz is not a status, it is an
+     alarm clock. It is throttled at the call site now; the gain came down as
+     well because a sound you hear ten times in a poison can afford to be
+     softer than one you hear once. */
+  poison:  { osc: 'square', f0: 760, f1: 560, dur: 0.035, gain: 0.055 },
+
+  /* Burning. Deliberately the least eventful sound in the file: a short band
+     of filtered noise, no pitch, quiet enough to sit under everything. Fire
+     is a state you are in rather than a thing that keeps happening to you,
+     and the poison tick is the cautionary tale about what the other reading
+     sounds like. */
+  burn:    { noise: { dur: 0.12, lp: 1100, lp1: 420 }, dur: 0.12, gain: 0.05 },
   hazard:  { noise: { dur: 0.17, lp: 1900, lp1: 500 }, dur: 0.17, gain: 0.30 },
 
   // The match. A KO is the one moment worth being loud about.
@@ -5469,7 +5530,13 @@ const AUDIO_RECIPES = {
               noise: { dur: 0.28, lp: 1400, lp1: 150 } },
 
   // John and Reese's new kit.
-  belch:  { osc: 'sawtooth', f0: 155, f1: 68, dur: 0.30, gain: 0.40,
+  /* 0.40 made this the loudest recipe in the file -- louder than a hit, the
+     same as the deadlift that drops the floor on the whole stage. That would
+     be fine for a big rare move, but BELCH is a 21-frame neutral special:
+     mashed, it comes out four times in four seconds until the meter runs dry
+     (measured gaps of 24, 64, 94 frames). Loudest plus roughly once a second
+     is what makes a sound obnoxious; neither is a problem alone. */
+  belch:  { osc: 'sawtooth', f0: 155, f1: 68, dur: 0.30, gain: 0.17,
             noise: { dur: 0.22, lp: 950, lp1: 280 } },
   smoke:  { noise: { dur: 0.34, lp: 5200, lp1: 700 }, dur: 0.34, gain: 0.22 },
   gunshot: { osc: 'square', f0: 290, f1: 55, dur: 0.13, gain: 0.50,
@@ -7833,7 +7900,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'bd51c11d6d';
+const BUILD_ID = '49e4322f8d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7844,7 +7911,7 @@ const BUILD_ID = 'bd51c11d6d';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.16';
+const VERSION = '2.17';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

@@ -763,3 +763,194 @@ test("the dog changes pose when it leaps", async () => {
     "a leaping dog should be drawn as a pose rather than the running frames; " +
     "only " + r.air + " frames used one");
 });
+
+test("the pole catches what the line touches, not a box around the whole arc", async () => {
+  /* The reported bug was "the fishing pole is not working as intended", and
+     what it was doing was hitting people it visibly missed.
+
+     hitbox() returned ONE rectangle bounding the entire cast: near end to far
+     end, cast height to wherever the line had fallen to. On flat ground the
+     line is almost level, so the rectangle and the line are nearly the same
+     shape and it looked correct. Cast from a jump, the line drops sixty-odd
+     pixels, and the rectangle became 67 wide by 63 tall -- a third of the
+     screen's height -- catching anything in that whole quadrant.
+
+     So the guard is not "the box is small". A short cast would pass that
+     while still being a bounding box. It is "the box is small WHILE THE ARC
+     IS LARGE", which only the walked line can satisfy. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.specials.down.kind"), "pole",
+    "player 1 should be the one with the rod");
+
+  const DOWN_SPECIAL = 1024;
+  const r = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    var s = me.def.specials.down;
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.grabbing = -1;
+    // High enough that the line has a long way to fall during the cast.
+    me.x = main.x + 40; me.y = main.y - 55; me.vy = 0;
+    me.grounded = false; me.facing = 1;
+    // Parked far away so nothing interrupts, and so the line hits the floor
+    // rather than a body.
+    foe.x = 10; foe.y = main.y; foe.setState('idle'); foe.hasHit = true;
+    var frames = [];
+    netplay.active = true;
+    for (var i = 0; i < 24; i++) {
+      netplay.framePads = [bitsToPad(i === 0 ? ${DOWN_SPECIAL} : 0), bitsToPad(0)];
+      step();
+      var b = me.hitbox();
+      if (!b) continue;
+      var cast = poleCast(me, s);
+      var hook = polePoint(me, s);
+      frames.push({
+        w: b.box.w, h: b.box.h,
+        cx: b.box.x + b.box.w / 2, cy: b.box.y + b.box.h / 2,
+        hookX: hook.x, hookY: hook.y,
+        arcW: cast.fwd, arcH: cast.up - s.oy,
+      });
+    }
+    netplay.active = false; netplay.framePads = null;
+    return frames;
+  })()`);
+
+  assert.ok(r.length > 0, "the cast should have produced an active hitbox");
+
+  for (const f of r) {
+    assert.ok(f.w <= 12 && f.h <= 12,
+      "the hitbox should be a point on the line, got " + f.w + "x" + f.h);
+    // And it should be that point, not merely small and somewhere else.
+    assert.ok(Math.abs(f.cx - f.hookX) < 0.001 && Math.abs(f.cy - f.hookY) < 0.001,
+      "the box should be centered on the hook; box (" + f.cx + ", " + f.cy +
+      ") vs hook (" + f.hookX + ", " + f.hookY + ")");
+  }
+
+  /* The half that makes the above mean something. If the arc were small here
+     too, a bounding box would also have passed. */
+  const arc = r[r.length - 1];
+  assert.ok(arc.arcW > 30,
+    "this cast should reach a long way, or the test proves nothing; " + arc.arcW);
+  assert.ok(arc.arcH > 30,
+    "and fall a long way, or the test proves nothing; " + arc.arcH);
+});
+
+test("a status ticks damage every frame but only speaks every twentieth", async () => {
+  /* Measured before the fix: one poisoned, burning fighter fired 350 poison
+     cues in four seconds -- roughly 85 a second, at 880Hz. That is not a
+     status sound, it is an alarm.
+
+     The throttle keys off the status counter itself rather than a new timer
+     field, which matters for netcode specifically: restoreSim deletes any key
+     that is not in the snapshot, so a fresh poisonCueTimer would have to be
+     declared in the constructor or vanish on every rollback. Deriving the
+     throttle from state that is already snapshotted means a resimulated frame
+     replays the identical cue pattern for nothing. */
+  const run = await bootEngine();
+  run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const r = run(`(function () {
+    var counts = {};
+    var realCue = cue;
+    cue = function (name) {
+      counts[name] = (counts[name] || 0) + 1;
+      return realCue.apply(null, arguments);
+    };
+    var f = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    f.setState('idle'); f.timer = 0; f.hitstun = 0; f.hitstop = 0;
+    f.invuln = 0; f.vx = 0; f.vy = 0; f.grounded = true;
+    f.x = main.x + 60; f.y = main.y;
+    f.health = 1000; f.stocks = 99;
+    f.poison = 200; f.poisonDps = 0.05; f.poisonBy = 0;
+    f.burn = 200; f.burnDps = 0.075;
+    /* The other fighter is a CPU and it will walk over and start punching,
+       which lands in the same health number the statuses do. Park it at the
+       far edge and hold it idle every frame so the only thing taking health
+       off is the poison and the fire. */
+    var other = fighters[0];
+    other.stocks = 99; other.health = 1000;
+    var park = function () {
+      other.setState('idle');
+      other.timer = 0; other.attackFrame = 0; other.hasHit = true;
+      other.x = main.x + 4; other.y = main.y; other.vx = 0; other.vy = 0;
+      other.grounded = true; other.mana = 0; other.ultMeter = 0;
+      projectiles.length = 0;
+    };
+    /* Counted rather than assumed. Both statuses are frozen by hitstop --
+       update() returns above the damage-over-time block -- and this fighter
+       is a CPU that trades blows, so 200 frames is not 200 ticks. Measured
+       here: 185, the missing 15 being one heavy hitstop. Asserting against a
+       hardcoded 200 fails for a reason that has nothing to do with sound. */
+    var before = f.health;
+    var pTicks = 0, bTicks = 0, pPrev = f.poison, bPrev = f.burn;
+    for (var i = 0; i < 200; i++) {
+      park();
+      step();
+      if (f.poison < pPrev) pTicks++;
+      if (f.burn < bPrev) bTicks++;
+      pPrev = f.poison; bPrev = f.burn;
+    }
+    cue = realCue;
+    return { poison: counts.poison || 0, burn: counts.burn || 0,
+             lost: before - f.health, pTicks: pTicks, bTicks: bTicks,
+             pDps: f.poisonDps, bDps: f.burnDps };
+  })()`);
+
+  assert.ok(r.pTicks > 150 && r.bTicks > 150,
+    "the statuses should have run most of their length; " +
+    r.pTicks + " and " + r.bTicks + " ticks");
+
+  // One cue every twentieth tick, give or take where the counters started.
+  for (const [what, cues, ticks] of [["poison", r.poison, r.pTicks],
+                                     ["burning", r.burn, r.bTicks]]) {
+    assert.ok(cues >= ticks / 30 && cues <= ticks / 12,
+      what + " should speak about once every twenty ticks: " + cues +
+      " cues over " + ticks + " ticks");
+  }
+
+  /* The negative control, and the reason the throttle is at the call site
+     rather than in the tick: quieter must not mean weaker. Every tick still
+     takes its full damage, and the only thing that changed is how often you
+     hear about it. If someone ever "fixes" this by throttling the tick
+     itself, this is the assertion that catches it. */
+  const expect = r.pTicks * r.pDps + r.bTicks * r.bDps;
+  assert.ok(Math.abs(r.lost - expect) < 0.01,
+    "every tick should still take its damage: expected " + expect.toFixed(3) +
+    ", lost " + r.lost.toFixed(3));
+});
+
+test("the status and burp sounds sit under the sounds that matter", async () => {
+  /* BELCH at 0.40 was the loudest recipe in the file, tied with the deadlift
+     that drops the floor on the whole stage -- and it is a 21 frame neutral
+     special that mashes out four times in four seconds until the meter dries
+     up. Loudest plus roughly once a second is what makes a sound obnoxious;
+     neither on its own is. */
+  const run = await bootEngine();
+  const gains = run(`(function () {
+    var out = {};
+    for (var k in AUDIO_RECIPES) out[k] = AUDIO_RECIPES[k].gain;
+    return out;
+  })()`);
+
+  assert.ok(gains.burn != null, "burning needs a recipe or its cue is silent");
+
+  const hit = gains.hit;
+  assert.ok(gains.poison < hit,
+    "the poison tick should be quieter than a punch; " + gains.poison + " vs " + hit);
+  assert.ok(gains.burn <= gains.poison,
+    "and the fire quieter still; " + gains.burn + " vs " + gains.poison);
+  assert.ok(gains.belch < hit,
+    "the burp should not be louder than a punch; " + gains.belch + " vs " + hit);
+
+  const loudest = Object.keys(gains).reduce(
+    (a, k) => (gains[k] > gains[a] ? k : a), "hit");
+  assert.notEqual(loudest, "belch",
+    "a spammable neutral special must not be the loudest sound in the game");
+});
