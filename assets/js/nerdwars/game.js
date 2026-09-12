@@ -463,6 +463,11 @@ const ROSTER = {
         maxAlive: 1, leap: -4.4,
         speed: 2.1, life: 170,
         hitEvery: 34, cue: 'bark',
+        /* Half again while its jaws are open -- the climb and the apex of a
+           leap, eleven frames of a twenty-frame arc. 6 becomes 9. Jumping the
+           dog into somebody was already the interesting thing to do with it;
+           this is what makes it worth the trouble. */
+        biteBonus: 1.5,
         damage: 6, base: 2.2, scale: 5.4, angle: 35, kx: 0.81915204428899180, ky: 0.57357643635104605,
       },
       /* Replaces HEAVE, which was his recovery, so the recoil has to do that
@@ -5004,6 +5009,44 @@ class Dog {
     return false;
   }
 
+  /* Which of the three air poses it is in, or null on the ground.
+
+     Lifted out of draw() because the bite is worth damage now, and a number
+     the simulation depends on cannot live in a renderer -- render runs once
+     per frame on one machine, the simulation runs again on every rollback on
+     every machine. Pure: it reads vy and the platform list, both snapshotted,
+     and writes nothing. A prototype method, so restoreSim's key-deletion pass
+     never sees it, the same as onSurface above. */
+  airPose() {
+    if (this.onSurface()) return null;
+    return this.vy <= -2 ? 'lunge' : this.vy <= 0 ? 'snap' : 'pounce';
+  }
+
+  /* Caught with its jaws open and it bites properly.
+
+     The window is the open-jawed half of a leap -- `lunge` climbing and
+     `snap` across the top -- which is exactly the stretch that reads as a
+     bite on screen. `pounce` is excluded on principle rather than on feel:
+     the descent of a leap and a dog that merely walked off a ledge are the
+     same (x, y, vy) to the last bit, so the simulation genuinely cannot tell
+     them apart, and a dog that fell off a platform has not bitten anybody.
+
+     It was `snap` alone first, on the grounds that it is the pose actually
+     named for the bite. Measured over six CPU matches that was 10 frames out
+     of 1741 with a dog on the stage, and zero of fifteen landed bites -- the
+     AI holds the leap button, which re-launches at -4.4 before the dog can
+     decelerate into the apex, so it lives in `lunge` and never arrives. A
+     five-frame window nothing can reach is a trap, not a mechanic.
+
+     Deliberately not priced into moveCost. The formula prices what a move
+     does on paper, and this is conditional on putting the dog in the air and
+     connecting there -- and John is last on the roster at 20.3%, so a buff
+     that asks for timing is exactly what he is short of. */
+  damageScale() {
+    const pose = this.airPose();
+    return pose === 'lunge' || pose === 'snap' ? (this.spec.biteBonus || 1) : 1;
+  }
+
   draw(g) {
     /* In the air it bites instead of trotting, because the six-frame leg
        shuffle below needs ground under it to read as running -- off the
@@ -5029,8 +5072,8 @@ class Dog {
        accumulated launch passes -2 at -2.0000000000000004 and reaches its
        apex at -5.6e-16 rather than at a clean zero, and both of those land
        where they should without the thresholds having to be lucky. */
-    if (!this.onSurface()) {
-      const pose = this.vy <= -2 ? 'lunge' : this.vy <= 0 ? 'snap' : 'pounce';
+    const pose = this.airPose();
+    if (pose) {
       const left = this.dir < 0;
       g.drawImage(pixelArt('dog.' + pose + (left ? 'L' : 'R'),
                            DOG_AIR_POSES[pose], DOG_INK, left),
@@ -6031,8 +6074,12 @@ function releaseGrab(grabber) {
   grabber.grabTimer = 0;
 }
 
-function applyHit(attacker, defender, move, sourceX) {
-  let dmg = move.damage * attacker.damageMul;
+/* `scale` multiplies the damage and NOTHING else. Knockback is built from
+   move.damage further down rather than from dmg -- see the note there -- so a
+   projectile that hits harder in one pose does not also launch harder and
+   quietly rewrite the spacing around it. */
+function applyHit(attacker, defender, move, sourceX, scale) {
+  let dmg = move.damage * attacker.damageMul * (scale == null ? 1 : scale);
   /* What they were doing when it landed, captured before anything below can
      change it. See the punish branch near the bottom. */
   const committed = defender.state === 'attack' || defender.state === 'special' ||
@@ -6257,13 +6304,16 @@ function resolveCombat(fighters) {
         // Something that swings through the whole stage keeps going. It has
         // to remember who it just hit, or it would connect on every frame it
         // overlapped them.
+        /* Asked of the projectile rather than switched on its class here:
+           resolveCombat has no business knowing which shots have poses. */
+        const bite = shot.damageScale ? shot.damageScale() : 1;
         if (shot.pierce) {
           if (shot.hitAt[f.slot] > 0) continue;
-          applyHit(shot.owner, f, shot.spec, shot.x);
+          applyHit(shot.owner, f, shot.spec, shot.x, bite);
           shot.hitAt[f.slot] = shot.spec.hitEvery || 30;
           continue;
         }
-        applyHit(shot.owner, f, shot.spec, shot.x);
+        applyHit(shot.owner, f, shot.spec, shot.x, bite);
         shot.dead = true;
         break;
       }
@@ -7946,7 +7996,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '735f4e4647';
+const BUILD_ID = 'b67fe31fc5';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7957,7 +8007,7 @@ const BUILD_ID = '735f4e4647';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.21';
+const VERSION = '2.22';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

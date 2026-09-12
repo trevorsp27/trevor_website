@@ -764,6 +764,101 @@ test("the dog changes pose when it leaps", async () => {
     "only " + r.air + " frames used one");
 });
 
+test("the dog bites harder with its jaws open, and not on the way down", async () => {
+  /* A leap with the jaws open pays half again: 6 damage becomes 9. That is
+     `lunge` climbing and `snap` across the top, eleven frames of a roughly
+     twenty-frame arc.
+
+     It was `snap` alone first -- the pose actually named for the bite -- and
+     that turned out to be unreachable: measured over six CPU matches it was
+     10 frames out of 1741 with a dog on the stage, and zero of fifteen landed
+     bites, because holding the leap button re-launches at -4.4 before the dog
+     can decelerate into the apex. A five-frame window nothing can reach is a
+     trap rather than a mechanic. */
+  const run = await bootEngine();
+  run("select.cursor=[1,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  const spec = run("(function(){var s = ROSTER.johnnyham.specials.down;" +
+    "return { kind: s.kind, damage: s.damage, bonus: s.biteBonus };})()");
+  assert.equal(spec.kind, "dog", "player 1 should be the one with the dog");
+
+  /* Bitten while the dog is held at a chosen vy. 8 pixels up puts it off the
+     platform -- onSurface wants exact equality -- while still overlapping a
+     standing hurtbox, which spans y-14 to y. */
+  const bite = (vy, onGround) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
+    foe.invuln = 0; foe.stocks = 99; foe.health = 1000;
+    foe.vx = 0; foe.vy = 0; foe.x = main.x + 60; foe.y = main.y;
+    foe.grounded = true;
+    me.setState('idle'); me.hitstop = 0; me.damageMul = 1;
+    me.x = main.x + 20; me.y = main.y;
+    var d = new Dog(me, ROSTER.johnnyham.specials.down);
+    d.x = foe.x; d.y = ${onGround} ? main.y : main.y - 8; d.vy = ${vy};
+    projectiles.push(d);
+    var before = foe.health;
+    var pose = d.airPose();
+    resolveCombat(fighters);
+    return { pose: pose, lost: before - foe.health,
+             vx: foe.vx, vy: foe.vy };
+  })()`);
+
+  const ground = bite(0, true);
+  const lunge = bite(-4.0, false);
+  const snap = bite(-0.5, false);
+  const pounce = bite(1.5, false);
+
+  assert.equal(ground.pose, null, "a dog on the floor has no air pose");
+  assert.equal(lunge.pose, "lunge");
+  assert.equal(snap.pose, "snap");
+  assert.equal(pounce.pose, "pounce");
+
+  assert.ok(Math.abs(ground.lost - spec.damage) < 0.01,
+    "a trotting dog should do its plain damage; took " + ground.lost);
+  /* Against the ground bite, not only against the spec's own arithmetic.
+
+     The first version asserted snap.lost === damage * biteBonus and nothing
+     else, which is a tautology the moment biteBonus is 1 -- setting it to 1
+     deleted the feature and the test still passed. The claim is that a snap
+     takes MORE, so that is what gets asserted. */
+  assert.ok(spec.bonus > 1.01,
+    "the snap is supposed to be worth something; biteBonus is " + spec.bonus);
+  assert.ok(snap.lost > ground.lost + 0.5,
+    "a snap bite should take more than a trotting one; " + snap.lost +
+    " against " + ground.lost);
+  assert.ok(pounce.lost < snap.lost,
+    "and more than one on the way down; " + snap.lost + " against " +
+    pounce.lost);
+  assert.ok(Math.abs(snap.lost - spec.damage * spec.bonus) < 0.01,
+    "and exactly the advertised " + (spec.damage * spec.bonus) +
+    "; took " + snap.lost);
+
+  // Climbing counts: jaws open, provably mid-leap.
+  assert.ok(Math.abs(lunge.lost - spec.damage * spec.bonus) < 0.01,
+    "a lunge is a bite too; took " + lunge.lost);
+
+  /* And this is the line that keeps it a window rather than "airborne".
+     A leap coming down and a dog that walked off a ledge are the same
+     (x, y, vy) to the last bit, so `pounce` cannot be told from an accident
+     -- and a dog that fell off a platform has not bitten anybody. Without
+     this assertion, handing the bonus to every airborne frame would pass. */
+  assert.ok(Math.abs(pounce.lost - spec.damage) < 0.01,
+    "coming down must not pay: it is indistinguishable from a ledge drop; " +
+    "took " + pounce.lost);
+
+  /* And the bonus is damage ONLY. Knockback is built from move.damage rather
+     than the scaled figure, so a harder bite must not also launch harder --
+     that would quietly rewrite every spacing around the move. */
+  assert.ok(Math.abs(snap.vx - ground.vx) < 0.001 &&
+            Math.abs(snap.vy - ground.vy) < 0.001,
+    "a snap bite must launch exactly as far as a plain one; snap (" +
+    snap.vx.toFixed(2) + ", " + snap.vy.toFixed(2) + ") vs ground (" +
+    ground.vx.toFixed(2) + ", " + ground.vy.toFixed(2) + ")");
+});
+
 test("the cast is a thrown lure: it travels, it arcs, and the way home is live", async () => {
   /* Four complaints in one move, so four things to hold down.
 
