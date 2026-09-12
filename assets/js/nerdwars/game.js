@@ -1159,6 +1159,29 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => held.delete(e.code));
 window.addEventListener('blur', () => { held.clear(); });
 
+/* A hidden tab stops firing requestAnimationFrame, so that machine stops
+   simulating AND stops sending input -- and everyone else froze 0.38 seconds
+   later, measured, for as long as somebody looked at their email. Four of the
+   five seconds of a five-second absence were lost by the people who had done
+   nothing wrong.
+
+   Saying so is what makes it fixable. A peer that has ANNOUNCED it is hidden
+   is not a peer that is lagging: it is a machine receiving no key events at
+   all, so "they pressed nothing" is not a prediction about them, it is the
+   truth, and the others can fill it in and keep playing. Without the
+   announcement the same assumption against a merely slow peer would be a
+   guess, and a wrong one desyncs the match -- so this is only ever done on
+   evidence, never on a timer. */
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('visibilitychange', () => {
+    const gone = !!document.hidden;
+    if (gone) held.clear();      // nothing is held on a tab you cannot see
+    if (netplay.active && netplay.send) {
+      netplay.send({ t: 'v', s: netplay.localSlot, h: gone ? 1 : 0 });
+    }
+  });
+}
+
 if (embedded) {
   // Claim the keyboard on click inside the game, release it on click outside,
   // so the rest of the page keeps working normally.
@@ -7116,10 +7139,6 @@ function drawTitle() {
   sctx.fillStyle = '#0d1020';
   sctx.fillRect(0, 0, view.width, view.height);
 
-  // Bottom right, dim, out of the way of everything. Drawn before the
-  // onlineOnly return below so the embedded build carries it too -- that is
-  // the build most people are looking at.
-  text('v' + VERSION, VW - 4, VH - 3, 5, '#3a4059', 'right', 500);
 
   // A line of the whole crew across the top.
   ORDER.forEach((k, i) => {
@@ -7128,6 +7147,12 @@ function drawTitle() {
   });
 
   text('NERDWARS', VW / 2, 116, 30, '#ffffff', 'center', 800);
+  /* Beside the wordmark rather than hidden in a corner, because the whole
+     point of showing a version is being able to read it back to somebody --
+     and the first place anybody looks is the title, not the bottom edge.
+     Raised off the baseline so it reads as a superscript on the name rather
+     than as another word in it. */
+  text('v' + VERSION, VW / 2 + 76, 104, 6, '#5f6884', 'left', 700);
 
   if (onlineOnly) {
     text('create or join a room below to play', VW / 2, 138, 8, '#c8cee6', 'center', 600);
@@ -7395,7 +7420,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '5b12417a6d';
+const BUILD_ID = '84a4a807df';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7406,7 +7431,7 @@ const BUILD_ID = '5b12417a6d';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.13';
+const VERSION = '2.14';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -7644,6 +7669,15 @@ const netplay = {
   // there was a single opponent; with three of them the one that matters is
   // whichever is furthest behind, so it has to be tracked separately and
   // reduced at the point of use.
+  /* Who has told us their tab is hidden, and who we are currently filling in
+     for. Two separate things: `hidden` is what they said, `covering` is what
+     we are doing about it, and the second outlives the first because a peer
+     that comes back is still hundreds of frames behind and has to be carried
+     until it catches up. */
+  hidden: new Array(MAX_PLAYERS).fill(false),
+  covering: new Array(MAX_PLAYERS).fill(false),
+  coveredFrames: 0,
+
   newest: new Array(MAX_PLAYERS).fill(-1),
   aheadPeak: 0,              // worst guess distance this reporting window
   peerAhead: new Array(MAX_PLAYERS).fill(0),  // what each of them reports
@@ -7670,6 +7704,15 @@ function netLaggard() {
     }
   }
   return worst;
+}
+
+/** The peer furthest AHEAD -- how far the match has got without us. */
+function netNewestRemote() {
+  let best = -1;
+  for (const sl of netRemoteSlots()) {
+    if (netplay.newest[sl] > best) best = netplay.newest[sl];
+  }
+  return best;
 }
 
 /* The peer furthest behind. A rollback match runs at the pace of its slowest
@@ -7771,9 +7814,17 @@ function netSubmitLocal() {
   const target = netplay.frame + netplay.delay;
 
   if (target > netplay.submittedTo) {
+    /* Coming back from a hidden tab, we are hundreds of frames behind and the
+       others have already filled those frames in with nothing on our behalf.
+       Submitting anything else for them -- a key pressed the instant the tab
+       came forward, backfilled across the whole gap by the level-bits fill
+       below -- would contradict a decision they have already committed to and
+       cannot rewind. So while climbing back, we press nothing too. It is a
+       fraction of a second and it was never ours to play. */
+    const behind = netNewestRemote() - netplay.frame > NET_MAX_ROLLBACK;
     // Always scheme 0: online there is one person per keyboard, so both ends
     // use WASD regardless of which slot they occupy.
-    const now = padToBits(readPad(0));
+    const now = behind ? 0 : padToBits(readPad(0));
     // Raising the delay moves the target forward by more than one frame.
     // Those in-between frames get the HELD bits only: the sample carries
     // edges, so copying it wholesale would deliver one jump press as three.
@@ -7882,6 +7933,14 @@ function netReceive(msg) {
     if (typeof msg.f !== 'number' || typeof msg.h !== 'number') return;
     netplay.theirChecks[cs].set(msg.f, msg.h);
     netCompareCheck(msg.f);
+    return;
+  }
+
+  if (msg.t === 'v') {
+    const vs = typeof msg.s === 'number' ? msg.s : 1 - netplay.localSlot;
+    if (!(vs >= 0) || vs >= netplay.slots || vs === netplay.localSlot) return;
+    netplay.hidden[vs] = !!msg.h;
+    netEmit('peerHidden', { slot: vs, hidden: netplay.hidden[vs] });
     return;
   }
 
@@ -8029,6 +8088,44 @@ function netPace() {
   return 1 - (1 - NET_PACE_MIN) * (over / span);
 }
 
+/* Carry a peer whose tab is hidden.
+
+   Fills their input with nothing -- which is exactly what a machine receiving
+   no key events produced -- so the rest of the match can keep running. The
+   filled frames are marked NOT guessed on purpose: this is not a prediction
+   to be corrected later, it is a decision both sides make the same way, and a
+   frame we might still rewind is a frame we cannot advance past.
+
+   `covering` outlasts `hidden` deliberately. A peer that comes back is still
+   hundreds of frames behind and climbs out at eight steps a frame, so it has
+   to be carried until its own input reaches us; dropping the cover the
+   instant the tab is visible again just moves the freeze later. Their side
+   backfills the same nothing -- blur cleared everything they were holding,
+   and netSubmitLocal fills skipped frames from the pad it can see -- so the
+   two agree without either of them having to know the other's frame number. */
+function netCoverHidden() {
+  const target = netplay.frame + netplay.delay;
+  let covered = true;
+  for (const sl of netRemoteSlots()) {
+    if (netplay.inputs[sl].has(netplay.frame)) continue;
+    // Caught up again? Then stop carrying them and take what they send.
+    if (netplay.covering[sl] &&
+        netplay.newest[sl] >= netplay.frame - NET_MAX_ROLLBACK) {
+      netplay.covering[sl] = false;
+    }
+    if (!netplay.hidden[sl] && !netplay.covering[sl]) { covered = false; continue; }
+    netplay.covering[sl] = true;
+    for (let f = Math.max(0, netplay.newest[sl] + 1); f <= target; f++) {
+      if (netplay.inputs[sl].has(f)) continue;
+      netplay.inputs[sl].set(f, 0);
+      netplay.guessed[sl].set(f, false);
+      netplay.coveredFrames++;
+    }
+    if (target > netplay.newest[sl]) netplay.newest[sl] = target;
+  }
+  return covered;
+}
+
 /* One wall-clock frame of online play. Returns false if the simulation could
    not advance, which is now rare: it takes the opponent falling further
    behind than we are willing to guess. */
@@ -8044,7 +8141,8 @@ function netAdvance() {
   // confirmedFrame stops dead at a permanently lost frame, and keying the
   // stall off it turned one unrecoverable packet into a permanent freeze.
   if (netMissingAt(netplay.frame) &&
-      netplay.frame - netWorstRemote() > NET_MAX_ROLLBACK) {
+      netplay.frame - netWorstRemote() > NET_MAX_ROLLBACK &&
+      !netCoverHidden()) {
     netplay.stalling = true;
     netplay.stalledFrames++;
     netplay.worstStall = Math.max(netplay.worstStall, netplay.stalledFrames);
@@ -8115,6 +8213,9 @@ function netStart(opts) {
   netplay.confirmedFrame = 0;
   netplay.lastCheckedFrame = -1;
   netplay.theirChecks = netMaps();
+  netplay.hidden = new Array(MAX_PLAYERS).fill(false);
+  netplay.covering = new Array(MAX_PLAYERS).fill(false);
+  netplay.coveredFrames = 0;
   netplay.rollbacks = 0;
   netplay.resimFrames = 0;
   netplay.newest = new Array(MAX_PLAYERS).fill(-1);
@@ -8339,6 +8440,8 @@ window.NerdWars = {
         ended: netplay.ended,
         confirmedFrame: netplay.confirmedFrame,
         rollbacks: netplay.rollbacks,
+        coveredFrames: netplay.coveredFrames,
+        covering: netplay.covering.slice(0, netplay.slots),
         resimFrames: netplay.resimFrames,
         aheadPeak: netplay.aheadPeak,
         peerAhead: netplay.peerAhead,

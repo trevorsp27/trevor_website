@@ -148,6 +148,7 @@ async function bootGame() {
       querySelector: () => null,
       createElement: () => stubCanvas(320, 180),
       addEventListener: on(docListeners),
+      hidden: false,
       documentElement: {},
       fullscreenElement: null,
     },
@@ -175,6 +176,12 @@ async function bootGame() {
         clock += 1000 / 60;
         for (const cb of due) cb(clock);
       }
+    },
+    /* Hide the tab, the way a browser does: set document.hidden and fire the
+       event. A hidden tab also stops pumping, which the caller does. */
+    setHidden(v) {
+      sandbox.document.hidden = v;
+      fire(docListeners, "visibilitychange", {});
     },
     press: (code) =>
       fire(winListeners, "keydown", { code, preventDefault() {} }),
@@ -878,4 +885,73 @@ test("a lossy link does not park input delay on the stick", async () => {
   );
   assert.equal(a.nw.net.status.desync, null, "no desync");
   assert.equal(b.nw.net.status.desync, null, "no desync");
+});
+
+/* A hidden tab fires no requestAnimationFrame, so that machine stops
+ * simulating AND stops sending input. Measured before the fix: the player who
+ * stayed froze 0.38s later and got 37 of the next 300 frames, with a worst
+ * stall of 260 frames -- four of the five seconds of a five-second absence
+ * lost by somebody who had done nothing.
+ *
+ * A peer that ANNOUNCES it is hidden is not a peer that is lagging: it is a
+ * machine receiving no key events, so "they pressed nothing" is the truth
+ * rather than a guess, and the others can fill it in. The announcement is
+ * what makes it safe -- the same assumption on a timer, against a merely slow
+ * peer, would desync the match.
+ */
+test("one player tabbing out does not freeze everybody else", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+
+  let now = 0;
+  const wire = [];
+  const LAG = 3;
+  const post = (to, m) => wire.push({ at: now + LAG, to, m });
+  const flush = () => {
+    for (let i = wire.length - 1; i >= 0; i--) {
+      if (wire[i].at <= now) {
+        const p = wire.splice(i, 1)[0];
+        (p.to === "a" ? a : b).nw.net.receive(p.m);
+      }
+    }
+  };
+
+  a.nw.net.start({ localSlot: 0, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("b", m) });
+  b.nw.net.start({ localSlot: 1, chars: ["kel", "trev"], stage: "swamp",
+                   delay: 1, send: (m) => post("a", m) });
+
+  const AWAY = 120, BACK = 420, TOTAL = 1200;
+  let ran = 0;
+  for (let f = 0; f < TOTAL; f++) {
+    now = f;
+    flush();
+    if (f % 9 === 0) a.press("KeyD");
+    if (f % 9 === 5) a.release("KeyD");
+    if (f === AWAY) b.setHidden(true);
+    if (f === BACK) b.setHidden(false);
+
+    const before = a.nw.net.status.frame;
+    a.pump(1);
+    if (f < AWAY || f >= BACK) b.pump(1);
+    if (f >= AWAY && f < BACK && a.nw.net.status.frame > before) ran++;
+  }
+
+  const sa = a.nw.net.status;
+  const sb = b.nw.net.status;
+
+  assert.equal(sa.worstStall, 0,
+    "the player who stayed should never hit the stall gate; worst stall was " +
+      sa.worstStall + " frames");
+  assert.ok(ran > (BACK - AWAY) * 0.7,
+    "they should keep playing through the absence, but simulated only " + ran +
+      " of the " + (BACK - AWAY) + " frames it lasted");
+  assert.ok(sa.coveredFrames > 0,
+    "somebody has to have been filled in for, or this proves nothing");
+
+  // And the whole point of doing it on evidence rather than on a timer.
+  assert.equal(sa.desync, null, "no desync on the machine that stayed");
+  assert.equal(sb.desync, null, "no desync on the machine that left");
+  assert.equal(sa.frame, sb.frame,
+    "they should be back in step: " + sa.frame + " vs " + sb.frame);
 });
