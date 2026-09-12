@@ -585,3 +585,70 @@ test("the title screen says which version it is", async () => {
     "the title screen should show the version; it drew " + JSON.stringify(drawn)
   );
 });
+
+test("a direct sword hit sets them alight for 15 over four seconds", async () => {
+  /* Burning is poison's twin and deliberately not poison: they stack, and a
+     kiss and a laser sword are two different things happening to you. The
+     bolt the sword throws does NOT carry it -- the fire is what you get for
+     closing to arm's length with a weapon that can also be thrown. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const spec = run("ROSTER.trev.ult.swing.burn");
+  assert.ok(
+    Math.abs(spec.frames * spec.dps - 15) < 0.01,
+    "the burn should total 15, not " + (spec.frames * spec.dps)
+  );
+  assert.equal(run("ROSTER.trev.ult.swing.beam.burn"), undefined,
+    "the thrown bolt must not light people, or there is no reason to ever " +
+    "take the unsafe option");
+
+  const ULT = 256;
+  const r = run(`(function(){
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.vx = 0; me.vy = 0; me.grabbing = -1;
+    me.x = main.x + 60; me.y = main.y; me.grounded = true; me.facing = 1;
+    me.swordTimer = 500;
+    foe.setState('idle'); foe.attackFrame = 0; foe.hasHit = true;
+    foe.invuln = 0; foe.hitstop = 0; foe.stocks = 99; foe.health = 100;
+    foe.x = me.x + 12; foe.y = main.y; foe.grounded = true;
+    var lit = 0;
+    netplay.active = true;
+    for (var i = 0; i < 90; i++) {
+      foe.x = me.x + 12; foe.vx = 0; foe.invuln = 0;
+      netplay.framePads = [bitsToPad(i === 0 ? ${ULT} : 0), bitsToPad(0)];
+      step();
+      if (foe.burn > 0) lit++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { lit: lit, burn: foe.burn, burnDps: foe.burnDps };
+  })()`);
+
+  assert.ok(r.lit > 40, "the sword should have set them on fire; burning on " +
+    r.lit + " of 90 frames");
+  assert.ok(r.burn > 0, "and it should still be burning after 90 frames");
+
+  // It has to be visible, or "there is an on-fire animation" is not true.
+  const drawn = run(`(function(){
+    var f = fighters[1];
+    f.burn = 200; f.invuln = 0;
+    var n = 0, styles = {};
+    var rec = { globalAlpha: 1, fillStyle: '#000',
+      save: function () {}, restore: function () {}, translate: function () {},
+      scale: function () {},
+      fillRect: function () { n++; styles[this.fillStyle] = 1; },
+      drawImage: function () {}, beginPath: function () {},
+      arc: function () {}, fill: function () {} };
+    drawFighter(rec, f);
+    return { rects: n, styles: Object.keys(styles) };
+  })()`);
+  assert.ok(drawn.rects >= 8,
+    "a burning fighter should be visibly on fire; drew " + drawn.rects + " rects");
+  assert.ok(drawn.styles.some((c) => c === "#ff3c14"),
+    "and in fire colors, not the poison pink; used " + JSON.stringify(drawn.styles));
+});

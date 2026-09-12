@@ -854,6 +854,13 @@ const ROSTER = {
         kind: 'laser', label: 'LASER SWORD', mobile: true,
         blade: '#fff6d8', tint: '#ffb347',
         startup: 6, active: 5, recovery: 22,
+        /* A direct hit with the blade sets them alight: 15 over four
+           seconds, which is more than the swing itself does and far slower.
+           The bolt below does NOT carry it -- the fire is the reward for
+           closing to arm's length with a weapon that can also be thrown, and
+           if the safe option lit people too there would be no reason ever to
+           take the unsafe one. */
+        burn: { frames: 240, dps: 15 / 240 },
         damage: 7, base: 2.6, scale: 6.4, angle: 40, kx: 0.766044443118978, ky: 0.6427876096865393,
         ox: 2, oy: -19, w: 20, h: 20,
         // The bolt it throws, with its own damage: the swing reaches an arm's
@@ -884,6 +891,7 @@ function moveCost(m) {
 
   // Damage over time is still damage; count all of it.
   if (m.poison) power += m.poison.frames * m.poison.dps;
+  if (m.burn) power += m.burn.frames * m.burn.dps;
   // New statuses have to be priced here or they are free: moveCost derives
   // every special's mana from this function at load, and it only knows about
   // the terms it is told about.
@@ -1508,6 +1516,8 @@ class Fighter {
     this.hazardCd = 0;
     this.ultMeter = 0;
     this.poisonBy = -1;
+    // Slot index rather than a Fighter, for the same reason poisonBy is one.
+    this.burnBy = -1;
     this.combo = 0;
     this.sinceHitFrames = 999;
     this.volleyOf = null;
@@ -1545,6 +1555,13 @@ class Fighter {
     this.throwDirX = 1;
     this.poison = 0;
     this.poisonDps = 0;
+    /* Burning. Its own status rather than poison with a different color,
+       because they stack: a kiss and a laser sword are two different things
+       happening to you and the screen has to be able to say both. Set in the
+       constructor like everything else the simulation owns, so saveSim picks
+       them up reflectively and restoreSim does not delete them. */
+    this.burn = 0;
+    this.burnDps = 0;
     // Frames of inverted movement left. A plain number on the fighter, so
     // saveSim's reflective sweep snapshots it and restoreSim puts it back
     // with no registration anywhere -- the same contract poison relies on.
@@ -1763,6 +1780,16 @@ class Fighter {
         by.ultMeter = Math.min(COMBAT.ultMax,
           by.ultMeter + this.poisonDps * COMBAT.ultPerDamageDealt);
       }
+    }
+
+    /* Burning, which is poison's twin and deliberately not poison. The one
+       difference that matters is the meter: this comes off an ult, and an ult
+       that refills its own bar was already ruled out once for Ladeane, so the
+       burn credits nobody. */
+    if (this.burn > 0) {
+      this.burn--;
+      this.health -= this.burnDps;
+      if (this.health <= 0) { this.knockOut(); return; }
     }
     if (this.dropThrough > 0) this.dropThrough--;
     if (this.landLag > 0) this.landLag--;
@@ -2773,6 +2800,7 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.poison = 0;
+    this.burn = 0;
     this.confused = 0;
     this.evadeCd = 0;
     this.mana = COMBAT.manaMax;
@@ -3532,8 +3560,26 @@ function poleStroke(g, x0, y0, x1, y1, bow, fat) {
    about him standing on the floor changes. The cap is the length of line on
    the reel, and 140 is enough to get from the highest platform on any stage
    down to the floor. */
-const POLE_DROOP = 12 / (46 * 46);
-const POLE_MAX = 140;
+/* The lure is thrown, not extruded, so it slows as it goes.
+
+   A pure arc had no drag: forward progress was constant and only the drop
+   accelerated, so a cast from height ran 101px across the stage and the move
+   had no natural end to its reach. Now the throw loses speed every step and
+   gravity does the rest, which is what a cast actually does and which puts a
+   ceiling on it that is a consequence rather than a rule -- forward travel
+   converges on about 82px no matter how high he is when he throws it.
+
+   Tuned so a fall of 12 -- tip height on flat ground -- still lands at 46
+   forward, the reach this move has always had. Nothing about him standing on
+   the floor changes. From a jump it reaches about 70 instead of 101.
+
+   Plain adds and multiplies on doubles, which are bit-identical everywhere,
+   so the simulation and the drawing can both run it and a rollback gets the
+   same answer. */
+const POLE_V0 = 3.4;        // pixels forward on the first step
+const POLE_DRAG = 0.96;     // ...and this much of it on each step after
+const POLE_GRAV = 0.0583;   // pixels per step per step, downward
+const POLE_MAX = 140;       // steps of line on the reel
 
 function poleCast(f, s) {
   /* Only surfaces the line can descend ONTO. Without this a side platform
@@ -3542,17 +3588,24 @@ function poleCast(f, s) {
      which is how the first version of this turned a 46px move into a 1px one
      on the only stage with side platforms. */
   const tipY = f.y + s.oy;
-  for (let d = 1; d <= POLE_MAX; d++) {
-    const x = f.x + f.facing * (s.ox + d);
-    const drop = d * d * POLE_DROOP;
+  let fwd = 0;
+  let drop = 0;
+  let vx = POLE_V0;
+  let vy = 0;
+  for (let n = 0; n < POLE_MAX; n++) {
+    vx *= POLE_DRAG;
+    vy += POLE_GRAV;
+    fwd += vx;
+    drop += vy;
+    const x = f.x + f.facing * (s.ox + fwd);
     const y = tipY + drop;
     for (const pl of STAGE.platforms) {
       if (pl.y < tipY) continue;
       if (x < pl.x || x > pl.x + pl.w) continue;
-      if (y >= pl.y) return { fwd: d, up: s.oy + drop };
+      if (y >= pl.y) return { fwd: fwd, up: s.oy + drop };
     }
   }
-  return { fwd: POLE_MAX, up: s.oy + POLE_MAX * POLE_MAX * POLE_DROOP };
+  return { fwd: fwd, up: s.oy + drop };
 }
 
 /** The rod, the line and the lure, for whoever is casting or holding one. */
@@ -5803,6 +5856,16 @@ function applyHit(attacker, defender, move, sourceX) {
     defender.poisonBy = attacker.slot;
   }
 
+  /* Set alight. Refreshed rather than stacked on a second hit: eighteen
+     swings in the ten seconds he holds the sword, and stacking would make the
+     ult a single unanswerable burn instead of a weapon he has to keep
+     landing. */
+  if (move.burn) {
+    defender.burn = move.burn.frames;
+    defender.burnDps = move.burn.dps;
+    defender.burnBy = attacker.slot;
+  }
+
   // Smoke. Left and right swap for a while -- see Fighter.update, which does
   // the swapping on a COPY of the pad. Applied here beside poison, and after
   // the shield return above for the same reason poison is: blocking it should
@@ -6873,6 +6936,44 @@ function drawFighter(g, f) {
     g.globalAlpha = 1;
   }
 
+  /* On fire. Behind the sprite for the same reason the buff aura is: flames
+     over the top of him would hide the one thing you need to see, which is
+     which character is burning and what they are about to do about it.
+
+     Five tongues along his width, each rising and falling on its own phase so
+     they never pulse together and read as one flashing block. The phase comes
+     out of the burn counter itself -- it is simulation state, snapshotted, so
+     two machines watching the same fire draw the same frame of it, and this
+     function writes nothing back.
+
+     Three colors, deepest at the root, and drawn in three passes rather than
+     per tongue: the matrix rain cost 433 canvas state changes a frame doing
+     it the other way round, and this is the same shape of mistake waiting to
+     be made. Fifteen rects, three fillStyle writes.
+
+     Deliberately NOT the poison glyph's pink, and deliberately not an orbit
+     -- the confused ducks own the space above the head, and a player has to
+     be able to tell three statuses apart at a glance while being hit. */
+  if (f.burn > 0) {
+    const FIRE = ['#ff3c14', '#ff8a2a', '#ffd76a'];
+    const fade = Math.min(1, f.burn / 30);
+    const base = Math.round(f.y);
+    const left = Math.round(f.x) - 7;
+    for (let layer = 0; layer < 3; layer++) {
+      g.globalAlpha = fade * (0.85 - layer * 0.18);
+      g.fillStyle = FIRE[layer];
+      for (let i = 0; i < 5; i++) {
+        // Each tongue on its own phase, and taller the nearer the middle.
+        const wob = Math.sin(f.burn * 0.31 + i * 1.7);
+        const mid = 2 - Math.abs(i - 2);
+        const h = 4 + mid * 2 + wob * 2 - layer * 2;
+        if (h <= 0) continue;
+        g.fillRect(left + i * 3, base - 14 - h + layer, 2, h);
+      }
+    }
+    g.globalAlpha = 1;
+  }
+
   // Buff aura sits behind the sprite so it glows around the pixels rather
   // than boxing them in.
   if (f.buffTimer > 0) {
@@ -7420,7 +7521,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '84a4a807df';
+const BUILD_ID = '8d8583371d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7431,7 +7532,7 @@ const BUILD_ID = '84a4a807df';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.14';
+const VERSION = '2.15';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
