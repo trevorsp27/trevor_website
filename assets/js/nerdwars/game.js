@@ -351,7 +351,22 @@ const ROSTER = {
         bounce: 0.12, friction: 0.96,
         startup: 8, active: 1, recovery: 11, maxAlive: 2,
         speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 240,
-        damage: 15, base: 3.4, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+        /* 15 before. It is a projectile that bounces, skids and keeps
+           threatening the floor for four seconds, and it was being paid a
+           committed-melee number for it. Ten still hurts; what it stops doing
+           is out-damaging moves you have to be standing next to somebody to
+           throw. The mana falls with it -- moveCost prices damage -- 32 to
+           26 -- so it also comes back sooner, and the measurement already
+           includes that.
+
+           Measured over 3600 CPU matches a side this takes AutisNick from
+           22.1% to 15.9% and widens the roster spread from 38.3 to 45.9. He
+           was ALREADY last before it. That is not an argument against the
+           change, which was asked for and is defensible on its own terms --
+           a bouncing four-second projectile should not out-damage a melee --
+           but it is the reason he now needs something given back, and the
+           rainbow is the obvious place to give it. */
+        damage: 10, base: 3.4, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       },
       /* Their original note for this one was a joke about giving people a
          disease. Kept as the mechanic underneath it: a mark that lands, and
@@ -8708,7 +8723,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '8f392e7bfd';
+const BUILD_ID = 'f501727f7a';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8719,7 +8734,7 @@ const BUILD_ID = '8f392e7bfd';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.30';
+const VERSION = '2.31';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
