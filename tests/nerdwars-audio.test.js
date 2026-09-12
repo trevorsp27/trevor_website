@@ -17,6 +17,24 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 
+/* Each vm gets its own Math.random stream. Every harness in this suite hands
+   the sandbox the HOST's Math, so without this they all draw from one shared
+   sequence -- and node --test runs files concurrently, which makes the
+   interleaving, and therefore any test that averages over AI behavior,
+   different on every run. Math remains the prototype, so everything else on
+   it still works. */
+let __seedCounter = 0;
+function seededMath() {
+  let s = (0x9e3779b9 ^ (++__seedCounter * 2654435761)) >>> 0 || 1;
+  const M = Object.create(Math);
+  M.random = () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  return M;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
@@ -184,7 +202,7 @@ async function bootGame(opts) {
 
   const sandbox = {
     console,
-    Math,
+    Math: seededMath(),
     JSON,
     Date,
     Promise,
@@ -790,19 +808,40 @@ function enterTwoPlayerBattle(g) {
 /**
  * Walk both seats toward each other -- seat 0 with KeyD, seat 1 with
  * ArrowLeft, their spawns face each other across the middle of the stage --
- * for 29 frames, then let go. Run identically across every engine in
- * `engines`.
+ * until they are actually within jab range, then let go. Run identically
+ * across every engine in `engines`.
+ *
+ * This counted 29 frames until DEEP SPACE was widened from 176 to 240, at
+ * which point the walk stopped arriving and every jab afterwards swung at
+ * open air. The tests still passed the parts that mattered to them and failed
+ * only on their own "did anything actually happen" guard -- which is the
+ * guard earning its keep, but the fix is to stop counting frames.
+ *
+ * The loop is driven off engines[0] and every engine is pumped the same
+ * number of frames, so they stay in lockstep -- which is the entire point of
+ * the comparison these feed.
  */
 function bringIntoContact(engines) {
+  const apart = (g) => Math.abs(g.nw.fighters[0].x - g.nw.fighters[1].x);
   for (const g of engines) {
     g.press("KeyD");
     g.press("ArrowLeft");
   }
-  for (const g of engines) g.pump(29);
+  let n = 0;
+  while (n < 200 && apart(engines[0]) > 18) {
+    for (const g of engines) g.pump(1);
+    n++;
+  }
   for (const g of engines) {
     g.release("KeyD");
     g.release("ArrowLeft");
   }
+  assert.ok(
+    apart(engines[0]) <= 24,
+    "could not walk the two fighters into jab range in " + n + " frames; " +
+      "they are " + apart(engines[0]).toFixed(0) + "px apart, so the blows " +
+      "traded after this would all be whiffs"
+  );
 }
 
 /**

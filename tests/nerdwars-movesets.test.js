@@ -18,6 +18,24 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 
+/* Each vm gets its own Math.random stream. Every harness in this suite hands
+   the sandbox the HOST's Math, so without this they all draw from one shared
+   sequence -- and node --test runs files concurrently, which makes the
+   interleaving, and therefore any test that averages over AI behavior,
+   different on every run. Math remains the prototype, so everything else on
+   it still works. */
+let __seedCounter = 0;
+function seededMath() {
+  let s = (0x9e3779b9 ^ (++__seedCounter * 2654435761)) >>> 0 || 1;
+  const M = Object.create(Math);
+  M.random = () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  return M;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
@@ -73,7 +91,7 @@ async function bootGame() {
   };
 
   const sandbox = {
-    console, Math, JSON, Date, Promise, Object, Array, Map, Set, Number,
+    console, Math: seededMath(), JSON, Date, Promise, Object, Array, Map, Set, Number,
     String, Boolean, Error, DataView, ArrayBuffer, Uint8Array, Float32Array,
     Float64Array, isNaN, parseInt, parseFloat,
     requestAnimationFrame: (cb) => rafQueue.push(cb),
@@ -331,19 +349,33 @@ test("a long fight with both kits does not crash or stall", async () => {
    the swap happens on a COPY of the pad inside Fighter.update -- the one
    place it can happen without the two machines in a netplay match disagreeing
    about which way somebody walked. */
+/* Walk them toward each other until they are actually within `gap`, rather
+   than for a number of frames that happened to work on the stage as it was
+   laid out that week. DEEP SPACE was widened from 176 to 240 and every
+   fixed-frame version of this quietly stopped arriving -- which is the worst
+   way for a test to fail, because "the cloud never reached him" and "the
+   cloud does nothing" look identical from here. */
+function closeToGap(g, gap, cap = 240) {
+  const apart = () => Math.abs(g.nw.fighters[0].x - g.nw.fighters[1].x);
+  g.press("KeyD"); g.press("ArrowLeft");
+  let n = 0;
+  while (n < cap && apart() > gap) { g.pump(1); n++; }
+  g.release("KeyD"); g.release("ArrowLeft");
+  g.pump(3);
+  assert.ok(apart() <= gap + 6,
+    "could not get the two fighters within " + gap + "px in " + cap +
+    " frames; they are " + apart().toFixed(0) + "px apart, so whatever this " +
+    "test goes on to assert would be about nothing");
+  return apart();
+}
+
 test("smoke turns a victim's walk backwards, then wears off", async () => {
   const g = await bootGame();
   startAs(g, "johnnyham", "reese");
 
-  // Walk them together -- but not past each other. They spawn 88px apart and
-  // close 2.8px a frame between them, so forty frames overshoots and John
-  // ends up firing away from Reese.
-  g.press("KeyD");
-  g.press("ArrowLeft");
-  g.pump(20);
-  g.release("KeyD");
-  g.release("ArrowLeft");
-  g.pump(4);
+  // Close to a measured distance rather than a counted one: near enough for
+  // the cloud to drift onto him, not so near they walk past each other.
+  closeToGap(g, 34);
 
   const before = g.nw.fighters[1].health;
   g.hold("KeyH", 3);                       // SMOKESCREEN
@@ -449,12 +481,7 @@ function waitOutSpawnInvuln(g) {
   g.pump(130);                      // COMBAT.respawnInvuln is 110
 }
 
-function closeIn(g, frames) {
-  g.press("KeyD"); g.press("ArrowLeft");
-  g.pump(frames);
-  g.release("KeyD"); g.release("ArrowLeft");
-  g.pump(3);
-}
+
 
 test("Trev's kit is the knight's move and the guillotine", async () => {
   const g = await bootGame();
@@ -488,7 +515,7 @@ test("the guillotine grabs through a raised shield and always lets go", async ()
     const g = await bootGame();
     startAs(g, "trev", "reese");
     waitOutSpawnInvuln(g);
-    closeIn(g, 26);
+    closeToGap(g, 22);
     const V = () => g.nw.fighters[1];
     const hp0 = V().health;
 
@@ -515,7 +542,7 @@ test("the throw goes where it is aimed", async () => {
     const g = await bootGame();
     startAs(g, "trev", "reese");
     waitOutSpawnInvuln(g);
-    closeIn(g, 26);
+    closeToGap(g, 22);
     const V = () => g.nw.fighters[1];
 
     g.press("KeyJ"); g.pump(3); g.release("KeyJ");

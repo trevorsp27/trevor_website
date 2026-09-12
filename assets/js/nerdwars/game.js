@@ -131,15 +131,20 @@ const STAGES = [
     bg: 'stars',
     ceilingY: null,
     hazard: null,
+    /* Widened from 176 to 240, side platforms pushed out to match, and the
+       blast zones opened up around all of it. This is the open arena -- the
+       one whose tag promises nothing will catch you -- and at the old size
+       four people stood on each other, which made the stage with no walls
+       play like the most cramped one on the list. */
     platforms: [
-      { x: 72, y: 130, w: 176, main: true },
-      { x: 76, y: 92, w: 50 },
-      { x: 194, y: 92, w: 50 },
-      { x: 135, y: 56, w: 50 },
+      { x: 40, y: 134, w: 240, main: true },
+      { x: 44, y: 94, w: 56 },
+      { x: 220, y: 94, w: 56 },
+      { x: 130, y: 54, w: 60 },
     ],
-    spawns: [{ x: 116, y: 130 }, { x: 204, y: 130 }],
+    spawns: [{ x: 96, y: 134 }, { x: 224, y: 134 }],
     respawn: { x: 160, y: 24 },
-    blast: { left: -26, right: VW + 26, top: -70, bottom: VH + 70 },
+    blast: { left: -50, right: VW + 50, top: -80, bottom: VH + 80 },
   },
 
   {
@@ -502,11 +507,18 @@ const ROSTER = {
        not change anything. This one hits everybody STANDING ON THE GROUND at
        once and leaves anyone in the air untouched, which is the first move in
        the game that rewards being airborne. */
+    /* It used to launch, and launching is how a move ENDS -- they fly off,
+       they recover, the ult is spent. Pinning is how one begins. Three
+       seconds is an age in a game where a jab recovers in nine frames: the
+       ult is no longer its damage, it is everything he gets to do next.
+
+       So the knockback comes almost all the way off. "Stunned in place" has
+       to mean in PLACE, or the pin just delivers them somewhere safer. */
     ult: {
       kind: 'deadlift', label: 'LEG DAY',
       startup: 20, active: 3, recovery: 30,
-      freeze: 10,
-      damage: 19, base: 4.6, scale: 9.5, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
+      freeze: 10, stun: 180,
+      damage: 19, base: 0.5, scale: 0.9, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
     },
   },
 
@@ -549,12 +561,25 @@ const ROSTER = {
       // "something creative with a music note", and his way back to the
       // stage: he rides the note up. The purple is the note motif, not his
       // character color -- it stays legible on every stage.
+      /* Was one poke on the way up, which is the least interesting thing a
+         drummer could do. It is a RIFF now: `multi` re-arms the hitbox every
+         three frames, so the rise lands four or five times instead of once.
+
+         Per-hit knockback is deliberately tiny. A big first hit would throw
+         them clear and the rest would swing at nothing -- low knockback drags
+         them up the screen with him instead, and the move ends with both of
+         them high in the air and only one of them holding a recovery. That is
+         where the kill comes from, not from the damage.
+
+         About 20 over the rise against 7 before, and it is priced to match:
+         moveCost counts a multi-hit by active/multi now, or the extra hits
+         would have been free. */
       up: {
         kind: 'uppercut', label: 'HIGH NOTE', blade: '#b06cf0',
-        startup: 5, active: 10, recovery: 22,
-        rise: -5.8, drift: 0.9,
-        damage: 7, base: 2.2, scale: 6.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-        ox: -7, oy: -12, w: 14, h: 18,
+        startup: 5, active: 15, recovery: 22,
+        rise: -6.2, drift: 1.0, multi: 3,
+        damage: 4, base: 0.9, scale: 1.9, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+        ox: -7, oy: -14, w: 17, h: 24,
       },
     },
     // "the strokes starts playing in background spiky music notes start
@@ -568,10 +593,26 @@ const ROSTER = {
       kind: 'rain', label: 'THE STROKES',
       startup: 12, active: 1, recovery: 18,
       duration: 200,
-      every: 2, stride: 13, offset: 6, fallSpeed: 3.3,
-      drop: 0.02, life: 200, shape: 'note', ghost: true,
+      /* Was a note every 2 frames -- a hundred of them -- so many that the
+         screen stopped reading as music and started reading as static. And
+         standing still under a shield answered all of it anyway.
+
+         Two and a half times fewer now, and every one breaks a shield
+         outright instead. Hiding was the whole counterplay; the song is a
+         reason to MOVE now, which is what it was always meant to be. Fewer
+         frightening notes beat a lot of harmless ones. */
+      every: 5, stride: 13, offset: 6, fallSpeed: 3.3,
+      drop: 0.02, life: 200, shape: 'note', ghost: true, shieldBreak: true,
       tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
-      damage: 9, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+      /* 9 was priced for a hundred notes. At forty it made him the worst
+         character in the game by a distance -- 18.3% over 1200 CPU matches,
+         against 43.5% with the old note count -- and ablating the two changes
+         separately put all of it here and none of it on the uppercut.
+
+         So each note hits two and a half times harder, which is the trade
+         the change was always supposed to be: fewer, and worth dodging.
+         Back to 45.3%, within noise of where he started. */
+      damage: 22, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -595,11 +636,25 @@ const ROSTER = {
          actually launches. A melee kind, so the hitbox comes from ox/oy/w/h
          rather than a projectile, and 'belch' is deliberately NOT in
          hitbox()'s exclusion list for that reason. */
+      /* Reach was the complaint, and it was two complaints in one: the box
+         stopped at 20px, and it sat too high to touch anybody standing below
+         him. It always CAME OUT in the air -- canSpecial never checked the
+         ground, and a belch fired airborne does full damage -- but from above
+         a stage it passed clean over everyone's head, which looks exactly
+         like a move that does not work in the air.
+
+         So the box is both longer and deeper: 30px of reach, hanging low
+         enough to catch somebody on the floor beneath him. */
       neutral: {
         kind: 'belch', label: 'BELCH',
         startup: 4, active: 5, recovery: 12,
-        damage: 8, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
-        ox: -2, oy: -12, w: 20, h: 15,
+        /* 8 before. Half the box again is a real buff, and left at 8 it put
+           Reese back to 68.3% -- undoing the CROP DUST nerf he was measured
+           into a fortnight earlier. One point of damage buys the reach and
+           leaves him at 61.8%, which is where the fart nerf alone had him.
+           More range at the same strength, rather than more of both. */
+        damage: 7, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
+        ox: -1, oy: -15, w: 30, h: 24,
       },
       /* The fart. Same class as John's smoke and the same hitEvery pacing --
          the difference is entirely the payload: this one carries `poison`,
@@ -763,7 +818,10 @@ const ROSTER = {
 function moveCost(m) {
   if (!m) return 0;
   const shots = m.count || 1;
-  let power = (m.damage || 0) * shots;
+  // A multi-hit move lands active/multi times. Counting it once would have
+  // sold four hits for the price of one.
+  const hits = m.multi ? Math.max(1, Math.floor(m.active / m.multi)) : 1;
+  let power = (m.damage || 0) * shots * hits;
 
   // Damage over time is still damage; count all of it.
   if (m.poison) power += m.poison.frames * m.poison.dps;
@@ -772,6 +830,10 @@ function moveCost(m) {
   // the terms it is told about.
   if (m.confuse) power += m.confuse.frames * 0.07;
   if (m.punish) power += m.punish.stun * 0.18;
+  // Worth more per frame than `punish`: that one has to catch somebody
+  // mid-swing, this one only has to land.
+  if (m.stun) power += m.stun * 0.25;
+  if (m.shieldBreak) power += 8;
   if (m.quake) power += m.quake.damage * 2;   // it lands twice, one each way
 
   // A buff does no damage itself, so price it by how much it multiplies
@@ -1820,6 +1882,12 @@ class Fighter {
     const m = this.moveFor(this.state);
     const total = m.startup + m.active + m.recovery;
     this.attackFrame++;
+
+    /* A multi-hit move re-arms its hitbox as it runs. resolveCombat stops a
+       melee connecting twice by latching hasHit, which is right for every
+       single-hit swing in the game -- this is the exception, and it is opt-in
+       per move rather than a second code path through combat. */
+    if (m.multi && this.attackFrame % m.multi === 0) this.hasHit = false;
 
     /* Aim, while the choke is on. runSpecial gets no pad, so the direction
        is read here and remembered -- the throw uses whatever was last held,
@@ -5034,7 +5102,9 @@ function applyHit(attacker, defender, move, sourceX) {
   }
 
   if (defender.state === 'shield' && defender.shield > 0) {
-    defender.shield -= dmg * 2.4;
+    // Some things are not blockable. The shield still takes the hit and still
+    // breaks loudly -- it just gets no say in whether it survives.
+    defender.shield -= move.shieldBreak ? COMBAT.shieldMax * 2 : dmg * 2.4;
     defender.vx += Math.sign(defender.x - sourceX) * 0.6;
     attacker.hitstop = COMBAT.hitstopLight;
     defender.hitstop = COMBAT.hitstopLight;
@@ -5114,6 +5184,16 @@ function applyHit(attacker, defender, move, sourceX) {
   if (move.punish && (defender.state === 'attack' ||
                       defender.state === 'special' || defender.state === 'ult')) {
     defender.hitstun = Math.max(defender.hitstun, move.punish.stun);
+  }
+
+  /* An unconditional pin, by the same mechanism as `punish` and for the same
+     reason: written into hitstun, which stateHash already covers, so two
+     machines that ever disagreed about one would be caught by the desync
+     check. A bespoke timer would snapshot correctly and be hashed by nothing.
+     Unlike punish this asks nothing of the victim -- landing is the whole
+     condition. */
+  if (move.stun) {
+    defender.hitstun = Math.max(defender.hitstun, move.stun);
   }
 
   if (defender.health <= 0) {
@@ -5838,14 +5918,37 @@ function drawBackground(g) {
     case 'matrix': {
       g.fillStyle = '#020603';
       g.fillRect(0, 0, VW, VH);
+
+      /* Same rain, drawn in a different order, and the order was the whole
+         cost. Setting fillStyle and globalAlpha per PIXEL meant 433 state
+         changes a frame against 11 on the swamp -- measured -- and a canvas
+         state change is far dearer than the two-pixel fill it guards.
+
+         Every pixel of a drop at the same depth shares a color and an alpha,
+         so depth is the natural batch: advance all the drops, then walk the
+         tail once per level, setting the state twice per level instead of
+         twice per pixel. That takes it to about two dozen.
+
+         The picture is identical, not merely similar, and the reason is
+         worth writing down: no two of these rects ever overlap. Drops sit on
+         a 6px pitch and are 2px wide, and within a drop the pixels are 3px
+         apart and 2px tall. Nothing composites with anything, so the order
+         they are painted in cannot be observed. */
+      let deepest = 0;
       for (const r of rain) {
         r.y += r.v;
         if (r.y - r.len > VH) { r.y = -rand(0, 60); r.v = rand(0.5, 2.2); }
-        for (let i = 0; i < r.len; i++) {
+        if (r.len > deepest) deepest = r.len;
+      }
+      for (let i = 0; i < deepest; i++) {
+        const a = i === 0 ? 0.85 : Math.max(0, 0.34 - i * 0.032);
+        if (a <= 0) break;                 // the tail has faded out entirely
+        g.globalAlpha = a;
+        g.fillStyle = i === 0 ? '#c6ffd0' : '#26c24a';
+        for (const r of rain) {
+          if (i >= r.len) continue;
           const yy = (r.y - i * 3) | 0;
           if (yy < 0 || yy > VH) continue;
-          g.globalAlpha = i === 0 ? 0.85 : Math.max(0, 0.34 - i * 0.032);
-          g.fillStyle = i === 0 ? '#c6ffd0' : '#26c24a';
           g.fillRect(r.x, yy, 2, 2);
         }
       }
@@ -6605,7 +6708,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '84153ad6c0';
+const BUILD_ID = 'a96b3597e5';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

@@ -25,6 +25,24 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 
+/* Each vm gets its own Math.random stream. Every harness in this suite hands
+   the sandbox the HOST's Math, so without this they all draw from one shared
+   sequence -- and node --test runs files concurrently, which makes the
+   interleaving, and therefore any test that averages over AI behavior,
+   different on every run. Math remains the prototype, so everything else on
+   it still works. */
+let __seedCounter = 0;
+function seededMath() {
+  let s = (0x9e3779b9 ^ (++__seedCounter * 2654435761)) >>> 0 || 1;
+  const M = Object.create(Math);
+  M.random = () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  return M;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
@@ -192,7 +210,7 @@ async function browser(opts) {
   };
 
   const sb = {
-    console, Math, JSON, Date, Promise, Object, Array, Map, Set, Number, String,
+    console, Math: seededMath(), JSON, Date, Promise, Object, Array, Map, Set, Number, String,
     Boolean, Error, DataView, ArrayBuffer, Uint8Array, Uint32Array, Float64Array,
     isNaN, parseInt, parseFloat,
     // Delays matter: net.js reclaims a seat whose channel never opens after

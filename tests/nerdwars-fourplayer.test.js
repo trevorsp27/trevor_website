@@ -22,6 +22,24 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 
+/* Each vm gets its own Math.random stream. Every harness in this suite hands
+   the sandbox the HOST's Math, so without this they all draw from one shared
+   sequence -- and node --test runs files concurrently, which makes the
+   interleaving, and therefore any test that averages over AI behavior,
+   different on every run. Math remains the prototype, so everything else on
+   it still works. */
+let __seedCounter = 0;
+function seededMath() {
+  let s = (0x9e3779b9 ^ (++__seedCounter * 2654435761)) >>> 0 || 1;
+  const M = Object.create(Math);
+  M.random = () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  return M;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
@@ -77,7 +95,7 @@ async function bootGame() {
   };
 
   const sandbox = {
-    console, Math, JSON, Date, Promise, Object, Array, Map, Set, Number,
+    console, Math: seededMath(), JSON, Date, Promise, Object, Array, Map, Set, Number,
     String, Boolean, Error, DataView, ArrayBuffer, Uint8Array, Float64Array,
     isNaN, parseInt, parseFloat,
     requestAnimationFrame: (cb) => rafQueue.push(cb),
@@ -221,8 +239,11 @@ test("one on one is exactly the match it always was", async () => {
 
   const f = g.nw.fighters;
   assert.equal(f.length, 2);
-  // The hand-placed spawn points for DEEP SPACE, which is the first stage.
-  assert.equal(JSON.stringify(Array.from(f, (x) => x.x)), JSON.stringify([116, 204]),
+  /* The hand-placed spawn points for DEEP SPACE, which is the first stage.
+     These move when the stage does -- it was widened from 176 to 240 -- and
+     that is fine; what this guards is that a four-player change never quietly
+     relocates the two-player match everybody actually plays. */
+  assert.equal(JSON.stringify(Array.from(f, (x) => x.x)), JSON.stringify([96, 224]),
     "two players must still spawn where the stages were laid out for them");
 });
 
