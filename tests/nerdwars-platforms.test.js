@@ -253,3 +253,98 @@ test("drawWorld starts each frame from a known transform", async () => {
     "drawWorld should reset the transform before drawing, so a leaked one " +
       "cannot accumulate across frames");
 });
+
+/* The end of a match, which used to arrive before you could see it.
+ *
+ * koed() set state 'gone' on the final stock, so the loser vanished on the
+ * frame of the last hit and updateBattle switched to the results on the next
+ * one. The KO everybody had spent the match playing toward was the one thing
+ * nobody ever watched. The flight now finishes first.
+ */
+test("the last KO flies off before the win screen appears", async () => {
+  const run = await battle();
+  const r = run(`(function(){
+    var loser = fighters[1], winner = fighters[0];
+    projectiles.length = 0; effects.length = 0;
+    loser.setState('idle');
+    loser.timer = 0; loser.hitstun = 0; loser.hitstop = 0; loser.invuln = 0;
+    loser.vx = 0; loser.vy = 0;
+    winner.invuln = 0; winner.hitstop = 0;
+    loser.stocks = 1;
+    loser.knockOut();
+
+    var sawKoFlight = 0, drawnDuringFlight = 0, resultsAt = -1;
+    for (var i = 0; i < 120; i++) {
+      if (scene !== 'battle' && resultsAt < 0) resultsAt = i;
+      if (scene !== 'battle') break;
+      if (loser.state === 'ko') {
+        sawKoFlight++;
+        // Still on screen? drawFighter bails on a fighter it will not draw.
+        var drew = 0;
+        var rec = { globalAlpha:1, fillStyle:'#000',
+          save:function(){}, restore:function(){}, translate:function(){},
+          scale:function(){}, fillRect:function(){ drew++; },
+          drawImage:function(){ drew++; }, beginPath:function(){},
+          arc:function(){}, fill:function(){} };
+        drawFighter(rec, loser);
+        if (drew > 0) drawnDuringFlight++;
+      }
+      step();
+    }
+    return { sawKoFlight: sawKoFlight, drawnDuringFlight: drawnDuringFlight,
+             resultsAt: resultsAt, eliminated: loser.eliminated,
+             endState: loser.state, scene: scene, winner: winnerKey };
+  })()`);
+
+  assert.ok(r.eliminated, "the loser should be out of the match immediately");
+  assert.ok(
+    r.sawKoFlight > 20,
+    "the final KO should stay in the air for the whole flight, but 'ko' " +
+      "lasted only " + r.sawKoFlight + " frames"
+  );
+  assert.ok(
+    r.drawnDuringFlight > 20,
+    "and be VISIBLE for it -- the point is watching them go. Drawn on " +
+      r.drawnDuringFlight + " of " + r.sawKoFlight + " frames"
+  );
+  assert.ok(
+    r.resultsAt > 20,
+    "the win screen should wait for the flight to land; it arrived after " +
+      r.resultsAt + " frames"
+  );
+  assert.equal(r.scene, "results", "and then it should actually arrive");
+});
+
+/* Online there is nobody whose job it is to press continue, and no shared
+   cursor for three other people to watch. The room takes itself back. */
+test("an online results screen returns to picking without a keypress", async () => {
+  const run = await battle();
+  const r = run(`(function(){
+    scene = 'results'; resultTimer = 0; winnerKey = 'trev';
+    netplay.active = true;
+    var left = -1;
+    for (var i = 0; i < 400; i++) {
+      step();
+      if (scene !== 'results') { left = i; break; }
+    }
+    var online = scene;
+    // Offline the person who presses the key is sitting right there, so it
+    // must still wait for them.
+    netplay.active = false;
+    scene = 'results'; resultTimer = 0;
+    for (var i = 0; i < 400; i++) step();
+    return { left: left, online: online, offlineScene: scene };
+  })()`);
+
+  assert.ok(
+    r.left > 60 && r.left < 400,
+    "an online results screen should move on by itself after a few seconds " +
+      "to read it; it left after " + r.left + " frames"
+  );
+  assert.notEqual(r.online, "results");
+  assert.equal(
+    r.offlineScene, "results",
+    "offline it must still wait for a key -- the person who presses it is in " +
+      "the room, and taking the screen away from them is not a kindness"
+  );
+});

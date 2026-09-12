@@ -76,11 +76,31 @@ function stubCanvas(w, h) {
   return el;
 }
 
+/* Every sandbox in this repo is handed the HOST's Math object, so all of them
+   share one Math.random stream -- and node --test runs files concurrently, so
+   the interleaving of the AI's random choices differs from run to run. This
+   file's assertions are averages over AI behavior, which made them pass alone
+   and fail in the full suite.
+
+   A seeded stream per boot fixes that, and costs nothing: Math is the
+   prototype, so every other function on it still works. */
+function seededMath(seed) {
+  let s = (seed >>> 0) || 1;
+  const M = Object.create(Math);
+  M.random = () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  return M;
+}
+
 /** Boot the engine source with everything at module scope reachable. */
-async function bootEngine() {
+async function bootEngine(seed) {
   const view = stubCanvas(960, 540);
   const sandbox = {
-    console, Math, JSON, Date, Promise, Object, Array, Map, Set, Number,
+    console, Math: seededMath(seed === undefined ? 1 : seed), JSON, Date,
+    Promise, Object, Array, Map, Set, Number,
     String, Boolean, Error, DataView, ArrayBuffer, Uint8Array, Float32Array,
     Float64Array, isNaN, parseInt, parseFloat,
     requestAnimationFrame: () => {},
@@ -121,8 +141,8 @@ async function bootEngine() {
 }
 
 /** A battle with both seats driven by the AI, past spawn invulnerability. */
-async function cpuBattle(seats) {
-  const run = await bootEngine();
+async function cpuBattle(seats, seed) {
+  const run = await bootEngine(seed);
   run(
     "select.cursor=[" + (seats || "1,4") + "]; twoPlayer=true; playerCount=" +
       (seats ? seats.split(",").length : 2) +
@@ -144,7 +164,7 @@ test("a confused CPU knocked off the stage still flies home", async () => {
   const moved = { 0: [], 240: [] };
   for (const confused of [0, 240]) {
     for (let t = 0; t < TRIALS; t++) {
-      const run = await cpuBattle();
+      const run = await cpuBattle(null, 1000 + t);
       const dx = run(`(function(){
         var f = fighters[1], stage = STAGE.platforms[0];
         f.invuln = 0;
@@ -188,7 +208,7 @@ test("the CPU is still genuinely confused, not quietly immune", async () => {
   const closed = { 0: [], 240: [] };
   for (const confused of [0, 240]) {
     for (let t = 0; t < TRIALS; t++) {
-      const run = await cpuBattle();
+      const run = await cpuBattle(null, 2000 + t);
       const gain = run(`(function(){
         var me = fighters[1], foe = fighters[0], stage = STAGE.platforms[0];
         var mid = stage.x + stage.w / 2;

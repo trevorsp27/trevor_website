@@ -411,7 +411,14 @@ function evasionStarts(g, drive) {
 test("neither evasion can be spammed, and alternating them does not help", async () => {
   for (const [label, drive, cap] of [
     ["spot dodge", (g) => (i) => { if (i === 0) g.press("KeyS"); }, 6],
-    ["roll", (g) => (i) => { if (i === 0) g.press("KeyD"); }, 6],
+    /* Fresh presses, not a held direction. Raising the shield with a
+       direction already down now BLOCKS -- that is the point of the change --
+       so a roll has to be asked for the way a person asks for one: shield up,
+       then tap. Holding KeyD for four seconds is a request to stand still. */
+    ["roll", (g) => (i) => {
+      if (i % 20 === 0) g.press("KeyD");
+      if (i % 20 === 6) g.release("KeyD");
+    }, 6],
     ["alternating", (g) => (i) => {
       if (i % 20 === 0) { g.release("KeyS"); g.press("KeyD"); }
       if (i % 20 === 10) { g.release("KeyD"); g.press("KeyS"); }
@@ -604,4 +611,59 @@ test("LEG DAY launches whoever is standing and spares whoever is not", async () 
     assert.equal(V().health, hp0,
       "jumping is the answer to it -- an airborne fighter should take nothing");
   }
+});
+
+
+/* Shield is the "stop what I am doing" button, so it has to outrank whatever
+   you were already doing. It used to be the opposite: shield plus a direction
+   WAS the roll, so pressing block while running rolled you instead, and the
+   only way to block at all was to come to a stop first and then press it.
+ */
+test("shield blocks and stops you even with a direction held", async () => {
+  const g = await bootGame();
+  startAs(g, "johnnyham", "reese");
+  g.pump(130);                       // past spawn invulnerability
+
+  // Get moving properly first, or "it stopped" proves nothing.
+  const f = () => g.nw.fighters[0];
+  const startX = f().x;
+  g.press("KeyD");
+  g.pump(20);
+  const movingX = f().x;
+  assert.equal(f().state, "walk", "should be walking before the shield goes up");
+
+  // Shield WITHOUT letting go of the direction.
+  g.press("ShiftLeft");
+  g.pump(2);
+  assert.equal(
+    f().state, "shield",
+    "raising the shield while holding a direction must block, not roll -- " +
+      "got state " + JSON.stringify(f().state)
+  );
+
+  const stoppedX = f().x;
+  g.pump(12);
+  assert.ok(
+    Math.abs(f().x - stoppedX) < 1,
+    "and it should stop dead, not skid: drifted " +
+      (f().x - stoppedX).toFixed(2) + "px while blocking"
+  );
+  assert.ok(
+    movingX > startX + 4,
+    "sanity: it should have walked somewhere before the shield went up, but " +
+      "only covered " + (movingX - startX).toFixed(1) + "px"
+  );
+
+  // The roll is still there -- it just wants a fresh press.
+  g.release("KeyD");
+  g.pump(2);
+  g.press("KeyD");
+  g.pump(2);
+  assert.equal(
+    f().state, "roll",
+    "letting go and pressing again, while still shielding, should roll -- " +
+      "otherwise the change cost the roll entirely"
+  );
+  g.release("KeyD");
+  g.release("ShiftLeft");
 });

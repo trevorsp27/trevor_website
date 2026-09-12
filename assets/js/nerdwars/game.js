@@ -613,8 +613,22 @@ const ROSTER = {
         life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
         hitEvery: 45, cue: 'belch',
         tints: ['#9dc25a', '#c3dd86', '#7fa347'],
-        poison: { frames: 150, dps: 0.11 },
-        damage: 3, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+        /* Was dps 0.11 over the same 150 frames, which is 16.5 damage from a
+           cloud you drop and walk away from -- more than BELCH does for a
+           move that asks nothing of you afterwards. Halved to 7.5.
+
+           The duration is deliberately untouched. What the cloud is FOR is
+           denying a piece of the stage while he retreats, and that is the
+           part worth keeping; it was the damage that made walking away the
+           whole strategy. Measured over 1200 CPU matches this takes Reese
+           from 75.3% to 67.3% and the roster spread from 35.5 to 29.8.
+
+           Note the mana cost falls with it -- moveCost reads poison.frames
+           times dps -- so the cloud also comes back sooner. The measurement
+           above already includes that, which is why the nerf is worth less
+           than the arithmetic suggests. */
+        poison: { frames: 150, dps: 0.05 },
+        damage: 2, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
       },
       /* JITTERS keeps its name and moves to `up`, because BOUNCE was his
          recovery and this now has to be. It gains a vertical kick that only
@@ -1301,6 +1315,11 @@ class Fighter {
     this.mana = COMBAT.manaMax;
     this.manaDenied = 0;
     this.evadeCd = 0;
+    /* Whether a direction was ALREADY held when the shield went up. Holding
+       one is then a request to block while facing that way, not to roll --
+       the roll wants a fresh press, which is what this disarms until the
+       stick comes back to neutral. */
+    this.evadeArm = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
        than Fighter references, for the reason poisonBy is: snapValue keeps a
        Fighter by pointer inside a snapshot, and a stale pointer survives a
@@ -1428,7 +1447,12 @@ class Fighter {
     // at the first rollback.
     audioShieldWas[this.slot] = this.state === 'shield';
     if (this.hitstop > 0) { this.hitstop--; return; }
-    if (this.eliminated) return;
+    if (this.eliminated) {
+      // Out of the match, but a last KO may still be in the air. Nothing else
+      // about them runs -- no input, no combat, no hazards -- they just fly.
+      if (this.state === 'ko') { this.timer++; this.updateKO(); }
+      return;
+    }
 
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
@@ -1572,7 +1596,28 @@ class Fighter {
 
     // --- shield / roll / spot dodge ---
     if (pad.shield && this.grounded && this.landLag <= 0) {
-      if ((pad.left || pad.right) && this.evadeCd <= 0) {
+      /* Shield outranks the direction you are holding.
+
+         It used to be the other way round: shield plus a direction WAS the
+         roll, so pressing block while running rolled you instead, and the
+         only way to actually block was to come to a stop first and then
+         press it. That is backwards for the one button whose entire job is
+         "stop what I am doing and protect me".
+
+         Raising the shield with a direction already down now blocks, and
+         stops you dead. The roll is still there and still free -- it just
+         wants a fresh press, the way every other fighting game does it:
+         shield first, then tap a direction. */
+      const wasShielding = this.state === 'shield';
+      // Only left/right. Down never fought with "stop and block" in the
+      // first place -- you are not travelling anywhere when you press it --
+      // and gating the spot dodge behind a fresh press made it unusable from
+      // a standing block, which is the one place it is meant to come from.
+      const dirHeld = !!(pad.left || pad.right);
+      if (!wasShielding) this.evadeArm = dirHeld ? 1 : 0;
+      else if (!dirHeld) this.evadeArm = 0;
+
+      if (this.evadeArm === 0 && (pad.left || pad.right) && this.evadeCd <= 0) {
         this.evadeCd = COMBAT.evadeCooldown;
         this.facing = pad.left ? -1 : 1;
         this.rollDir = pad.left ? -1 : 1;
@@ -1591,7 +1636,9 @@ class Fighter {
         cue('shield-up', { slot: this.slot, x: this.x });
       }
       this.state = 'shield';
-      this.vx *= PHYS.groundFriction;
+      // Stop, rather than skid to a halt over the next few frames. Blocking
+      // is meant to be the thing that arrests a commitment.
+      this.vx = 0;
       this.shield -= COMBAT.shieldDrain;
       if (this.shield <= 0) {
         this.shield = 0;
@@ -2261,7 +2308,11 @@ class Fighter {
     this.vy += PHYS.gravity * 0.5;
     this.x += this.vx;
     this.y += this.vy;
-    if (this.timer >= 40) this.respawn();
+    if (this.timer < 40) return;
+    // Out of stocks means there is nothing to come back to, so the flight was
+    // the last thing they had left to do.
+    if (this.eliminated) this.setState('gone');
+    else this.respawn();
   }
 
   groundAhead(lookahead) {
@@ -2392,8 +2443,18 @@ class Fighter {
     // on every replayed frame of a rollback. koed() is the single funnel.
     cue(this.stocks <= 0 ? 'eliminate' : 'ko', { slot: this.slot, x: this.x });
     if (this.stocks <= 0) {
+      /* Out of the match, but not off the screen yet.
+
+         Setting 'gone' here made the loser vanish on the frame of the final
+         hit, and updateBattle switched to the results on the next one -- so
+         the KO everybody had spent the match playing toward was the single
+         thing you never got to watch.
+
+         `eliminated` still flips now, because that is what the alive-count
+         reads and what stops them being hit again. The difference is that
+         the flight is allowed to finish: updateKO carries them off, and the
+         match is not called until the last fighter has left 'ko'. */
       this.eliminated = true;
-      this.state = 'gone';
     }
   }
 
@@ -5648,7 +5709,13 @@ function updateBattle() {
   if (banner) { banner.t++; if (banner.t >= banner.life) banner = null; }
 
   const alive = fighters.filter((f) => !f.eliminated);
-  if (alive.length <= 1) {
+  /* Wait for the last KO to land before calling it. Derived from fighter
+     state, which the rollback already snapshots, rather than a new
+     module-level timer saveSim would have to be taught about by hand -- a
+     field it does not know about is a silent desync, and this one would only
+     ever diverge on the very last frame of a match. */
+  const koStillFlying = fighters.some((f) => f.state === 'ko');
+  if (alive.length <= 1 && !koStillFlying) {
     winnerKey = alive.length === 1 ? alive[0].key : null;
     scene = 'results';
     resultTimer = 0;
@@ -5684,6 +5751,9 @@ function updateBattle() {
    SCENE: RESULTS
    ===================================================================== */
 
+// Long enough to read who won, short enough that nobody reaches for a key.
+const RESULT_AUTO_FRAMES = 200;   // ~3.3 seconds
+
 let resultTimer = 0;
 
 function updateResults() {
@@ -5708,7 +5778,17 @@ function updateResults() {
      is settled. */
   const backOut = menuBack();
   const carryOn = resultTimer > 40 && menuConfirm();
-  if (!backOut && !carryOn) return;
+  /* Online, nobody presses anything.
+
+     Four people staring at a results screen waiting to find out whose job it
+     is to continue is not a decision anybody wants to make, and there is no
+     shared cursor for them to watch. So the room takes itself back to
+     picking after long enough to read the result -- netStop below hands
+     everyone to the lobby, where all four choose at once rather than in
+     turn. Local play still waits for a key, because there the person who
+     presses it is sitting right there. */
+  const autoOnline = netplay.active && resultTimer > RESULT_AUTO_FRAMES;
+  if (!backOut && !carryOn && !autoOnline) return;
 
   if (netplay.active) netStop('match over');
   select.locked = new Array(MAX_PLAYERS).fill(false);
@@ -5963,7 +6043,9 @@ function drawDuck(g, x, y, facing) {
 }
 
 function drawFighter(g, f) {
-  if (f.eliminated) return;
+  // An eliminated fighter is still on screen while the KO that removed them
+  // plays out. 'gone' is when they are actually off the board.
+  if (f.eliminated && f.state !== 'ko') return;
   const im = f.sprite();
   if (!im) return;
 
@@ -6310,8 +6392,8 @@ function drawTitle() {
 const HELP_ROWS = [
   ['MOVE', 'A  D', 'left hand moves and blocks'],
   ['JUMP', 'W / SPACE', 'again in the air for a second jump'],
-  ['DROP', 'S', 'with jump, drops you through a platform'],
-  ['SHIELD', 'SHIFT', 'with a direction rolls, with S dodges'],
+  ['DROP', 'S', 'with jump, drops through a side platform'],
+  ['SHIELD', 'SHIFT', 'stops you; then tap a direction to roll'],
   ['SPECIALS', 'H J K', 'right hand attacks; each costs mana'],
   ['ULT', 'L', 'only once the ult bar is full'],
   ['JAB', 'G', 'free -- it still works at zero mana'],
@@ -6523,7 +6605,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '24368f8488';
+const BUILD_ID = '84153ad6c0';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
