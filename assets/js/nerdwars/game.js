@@ -6508,6 +6508,23 @@ function render() {
    to receive().
    ===================================================================== */
 
+/* A fingerprint of this exact engine, stamped in by build.py from a hash of
+   the source. 'dev' means somebody is running the file unbuilt.
+
+   Rollback netcode assumes every machine runs the SAME code: only buttons
+   cross the wire, and each machine derives the whole match from them. Two
+   builds that disagree about anything -- one frame of a move, whether the
+   stage floor is solid -- quietly produce two different matches from the same
+   inputs. That is not a bug the simulation can detect early; it is only
+   visible once the two have drifted far enough to notice.
+
+   It happened for real: a browser holding a cached bundle played a match
+   against a refreshed one, and the stale side watched its opponent fall
+   through a floor that was solid on the other screen. The lobby now compares
+   this before a match can start, because refusing to begin is the only
+   honest answer -- there is no way to reconcile two engines mid-match. */
+const BUILD_ID = '24368f8488';
+
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
 // all desync checking -- and an input is two bytes, so the window is cheap.
@@ -7352,6 +7369,8 @@ function frame(now) {
    check what it's doing without exposing anything that could be poked into an
    inconsistent state. */
 window.NerdWars = {
+  // What the lobby compares before it will start a match. See BUILD_ID.
+  get build() { return BUILD_ID; },
   get scene() { return scene; },
   get stage() { return STAGE.key; },
   get focused() { return hasFocus; },

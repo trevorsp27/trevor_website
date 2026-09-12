@@ -166,8 +166,14 @@ function stubCanvas(w, h) {
 
 let browserSeq = 0;
 
-/** One whole browser: game.js, net.js, a lobby to click on. */
-async function browser() {
+/** One whole browser: game.js, net.js, a lobby to click on.
+ *
+ * `opts.build` swaps the engine's stamped build id, which is how a browser
+ * holding a stale cached bundle is simulated. That is not a hypothetical: it
+ * is what actually happened, and the two machines played different matches
+ * from the same inputs for three deaths before anybody worked out why.
+ */
+async function browser(opts) {
   const seed = ++browserSeq;
   const els = {};
   for (const id of LOBBY_IDS) els[id] = makeEl(id);
@@ -221,9 +227,21 @@ async function browser() {
   vm.createContext(sb);
   vm.runInContext(SPRITES, sb, { filename: "sprites.js" });
   vm.runInContext("var SPRITES=window.NERDWARS_ASSETS.SPRITES,TILES=window.NERDWARS_ASSETS.TILES,UI=window.NERDWARS_ASSETS.UI;", sb);
-  vm.runInContext(GAME, sb, { filename: "game.js" });
+  var netSrc = NET;
+  if (opts && opts.legacyHello) {
+    const withBuild = '{ t: "hello", char: state.myChar, build: MY_BUILD }';
+    assert.ok(NET.includes(withBuild), "net.js should send its build on hello");
+    netSrc = NET.replace(withBuild, '{ t: "hello", char: state.myChar }');
+  }
+  var gameSrc = GAME;
+  if (opts && opts.build) {
+    const stamped = GAME.match(/BUILD_ID = '([a-z0-9]+)'/);
+    assert.ok(stamped, "game.js should carry a stamped BUILD_ID");
+    gameSrc = GAME.replace(stamped[0], "BUILD_ID = '" + opts.build + "'");
+  }
+  vm.runInContext(gameSrc, sb, { filename: "game.js" });
   for (let i = 0; i < 5; i++) await Promise.resolve();
-  vm.runInContext(NET, sb, { filename: "net.js" });
+  vm.runInContext(netSrc, sb, { filename: "net.js" });
 
   return {
     nw: sb.window.NerdWars,
@@ -629,4 +647,98 @@ test("the same room can start a second match with different fighters", async () 
   // And it is a real match, not a stalled one.
   playOut(ms, 240, 3);
   assertAgreed(ms, "the second match");
+});
+
+
+/* ------------------------------------------------------------------ *
+ * Two machines, two different bundles.
+ * ------------------------------------------------------------------ */
+
+test("the engine stamps a build id and the page can read it", async () => {
+  const b = await browser();
+  assert.match(b.nw.build, /^[a-f0-9]{10}$/,
+    "build.py should stamp a content hash; got " + JSON.stringify(b.nw.build) +
+    ". 'dev' means the bundle was not built, which would disable the check " +
+    "that stops two different engines from playing each other");
+});
+
+test("a guest on a stale bundle is turned away instead of seated", async () => {
+  resetWorld();
+  const host = await browser();
+  const guest = await browser({ build: "0badcache0" });
+
+  host.pick("kel");
+  host.hostRoom();
+  flush();
+  const code = host.code();
+
+  guest.pick("trev");
+  guest.joinRoom(code);
+  flush();
+
+  assert.equal(filledSeats(host), 1,
+    "the host should still be sitting alone -- seating a guest on a different " +
+    "engine is how two machines end up playing two different matches");
+  assert.match(guest.status(), /different version/i,
+    "and the guest has to be TOLD why, or the room simply never appears and " +
+    "there is nothing to act on. Saw: " + JSON.stringify(guest.status()));
+  assert.equal(guest.phase(), "idle");
+});
+
+test("the same bundle still joins normally", async () => {
+  /* The control. A version gate that rejects everybody would pass the test
+     above and quietly end multiplayer altogether. */
+  const { ms } = await room(["kel", "trev"]);
+  assert.equal(filledSeats(ms[0]), 2, "two matching builds should seat fine");
+  assert.equal(ms[1].phase(), "lobby");
+  assert.equal(ms[0].nw.build, ms[1].nw.build);
+});
+
+test("a desync stops the simulation, not just the lobby", async () => {
+  const { ms } = await room(["kel", "trev"]);
+  ms[0].start();
+  flush();
+  playOut(ms, 150);
+  assert.equal(ms[0].nw.net.active, true, "the match should be running");
+
+  const cp = checkpoint(ms[0]);
+  assert.ok(cp.frame >= 0, "a frame should have been hashed by now");
+
+  /* Exactly what a divergence looks like from the outside: the other machine
+     reporting a different hash for a frame we have already confirmed. */
+  ms[0].nw.net.receive({ t: "c", s: 1, f: cp.frame, h: (cp.hash ^ 0x5bf03635) >>> 0 });
+  flush();
+
+  assert.equal(
+    ms[0].nw.net.active, false,
+    "the SIMULATION has to stop, not just the lobby panel. It used to keep " +
+    "running behind the warning, which is how a match played on for three " +
+    "more deaths on one screen and none on the other"
+  );
+  assert.match(ms[0].status(), /fell out of step/i,
+    "and say so. Saw: " + JSON.stringify(ms[0].status()));
+});
+
+test("a peer too old to send a build at all is also turned away", async () => {
+  /* The realistic shape of this: a browser holding the whole page in cache has
+     the old net.js too, and that one sends no build field at all. Silence is
+     the signature of exactly the peer we know is out of date, so it must not
+     read as agreement. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser({ legacyHello: true });
+
+  host.pick("kel");
+  host.hostRoom();
+  flush();
+  guest.pick("trev");
+  guest.joinRoom(host.code());
+  flush();
+
+  assert.equal(filledSeats(host), 1,
+    "a guest that never mentions its build is running a page older than this " +
+    "check, which is the case the check exists for");
+  assert.match(host.status(), /different version/i,
+    "and the host should be told, so they can pass the word on. Saw: " +
+    JSON.stringify(host.status()));
 });

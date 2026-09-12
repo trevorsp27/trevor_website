@@ -33,6 +33,41 @@
   // and a v2 client cannot play together, and would fail confusingly rather
   // than loudly, so they are simply not allowed to meet.
   var PEER_PREFIX = "trevor-nerdwars-v2-";
+
+  /* Same engine on every machine, or no match at all.
+
+     Rollback netcode sends buttons and nothing else: each machine derives the
+     entire match from them, so two browsers on different bundles play two
+     different matches from identical input. Nothing detects that early and
+     nothing can reconcile it afterwards -- it showed up as one player falling
+     through a floor that was solid on the other screen, losing three stocks
+     on a machine where he never moved.
+
+     A stale bundle is the ordinary way this happens: the page is cached, the
+     ?v= token is cached with it, and the browser never asks for the new file.
+     So the check has to be the bytes themselves, not a version anybody
+     remembers to bump. */
+  var MY_BUILD = (window.NerdWars && window.NerdWars.build) || "unknown";
+
+  function buildDiffers(theirs) {
+    /* Absent counts as different. A peer that sends no build at all is
+       running a net.js from before this check existed, which means its page
+       is older than this one by definition -- and that is precisely the
+       browser-holding-a-stale-bundle case the check is for. Treating silence
+       as agreement would wave through the only peer we already know is
+       out of date. */
+    return theirs !== MY_BUILD;
+  }
+
+  function sayRefresh(who) {
+    /* The connection is about to be closed, and the drop handler has its own
+       opinion about what to say. This is the more useful message of the two,
+       so flag it and let the drop stay quiet. */
+    state.rejected = true;
+    say(who + " on a different version of the page, so a match would not be " +
+        "the same game on both screens. Everyone hard-refresh " +
+        "(Ctrl+Shift+R, or Cmd+Shift+R on a Mac) and try again.", "warn");
+  }
   var CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1
   var CODE_LEN = 4;
   var MAX_SEATS = 4;
@@ -331,7 +366,24 @@
       return;
     }
 
+    if (msg.t === "badversion") {
+      sayRefresh("You are");
+      closeConn(fromSlot);
+      setPhase("idle");
+      return;
+    }
+
     if (msg.t === "seat") {
+      // First thing the host ever says, so it is the earliest possible place
+      // to find out we are not the same game. Only the initial seating is a
+      // handshake: the `match` variant goes to peers that already passed this
+      // gate, and rejecting it there would tear down a working room.
+      if (!msg.match && buildDiffers(msg.build)) {
+        sayRefresh("The host is");
+        closeConn(fromSlot);
+        setPhase("idle");
+        return;
+      }
       // The host telling a guest which seat it took, or -- with `match` set --
       // which fighter it will be once empty seats are squeezed out. Only the
       // first kind changes where it sits in the room.
@@ -353,6 +405,18 @@
       // A guest announcing itself to the host. This is what turns a reserved
       // seat into an occupied one: it can only arrive on an open channel.
       if (state.role !== "host") return;
+      if (buildDiffers(msg.build)) {
+        // Tell them why before dropping them, or the room simply never
+        // appears and they have no idea what went wrong.
+        post(state.conns[fromSlot], { t: "badversion", build: MY_BUILD });
+        dropSeat(fromSlot);
+        closeConn(fromSlot);
+        broadcastSeats();
+        say("Somebody tried to join on a different version of the page and " +
+            "was turned away. They need to hard-refresh.", "warn");
+        renderLobby();
+        return;
+      }
       setSeat(fromSlot, msg.char, true);
       say(charName(msg.char) + " joined.", "good");
       broadcastSeats();
@@ -368,6 +432,14 @@
     }
 
     if (msg.t === "go") {
+      // Belt and braces. The handshake above should have caught this long
+      // ago, but this is the last instant at which refusing costs nothing.
+      if (buildDiffers(msg.build)) {
+        sayRefresh("The host is");
+        closeConn(fromSlot);
+        setPhase("idle");
+        return;
+      }
       // The host decides the pairing, so everyone starts from one source of
       // truth rather than each assembling their own idea of the match.
       beginMatch(msg.chars, msg.stage, msg.delay, state.mySlot);
@@ -388,13 +460,22 @@
       send: send,
       onEvent: function (kind, detail) {
         if (kind === "desync") {
-          endMatch(
-            "The games fell out of step at frame " + detail.frame +
-              ", so the match was stopped."
-          );
+          /* Stop the SIMULATION, not just the lobby.
+
+             endMatch only moves the room's phase and prints a line. The
+             engine kept running underneath it, which is how two machines on
+             different bundles played on for three more deaths while one of
+             them displayed a warning behind the canvas that nobody was
+             looking at. A detector that does not stop anything is not a
+             detector, it is a note. */
+          state.desyncFrame = detail && detail.frame;
+          if (window.NerdWars.net.active) window.NerdWars.net.stop("desync");
+          else endMatch(desyncMessage());
         } else if (kind === "stopped" && state.phase === "playing") {
           var reason = detail && detail.reason;
-          if (reason === "match over") {
+          if (reason === "desync") {
+            endMatch(desyncMessage());
+          } else if (reason === "match over") {
             // The normal ending. Everybody is back in the room they were
             // already in, so this is an invitation rather than a warning.
             endMatch("Good game. Pick a fighter and go again.", "ok");
@@ -404,6 +485,15 @@
         }
       },
     });
+  }
+
+  /* Almost always the same cause, so it names it: the two machines are on
+     different bundles. A desync between identical builds would be a genuine
+     engine bug, and the frame number is what makes that one reportable. */
+  function desyncMessage() {
+    return "The games fell out of step at frame " + state.desyncFrame +
+      ", so the match was stopped. If this keeps happening, one of you is on " +
+      "an older version of the page -- everyone hard-refresh and start again.";
   }
 
   function endMatch(message, kind) {
@@ -439,10 +529,10 @@
     conn.on("open", function () {
       if (state.role === "host") {
         // Tell the newcomer which seat it is in, then who else is here.
-        post(conn, { t: "seat", slot: slot });
+        post(conn, { t: "seat", slot: slot, build: MY_BUILD });
         broadcastSeats();
       } else {
-        send({ t: "hello", char: state.myChar });
+        send({ t: "hello", char: state.myChar, build: MY_BUILD });
         say("Connected.", "good");
       }
       // A channel that finishes opening DURING a match must not drag the panel
@@ -468,7 +558,11 @@
       } else {
         if (window.NerdWars.net.active) window.NerdWars.net.stop("disconnected");
         state.seats = [];
-        say("Lost the connection to the room.", "warn");
+        // A version rejection has already said something far more useful,
+        // and the close it triggers is the expected consequence rather than
+        // news. Do not talk over it.
+        if (state.rejected) state.rejected = false;
+        else say("Lost the connection to the room.", "warn");
         setPhase("idle");
       }
       renderLobby();
@@ -660,10 +754,11 @@
       var chars = here.map(function (s) { return s.char; });
       for (var i = 0; i < here.length; i++) {
         var conn = state.conns[here[i].slot];
-        if (conn) post(conn, { t: "seat", slot: i, match: true });
+        if (conn) post(conn, { t: "seat", slot: i, match: true, build: MY_BUILD });
       }
       state.mySlot = 0;
-      sendAll({ t: "go", chars: chars, stage: state.stage, delay: DEFAULT_DELAY });
+      sendAll({ t: "go", chars: chars, stage: state.stage,
+               delay: DEFAULT_DELAY, build: MY_BUILD });
       beginMatch(chars, state.stage, DEFAULT_DELAY, 0);
     });
 
