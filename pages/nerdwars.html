@@ -20,11 +20,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="../assets/css/styles.css?v=20260602a" />
-    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260901e" />
+    <link rel="stylesheet" href="../assets/css/nerdwars.css?v=20260912a" />
     <script src="../assets/js/site-data.js?v=20260831a" defer></script>
     <script src="../assets/js/site.js?v=20260811a" defer></script>
     <script src="../assets/js/nerdwars/sprites.js?v=20260903c" defer></script>
-    <script src="../assets/js/nerdwars/game.js?v=20260912f" defer></script>
+    <script src="../assets/js/nerdwars/game.js?v=20260912g" defer></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="../assets/js/nerdwars/net.js?v=20260912b" defer></script>
 
@@ -64,6 +64,11 @@
             <button class="nw-btn" type="button" data-nerdwars-fullscreen>
               Fullscreen
             </button>
+            <label class="nw-music" for="nw-music">
+              <span class="nw-music-label">Music</span>
+              <input id="nw-music" type="range" min="0" max="100" step="5" value="100" />
+              <output class="nw-music-val" id="nw-music-val" for="nw-music">100%</output>
+            </label>
           </div>
           <div class="nw-stage" data-nerdwars>
             <canvas id="nw-canvas" aria-label="NerdWars game screen"></canvas>
@@ -125,6 +130,7 @@
                   <th scope="col">Specials</th>
                   <th scope="col">Ult</th>
                   <th scope="col">Jab</th>
+                  <th scope="col">Grab</th>
                   <th scope="col">Shield</th>
                 </tr>
               </thead>
@@ -136,6 +142,7 @@
                   <td><kbd>H</kbd><kbd>J</kbd><kbd>K</kbd></td>
                   <td><kbd>L</kbd></td>
                   <td><kbd>G</kbd></td>
+                  <td><kbd>Y</kbd></td>
                   <td><kbd>Shift</kbd></td>
                 </tr>
               </tbody>
@@ -144,6 +151,37 @@
         </section>
 
       </main>
+
+      <script>
+        /* The music slider.
+
+           There is one inside the game too, on the controls screen, but that
+           is three keystrokes and a screen change away from a match -- which
+           is why the person who asked for a music bar could not find it. This
+           one sits above the canvas and is always there.
+
+           Deferred scripts have all run by DOMContentLoaded, so NerdWars is
+           built by the time this fires. If it is not -- a blocked bundle, a
+           browser that refused something -- the control removes itself rather
+           than sitting there doing nothing. */
+        document.addEventListener("DOMContentLoaded", function () {
+          var range = document.getElementById("nw-music");
+          var out = document.getElementById("nw-music-val");
+          var audio = window.NerdWars && window.NerdWars.audio;
+          if (!range || !out) return;
+          if (!audio || typeof audio.setMusicVolume !== "function") {
+            var label = range.closest(".nw-music");
+            if (label) label.hidden = true;
+            return;
+          }
+          var show = function (v) { out.textContent = v <= 0 ? "off" : Math.round(v * 100) + "%"; };
+          range.value = String(Math.round(audio.musicVolume * 100));
+          show(audio.musicVolume);
+          range.addEventListener("input", function () {
+            show(audio.setMusicVolume(Number(range.value) / 100));
+          });
+        });
+      </script>
 
       <footer>
         <p>&copy; <span data-year></span> <span data-owner>Trevor</span>. All rights reserved.</p>

@@ -4502,6 +4502,12 @@ function musicLevelLoad() {
   } catch (e) { /* no storage: the default stands */ }
 }
 
+/* Read at load rather than waiting for audioMusicInit, which only runs on the
+   first user gesture. Nothing here touches the audio API -- it is a number in
+   localStorage -- and a page that draws its own slider needs the real value
+   before anybody has clicked, or it shows 100% next to music that is not. */
+musicLevelLoad();
+
 function musicLevelSet(v) {
   AUDIO.music = clamp(v, 0, 1);
   try {
@@ -4521,7 +4527,6 @@ function audioMusicRole() {
    because an <audio> element is under the same autoplay rule. */
 function audioMusicInit() {
   if (audioMusicReady) return;
-  musicLevelLoad();
   if (typeof Audio !== 'function') return;      // headless harness: no music
   const table = typeof MUSIC === 'undefined' ? null : MUSIC;
   if (!table) return;
@@ -6939,7 +6944,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'e36b4098a5';
+const BUILD_ID = '5c605fb2fe';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

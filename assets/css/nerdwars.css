@@ -43,6 +43,30 @@
   margin: 0 0 0.7rem;
 }
 
+/* Sits in the bar above the canvas, beside Fullscreen. Deliberately not in
+   the online panel: it is about the game, not about the room. */
+.nw-music {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.nw-music input[type="range"] {
+  width: 8.5rem;
+  accent-color: #8fd6ff;
+  cursor: pointer;
+}
+
+.nw-music-val {
+  min-width: 2.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .nw-bar-hint {
   margin: 0;
   color: var(--muted);
