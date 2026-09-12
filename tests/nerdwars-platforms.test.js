@@ -1192,6 +1192,110 @@ test("SIDEARM's recoil has a ceiling, and never cancels a real launch", async ()
     launched.after.toFixed(2));
 });
 
+test("Kel's bone is three throws, and which one depends on what he was doing", async () => {
+  /* Standing he gets a boomerang, walking a fastball, airborne a spike -- and
+     the airborne one carries his horizontal speed, so a running jump-throw
+     goes somewhere a standing one cannot. That last part is the case the
+     pizza already gets right and the reason it feels alive.
+
+     The capture point is the interesting bit. groundFriction is 0.55, so six
+     frames of the bone's startup leaves four percent of a walk: by the frame
+     the projectile spawns there is nothing left to tell "he was running" from
+     "he was standing". throwFast is read in startAttack, before any of the
+     startup runs. In the AIR it works off owner.vx directly, because nothing
+     damps horizontal speed up there. */
+  const run = await bootEngine();
+  run("select.cursor=[2,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("ROSTER.kel.specials.neutral.kind"), "projectile",
+    "this is Kel's bone");
+
+  const SP_N = 512, RIGHT = 2;
+  const throwIt = (how) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = main.x + 60; me.y = main.y; me.specialSpawned = false;
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    foe.grounded = true; foe.vx = 0; foe.vy = 0;
+    var how = ${JSON.stringify('HOW')};
+    if (how === 'jump' || how === 'runjump') {
+      me.grounded = false; me.y = main.y - 34; me.vy = 0;
+    }
+    if (how === 'running' || how === 'runjump') me.vx = me.def.walk;
+    var hold = (how === 'running' || how === 'runjump') ? ${RIGHT} : 0;
+    /* Measured from the BONE's own spawn, not from where Kel started.
+       Measuring from Kel conflates "the throw went further" with "he had
+       already walked a few pixels before releasing it" -- and that is not
+       hypothetical: it made the momentum assertion below pass even with the
+       inheritance deleted, because a running Kel simply spawns it further
+       along. */
+    var sx = null, mode = null, firstVy = null, near = 0, far = 0, n = 0;
+    netplay.active = true;
+    for (var i = 0; i < 130; i++) {
+      me.hitstop = 0; foe.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad((i === 0 ? ${SP_N} : 0) | hold), bitsToPad(0)];
+      step();
+      var b = projectiles.filter(function (q) { return q.constructor.name === 'Bone'; })[0];
+      if (!b) continue;
+      if (!mode) { mode = b.mode; firstVy = b.vy; sx = b.x; }
+      var dx = b.x - sx;
+      if (dx < near) near = dx;
+      if (dx > far) far = dx;
+      n++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { mode: mode, firstVy: firstVy, near: near, far: far, frames: n };
+  })()`.replace('"HOW"', JSON.stringify(how)));
+
+  const still = throwIt("still");
+  const running = throwIt("running");
+  const jump = throwIt("jump");
+  const runjump = throwIt("runjump");
+
+  // Three distinct modes, chosen by state.
+  assert.equal(still.mode, "boom", "standing still should give the boomerang");
+  assert.equal(running.mode, "skip", "walking should give the fastball");
+  assert.equal(jump.mode, "spike", "airborne should give the spike");
+  assert.equal(runjump.mode, "spike", "still a spike from a running jump");
+
+  /* The boomerang has to actually come back -- past him, not merely stop
+     short. Everything else must NOT, or "it comes back" is meaningless. */
+  assert.ok(still.near < -6,
+    "the standing throw should return past him; nearest was " + still.near);
+  assert.ok(still.far > 30,
+    "and go somewhere first; furthest was " + still.far);
+  for (const [name, r] of [["running", running], ["jump", jump],
+                           ["runjump", runjump]]) {
+    assert.ok(r.near > -1,
+      "only the standing throw comes back; " + name + " reached " + r.near);
+  }
+
+  // The spike is thrown DOWN, which is what makes it a spike.
+  assert.ok(jump.firstVy > 1,
+    "an airborne bone should be thrown downward; vy was " + jump.firstVy);
+  assert.ok(still.firstVy <= 0.01,
+    "the boomerang should be flat, not falling; vy was " + still.firstVy);
+
+  /* And the airborne throw carries him. This is the assertion that fails if
+     anyone drops the `owner.vx * 0.3` term, which is easy to read as noise. */
+  assert.ok(runjump.far > jump.far + 8,
+    "a running jump should throw it further than a standing one; " +
+    runjump.far.toFixed(1) + " against " + jump.far.toFixed(1));
+
+  /* The fastball is the long one on the ground. If this ever inverts, the
+     standing throw has quietly become the better poke and the boomerang has
+     no reason to exist. */
+  assert.ok(running.far > still.far + 20,
+    "the running throw should out-range the boomerang; " +
+    running.far.toFixed(1) + " against " + still.far.toFixed(1));
+});
+
 test("John can walk through his whole kit, and still stops when you let go", async () => {
   /* Nothing was holding him still on purpose. `rooted` never listed any of
      his moves -- what stopped him was the plain non-mobile path, ground

@@ -540,7 +540,7 @@ const ROSTER = {
     origin: 'sprites',
     tag: 'BONES & BARBELLS',
     drawn: true,
-    blurb: 'A bone he made himself, and the rest of it out of the gym.',
+    blurb: 'A bone that comes back if he stands still, and the rest of it out of the gym.',
     weight: 98, walk: 1.52, jump: 6.5, doubleJump: 6.0,
     jab: { startup: 4, active: 4, recovery: 10, damage: 5,
            base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
@@ -553,6 +553,20 @@ const ROSTER = {
         startup: 6, active: 1, recovery: 13, maxAlive: 3,
         bounce: 0.42, friction: 0.82,
         speed: 3.3, lift: -0.55, drop: 0.055, life: 240,
+        /* Standing: out about 59px and back, on a flat line, in roughly 65
+           frames. boomPull is the deceleration, so the reach is
+           boomSpeed^2 / (2 * boomPull) and the round trip is twice
+           boomSpeed / boomPull -- change either and both move. */
+        boomSpeed: 3.6, boomPull: 0.11, boomLife: 110,
+        // Walking: flatter and quicker than the standing throw ever was.
+        skipSpeed: 4.4, skipLift: -0.25,
+        /* Airborne: down hard, and it comes back up off the floor. The
+           rebound apex is (spikeDrop * spikeBounce)^2 / (2 * drop), so it is
+           very sensitive to this number -- 0.86 sent it 110 pixels up, over
+           half the screen, which is not "owns the space above where it
+           landed", it is a second projectile in the ceiling. 0.62 puts the
+           apex around 40, which is the height of the side platforms. */
+        spikeSpeed: 1.6, spikeDrop: 3.4, spikeBounce: 0.62,
         damage: 15, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       },
       // He lived in the gym, so the other two slots came out of it rather than
@@ -1713,6 +1727,8 @@ class Fighter {
        and an integer is one. */
     this.chargePiece = 0;
     this.chargeTimer = 0;
+    // Was he moving on the frame he committed to a throw? See startAttack.
+    this.throwFast = false;
     // Which special slot opened the running charge: 'neutral', 'down', 'up'.
     this.chargeKey = 'neutral';
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
@@ -2258,6 +2274,12 @@ class Fighter {
   }
 
   startAttack(kind, pad) {
+    /* Was he actually going somewhere when he committed to this? Read HERE,
+       before the 0.4 below and before any of the startup runs, because
+       groundFriction is 0.55: six frames of a bone's startup leaves four
+       percent of a walk, so by the frame the projectile spawns there is
+       nothing left to read. */
+    this.throwFast = this.grounded && Math.abs(this.vx) > 0.5;
     if (kind === 'special') this.specialSlot = this.slotFor(pad);
     /* Which button opened this, remembered so a charge can only be held by
        that one. It duplicates specialSlot on purpose: specialSlot is not a
@@ -2427,10 +2449,28 @@ class Fighter {
 
   runSpecial(s) {
     switch (s.kind) {
+      /* One button, three bones. The shape comes out of what he was doing
+         when he threw it, which is the thing worth copying from the pizza --
+         not its numbers, which stay exactly as they are.
+
+           standing on the ground -> it comes BACK. He has time to set it up,
+             so it threatens the same line twice and he can stand behind it.
+           walking or running      -> a fastball: flatter, quicker, and it
+             skitters off the floor the way the bone always has.
+           in the air              -> a spike, thrown down hard, and it
+             rebounds high off whatever it lands on.
+
+         The air one also carries his horizontal speed, which is the case the
+         pizza gets right and the reason a running jump-throw goes somewhere
+         different from a standing one. It works there and not on the ground
+         because nothing damps vx in the air -- on the ground friction has
+         already eaten it by the spawn frame, which is what throwFast is for. */
       case 'projectile':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Bone(this, s));
+          const mode = !this.grounded ? 'spike'
+                     : this.throwFast ? 'skip' : 'boom';
+          projectiles.push(new Bone(this, s, mode));
         }
         break;
 
@@ -4429,14 +4469,31 @@ const NOTE_ART = [
    ===================================================================== */
 
 class Bone {
-  constructor(owner, spec) {
+  constructor(owner, spec, mode) {
     this.owner = owner;
     this.spec = spec;
+    this.mode = mode || 'skip';
     this.x = owner.x + owner.facing * 8;
     this.y = owner.y - 9;
-    this.vx = owner.facing * spec.speed;
-    this.vy = spec.lift;
-    this.life = spec.life;
+    this.dir = owner.facing;
+    this.homeX = owner.x;
+    if (this.mode === 'boom') {
+      // Flat and gravityless: a thing that comes back has to come back to the
+      // height it left from, or it is just a bone that fell over there.
+      this.vx = owner.facing * (spec.boomSpeed || 3.6);
+      this.vy = 0;
+    } else if (this.mode === 'spike') {
+      /* Down, hard, and carrying him with it. This is the case the pizza
+         gets right: nothing damps vx in the air, so owner.vx here is really
+         how fast he is going and a running jump-throw lands somewhere a
+         standing one never could. */
+      this.vx = owner.facing * (spec.spikeSpeed || 1.6) + owner.vx * 0.3;
+      this.vy = spec.spikeDrop || 3.4;
+    } else {
+      this.vx = owner.facing * (spec.skipSpeed || spec.speed);
+      this.vy = spec.skipLift === undefined ? spec.lift : spec.skipLift;
+    }
+    this.life = this.mode === 'boom' ? (spec.boomLife || 90) : spec.life;
     this.spin = 0;
     this.dead = false;
     this.dmgMul = owner.damageMul;
@@ -4446,7 +4503,18 @@ class Bone {
     const prevY = this.y;
     this.x += this.vx;
     this.y += this.vy;
-    this.vy += this.spec.drop;
+    if (this.mode === 'boom') {
+      /* Pulled back the way it came, every frame. It slows, stops, and
+         returns along its own line -- so the dangerous thing is not the throw
+         but the space between him and wherever it turned around.
+
+         It dies once it is behind him rather than on a timer: a boomerang
+         that expires in mid-return is a boomerang that did not come back. */
+      this.vx -= this.dir * (this.spec.boomPull || 0.11);
+      if ((this.x - this.homeX) * this.dir < -12) this.dead = true;
+    } else {
+      this.vy += this.spec.drop;
+    }
     this.spin += 0.34;
     this.life--;
 
@@ -4465,7 +4533,12 @@ class Bone {
             // still on the floor is trivially walked around -- what makes a
             // grounded projectile dangerous is that it keeps travelling.
             if (Math.abs(this.vy) > 0.55) {
-              this.vy = -Math.abs(this.vy) * this.spec.bounce;
+              /* A spike rebounds far harder than a skip does, which is the
+                 whole point of throwing it down: it arrives fast, and then it
+                 owns the air above where it landed for a second afterwards. */
+              const b = this.mode === 'spike' && this.spec.spikeBounce !== undefined
+                ? this.spec.spikeBounce : this.spec.bounce;
+              this.vy = -Math.abs(this.vy) * b;
               this.vx *= (this.spec.friction === undefined ? 0.9 : this.spec.friction);
             } else {
               this.vy = 0;
@@ -8612,7 +8685,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '817d79aafc';
+const BUILD_ID = 'fd13c8f2f9';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8623,7 +8696,7 @@ const BUILD_ID = '817d79aafc';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.28';
+const VERSION = '2.29';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
