@@ -501,7 +501,7 @@ const ROSTER = {
         kind: 'gun', label: 'SIDEARM', mobile: true,
         startup: 8, active: 3, recovery: 21,
         speed: 6.2, life: 46, tint: '#ffd76a',
-        kickX: 1.9, kickY: 4.6, cue: 'gunshot',
+        kickX: 1.9, kickY: 4.6, kickMax: 1.9, cue: 'gunshot',
         punish: { stun: 48 },
         damage: 7, base: 2.4, scale: 5.8, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
       },
@@ -2500,7 +2500,30 @@ class Fighter {
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           projectiles.push(new Slug(this, s));
-          this.vx -= this.facing * (s.kickX || 0);
+          /* The recoil ACCUMULATES, and nothing in the air used to put a
+             ceiling on it: every shot subtracted another kickX, and each one
+             also hands back an air jump, so firing repeatedly was a rocket.
+             Measured at 1.9 and 59px of drift for one shot, 3.8 and 251px for
+             two, 5.7 and 439px for three -- on a stage 320 pixels wide.
+
+             kickMax is 1.9, which is both one kick and PHYS.airDriftMax --
+             the fastest a player can push themselves sideways in the air. So
+             the rule is that the gun can never carry you quicker than your
+             own drift, which makes one shot exactly what it always was and
+             makes the second and third add nothing. 3 was tried first and
+             was not enough: each shot also cancels his fall and hands back an
+             air jump, so the hang time multiplies whatever the speed is, and
+             at 3 a triple-fire still flew him to x=-52 and killed him.
+
+             The window always contains his current vx, which is the part that
+             matters: the cap stops the RECOIL making him faster than kickMax,
+             but somebody launched across the stage by a real hit keeps every
+             pixel of it. Firing while already flying neither helps him nor
+             adds to it. */
+          const kick = this.facing * (s.kickX || 0);
+          const cap = s.kickMax || 3;
+          this.vx = clamp(this.vx - kick,
+                          Math.min(-cap, this.vx), Math.max(cap, this.vx));
           if (!this.grounded) {
             this.vy = Math.min(this.vy, 0) - (s.kickY || 0);
             this.jumpsLeft = Math.max(this.jumpsLeft, 1);
@@ -8589,7 +8612,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '9aa84b9952';
+const BUILD_ID = '817d79aafc';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8600,7 +8623,7 @@ const BUILD_ID = '9aa84b9952';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.27';
+const VERSION = '2.28';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

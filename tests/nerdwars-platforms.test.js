@@ -1106,6 +1106,92 @@ test("the burst is a firework: it slows, and it reaches as far as it hits hard",
     drawn.alphas + " distinct alphas over " + drawn.rects + " rects");
 });
 
+test("SIDEARM's recoil has a ceiling, and never cancels a real launch", async () => {
+  /* The recoil ACCUMULATES -- every shot subtracts another kickX -- and
+     nothing in the air used to put a ceiling on it. Each shot also cancels
+     his fall and hands back an air jump, so he could hang there firing and
+     the speed just kept climbing: measured at 1.9 and 59px of drift for one
+     shot, 3.8 and 251px for two, 5.7 and 439px for three, on a stage 320
+     pixels wide. Jump and spam it and he flew off the side and died.
+
+     kickMax is 1.9, which is both one kick and PHYS.airDriftMax, the fastest
+     a player can push themselves sideways in the air. The rule is that the
+     gun can never carry you quicker than your own drift. A cap of 3 was
+     tried first and was not enough -- the hang time multiplies whatever the
+     speed is, and a triple-fire still reached x=-52 and killed him. */
+  const run = await bootEngine();
+  run("select.cursor=[1,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  const gun = run("(function(){var s = ROSTER.johnnyham.specials.up;" +
+    "return { kickX: s.kickX, kickMax: s.kickMax, drift: PHYS.airDriftMax };})()");
+  assert.ok(gun.kickMax > 0, "the recoil needs a ceiling at all");
+  assert.ok(gun.kickMax <= gun.drift + 0.01,
+    "the ceiling should not exceed a player's own air drift (" + gun.drift +
+    "); it is " + gun.kickMax);
+
+  const SP_U = 2048;
+  /* Fire it repeatedly in mid-air, held up so he can keep going -- which is
+     the situation the old code turned into a rocket. */
+  const spam = (shots, startVx) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.grabbing = -1;
+    me.vx = ${startVx}; me.vy = 0;
+    me.x = main.x + main.w / 2; me.y = main.y - 40;
+    me.grounded = false; me.facing = 1; me.specialSpawned = false;
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + 4; foe.y = main.y; foe.hasHit = true;
+    var worst = 0, fired = 0, after = null;
+    netplay.active = true;
+    for (var i = 0; i < 240 && fired < ${shots}; i++) {
+      me.hitstop = 0; me.mana = 999;
+      var free = (me.state !== 'special');
+      netplay.framePads = [bitsToPad(free ? ${SP_U} : 0), bitsToPad(0)];
+      var was = me.specialSpawned;
+      step();
+      if (!was && me.specialSpawned) { fired++; if (after === null) after = me.vx; }
+      if (Math.abs(me.vx) > Math.abs(worst)) worst = me.vx;
+      me.vy = Math.min(me.vy, 0);
+      me.grounded = false;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { fired: fired, worst: worst, after: after };
+  })()`);
+
+  // One shot is untouched: the common case, and his recovery.
+  const one = spam(1, 0);
+  assert.equal(one.fired, 1, "one shot should have gone off");
+  assert.ok(Math.abs(Math.abs(one.worst) - gun.kickX) < 0.2,
+    "a single shot should still give the full kick of " + gun.kickX +
+    "; got " + one.worst.toFixed(2));
+
+  // And stacking buys nothing.
+  for (const n of [2, 3, 5]) {
+    const many = spam(n, 0);
+    assert.ok(Math.abs(many.worst) <= gun.kickMax + 0.01,
+      n + " shots must not stack past the ceiling of " + gun.kickMax +
+      "; reached " + many.worst.toFixed(2));
+  }
+
+  /* The subtle half. The clamp's window always contains his CURRENT vx, so
+     somebody genuinely launched across the stage keeps every pixel of it --
+     firing mid-flight neither adds to it nor helps him out of it. A naive
+     clamp to the cap would turn the gun into a free brake on knockback,
+     which is a bigger bug than the one being fixed. */
+  /* Measured on the frame the shot goes off, NOT as the worst over the run:
+     he enters this already travelling at 8, so a worst-of reading captures
+     that before the clamp has run and passes whatever the clamp does. That
+     version of this assertion did not fail when the clamp was replaced with a
+     naive clamp(-cap, cap), which is exactly the bug it is here to catch. */
+  const launched = spam(1, -8);
+  assert.ok(Math.abs(launched.after) >= 7.9,
+    "a fighter already flying at 8 must keep it; the recoil left him at " +
+    launched.after.toFixed(2));
+});
+
 test("John can walk through his whole kit, and still stops when you let go", async () => {
   /* Nothing was holding him still on purpose. `rooted` never listed any of
      his moves -- what stopped him was the plain non-mobile path, ground
