@@ -608,7 +608,7 @@ const ROSTER = {
     // is completely free for all of it -- moving, jumping, hitting people
     // while the ceiling comes down on them.
     ult: {
-      kind: 'rain', label: 'THE STROKES',
+      kind: 'rain', label: 'THE STROKES', noMeter: true,
       startup: 12, active: 1, recovery: 18,
       duration: 200,
       /* Was a note every 2 frames -- a hundred of them -- so many that the
@@ -3318,6 +3318,331 @@ function drawSwordFrame(g, key, x, y, facing, alpha) {
 function swordHandX(f) { return f.x + f.facing * 3; }
 function swordHandY(f) { return f.y - 9; }
 
+/* =====================================================================
+   TREV'S FISHING POLE
+
+   The guillotine this replaced needed no art: the victim was visibly
+   pinned at his side and that was the whole read. As a fishing pole it
+   reaches 46px -- a seventh of the stage -- and drew nothing at all
+   between the button and the catch. "trevors fishingpole doesnt have an
+   animation" was exactly right, and the frames it was most wrong about
+   were the 24 recovery frames after a MISS, where he is punishable and
+   the screen said nothing had happened.
+
+   Four moments. What the eye tracks at this size is the lure, not the
+   rod: a five-by-six red blob that TRAVELS is legible in the twelve
+   frames anybody gets to read it in, and a beautifully drawn rod is nine
+   brown pixels that read as a stick either way. So the lure is the
+   animation and the rod is its excuse.
+
+   Every stroke is drawn twice, dark first and one pixel fatter. That is
+   not decoration. The stage list runs from DEEP SPACE and the LAVA PIT
+   to THE BEACH, whose sand is #e6d6a2 and whose sun is a #fff3b0 disc
+   at (258, 36) -- a pale one-pixel line crossing that sun is not there,
+   and a dark one is not there over the lava. A bright core inside a
+   dark halo is the only thing that survives all five.
+
+   Everything is derived from fields the simulation already owns --
+   x, y, facing, state, attackFrame, grabbing, grabKind, grabTimer --
+   and writes none of them, so there is no new field for saveSim to pick
+   up and nothing here can drift between two machines. It spawns no
+   effects either: effects are deliberately not snapshotted, and 39
+   frames is exactly long enough to be re-simulated several times over,
+   so anything thrown from runSpecial would stack up once per replay.
+   ===================================================================== */
+const POLE_DARK = '#191622';   // the halo under rod, line and lure alike
+const POLE_WOOD = '#c08a46';   // cane
+const POLE_LINE = '#e4ecff';   // monofilament, cold so it never reads as sand
+const POLE_TAUT = '#ffffff';   // ...and hot for the six frames the box is live
+// The same red tickGrab already throws off a live hold, so the thing that
+// catches you and the thing that has you are one color.
+const POLE_LURE = '#d24b4b';
+
+/* Rod-tip keyframes as (forward, up) offsets from his center; his fist is at
+   (3, -9), which is where swordHandX/Y put it. Both swings route through
+   POLE_HIGH rather than interpolating straight across, because the short way
+   from carrying it to over the shoulder cuts the corner through his own fist:
+   that chord passes 13.0px from it, where routing through vertical never gets
+   closer than 15.7. Measured over all 70 drawn frames the rod is between 14.2
+   and 18.1 pixels long, and a rod whose length changes more than that frame
+   to frame reads as a rubber band being waved rather than as a rod. */
+const POLE_REST  = [12, -22];  // carried, and where the reel lands again
+const POLE_HIGH  = [ 3, -26];  // straight up: the corner both swings turn
+const POLE_BACK  = [-7, -22];  // wound back over the shoulder
+const POLE_FORE  = [19, -16];  // punched forward, pointing down the hitbox
+const POLE_DIP   = [18, -13];  // the miss: the tip drops when nothing takes it
+const POLE_HOLD  = [ 5, -25];  // lifted, with somebody on the end of it
+const POLE_SLING = [-6, -24];  // wound back a second time, to throw them
+
+/* Where the line ends during a hold. The `grabbed` branch of update() parks a
+   held fighter at `by.x + by.facing * 11` and `by.y - 1`, so their sprite's
+   top row sits at f.y - 17 -- and fighters draw in slot order, so a victim in
+   a higher slot is drawn AFTER Trev and paints over anything at their own
+   height. One pixel above their crown is the only place the far end of this
+   line is guaranteed not to be covered up. Change that 11 and this moves. */
+const POLE_BITE  = [11, -18];
+
+const poleMix = (a, b, u) => a + (b - a) * u;
+
+/* One stroke of rod or line, rasterized by hand into whole pixels.
+
+   Not g.stroke(): a 1px stroke on the fractional coordinates a walking
+   fighter produces comes back antialiased, and the whole-number upscale
+   (Math.floor(availW / VW), so four to six on most screens) then blows that
+   gray fringe up into blocks. Gray blocks against a busy stage are exactly
+   the invisible line this whole function exists to avoid.
+
+   It walks whichever axis the stroke is longer on and emits ONE rect per
+   step, tall (or wide) enough to bridge whatever the short axis did in
+   between -- a line with holes in it at this size is a dotted line.
+
+   `bow` pushes the middle aside and tapers to nothing at both ends, applied
+   to whichever axis is ACROSS the walk: on the near-horizontal cast that is
+   gravity sagging the line, on the near-vertical hold it is the loop of
+   slack swinging out in front of him. Positive is down for a flat stroke and
+   right for a steep one, so a caller wanting "forward" multiplies by facing.
+
+   `fat` grows every rect by one pixel on all four sides for no extra rect,
+   which is how the dark pass gets a full halo at the same cost as the bright
+   one instead of the one-sided shadow an offset copy would give. */
+function poleStroke(g, x0, y0, x1, y1, bow, fat) {
+  const ax = Math.round(x0), ay = Math.round(y0);
+  const dx = Math.round(x1) - ax, dy = Math.round(y1) - ay;
+  const n = Math.max(Math.abs(dx), Math.abs(dy));
+  const p = fat ? 1 : 0, d = p * 2 + 1;
+  if (n === 0) { g.fillRect(ax - p, ay - p, d, d); return; }
+  const flat = Math.abs(dx) >= Math.abs(dy);
+  let prev = flat ? ay : ax;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const b = bow * 4 * t * (1 - t);
+    if (flat) {
+      const y = Math.round(ay + dy * t + b);
+      g.fillRect(ax + (dx < 0 ? -i : i) - p, Math.min(y, prev) - p,
+                 d, Math.abs(y - prev) + d);
+      prev = y;
+    } else {
+      const x = Math.round(ax + dx * t + b);
+      g.fillRect(Math.min(x, prev) - p, ay + (dy < 0 ? -i : i) - p,
+                 Math.abs(x - prev) + d, d);
+      prev = x;
+    }
+  }
+}
+
+/** The rod, the line and the lure, for whoever is casting or holding one. */
+function drawPole(g, f) {
+  const s = f.def.specials && f.def.specials.down;
+  if (!s || s.kind !== 'pole') return;
+
+  /* Two reasons to draw, and they overlap on purpose. The hold runs on
+     grabTimer for 32 frames while the cast runs on attackFrame for 39, so a
+     catch on the first active frame leaves him in `special` AND holding
+     somebody -- and the hold outlives the animation at the other end, by
+     which point attackFrame means nothing at all. The hold wins: it is the
+     one with a person on it.
+
+     grabKind 1 is "caught by the character's own down special", which is the
+     only thing separating this from the universal Y grab. He has both, and
+     the Y grab must not sprout a fishing rod.
+
+     moveFor('special') rather than specialSlot === 'down': specialSlot is
+     assigned in startAttack and is NOT one of the constructor's fields, so
+     restoreSim -- which deletes any key missing from a snapshot -- is
+     entitled to take it away on a rewind past his first special of the
+     match. Asking the engine which move it believes is running draws
+     whatever he is actually doing either way. */
+  const holding = f.grabbing >= 0 && f.grabKind === 1;
+  const casting = f.state === 'special' && f.moveFor('special') === s;
+  if (!holding && !casting) return;
+
+  /* Forward-space: everything below is measured in pixels in front of him
+     and mirrored into world coordinates exactly once, at the bottom. That is
+     the trick relBox uses so a move never needs a second set of definitions
+     for facing left, and it is why there is no mirrored art here at all. */
+  let tf, tu;                       // rod tip
+  let kf, ku;                       // lure
+  let bow = 0, rodBow = 0;
+  let lineCol = POLE_LINE;
+  let lure = true;
+
+  if (holding) {
+    /* THE HOLD. The engine has already dragged them to his side -- that is
+       the `grabbed` branch, and it is instant -- so there is no reel-in left
+       to animate and drawing one would be a lie. What IS honest is the slack
+       that was out there when it bit: a loop of loose line collapsing
+       forward over six frames, and then taut. */
+    const t = s.grab.hold - f.grabTimer;        // 0 on the catch, 31 last
+    const sling = s.grab.hold - 8;
+    kf = POLE_BITE[0]; ku = POLE_BITE[1];
+    rodBow = -2;                                // loaded: the belly bends back
+    lure = false;                               // the hook is in him
+    if (t < 6) {
+      tf = POLE_HOLD[0]; tu = POLE_HOLD[1];
+      bow = 9 * (1 - t / 6);
+    } else if (t < sling) {
+      tf = POLE_HOLD[0];
+      /* Lifting them as he reels, plus a plucked-string twitch of one pixel
+         either side. Without it this stretch is seventeen identical frames,
+         and a still picture in the middle of a fight reads as the game
+         having hung rather than as a hold in progress. */
+      tu = POLE_HOLD[1] - clamp((t - 6) / 8, 0, 2);
+      bow = ((t >> 1) & 1) ? 1 : -1;
+    } else {
+      /* The last eight frames wind back for the throw, and the line goes
+         hot. This move goes through shields, so once somebody is on the line
+         seeing the throw coming is the only counterplay they have left --
+         and the throw is what actually takes the stock. */
+      const v = clamp((t - sling) / 8, 0, 1);
+      tf = poleMix(POLE_HOLD[0], POLE_SLING[0], v);
+      tu = poleMix(POLE_HOLD[1] - 2, POLE_SLING[1], v);
+      lineCol = POLE_TAUT;
+    }
+  } else {
+    /* updateAttack increments attackFrame BEFORE anything reads it and drops
+       out of `special` on the frame it reaches the total, so the frames that
+       actually get drawn are 1 through 38 -- never 0, and never 39. */
+    const k = f.attackFrame;
+    /* The frame the wind-up hands over to the cast. It lands on POLE_BACK
+       exactly -- hence the -1 below -- because leaving the two branches to
+       meet approximately put a three-pixel jump in the rod on the one frame
+       the eye is already watching it hardest. */
+    const whip = Math.max(2, s.startup - 4);
+    const live = s.startup + s.active;          // first recovery frame
+    const reach = s.ox + s.w - 2;               // relBox's far edge, less the
+                                                // lure's own half-width
+
+    if (k < whip) {
+      /* WIND-UP, frames 1-4. Rod from the carry pose up through vertical and
+         back over the shoulder, lure trailing low and behind him. Nine
+         frames of startup is a long telegraph and it is meant to be: this is
+         the one move in the game that beats a shield, and what it pays for
+         that is being seen coming. */
+      const u = k / (whip - 1);
+      const a = u < 0.5 ? POLE_REST : POLE_HIGH;
+      const b = u < 0.5 ? POLE_HIGH : POLE_BACK;
+      const h = u < 0.5 ? u * 2 : u * 2 - 1;
+      tf = poleMix(a[0], b[0], h); tu = poleMix(a[1], b[1], h);
+      kf = tf - 4; ku = tu + 5;
+      bow = 2;
+    } else if (k <= s.startup) {
+      /* THE CAST, frames 5-9. The rod whips forward through vertical while
+         the lure flies from behind him to the far edge of the box, arriving
+         on exactly the frame the box goes live. Five frames rather than the
+         three a tighter wind-up would leave: four steps of travel is the
+         fewest that reads as a throw instead of as a teleport.
+
+         So the lure is out in front of him on frames 6 through 8, before
+         anything can hit. That is deliberate and it is the safe direction of
+         the error: it is 8, 23 and 35 pixels out, always SHORTER than the 46
+         the box will be, so nobody is ever hit from a spot the lure had not
+         reached yet. The reverse cheat -- a lure still traveling while the
+         box is already live at full length -- has the art advertising a
+         shorter move than this one is, and people walk into a tip they had
+         every reason to think was ten pixels further off.
+
+         Decelerating, so it leaves fast and arrives settling: steps of 19,
+         15, 12 and 9 pixels. The sag peaks mid-flight and is gone at full
+         extension, which is what makes the arrival frame -- the frame the
+         hitbox opens -- read as the line snapping tight. */
+      const u = (k - whip) / (s.startup - whip);
+      const e = u * (1.5 - 0.5 * u);
+      const a = e < 0.5 ? POLE_BACK : POLE_HIGH;
+      const b = e < 0.5 ? POLE_HIGH : POLE_FORE;
+      const h = e < 0.5 ? e * 2 : e * 2 - 1;
+      tf = poleMix(a[0], b[0], h); tu = poleMix(a[1], b[1], h);
+      kf = poleMix(POLE_BACK[0] - 4, reach, e);
+      ku = poleMix(POLE_BACK[1] + 5, s.oy, e);
+      bow = 22 * u * (1 - u);
+    } else if (k < live) {
+      /* LIVE, frames 9-14. Line dead straight and white, lure parked at full
+         reach with one pixel of tick on it, for exactly the six frames the
+         hitbox exists. Making the brightest frames the only ones that can
+         catch anybody is a free and completely honest tell. */
+      tf = POLE_FORE[0]; tu = POLE_FORE[1];
+      kf = reach; ku = s.oy + ((k >> 1) & 1);
+      lineCol = POLE_TAUT;
+    } else {
+      const w = k - live;                       // 0 on the first recovery frame
+      if (w < 5) {
+        /* THE MISS, frames 15-19. Nothing took it, so nothing holds it up:
+           the tip drops, the lure falls out of the box it was tracing and
+           the line goes slack. Five frames of hanging there is the beat that
+           says nothing bit -- reeling from the instant the box closes reads
+           as putting the rod away, not as missing. */
+        const u = w / 5;
+        tf = poleMix(POLE_FORE[0], POLE_DIP[0], u);
+        tu = poleMix(POLE_FORE[1], POLE_DIP[1], u);
+        kf = reach; ku = s.oy + 1 + w;
+        bow = 7 * u;
+      } else {
+        /* THE REEL, frames 20-38. Nineteen frames of winding it back in,
+           easing in the way a reel takes up: slow, then quick, then dangling
+           off the tip. It lands exactly on the carry pose, so the last frame
+           of the recovery is the first frame of the next cast.
+
+           This is the part the complaint was actually about. A move that
+           reaches 46px and shows nothing when it misses has an invisible
+           punish window; these are the frames he is being punished IN, and
+           they now visibly cost him something. */
+        const v = clamp((w - 5) / Math.max(1, s.recovery - 7), 0, 1);
+        const e = v * v;
+        tf = poleMix(POLE_DIP[0], POLE_REST[0], e);
+        tu = poleMix(POLE_DIP[1], POLE_REST[1], e);
+        kf = poleMix(reach, tf - 4, e);
+        ku = poleMix(s.oy + 6, tu + 5, e);
+        bow = 7 * (1 - e);
+      }
+    }
+  }
+
+  /* Into world pixels, once. Anchored on Math.round(f.x) because that is the
+     whole pixel the sprite itself lands on -- drawImage is handed
+     Math.round(f.x - 8), which is the same number less eight. Left on the
+     raw float the rod crosses its rounding boundary one step out of step
+     with the sprite and shimmers against his hand every time he walks. */
+  const fw = f.facing;
+  const ax = Math.round(f.x), ay = Math.round(f.y);
+  const hx = ax + Math.round(swordHandX(f) - f.x);   // the same fist the
+  const hy = ay + Math.round(swordHandY(f) - f.y);   // laser sword hangs off
+  const tx = ax + fw * Math.round(tf), ty = ay + Math.round(tu);
+  const kx = ax + fw * Math.round(kf), ky = ay + Math.round(ku);
+  /* The bows are forward-space like everything else. poleStroke applies one
+     to whichever axis is across the walk, so a stroke that came out steep
+     bows along x and needs the mirror the coordinates already got, while a
+     flat one bows along y and must not be mirrored at all. */
+  const rodBowW = Math.abs(tx - hx) >= Math.abs(ty - hy) ? rodBow : fw * rodBow;
+  const lineBowW = Math.abs(kx - tx) >= Math.abs(ky - ty) ? bow : fw * bow;
+
+  /* Four fillStyle assignments for the entire move: four passes by color
+     rather than one per part. The fills themselves are cheap -- about 120 at
+     full extension, on one fighter, for 38 frames -- and the state changes
+     are the thing that is not. This engine was once measured setting
+     fillStyle 433 times in a single frame drawing a glyph pixel by pixel. */
+  g.fillStyle = POLE_DARK;
+  poleStroke(g, hx, hy, tx, ty, rodBowW, true);
+  poleStroke(g, tx, ty, kx, ky, lineBowW, true);
+  if (lure) {
+    g.fillRect(kx - 2, ky - 2, 5, 5);           // the lure's whole halo in
+    g.fillRect(kx - fw, ky + 3, 1, 1);          // one rect, and the barb
+  }
+
+  g.fillStyle = POLE_WOOD;
+  poleStroke(g, hx, hy, tx, ty, rodBowW, false);
+
+  g.fillStyle = lineCol;
+  poleStroke(g, tx, ty, kx, ky, lineBowW, false);
+  // The lure's white belly rides the line pass: it is the same pale color and
+  // splitting it out would buy a fifth fillStyle for one pixel of nothing.
+  if (lure) g.fillRect(kx - 1, ky + 1, 3, 1);
+
+  if (lure) {
+    g.fillStyle = POLE_LURE;
+    g.fillRect(kx - 1, ky - 1, 3, 2);
+  }
+}
+
+
 /* A drumstick, tip up and to the right. Mirrored for the other facing. */
 const STICK_ART = [
   '....##',
@@ -5283,7 +5608,15 @@ function applyHit(attacker, defender, move, sourceX) {
   if (attacker.ai) attacker.ai.starve = 0;
   if (defender.ai) defender.ai.starve = 0;
   // A sword swing earns nothing, so a good ult cannot pay for the next one.
-  if (attacker.swordTimer <= 0) {
+  /* `noMeter` is for a move that must not pay for itself. Measured: THE
+     STROKES dealt 22 damage to a single parked target and handed 33 of 100
+     meter straight back -- a third of the next ult, from one person standing
+     still. Against somebody actually moving through the shower it is more,
+     and the song starts paying for its own encore.
+
+     Same idea as the swordTimer clause beside it, which stops Trev's ten
+     seconds of sword refilling the meter that bought it. */
+  if (attacker.swordTimer <= 0 && !move.noMeter) {
     attacker.ultMeter = Math.min(COMBAT.ultMax,
       attacker.ultMeter + dmg * COMBAT.ultPerDamageDealt);
   }
@@ -6451,6 +6784,12 @@ function drawFighter(g, f) {
     drawSwordFrame(g, swordFrameKey(f), swordHandX(f), swordHandY(f), f.facing, fade);
   }
 
+  /* And the rod, after the sword rather than before it: his ult can still be
+     running while he casts, and a one-pixel line underneath a burning blade
+     is a line nobody sees. Inside the same translate as the sprite above, so
+     a rollback correction carries the rod with the hand holding it. */
+  drawPole(g, f);
+
   /* Confused had no tell at all. The only way to find out your controls were
      inverted was to walk the wrong way off a ledge, which is a lesson that
      arrives one stock too late -- and it is a four second status, so a victim
@@ -6944,7 +7283,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '5c605fb2fe';
+const BUILD_ID = '66aff1a91d';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

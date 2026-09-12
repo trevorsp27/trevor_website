@@ -494,3 +494,70 @@ test("with no clock, four CPUs still settle it on stocks", async () => {
     "been a fight -- something is ending the match early");
   assert.equal(run("scene"), "results");
 });
+
+/* "trevors fishingpole doesnt have an animation" -- and it did not. The move
+ * it replaced was a guillotine choke with no art of its own, which read fine
+ * because the victim was visibly held at his side. A pole that reaches 46px
+ * across the stage and shows nothing between the button and the catch does
+ * not, and a WHIFF showed nothing at all.
+ *
+ * Measured against what an idle fighter draws, so it cannot be satisfied by
+ * the sprite that was always there.
+ */
+test("the fishing pole is visible while it is cast, and when it misses", async () => {
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const SP_DOWN = 1024;
+  const r = run(`(function(){
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.vy = 0;
+    me.grabbing = -1;
+    me.x = main.x + 40; me.y = main.y; me.grounded = true; me.facing = 1;
+    // Far out of reach, so this is a clean whiff from start to finish.
+    foe.x = main.x + main.w - 6; foe.y = main.y;
+    foe.invuln = 0; foe.hitstop = 0; foe.vx = 0; foe.vy = 0;
+
+    var count = function () {
+      var n = 0;
+      var rec = { globalAlpha: 1, fillStyle: '#000', strokeStyle: '#000', lineWidth: 1,
+        save: function () {}, restore: function () {}, translate: function () {},
+        scale: function () {}, rotate: function () {},
+        fillRect: function () { n++; }, drawImage: function () { n++; },
+        beginPath: function () {}, moveTo: function () {}, lineTo: function () {},
+        stroke: function () { n++; }, arc: function () {}, fill: function () { n++; },
+        closePath: function () {}, setLineDash: function () {} };
+      drawFighter(rec, me);
+      return n;
+    };
+
+    var idle = count();
+    var during = [];
+    netplay.active = true;
+    for (var i = 0; i < 40; i++) {
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_DOWN} : 0), bitsToPad(0)];
+      step();
+      during.push({ f: me.attackFrame, state: me.state, ops: count() });
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { idle: idle, during: during, caught: me.grabbing >= 0 };
+  })()`);
+
+  assert.ok(!r.caught, "precondition: this is meant to be a whiff");
+  const casting = r.during.filter((d) => d.state === "special");
+  assert.ok(casting.length > 20, "precondition: the cast should run ~39 frames");
+
+  const richer = casting.filter((d) => d.ops > r.idle);
+  assert.ok(
+    richer.length >= 10,
+    "the pole should be on screen for a good part of its 39 frames. An idle " +
+      "Trev draws " + r.idle + " things; during the cast he drew " +
+      JSON.stringify(casting.map((d) => d.ops)) +
+      " -- only " + richer.length + " frames showed anything extra"
+  );
+});
