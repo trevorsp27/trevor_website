@@ -486,31 +486,47 @@ function waitOutSpawnInvuln(g) {
 
 
 
-test("Trev's kit is the knight's move and the fishing pole", async () => {
+test("Trev's kit is the pawn and the fishing pole", async () => {
   const g = await bootGame();
   const trev = g.nw.roster.find((c) => c.key === "trev");
   assert.deepEqual(
     trev.moves.map((m) => m.slot + ":" + m.label).sort(),
-    ["down:FISHING POLE", "neutral:CEREAL", "up:KNIGHT"]
+    ["down:FISHING POLE", "neutral:CEREAL", "up:PAWN"]
   );
   assert.equal(trev.ult, "LASER SWORD", "the sword stays");
 });
 
-test("the knight move goes up twice as far as it goes across", async () => {
+test("a tapped pawn walks off in front of him", async () => {
+  /* PAWN replaced KNIGHT, and KNIGHT was his recovery -- two squares up and
+     one across, generous on the vertical precisely because it was his way
+     home. The test that used to live here asserted exactly that ("it is his
+     only recovery; it rose Npx") and it is gone with the move it guarded.
+
+     Off the stage he is down to his double jump now. That is a real loss and
+     it is deliberate, not an oversight: the brief was to rework the move
+     completely, and a pawn walking forwards does nothing for a man falling.
+     What is guarded here instead is the thing the move actually does. */
   const g = await bootGame();
   startAs(g, "trev", "reese");
-  const f = () => g.nw.fighters[0];
-  const y0 = f().y, x0 = f().x;
+  waitOutSpawnInvuln(g);
+  const pawns = () => g.nw.projectiles.filter((p) => p.kind === "Pawn");
+
+  assert.equal(pawns().length, 0, "nothing out before he presses anything");
   g.press("KeyK"); g.pump(2); g.release("KeyK");
-  let peak = y0;
-  for (let i = 0; i < 44; i++) { g.pump(1); if (f().y < peak) peak = f().y; }
-  const up = y0 - peak, across = Math.abs(f().x - x0);
-  assert.ok(up > 40, "it is his only recovery; it rose " + up.toFixed(0) + "px");
-  assert.ok(
-    up / across > 1.4 && up / across < 3,
-    "a knight goes two squares then one, so this should be roughly 2:1 -- " +
-      "rose " + up.toFixed(0) + "px, moved " + across.toFixed(0) + "px across"
-  );
+  g.pump(12);
+  assert.equal(pawns().length, 1, "tapping should send one pawn");
+
+  const start = pawns()[0].x;
+  const facing = g.nw.fighters[0].x < g.nw.fighters[1].x ? 1 : -1;
+  g.pump(40);
+  const later = pawns()[0];
+  assert.ok(later, "and it should still be out: it is slow on purpose");
+  const travelled = (later.x - start) * facing;
+  assert.ok(travelled > 10,
+    "it should walk the way he is looking; moved " + travelled.toFixed(1) + "px");
+  assert.ok(travelled < 60,
+    "and slowly -- 40 frames should not cross the stage; moved " +
+    travelled.toFixed(1) + "px");
 });
 
 test("the guillotine grabs through a raised shield and always lets go", async () => {

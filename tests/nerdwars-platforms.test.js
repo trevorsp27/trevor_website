@@ -764,6 +764,192 @@ test("the dog changes pose when it leaps", async () => {
     "only " + r.air + " frames used one");
 });
 
+test("charging the pawn walks knight, bishop, rook, queen and round again", async () => {
+  /* The charge is a choice you make by watching, so the two things that have
+     to be true are that it cycles in order and that letting go keeps what was
+     showing. The cycle wraps on purpose: holding forever is not a way to get
+     a queen, it is a way to lose track of one. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  const move = run("(function(){var s = ROSTER.trev.specials.up;" +
+    "return { kind: s.kind, label: s.label, swapEvery: s.charge.swapEvery,\n" +
+    "  hold: s.charge.hold, startup: s.startup };})()");
+  assert.equal(move.kind, "pawn", "Trev's up special should be the pawn");
+  /* Joined rather than deepEqual'd. Objects and arrays built inside a vm
+     context carry that realm's prototypes -- passing the host's Array into
+     the sandbox does not change what a literal uses -- so deepStrictEqual
+     fails on a prototype mismatch while printing two values that look
+     identical. Comparing content sidesteps the whole question. */
+  assert.equal(run("CHESS_PIECES.map(function(c){return c.key;}).join(',')"),
+    "knight,bishop,rook,queen",
+    "weakest to strongest, which is the order the button walks");
+
+  const SP_UP = 2048;
+  /* Both fighters pinned and untouchable. The charge is pinned to a frame
+     counter that hitstop freezes, so a CPU landing one hit mid-charge stalls
+     the cycle and the frame numbers below stop meaning anything. */
+  const setup = `
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = main.x + 30; me.y = main.y;
+    me.specialSpawned = false; me.chargePiece = 0; me.chargeTimer = 0;
+    foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
+    foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.vx = 0; foe.vy = 0;
+    foe.grounded = true; foe.hasHit = true;`;
+
+  const cycle = run(`(function () {
+    ${setup}
+    var seen = [];
+    netplay.active = true;
+    for (var i = 0; i < 120; i++) {
+      foe.hitstop = 0; me.hitstop = 0;
+      netplay.framePads = [bitsToPad(${SP_UP}), bitsToPad(0)];
+      step();
+      var k = CHESS_PIECES[me.chargePiece].key;
+      if (!seen.length || seen[seen.length - 1] !== k) seen.push(k);
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { seen: seen, state: me.state, af: me.attackFrame,
+             out: projectiles.length };
+  })()`);
+
+  assert.equal(cycle.seen.join(","),
+    "knight,bishop,rook,queen,knight,bishop",
+    "holding should walk the order and wrap; saw " + cycle.seen.join(" -> "));
+  assert.equal(cycle.state, "special",
+    "and he should still be standing there charging after 120 frames");
+  assert.equal(cycle.af, move.startup,
+    "with the move pinned at the end of its startup, not advancing");
+  assert.equal(cycle.out, 0, "nothing fires while the button is down");
+
+  // Letting go sends whatever was showing.
+  const fire = (holdFor) => run(`(function () {
+    ${setup}
+    var carried = null;
+    netplay.active = true;
+    for (var i = 0; i < ${holdFor} + 30; i++) {
+      foe.hitstop = 0; me.hitstop = 0;
+      netplay.framePads = [bitsToPad(i < ${holdFor} ? ${SP_UP} : 0), bitsToPad(0)];
+      step();
+      var p = projectiles.filter(function (q) { return q.constructor.name === 'Pawn'; })[0];
+      if (p && !carried) carried = p.pieceKey;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return carried;
+  })()`);
+
+  /* And it has to be on screen, or the choice cannot be made. A charge you
+     cannot see is just a delay: the whole mechanic is watching the piece
+     change and letting go on the one you want. */
+  const drawn = run(`(function () {
+    ${setup}
+    var blits = 0, none = 0;
+    var rec = { globalAlpha: 1, fillStyle: '#000',
+      fillRect: function () {}, drawImage: function () { blits++; },
+      save: function () {}, restore: function () {}, translate: function () {},
+      scale: function () {}, beginPath: function () {}, arc: function () {},
+      fill: function () {} };
+    netplay.active = true;
+    for (var i = 0; i < 40; i++) {
+      foe.hitstop = 0; me.hitstop = 0;
+      netplay.framePads = [bitsToPad(${SP_UP}), bitsToPad(0)];
+      step();
+    }
+    drawCharge(rec, me);              // mid-charge
+    var charging = blits;
+    netplay.active = false; netplay.framePads = null;
+    blits = 0;
+    me.setState('idle'); me.specialSpawned = true;
+    drawCharge(rec, me);              // not charging
+    none = blits;
+    return { charging: charging, none: none };
+  })()`);
+  assert.ok(drawn.charging > 0,
+    "the piece he is holding must be drawn while charging");
+  assert.equal(drawn.none, 0,
+    "and nothing drawn when he is not");
+
+  assert.equal(fire(1), "knight",
+    "a tap should send the first piece in the cycle, not nothing and not a queen");
+  const held = [fire(30), fire(50), fire(70)];
+  assert.ok(held.every(Boolean), "every hold should fire something: " + held);
+  assert.notEqual(held[2], "knight",
+    "holding most of two cycles should not still be on the knight; got " + held[2]);
+});
+
+test("the pawn promotes into its piece's own directions", async () => {
+  /* A bishop is its diagonals, a rook its ranks and files, a queen both, and
+     a knight eight L's. The counts are the cheapest true statement of that,
+     and they are what a burst actually is. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const counts = JSON.parse(run(
+    "JSON.stringify(CHESS_PIECES.reduce(function (a, c) {" +
+    "  a[c.key] = c.dirs.length; return a; }, {}))"));
+  assert.equal(JSON.stringify(counts),
+    JSON.stringify({ knight: 8, bishop: 4, rook: 4, queen: 8 }),
+    "a rook has four directions and a queen eight; got " + JSON.stringify(counts));
+
+  // Damage per shard climbs with the cycle, which is what the charge buys.
+  const dmg = run("CHESS_PIECES.map(function(c){return c.damage;})");
+  for (let i = 1; i < dmg.length; i++) {
+    assert.ok(dmg[i] > dmg[i - 1],
+      "each piece in the cycle should hit harder than the last; " + dmg.join(", "));
+  }
+
+  /* And a real one: send a pawn into somebody and count what comes out.
+     Driven through the projectile, not through the charge, so a failure here
+     is about promotion rather than about input. */
+  const burst = (pieceKey) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.hitstop = 0; me.damageMul = 1;
+    me.x = main.x + 30; me.y = main.y; me.facing = 1; me.grounded = true;
+    foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
+    foe.invuln = 0; foe.stocks = 99; foe.health = 1000;
+    foe.vx = 0; foe.vy = 0; foe.y = main.y; foe.grounded = true;
+    foe.hasHit = true;
+    /* Absolute, and both of them. Pinning the victim to me.x + 40 pinned it
+       to a CPU that walks -- so the target trotted away at 1.46 a frame from
+       a pawn that does 0.85, and it never once caught up. */
+    var HOME = main.x + 30, AWAY = main.x + 70;
+    me.x = HOME; foe.x = AWAY;
+    var p = new Pawn(me, ROSTER.trev.specials.up, ${JSON.stringify(pieceKey)});
+    projectiles.push(p);
+    var shards = 0, burstAt = -1, before = foe.health;
+    for (var i = 0; i < 90; i++) {
+      me.x = HOME; me.vx = 0; me.y = main.y; me.hitstop = 0;
+      if (burstAt < 0) { foe.x = AWAY; foe.vx = 0; foe.y = main.y; }
+      foe.invuln = 0; foe.hitstop = 0;
+      step();
+      var sh = projectiles.filter(function (q) {
+        return q.constructor.name === 'PieceShard'; });
+      if (sh.length && burstAt < 0) { burstAt = i; shards = sh.length; }
+    }
+    return { shards: shards, burstAt: burstAt,
+             lost: before - foe.health };
+  })()`);
+
+  for (const key of ["knight", "bishop", "rook", "queen"]) {
+    const r = burst(key);
+    assert.ok(r.burstAt >= 0, "a " + key + " pawn should reach them and promote");
+    assert.equal(r.shards, counts[key],
+      "a " + key + " should burst into " + counts[key] + " shards, saw " + r.shards);
+    assert.ok(r.lost > 0, "and it should hurt; a " + key + " took " + r.lost);
+  }
+});
+
 test("the dog bites harder with its jaws open, and not on the way down", async () => {
   /* A leap with the jaws open pays half again: 6 damage becomes 9. That is
      `lunge` climbing and `snap` across the top, eleven frames of a roughly

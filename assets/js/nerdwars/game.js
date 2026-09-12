@@ -791,7 +791,7 @@ const ROSTER = {
     origin: 'notes',
     tag: 'CEREAL & LASER SWORD',
     drawn: false,
-    blurb: 'Cereal, a chess knight that turns a corner, milk to get home.',
+    blurb: 'Cereal, a pawn you charge into the piece of your choosing, a fishing rod.',
     weight: 96, walk: 1.46, jump: 6.9, doubleJump: 6.2,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
@@ -863,17 +863,54 @@ const ROSTER = {
       // He rides a column of milk. It had no visual at all before -- the
       // uppercut only draws when a move names a blade colour, and this one
       // never did, so the move called MILK showed nothing whatsoever.
-      /* The knight's move, performed rather than thrown: two squares up,
-         then one across, with the piece held over his head the whole way so
-         it is obvious what it is. This replaced MILK, which was his only way
-         back to the stage, so the vertical half is deliberately generous --
-         he commits to a direction only after he has the height. */
+      /* A pawn, and whatever you decide it is going to become.
+
+         He sends it walking the way he is facing and it keeps walking --
+         slowly, which is the point -- until it touches somebody or reaches
+         the edge and is gone. Touching somebody promotes it: it bursts into
+         the piece's own directions, a bishop into its diagonals, a rook into
+         its ranks and files, a queen into both, a knight into eight L's.
+
+         Which one is a charge. Hold the button and it cycles knight, bishop,
+         rook, queen and round again, one every `swapEvery` frames, and the
+         one showing when you let go is the one the pawn carries. Later in
+         the cycle is more damage per shard, so the cost of a queen is the
+         time you spend standing there telegraphing it -- and if you hold too
+         long you are back to a knight, which is the cost of not watching.
+
+         NOTE, and it is not a small one: this replaced KNIGHT, which was
+         Trev's recovery -- two squares up and one across, generous on the
+         vertical precisely because it was his way home. A pawn walking
+         forwards does nothing for a man falling, so off the stage he is down
+         to his double jump. Measured below in the commit; if it is too much
+         the fix is to hand the cast a rise or to move it to another slot,
+         both of which are a line. */
       up: {
-        kind: 'knightmove', label: 'KNIGHT',
-        startup: 5, active: 22, recovery: 20,
-        rise: 4.6, riseFrames: 13, side: 2.4, sideFrames: 9,
-        damage: 9, base: 2.4, scale: 6.4, angle: 72, kx: 0.30901699437494745, ky: 0.95105651629515353,
-        ox: -8, oy: -20, w: 16, h: 26,
+        kind: 'pawn', label: 'PAWN',
+        startup: 8, active: 6, recovery: 22,
+        /* Charging holds him at the end of startup for as long as he likes,
+           so `hold` names the pad bit that keeps it going -- this is the up
+           special, so spUp. Read from the spec rather than from specialSlot,
+           which startAttack assigns and restoreSim is entitled to delete. */
+        charge: { hold: 'spUp', swapEvery: 20 },
+        pawnSpeed: 0.85, life: 320,
+        /* What one ray of the burst is. `damage` is filled in per piece when
+           the shard is built -- see PieceShard -- so the number here is only
+           a placeholder for moveCost, which never sees the real one. */
+        shard: {
+          speed: 2.6, turnAfter: 9,
+          damage: 4, base: 2.0, scale: 5.2,
+          angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725,
+        },
+        shardLife: 26,
+        /* The pawn itself barely hurts: it is a delivery, and the piece is
+           the payload. */
+        damage: 2, base: 1.4, scale: 3.0,
+        angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725,
+        /* Hand-set, because moveCost cannot see this move. It prices
+           `damage`, and the damage that matters belongs to between four and
+           eight shards built at runtime out of a table it never reads. */
+        manaOverride: 30,
       },
     },
     // "newtons flaming lazer swords" -- their note. Not a single lunge: he
@@ -1592,6 +1629,14 @@ class Fighter {
     this.poleX0 = 0;
     this.poleY0 = 0;
     this.poleDir = 1;
+    /* The charge on PAWN: which piece is showing, and how long it has been
+       showing for. Declared here because restoreSim deletes any key it does
+       not find in a snapshot, so a field first written mid-charge would
+       vanish on the next rollback and take the choice with it. Indices into
+       CHESS_PIECES rather than the piece itself: snapValue copies own values,
+       and an integer is one. */
+    this.chargePiece = 0;
+    this.chargeTimer = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
        than Fighter references, for the reason poisonBy is: snapValue keeps a
        Fighter by pointer inside a snapshot, and a stale pointer survives a
@@ -1715,6 +1760,7 @@ class Fighter {
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
+          s.kind === 'pawn' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
           s.kind === 'deadlift') return null;
       if (this.attackFrame < s.startup) return null;
@@ -2194,6 +2240,29 @@ class Fighter {
       }
     }
 
+    /* A charged move waits at the end of its startup for as long as the
+       button is held, cycling what it is going to fire.
+
+       Here rather than in runSpecial for one reason: runSpecial is handed no
+       pad, and "is he still holding it" is the entire mechanic. Held, the
+       frame counter is pinned back to `startup`, so the move simply does not
+       advance; let go and the next increment carries it to startup + 1,
+       which is the frame the pawn is spawned on. Nothing else in the
+       timeline has to know that the middle of it is elastic.
+
+       `specialSpawned` guards the other half: a charge that has already
+       fired must not be able to start charging again on its way out. */
+    if (m.charge && !this.specialSpawned && this.attackFrame >= m.startup &&
+        pad && pad[m.charge.hold]) {
+      this.attackFrame = m.startup;
+      this.chargeTimer++;
+      if (this.chargeTimer >= m.charge.swapEvery) {
+        this.chargeTimer = 0;
+        this.chargePiece = (this.chargePiece + 1) % CHESS_PIECES.length;
+        cue('swap', { slot: this.slot, x: this.x });
+      }
+    }
+
     if (this.state === 'special' || this.state === 'ult') this.runSpecial(m);
 
     // Roots and dashes control their own horizontal motion.
@@ -2363,6 +2432,27 @@ class Fighter {
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           projectiles.push(new KnightPiece(this, s));
+        }
+        break;
+
+      /* The charge starts fresh on the first frame and fires on the frame
+         after startup -- never ON startup, because that is the frame the
+         hold above pins him to, and a spawn there would go off on the first
+         held frame instead of the released one. Tapping the button never
+         pins at all, so it fires at startup + 1 with the knight showing,
+         which is the cheapest and weakest of the four. That is the right
+         default: the piece you get for not charging is the one at the start
+         of the cycle. */
+      case 'pawn':
+        if (this.attackFrame === 1) {
+          this.chargePiece = 0;
+          this.chargeTimer = 0;
+        }
+        if (this.attackFrame === s.startup + 1 && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(
+            new Pawn(this, s, CHESS_PIECES[this.chargePiece].key));
+          cue('shoot', { slot: this.slot, x: this.x });
         }
         break;
 
@@ -3043,6 +3133,106 @@ const KNIGHT_ART = [
   '..###..',
   '.#####.',
   '#######',
+];
+
+/* The rest of the set, all seven by nine so they share the knight's footprint
+   -- the charge indicator swaps between them above his head and a piece that
+   changed size as it cycled would read as the whole board lurching. */
+const PAWN_ART = [
+  '.......',
+  '..###..',
+  '..###..',
+  '...#...',
+  '...#...',
+  '..###..',
+  '.#####.',
+  '.#####.',
+  '#######',
+];
+
+const BISHOP_ART = [
+  '...#...',
+  '..###..',
+  '..#E#..',
+  '..###..',
+  '...#...',
+  '...#...',
+  '..###..',
+  '.#####.',
+  '#######',
+];
+
+const ROOK_ART = [
+  '.......',
+  '#.#.#.#',
+  '#######',
+  '.#####.',
+  '.#####.',
+  '.#####.',
+  '.#####.',
+  '#######',
+  '#######',
+];
+
+const QUEEN_ART = [
+  '#.#.#.#',
+  '#######',
+  '.#####.',
+  '..###..',
+  '..###..',
+  '..###..',
+  '.#####.',
+  '#######',
+  '#######',
+];
+
+/* Where a piece's shards go when the pawn gets there.
+
+   Unit vectors, and the whole chess idea of the move: a bishop is its
+   diagonals, a rook is its ranks and files, a queen is both. They are
+   directions rather than angles because nothing here may call trig -- the
+   build rejects the file over it, for the same reason every move's kx/ky is
+   a baked literal: runtime trig is not bit-portable and this is lockstep. */
+const DIAGONALS = [
+  { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 },
+];
+const ORTHOGONALS = [
+  { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+];
+
+/* The knight is the one that is not a ray. Each entry is two legs: travel the
+   first, turn, travel the second -- two squares and then one, which is the
+   only rule the piece has. `turn` is what the shard switches to partway. */
+const KNIGHT_DIRS = [
+  { dx: 1, dy: 0, turn: { dx: 0, dy: 1 } },
+  { dx: 1, dy: 0, turn: { dx: 0, dy: -1 } },
+  { dx: -1, dy: 0, turn: { dx: 0, dy: 1 } },
+  { dx: -1, dy: 0, turn: { dx: 0, dy: -1 } },
+  { dx: 0, dy: 1, turn: { dx: 1, dy: 0 } },
+  { dx: 0, dy: 1, turn: { dx: -1, dy: 0 } },
+  { dx: 0, dy: -1, turn: { dx: 1, dy: 0 } },
+  { dx: 0, dy: -1, turn: { dx: -1, dy: 0 } },
+];
+
+/* The four you can charge into, in the order the button walks through them.
+
+   Ordered weakest to strongest and cycling, so holding longer is how you ask
+   for more -- and holding too long takes you back round to the knight, which
+   is the cost of not watching. `damage` is per shard: the counts differ, so
+   these are not the whole story and the roster comment says so.
+
+   Authored here rather than in the moveset because they are shared shape,
+   not tuning: the move picks its damage and speed, the piece decides what a
+   burst of it looks like. */
+const CHESS_PIECES = [
+  { key: 'knight', label: 'KNIGHT', art: KNIGHT_ART, ink: '#efe7d2',
+    dirs: KNIGHT_DIRS, damage: 3 },
+  { key: 'bishop', label: 'BISHOP', art: BISHOP_ART, ink: '#9fd4ff',
+    dirs: DIAGONALS, damage: 4 },
+  { key: 'rook', label: 'ROOK', art: ROOK_ART, ink: '#c9c2b4',
+    dirs: ORTHOGONALS, damage: 5 },
+  { key: 'queen', label: 'QUEEN', art: QUEEN_ART, ink: '#ffd75e',
+    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6 },
 ];
 
 /* John's dog in the air. The trot stays a dozen fillRects; these are row
@@ -3821,6 +4011,31 @@ function poleHook(f, s) {
   const tipX = f.x + f.facing * POLE_REST[0];
   const tipY = f.y + POLE_REST[1];
   return { x: poleMix(full.x, tipX, e), y: poleMix(full.y, tipY, e), landed: false };
+}
+
+/* The piece he is currently holding out, while a charge is running.
+
+   The whole mechanic is invisible without this: the charge is a choice made
+   by watching, so if the choice is not on screen there is nothing to watch
+   and holding the button is just a delay. It sits above his head, clear of
+   the seat arrow at y-24 and of the confused ducks, and it bobs one pixel on
+   the frame it changes so a swap is visible even to somebody who has not
+   learnt the silhouettes yet.
+
+   Reads chargePiece and attackFrame and writes nothing, like every other
+   draw in this file. Whether he is charging is derived the same way the
+   engine derives it -- still in `special`, still on the move's charge frame,
+   nothing spawned yet -- rather than from a flag a renderer could get wrong. */
+function drawCharge(g, f) {
+  if (f.state !== 'special' || f.specialSpawned) return;
+  const m = f.moveFor('special');
+  if (!m || !m.charge || f.attackFrame < m.startup) return;
+  const piece = CHESS_PIECES[f.chargePiece % CHESS_PIECES.length];
+  // One pixel of lift for the first few frames after a swap.
+  const fresh = f.chargeTimer < 4 ? 1 : 0;
+  drawArt(g, pixelArt('piece.' + piece.key, piece.art,
+                      { '#': piece.ink, E: '#3c2a1e' }, false),
+          f.x, f.y - 30 - fresh);
 }
 
 /** The rod, the line and the lure, for whoever is casting or holding one. */
@@ -5103,6 +5318,152 @@ class Dog {
   }
 }
 
+/* The pawn, and what it turns into.
+
+   The pawn walks. It is deliberately the slowest thing on the stage -- you
+   send it and then you live with it being out there, which is the whole
+   reason the charge can afford to be as slow as it is. It rides whatever it
+   lands on, the same way the dog does, and it dies off the edge without
+   doing anything, because a pawn that walked off the board is just gone.
+
+   `pieceKey` rather than the piece object: restoreSim copies own keys with
+   snapValue, and a key is a string. Looking the table up by key on demand
+   keeps the shared data shared and out of every snapshot. */
+class Pawn {
+  constructor(owner, spec, pieceKey) {
+    this.owner = owner;
+    this.spec = spec;
+    this.pieceKey = pieceKey;
+    this.dir = owner.facing;
+    this.x = owner.x + this.dir * 10;
+    this.y = owner.y - 4;
+    this.vy = 0;
+    this.life = spec.life || 240;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  piece() {
+    for (const c of CHESS_PIECES) if (c.key === this.pieceKey) return c;
+    return CHESS_PIECES[0];
+  }
+
+  update() {
+    this.t++;
+    this.life--;
+    this.x += this.dir * this.spec.pawnSpeed;
+
+    // Falls onto whatever is under it and then rides it, same as the dog.
+    const prevY = this.y;
+    this.vy += 0.4;
+    this.y += this.vy;
+    for (const p of STAGE.platforms) {
+      if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
+      if (prevY <= p.y + 1 && this.y >= p.y) {
+        this.y = p.y;
+        this.vy = 0;
+        break;
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    /* Off the edge and it is gone, with no burst. Promotion is something you
+       earn by connecting; walking into the blast zone is not that. */
+    if (this.x < -14 || this.x > VW + 14 ||
+        this.y > VH + 30 || this.y < -40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 4, y: this.y - 9, w: 8, h: 9 };
+  }
+
+  /* Promotion. Called by resolveCombat the moment it connects, because that
+     is the only place that knows it connected -- and it must happen there
+     rather than in update() so the shards exist on the same frame the pawn
+     stops existing, with no gap for somebody to walk through. */
+  burst() {
+    const piece = this.piece();
+    for (const d of piece.dirs) {
+      projectiles.push(new PieceShard(this, piece, d));
+    }
+    addEffect('ring', this.x, this.y - 4, piece.ink);
+    cue('promote', { slot: this.owner.slot, x: this.x });
+    this.dead = true;
+  }
+
+  draw(g) {
+    const left = this.dir < 0;
+    drawArt(g, pixelArt('pawn' + (left ? 'L' : 'R'), PAWN_ART,
+                        { '#': '#efe7d2', E: '#3c2a1e' }, left),
+            this.x, this.y - 4);
+    /* A tick of the piece it is carrying, above it. Without this the pawn on
+       the floor is the same object whichever way the charge went, and the
+       thing you spent the charge choosing is invisible until it lands. */
+    const pc = this.piece();
+    g.fillStyle = pc.ink;
+    g.fillRect(Math.round(this.x) - 1, Math.round(this.y) - 12, 2, 2);
+  }
+}
+
+/* One ray of the promoted piece.
+
+   Straight for everything except the knight, which turns once: `turn` is the
+   second leg, taken after `shardTurn` frames, and it is what makes eight of
+   these read as eight L's rather than as eight odd diagonals.
+
+   Dies on the first thing it touches, so a burst cannot stack its whole set
+   into one person standing in the middle of it. */
+class PieceShard {
+  constructor(pawn, piece, dir) {
+    this.owner = pawn.owner;
+    this.pieceKey = piece.key;
+    this.ink = piece.ink;
+    this.dx = dir.dx;
+    this.dy = dir.dy;
+    this.turnDx = dir.turn ? dir.turn.dx : 0;
+    this.turnDy = dir.turn ? dir.turn.dy : 0;
+    this.turns = !!dir.turn;
+    this.turned = false;
+    /* Its own damage, copied off the piece onto the spec the hit is resolved
+       with. applyHit reads move.damage, and the four pieces differ only in
+       that number and in how many of these there are. */
+    this.spec = Object.assign({}, pawn.spec.shard, { damage: piece.damage });
+    this.t = 0;
+    this.x = pawn.x + this.dx * 5;
+    this.y = pawn.y - 4 + this.dy * 5;
+    this.life = pawn.spec.shardLife || 26;
+    this.dead = false;
+  }
+
+  update() {
+    this.t++;
+    this.life--;
+    if (this.turns && !this.turned && this.t >= (this.spec.turnAfter || 9)) {
+      this.turned = true;
+      this.dx = this.turnDx;
+      this.dy = this.turnDy;
+    }
+    const sp = this.spec.speed;
+    this.x += this.dx * sp;
+    this.y += this.dy * sp;
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 ||
+        this.y > VH + 40 || this.y < -40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 2, y: this.y - 2, w: 4, h: 4 };
+  }
+
+  draw(g) {
+    g.fillStyle = this.ink;
+    g.fillRect(Math.round(this.x) - 2, Math.round(this.y) - 2, 4, 4);
+    // A one-pixel tail so a fast shard reads as travelling, not blinking.
+    g.fillRect(Math.round(this.x - this.dx * 3) - 1,
+               Math.round(this.y - this.dy * 3) - 1, 2, 2);
+  }
+}
+
 class KnightPiece {
   constructor(owner, spec) {
     this.owner = owner;
@@ -5607,6 +5968,16 @@ const AUDIO_RECIPES = {
   // The floor coming up and going back down.
   deadlift: { osc: 'sine', f0: 120, f1: 28, dur: 0.5, curve: 'exp', gain: 0.5,
               noise: { dur: 0.28, lp: 1400, lp1: 150 } },
+
+  /* Trev's pawn. Three sounds for three moments, and their volumes say which
+     is which: the cycle tick is the quietest thing he can hear on purpose --
+     you may hear a dozen of them in one charge -- the send is a flat knock,
+     and promotion is the one that should make somebody look. */
+  swap:    { osc: 'square', f0: 620, f1: 700, dur: 0.02, gain: 0.045 },
+  shoot:   { osc: 'triangle', f0: 300, f1: 180, dur: 0.07, gain: 0.16,
+             noise: { dur: 0.03, lp: 1200 } },
+  promote: { osc: 'triangle', f0: 392, f1: 784, dur: 0.20, gain: 0.30,
+             noise: { dur: 0.10, lp: 4200, lp1: 900 } },
 
   // John and Reese's new kit.
   /* 0.40 made this the loudest recipe in the file -- louder than a hit, the
@@ -6295,7 +6666,16 @@ function resolveCombat(fighters) {
     }
   }
 
-  for (const shot of projectiles) {
+  /* Indexed to the length the frame started with, not a for...of.
+
+     A promoting pawn pushes its shards into this very array, and for...of
+     walks an array that grows -- so the shards were visited on the frame
+     they were created, still sitting on top of the victim, and two of them
+     landed before they had travelled a pixel. Freezing the count means a
+     burst radiates and then connects, which is both what it looks like and
+     the only version anybody can read on screen. */
+  for (let n = projectiles.length, i = 0; i < n; i++) {
+    const shot = projectiles[i];
     if (shot.dead) continue;
     for (const f of fighters) {
       if (f === shot.owner || f.eliminated) continue;
@@ -6314,7 +6694,14 @@ function resolveCombat(fighters) {
           continue;
         }
         applyHit(shot.owner, f, shot.spec, shot.x, bite);
-        shot.dead = true;
+        /* A pawn that reaches somebody is promoted, and the burst has to
+           happen HERE -- this is the only place that knows it connected, and
+           the shards have to exist on the same frame the pawn stops existing
+           or there is a gap for the victim to step through. burst() sets
+           dead itself, so the assignment below is left to the general case
+           rather than fighting it. */
+        if (shot.burst) shot.burst();
+        else shot.dead = true;
         break;
       }
     }
@@ -7495,6 +7882,7 @@ function drawFighter(g, f) {
      is a line nobody sees. Inside the same translate as the sprite above, so
      a rollback correction carries the rod with the hand holding it. */
   drawPole(g, f);
+  drawCharge(g, f);
 
   /* Confused had no tell at all. The only way to find out your controls were
      inverted was to walk the wrong way off a ledge, which is a lesson that
@@ -7996,7 +8384,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'b67fe31fc5';
+const BUILD_ID = 'e94cdf09fe';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8007,7 +8395,7 @@ const BUILD_ID = 'b67fe31fc5';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.22';
+const VERSION = '2.23';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
