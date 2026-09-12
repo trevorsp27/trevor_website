@@ -888,21 +888,29 @@ const ROSTER = {
       up: {
         kind: 'pawn', label: 'PAWN',
         startup: 8, active: 6, recovery: 22,
-        /* Charging holds him at the end of startup for as long as he likes,
-           so `hold` names the pad bit that keeps it going -- this is the up
-           special, so spUp. Read from the spec rather than from specialSlot,
-           which startAttack assigns and restoreSim is entitled to delete. */
-        charge: { hold: 'spUp', swapEvery: 20 },
+        /* Charging holds him at the end of startup for as long as the
+           special button is physically down -- `pad.specialHold`, which is a
+           level rather than an edge. It reads no key name: the edge bits that
+           START a special are true for exactly one frame, so a charge built
+           on those fired instantly every time and always handed over the
+           first piece in the cycle. */
+        charge: { swapEvery: 20 },
         pawnSpeed: 0.85, life: 320,
         /* What one ray of the burst is. `damage` is filled in per piece when
            the shard is built -- see PieceShard -- so the number here is only
            a placeholder for moveCost, which never sees the real one. */
+        /* No speed and no life here: both come off the piece and the shared
+           firework constants, because how far a burst goes is the piece's
+           business and how it decays is the move's look. `turnAfter` is the
+           knight's corner: it has to land two thirds of the way along the
+           ray, not two thirds of the way through the FRAMES, and those are
+           different once the thing is decelerating. Measured, 22 gave 2.69:1;
+           19 gives the 2:1 a knight actually moves. */
         shard: {
-          speed: 2.6, turnAfter: 9,
+          turnAfter: 19,
           damage: 4, base: 2.0, scale: 5.2,
           angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725,
         },
-        shardLife: 26,
         /* The pawn itself barely hurts: it is a delivery, and the piece is
            the payload. */
         damage: 2, base: 1.4, scale: 3.0,
@@ -1377,6 +1385,14 @@ function readGamepad(i) {
     spDown: spD,
     spUp: spU,
     special: spN || spD || spU,
+    /* See readPad: an edge for casting, a level for holding a charge open,
+       and one level per button so a charge can only be held by the button
+       that opened it. It matters more here than on a keyboard -- spDown and
+       spUp are the two analog triggers, so a finger resting on LT past its
+       press threshold used to lock every charge thrown with RT. */
+    holdNeutral: gpDown(i, 'spNeutral'),
+    holdDown: gpDown(i, 'spDown'),
+    holdUp: gpDown(i, 'spUp'),
     shield: gpDown(i, 'shield'),
     ult: gpTapped(i, 'ult'),
     grab: gpTapped(i, 'grab'),
@@ -1423,6 +1439,25 @@ function readPad(idx) {
     spDown: spD,
     spUp: spU,
     special: spN || spD || spU,
+    /* The three above are EDGES -- true only on the frame the key goes down,
+       which is what stops a held button from re-casting a special every
+       frame. A charge needs the opposite question answered: is the button
+       still down. So these are levels, and they are separate fields rather
+       than a change to those three, because making those levels would have
+       every special in the game firing sixty times a second.
+
+       One per button, NOT one OR'd level. The OR was the first attempt and
+       it was wrong: the charge gate is not asking whether a move may START,
+       it is asking whether THIS one should continue, and for that the
+       identity of the key is the entire point. With the three collapsed,
+       holding H -- which does nothing else mid-move, so it looks free to
+       press -- kept a charge opened with K pinned, and releasing K fired
+       nothing. PAWN is not `mobile`, so he stood there locked in place
+       cycling pieces until every special key happened to come up. Seat 0
+       binds all three to H, J and K, three adjacent keys under one hand. */
+    holdNeutral: any(b.spNeutral, b.spNeutral2),
+    holdDown: any(b.spDown, b.spDown2),
+    holdUp: any(b.spUp, b.spUp2),
     shield: any(b.shield, b.shield2),
     ult: anyTap(b.ult, b.ult2),
   };
@@ -1432,8 +1467,13 @@ const NEUTRAL = {
   left: false, right: false, up: false, down: false,
   jump: false, attack: false, special: false, grab: false,
   spNeutral: false, spDown: false, spUp: false,
+  holdNeutral: false, holdDown: false, holdUp: false,
   shield: false, ult: false,
 };
+
+/* Which level goes with which slot, so a charge can ask after the button
+   that actually opened it. Indexed by Fighter.chargeKey. */
+const HOLD_FOR_SLOT = { neutral: 'holdNeutral', down: 'holdDown', up: 'holdUp' };
 
 /* The 2016 menu art (BACK / QUIT) is 325x128 -- wider than the whole 320px
    playfield -- so it is drawn on the UI layer at device resolution instead of
@@ -1637,6 +1677,8 @@ class Fighter {
        and an integer is one. */
     this.chargePiece = 0;
     this.chargeTimer = 0;
+    // Which special slot opened the running charge: 'neutral', 'down', 'up'.
+    this.chargeKey = 'neutral';
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
        than Fighter references, for the reason poisonBy is: snapValue keeps a
        Fighter by pointer inside a snapshot, and a stale pointer survives a
@@ -2160,6 +2202,12 @@ class Fighter {
 
   startAttack(kind, pad) {
     if (kind === 'special') this.specialSlot = this.slotFor(pad);
+    /* Which button opened this, remembered so a charge can only be held by
+       that one. It duplicates specialSlot on purpose: specialSlot is not a
+       constructor field, so restoreSim is entitled to delete it on a rewind
+       past his first special of the match, and a charge that lost track of
+       its own key would fall back to reading the wrong one. */
+    if (kind === 'special') this.chargeKey = this.specialSlot;
     this.setState(kind);
     this.attackKind = kind;
     this.attackFrame = 0;
@@ -2253,7 +2301,7 @@ class Fighter {
        `specialSpawned` guards the other half: a charge that has already
        fired must not be able to start charging again on its way out. */
     if (m.charge && !this.specialSpawned && this.attackFrame >= m.startup &&
-        pad && pad[m.charge.hold]) {
+        pad && pad[HOLD_FOR_SLOT[this.chargeKey] || 'holdNeutral']) {
       this.attackFrame = m.startup;
       this.chargeTimer++;
       if (this.chargeTimer >= m.charge.swapEvery) {
@@ -3193,8 +3241,17 @@ const QUEEN_ART = [
    directions rather than angles because nothing here may call trig -- the
    build rejects the file over it, for the same reason every move's kx/ky is
    a baked literal: runtime trig is not bit-portable and this is lockstep. */
+/* Unit length, not (1, 1). A diagonal built from ones moves the full step on
+   BOTH axes, so it covers root two times the distance an orthogonal does in
+   the same frames -- a queen's burst came out a square with the corners 41%
+   further out than the sides, and `reach` meant two different things
+   depending on which ray you asked. The literal is the cosine of 45 degrees,
+   baked like every other one in this file because runtime trig is not
+   bit-portable and this is lockstep. */
+const DIAG = 0.70710678118654752;
 const DIAGONALS = [
-  { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 },
+  { dx: DIAG, dy: DIAG }, { dx: DIAG, dy: -DIAG },
+  { dx: -DIAG, dy: DIAG }, { dx: -DIAG, dy: -DIAG },
 ];
 const ORTHOGONALS = [
   { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
@@ -3226,14 +3283,34 @@ const KNIGHT_DIRS = [
    burst of it looks like. */
 const CHESS_PIECES = [
   { key: 'knight', label: 'KNIGHT', art: KNIGHT_ART, ink: '#efe7d2',
-    dirs: KNIGHT_DIRS, damage: 3 },
+    dirs: KNIGHT_DIRS, damage: 3, reach: 24 },
   { key: 'bishop', label: 'BISHOP', art: BISHOP_ART, ink: '#9fd4ff',
-    dirs: DIAGONALS, damage: 4 },
+    dirs: DIAGONALS, damage: 4, reach: 36 },
   { key: 'rook', label: 'ROOK', art: ROOK_ART, ink: '#c9c2b4',
-    dirs: ORTHOGONALS, damage: 5 },
+    dirs: ORTHOGONALS, damage: 5, reach: 48 },
   { key: 'queen', label: 'QUEEN', art: QUEEN_ART, ink: '#ffd75e',
-    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6 },
+    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6, reach: 62 },
 ];
+
+/* The burst is a firework, not a volley.
+
+   Every ray leaves at its own speed and is pulled down to nothing by drag,
+   so it flies out, slows, and dies where it stops -- which is what a shell
+   does and what a bullet emphatically does not. The old version ran at a flat
+   2.6 a frame for 26 frames and read as eight tracer rounds.
+
+   `reach` above is authored in pixels, because pixels are the thing anybody
+   has an opinion about, and the speed to get there is derived. SHARD_SPREAD
+   is how far one pixel-per-frame of launch speed travels over a whole life
+   at this drag -- the sum of the geometric series, baked as a literal rather
+   than computed with Math.pow, for the same portability reason every angle in
+   the roster is baked: this is lockstep and two machines must agree to the
+   bit. Recompute it if either number below changes:
+
+       SHARD_SPREAD = (1 - SHARD_DRAG ^ SHARD_LIFE) / (1 - SHARD_DRAG) */
+const SHARD_DRAG = 0.95;
+const SHARD_LIFE = 46;
+const SHARD_SPREAD = 18.1124;
 
 /* John's dog in the air. The trot stays a dozen fillRects; these are row
    strings because a lunge is a mouth, and a mouth drawn in the dog's own
@@ -5431,21 +5508,28 @@ class PieceShard {
     this.t = 0;
     this.x = pawn.x + this.dx * 5;
     this.y = pawn.y - 4 + this.dy * 5;
-    this.life = pawn.spec.shardLife || 26;
+    /* Launch speed for the distance this piece is supposed to cover. A knight
+       gets 24 pixels and a queen 62, so a queen leaves noticeably faster and
+       they both coast to a stop on the same frame -- the burst stays one
+       shape, it is just bigger for the pieces you waited longer for. */
+    this.speed = piece.reach / SHARD_SPREAD;
+    this.born = SHARD_LIFE;
+    this.life = SHARD_LIFE;
     this.dead = false;
   }
 
   update() {
     this.t++;
     this.life--;
-    if (this.turns && !this.turned && this.t >= (this.spec.turnAfter || 9)) {
+    if (this.turns && !this.turned && this.t >= (this.spec.turnAfter || 22)) {
       this.turned = true;
       this.dx = this.turnDx;
       this.dy = this.turnDy;
     }
-    const sp = this.spec.speed;
-    this.x += this.dx * sp;
-    this.y += this.dy * sp;
+    this.x += this.dx * this.speed;
+    this.y += this.dy * this.speed;
+    // Drag, applied after the step so the first frame gets the full launch.
+    this.speed *= SHARD_DRAG;
     if (this.life <= 0) this.dead = true;
     if (this.x < -20 || this.x > VW + 20 ||
         this.y > VH + 40 || this.y < -40) this.dead = true;
@@ -5455,12 +5539,37 @@ class PieceShard {
     return { x: this.x - 2, y: this.y - 2, w: 4, h: 4 };
   }
 
+  /* An ember: bright and fat on the way out, dim and small as it settles,
+     with a short trail of what it just was.
+
+     The trail is drawn from the shard's own position and speed rather than
+     from a remembered path -- three points back along the direction it is
+     travelling, spaced by the distance it is currently covering. That costs
+     no state, which matters twice over: nothing extra to snapshot, and
+     nothing a rollback can disagree about, because there is nothing here the
+     simulation can see at all. */
   draw(g) {
+    const left = Math.max(0, this.life) / this.born;
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const step = Math.max(0.6, this.speed);
+    g.globalAlpha = 0.25 * left;
+    for (let i = 3; i >= 1; i--) {
+      g.fillStyle = this.ink;
+      g.fillRect(Math.round(this.x - this.dx * step * i) - 1,
+                 Math.round(this.y - this.dy * step * i) - 1, 2, 2);
+    }
+    // The head, shrinking from four pixels to one as it burns out.
+    g.globalAlpha = Math.min(1, 0.35 + left);
+    const r = left > 0.55 ? 2 : left > 0.25 ? 1.5 : 1;
     g.fillStyle = this.ink;
-    g.fillRect(Math.round(this.x) - 2, Math.round(this.y) - 2, 4, 4);
-    // A one-pixel tail so a fast shard reads as travelling, not blinking.
-    g.fillRect(Math.round(this.x - this.dx * 3) - 1,
-               Math.round(this.y - this.dy * 3) - 1, 2, 2);
+    g.fillRect(x - Math.round(r), y - Math.round(r),
+               Math.round(r * 2), Math.round(r * 2));
+    // A white core for the first third, which is what makes it read as hot.
+    if (left > 0.66) {
+      g.fillStyle = '#ffffff';
+      g.fillRect(x - 1, y - 1, 2, 2);
+    }
+    g.globalAlpha = 1;
   }
 }
 
@@ -8384,7 +8493,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'e94cdf09fe';
+const BUILD_ID = 'b20f4d3d2f';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8395,7 +8504,7 @@ const BUILD_ID = 'e94cdf09fe';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.23';
+const VERSION = '2.24';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -8490,7 +8599,16 @@ const NET_MAX_DELAY = 3;
    Prediction therefore keeps the held directions and shield, and assumes no
    new presses. Missing a press for a frame costs one rollback; inventing one
    makes the opponent visibly do something they did not do. */
-const NET_LEVEL_BITS = 1 | 2 | 4 | 8 | 128;
+const NET_LEVEL_BITS = 1 | 2 | 4 | 8 | 128 | 4096 | 8192 | 16384;
+
+/* The top three are the per-button special HOLDS, and they belong here for
+   the same reason shield does: a button being held, so repeating it invents
+   nothing. They cannot start a move -- the edge bits do that, and they are
+   still excluded -- only keep open a charge a real press already opened.
+   Leaving them out would drop the charge on any frame the opponent's input
+   had not arrived, which is a piece changing under them because the network
+   hiccuped. See netCoverHidden for the one path where repeating them was not
+   enough on its own. */
 
 /* ---------------------------------------------------------------------
    SNAPSHOTS
@@ -8707,7 +8825,9 @@ function padToBits(p) {
   return (p.left ? 1 : 0) | (p.right ? 2 : 0) | (p.up ? 4 : 0) | (p.down ? 8 : 0) |
          (p.jump ? 16 : 0) | (p.attack ? 32 : 0) | (p.grab ? 64 : 0) |
          (p.shield ? 128 : 0) | (p.ult ? 256 : 0) |
-         (p.spNeutral ? 512 : 0) | (p.spDown ? 1024 : 0) | (p.spUp ? 2048 : 0);
+         (p.spNeutral ? 512 : 0) | (p.spDown ? 1024 : 0) | (p.spUp ? 2048 : 0) |
+         (p.holdNeutral ? 4096 : 0) | (p.holdDown ? 8192 : 0) |
+         (p.holdUp ? 16384 : 0);
 }
 
 function bitsToPad(b) {
@@ -8718,6 +8838,9 @@ function bitsToPad(b) {
     ult: !!(b & 256),
     spNeutral: spN, spDown: spD, spUp: spU,
     special: spN || spD || spU,
+    holdNeutral: !!(b & 4096),
+    holdDown: !!(b & 8192),
+    holdUp: !!(b & 16384),
   };
 }
 
@@ -9079,11 +9202,29 @@ function netCoverHidden() {
     }
     if (!netplay.hidden[sl] && !netplay.covering[sl]) { covered = false; continue; }
     netplay.covering[sl] = true;
+    /* The cover range starts BELOW netplay.frame -- the stall gate only
+       fires once they are NET_MAX_ROLLBACK behind, so the first call always
+       writes over about thirty-six frames this machine has already simulated
+       from `lastReal & NET_LEVEL_BITS`. Writing 0 and clearing `guessed`
+       over those declares them confirmed while the simulation still holds
+       what was guessed, and netAdvanceConfirmed then walks confirmedFrame
+       straight across them into the hash compare.
+
+       So a frame already spent has to be treated exactly as netReceive
+       treats a disagreeing input: roll back to it. Without this the guess is
+       never corrected, and with the special HOLDS in NET_LEVEL_BITS what
+       survives uncorrected is no longer a few pixels of drift -- it is which
+       chess piece a charge fired and on which frame, which is a desync. */
     for (let f = Math.max(0, netplay.newest[sl] + 1); f <= target; f++) {
       if (netplay.inputs[sl].has(f)) continue;
+      const spent = netplay.used[sl].get(f);
       netplay.inputs[sl].set(f, 0);
       netplay.guessed[sl].set(f, false);
       netplay.coveredFrames++;
+      if (spent !== undefined && spent !== 0) {
+        netplay.rollbackTo = netplay.rollbackTo === null
+          ? f : Math.min(netplay.rollbackTo, f);
+      }
     }
     if (target > netplay.newest[sl]) netplay.newest[sl] = target;
   }
@@ -9112,6 +9253,13 @@ function netAdvance() {
     netplay.worstStall = Math.max(netplay.worstStall, netplay.stalledFrames);
     return false;
   }
+  /* Again, because covering a hidden peer can discover that frames already
+     simulated were wrong -- and the check above it runs BEFORE the cover.
+     Left to the next tick, netAdvanceConfirmed would walk confirmedFrame
+     across those frames first and hash a state the rewind was about to
+     replace, which reports as a desync rather than as the rollback it is. */
+  if (netplay.rollbackTo !== null) netRollback();
+
   netplay.stalling = false;
   netplay.stalledFrames = 0;
 
@@ -9446,6 +9594,9 @@ window.NerdWars = {
     return projectiles.map((p) => ({
       kind: p.constructor.name,
       shape: p.shape || null,
+      // Which chess piece a pawn or a shard is carrying, for the same reason
+      // `shape` exists: the class alone does not say what the move did.
+      piece: p.pieceKey || null,
       owner: p.owner ? p.owner.slot : null,
       x: Math.round(p.x), y: Math.round(p.y),
     }));

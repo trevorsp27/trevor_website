@@ -786,7 +786,21 @@ test("charging the pawn walks knight, bishop, rook, queen and round again", asyn
     "knight,bishop,rook,queen",
     "weakest to strongest, which is the order the button walks");
 
-  const SP_UP = 2048;
+  /* 2048 is the EDGE -- the frame the key goes down, which is what starts
+     the move -- and 4096 is `specialHold`, the level that says it is still
+     down. A real keyboard sends both on the first frame and only the level
+     after that, and this test now says so.
+
+     It used to send 2048 every frame, which no keyboard ever produces, and
+     that is how it passed for a charge that on a real keyboard fired
+     instantly and always handed over a knight. A harness that answers the
+     question instead of asking it will do that. The keyboard-driven version
+     of this lives in nerdwars-movesets.test.js. */
+  /* 16384 is holdUp specifically, not "some special is down". The holds are
+     one bit per button so a charge can only be held open by the button that
+     opened it -- 4096 is holdNeutral and would not keep this one alive, which
+     is the point: holding H used to pin a charge started with K. */
+  const SP_UP = 2048, SP_HOLD = 16384;
   /* Both fighters pinned and untouchable. The charge is pinned to a frame
      counter that hitstop freezes, so a CPU landing one hit mid-charge stalls
      the cycle and the frame numbers below stop meaning anything. */
@@ -810,7 +824,8 @@ test("charging the pawn walks knight, bishop, rook, queen and round again", asyn
     netplay.active = true;
     for (var i = 0; i < 120; i++) {
       foe.hitstop = 0; me.hitstop = 0;
-      netplay.framePads = [bitsToPad(${SP_UP}), bitsToPad(0)];
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_UP} | ${SP_HOLD} : ${SP_HOLD}),
+                           bitsToPad(0)];
       step();
       var k = CHESS_PIECES[me.chargePiece].key;
       if (!seen.length || seen[seen.length - 1] !== k) seen.push(k);
@@ -836,7 +851,9 @@ test("charging the pawn walks knight, bishop, rook, queen and round again", asyn
     netplay.active = true;
     for (var i = 0; i < ${holdFor} + 30; i++) {
       foe.hitstop = 0; me.hitstop = 0;
-      netplay.framePads = [bitsToPad(i < ${holdFor} ? ${SP_UP} : 0), bitsToPad(0)];
+      netplay.framePads = [bitsToPad(
+        i === 0 ? ${SP_UP} | ${SP_HOLD} : (i < ${holdFor} ? ${SP_HOLD} : 0)),
+        bitsToPad(0)];
       step();
       var p = projectiles.filter(function (q) { return q.constructor.name === 'Pawn'; })[0];
       if (p && !carried) carried = p.pieceKey;
@@ -859,7 +876,8 @@ test("charging the pawn walks knight, bishop, rook, queen and round again", asyn
     netplay.active = true;
     for (var i = 0; i < 40; i++) {
       foe.hitstop = 0; me.hitstop = 0;
-      netplay.framePads = [bitsToPad(${SP_UP}), bitsToPad(0)];
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_UP} | ${SP_HOLD} : ${SP_HOLD}),
+                           bitsToPad(0)];
       step();
     }
     drawCharge(rec, me);              // mid-charge
@@ -948,6 +966,104 @@ test("the pawn promotes into its piece's own directions", async () => {
       "a " + key + " should burst into " + counts[key] + " shards, saw " + r.shards);
     assert.ok(r.lost > 0, "and it should hurt; a " + key + " took " + r.lost);
   }
+});
+
+test("the burst is a firework: it slows, and it reaches as far as it hits hard", async () => {
+  /* The first version ran every ray at a flat 2.6 a frame for 26 frames and
+     read as eight tracer rounds leaving a gun. A firework leaves fast, slows,
+     and dies where it stops -- and a queen's goes further than a knight's,
+     because range is the other half of what the charge buys you. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  /* One ray in open air with nothing to hit, built directly: this measures
+     the flight rather than whatever a match happened to allow. */
+  const fly = (key) => run(`(function () {
+    var me = fighters[0];
+    var piece = CHESS_PIECES.filter(function (c) {
+      return c.key === ${JSON.stringify(key)}; })[0];
+    var fake = { owner: me, x: 160, y: 90, spec: ROSTER.trev.specials.up };
+    var sh = new PieceShard(fake, piece, { dx: 1, dy: 0 });
+    var x0 = sh.x, first = 0, last = 0, n = 0;
+    for (var i = 0; i < 90 && !sh.dead; i++) {
+      var was = sh.x;
+      sh.update();
+      var step = sh.x - was;
+      if (i === 0) first = step;
+      last = step;
+      n++;
+    }
+    return { flown: sh.x - x0, want: piece.reach, damage: piece.damage,
+             first: first, last: last, frames: n };
+  })()`);
+
+  const shot = {};
+  for (const k of ["knight", "bishop", "rook", "queen"]) shot[k] = fly(k);
+
+  // It goes where the piece says it goes.
+  for (const k of Object.keys(shot)) {
+    assert.ok(Math.abs(shot[k].flown - shot[k].want) < 1.5,
+      k + " should cover its declared reach of " + shot[k].want +
+      ", flew " + shot[k].flown.toFixed(1));
+  }
+
+  /* Range climbs with the cycle, exactly as damage does. This is the half
+     that was asked for and the half that is easiest to lose in a retune. */
+  const order = ["knight", "bishop", "rook", "queen"];
+  for (let i = 1; i < order.length; i++) {
+    const prev = shot[order[i - 1]], cur = shot[order[i]];
+    assert.ok(cur.flown > prev.flown + 4,
+      order[i] + " should out-reach " + order[i - 1] + "; " +
+      cur.flown.toFixed(1) + " against " + prev.flown.toFixed(1));
+    assert.ok(cur.damage > prev.damage,
+      order[i] + " should out-damage " + order[i - 1]);
+  }
+
+  /* And it is a firework rather than a bullet: the last step of the flight is
+     a fraction of the first. A constant-speed shard makes this ratio 1. */
+  for (const k of Object.keys(shot)) {
+    assert.ok(shot[k].last < shot[k].first * 0.25,
+      k + " should be coasting to a stop, not cruising: first step " +
+      shot[k].first.toFixed(2) + ", last " + shot[k].last.toFixed(2));
+  }
+
+  /* A diagonal has to be a unit vector or it covers root two times the
+     distance an orthogonal does, and a queen's burst comes out a square with
+     the corners 41% further out than the sides. */
+  const diag = run(`(function () {
+    var me = fighters[0];
+    var piece = CHESS_PIECES.filter(function (c) { return c.key === 'bishop'; })[0];
+    var fake = { owner: me, x: 160, y: 90, spec: ROSTER.trev.specials.up };
+    var sh = new PieceShard(fake, piece, piece.dirs[0]);
+    var x0 = sh.x, y0 = sh.y;
+    for (var i = 0; i < 90 && !sh.dead; i++) sh.update();
+    var ax = sh.x - x0, ay = sh.y - y0;
+    return { dist: Math.sqrt(ax * ax + ay * ay), want: piece.reach };
+  })()`);
+  assert.ok(Math.abs(diag.dist - diag.want) < 1.5,
+    "a diagonal ray should cover the same distance as a straight one; went " +
+    diag.dist.toFixed(1) + " against " + diag.want);
+
+  /* The knight turns two thirds of the way ALONG THE RAY, which is not two
+     thirds of the way through the frames once the thing is decelerating.
+     Measured, turning on frame 22 gave 2.69:1; this is the 2:1 a knight
+     actually moves. */
+  const corner = run(`(function () {
+    var me = fighters[0];
+    var piece = CHESS_PIECES.filter(function (c) { return c.key === 'knight'; })[0];
+    var fake = { owner: me, x: 160, y: 90, spec: ROSTER.trev.specials.up };
+    var sh = new PieceShard(fake, piece, { dx: 1, dy: 0, turn: { dx: 0, dy: 1 } });
+    var x0 = sh.x, y0 = sh.y;
+    for (var i = 0; i < 90 && !sh.dead; i++) sh.update();
+    return { across: sh.x - x0, down: sh.y - y0 };
+  })()`);
+  const ratio = corner.across / Math.max(0.01, corner.down);
+  assert.ok(ratio > 1.6 && ratio < 2.5,
+    "a knight goes two squares and then one, so the L should be near 2:1; " +
+    "got " + ratio.toFixed(2) + ":1 (" + corner.across.toFixed(1) + " across, " +
+    corner.down.toFixed(1) + " down)");
 });
 
 test("the dog bites harder with its jaws open, and not on the way down", async () => {

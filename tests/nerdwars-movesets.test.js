@@ -496,6 +496,82 @@ test("Trev's kit is the pawn and the fishing pole", async () => {
   assert.equal(trev.ult, "LASER SWORD", "the sword stays");
 });
 
+test("holding the special key really does charge the pawn", async () => {
+  /* This is the test that was missing, and its absence shipped a broken
+     move.
+
+     The charge was covered -- thoroughly -- by a test that drove it through
+     netplay.framePads, setting the button bit every frame by hand. It
+     passed. On a keyboard it never once worked: readPad reports the three
+     special buttons as EDGES, true only on the frame the key goes down, so
+     "is he still holding it" was false on every frame after the first and
+     every charge fired instantly with the first piece in the cycle. The
+     harness had been told the answer instead of being asked the question.
+
+     So this one holds a real key down and pumps frames, which is the only
+     version that exercises readPad at all. */
+  const g = await bootGame();
+  startAs(g, "trev", "reese");
+  waitOutSpawnInvuln(g);
+  const pawns = () => g.nw.projectiles.filter((p) => p.kind === "Pawn");
+
+  // Hold it down for a long time: nothing should come out while it is held.
+  g.press("KeyK");
+  g.pump(70);
+  assert.equal(pawns().length, 0,
+    "holding the key should hold the charge, not fire it");
+  assert.equal(g.nw.fighters[0].state, "special",
+    "and he should still be standing there charging");
+
+  g.release("KeyK");
+  g.pump(6);
+  const out = pawns();
+  assert.equal(out.length, 1, "letting go should send exactly one pawn");
+
+  /* And it must not be the first piece in the cycle. That is the whole
+     failure: a charge that does not charge still fires, still looks like it
+     worked, and hands over a knight every single time. */
+  assert.notEqual(out[0].piece, "knight",
+    "70 frames of holding should have cycled past the knight, got " +
+    out[0].piece);
+});
+
+test("only the button that opened a charge can hold it open", async () => {
+  /* Found by review, not by playing, and it would have been miserable to
+     diagnose from the player's side.
+
+     The hold started life as one level OR'd across all three special
+     buttons, defended with "you cannot start a second special mid-move, so
+     which key is holding it open cannot matter". The premise is true and the
+     conclusion does not follow: the gate is not asking whether a move may
+     START, it is asking whether THIS one should continue.
+
+     So holding H -- which is completely inert mid-move, and therefore looks
+     free to press -- kept a charge opened with K pinned, and releasing K did
+     nothing. PAWN is not `mobile`, so he stood locked in place cycling
+     pieces above his head, with the only on-screen feedback actively telling
+     the player the charge was still going. Seat 0 binds the three specials
+     to H, J and K: three adjacent keys under one hand. */
+  const g = await bootGame();
+  startAs(g, "trev", "reese");
+  waitOutSpawnInvuln(g);
+  const pawns = () => g.nw.projectiles.filter((p) => p.kind === "Pawn");
+
+  g.press("KeyK");          // the charge
+  g.pump(40);
+  g.press("KeyH");          // an unrelated special, held by accident
+  g.pump(10);
+  assert.equal(pawns().length, 0, "still charging, which is correct so far");
+
+  g.release("KeyK");        // let go of the one that started it
+  g.pump(8);
+  assert.equal(pawns().length, 1,
+    "releasing the button that opened the charge must fire it, even with " +
+    "another special key still down");
+
+  g.release("KeyH");
+});
+
 test("a tapped pawn walks off in front of him", async () => {
   /* PAWN replaced KNIGHT, and KNIGHT was his recovery -- two squares up and
      one across, generous on the vertical precisely because it was his way
