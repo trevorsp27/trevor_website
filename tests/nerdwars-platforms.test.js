@@ -1307,6 +1307,72 @@ test("the dog bites harder with its jaws open, and not on the way down", async (
     ground.vx.toFixed(2) + ", " + ground.vy.toFixed(2) + ")");
 });
 
+test("the pole hurts on the throw, not on the catch", async () => {
+  /* All of this move's damage is in the throw, which is the half you have to
+     earn: the line has to connect, and then you have to survive holding
+     somebody for 32 frames before it pays. The catch used to take five off by
+     itself, which made throwing the line worth something even when the
+     follow-up was taken off you.
+
+     The basic Y grab is untouched -- only the pole was asked about -- and
+     that is worth an assertion, because `grab.damage` is read from whichever
+     move is running and it would be easy to zero the wrong one. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const pole = run("(function(){var s = ROSTER.trev.specials.down;" +
+    "return { grab: s.grab.damage, fwd: s.throwFwd.damage," +
+    " up: s.throwUp.damage, down: s.throwDown.damage };})()");
+  assert.equal(pole.grab, 0, "the catch should take nothing off");
+  for (const k of ["fwd", "up", "down"]) {
+    assert.ok(pole[k] > 5,
+      "the throws are where the damage lives; " + k + " does " + pole[k]);
+  }
+  assert.ok(run("BASIC_GRAB.grab.damage") > 0,
+    "the universal Y grab keeps its catch damage -- only the pole was asked " +
+    "about, and grab.damage is read from whichever move is running");
+
+  // And end to end, because a spec is not a match.
+  const DOWN_SPECIAL = 1024;
+  const r = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grabTimer = 0; me.grounded = true; me.facing = 1;
+    me.x = main.x + 30; me.y = main.y; me.throwAim = 0; me.throwDirX = 1;
+    foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
+    foe.invuln = 0; foe.stocks = 99; foe.health = 1000; foe.grabbedBy = -1;
+    foe.vx = 0; foe.vy = 0; foe.grounded = true; foe.y = main.y;
+    foe.x = me.x + 22;
+    var start = foe.health, atCatch = null, afterThrow = null, caught = false;
+    netplay.active = true;
+    for (var i = 0; i < 100; i++) {
+      me.hitstop = 0; foe.hitstop = 0;
+      netplay.framePads = [bitsToPad(i === 0 ? ${DOWN_SPECIAL} : 0), bitsToPad(0)];
+      if (me.grabbing < 0 && !caught) {
+        foe.x = me.x + 22; foe.vx = 0; foe.y = main.y;
+      }
+      foe.invuln = 0;
+      var was = me.grabbing;
+      step();
+      if (was < 0 && me.grabbing >= 0) { caught = true; atCatch = start - foe.health; }
+      if (was >= 0 && me.grabbing < 0) { afterThrow = start - foe.health; break; }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { caught: caught, atCatch: atCatch, afterThrow: afterThrow };
+  })()`);
+
+  assert.ok(r.caught, "the line should have connected, or this proves nothing");
+  assert.equal(r.atCatch, 0,
+    "nothing should come off on the catch; took " + r.atCatch);
+  assert.ok(r.afterThrow > 8,
+    "and the throw should still hurt; took " + r.afterThrow + " in total");
+});
+
 test("the cast is a thrown lure: it travels, it arcs, and the way home is live", async () => {
   /* Four complaints in one move, so four things to hold down.
 

@@ -861,7 +861,18 @@ const ROSTER = {
            feel instant. */
         startup: 9, active: 30, recovery: 16,
         ox: 4, oy: -12, w: 46, h: 10,
-        grab: { hold: 32, damage: 5 },
+        /* The catch itself takes nothing off. All of this move's damage is in
+           the throw below, which is the half you have to earn: the line has
+           to connect, and then you have to survive holding somebody for 32
+           frames before it pays. Five free damage for the connection made
+           throwing the line worth something even when the follow-up was
+           taken off you.
+
+           moveCost prices `grab.damage`, so leaving this at zero makes the
+           move cheaper by exactly the damage it no longer does -- which is
+           the formula working, not a hole in it. manaOverride is deliberately
+           NOT used here: this move genuinely does less. */
+        grab: { hold: 32, damage: 0 },
         // Never read for knockback -- applyHit returns at the grab branch
         // long before it computes any. Present because the throws below are
         // where the force actually is.
@@ -8578,7 +8589,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '3eefbdeaba';
+const BUILD_ID = '9aa84b9952';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8589,7 +8600,7 @@ const BUILD_ID = '3eefbdeaba';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.26';
+const VERSION = '2.27';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
