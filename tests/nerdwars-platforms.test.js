@@ -1106,6 +1106,112 @@ test("the burst is a firework: it slows, and it reaches as far as it hits hard",
     drawn.alphas + " distinct alphas over " + drawn.rects + " rects");
 });
 
+test("John can walk through his whole kit, and still stops when you let go", async () => {
+  /* Nothing was holding him still on purpose. `rooted` never listed any of
+     his moves -- what stopped him was the plain non-mobile path, ground
+     friction with no way to accelerate out of it, for every frame of the
+     move. His longest is SIC 'EM at 36 frames, so two attacks back to back
+     is most of a second of a man who cannot walk.
+
+     The second half matters as much as the first: `mobile` is walk controls,
+     not frozen momentum. Letting go has to stop him, which is the bug that
+     shipped the first time a move was made mobile. */
+  const run = await bootEngine();
+  run("select.cursor=[1,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.key || ROSTER.johnnyham.name"), "JOHNNYHAM",
+    "player 1 should be John");
+
+  const ATTACK = 32, SP_N = 512, SP_D = 1024, SP_U = 2048, ULT = 256, RIGHT = 2;
+  const setup = `
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.ultMeter = 999;
+    me.vx = 0; me.vy = 0; me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = main.x + 30; me.y = main.y; me.specialSpawned = false;
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    foe.grounded = true; foe.vx = 0; foe.vy = 0;`;
+
+  const through = (startBits, holdBits, frames, enterMoving) => run(`(function () {
+    ${setup}
+    me.vx = ${enterMoving} ? me.def.walk : 0;
+    var x0 = me.x, busy = 0;
+    netplay.active = true;
+    for (var i = 0; i < ${frames}; i++) {
+      me.hitstop = 0; foe.hitstop = 0;
+      netplay.framePads = [bitsToPad((i === 0 ? ${startBits} : 0) | ${holdBits}),
+                           bitsToPad(0)];
+      step();
+      if (me.state === 'attack' || me.state === 'special' || me.state === 'ult') busy++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { moved: me.x - x0, busy: busy };
+  })()`);
+
+  const kit = [["jab", ATTACK, 24], ["SMOKESCREEN", SP_N, 34],
+               ["SIC 'EM", SP_D, 40], ["SIDEARM", SP_U, 36],
+               ["HONEY BAKED", ULT, 34]];
+  for (const [name, bits, frames] of kit) {
+    const held = through(bits, RIGHT, frames, false);
+    assert.ok(held.busy > 15,
+      name + " should still be running for most of this; " + held.busy + " frames");
+    assert.ok(held.moved > 15,
+      "he should be able to walk through " + name + "; moved " +
+      held.moved.toFixed(1) + "px");
+
+    // ...and letting go stops him rather than freezing whatever he carried in.
+    const loose = through(bits, 0, frames, true);
+    assert.ok(Math.abs(loose.moved) < 6,
+      "releasing everything during " + name + " should stop him, not coast; " +
+      "drifted " + loose.moved.toFixed(1) + "px");
+  }
+
+  /* SIDEARM is his recovery, and being mobile must not cost him that. The
+     mobile branch only assigns vx when he is GROUNDED, so the airborne half
+     of the recoil -- the vy kick and the air jump it hands back -- is
+     untouched. This is the assertion that fails if anyone ever "simplifies"
+     that branch to set velocity unconditionally. */
+  const recover = run(`(function () {
+    ${setup}
+    me.x = main.x - 30; me.y = main.y - 60;      // off the edge, falling
+    me.grounded = false; me.vy = 3; me.jumpsLeft = 0;
+    var before = null, after = null, jumps = 0;
+    var vxBefore = null, vxAfter = null;
+    netplay.active = true;
+    for (var i = 0; i < 30; i++) {
+      me.hitstop = 0;
+      netplay.framePads = [bitsToPad((i === 0 ? ${SP_U} : 0) | ${RIGHT}),
+                           bitsToPad(0)];
+      step();
+      if (!me.specialSpawned) { before = me.vy; vxBefore = me.vx; }
+      else if (after === null) { after = me.vy; vxAfter = me.vx; }
+      jumps = Math.max(jumps, me.jumpsLeft);
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { before: before, after: after, jumps: jumps,
+             vxBefore: vxBefore, vxAfter: vxAfter };
+  })()`);
+  assert.ok(recover.after < recover.before,
+    "firing SIDEARM while falling must still kick him upward; vy went from " +
+    recover.before.toFixed(1) + " to " + recover.after.toFixed(1));
+  assert.ok(recover.jumps > 0,
+    "and hand back an air jump; got " + recover.jumps);
+
+  /* "Kicks him back AND up" -- the horizontal half is spec too, and it is
+     the half the mobile branch could actually eat. He is holding RIGHT
+     through all of this, so if that branch ever assigns vx in the air, the
+     backward shove is overwritten by a walk he should not get while
+     airborne. That is the one-word change this guards against. */
+  assert.ok(recover.vxAfter < recover.vxBefore,
+    "firing it should shove him backward as well as upward; vx went from " +
+    recover.vxBefore.toFixed(2) + " to " + recover.vxAfter.toFixed(2) +
+    " while holding forward");
+});
+
 test("the dog bites harder with its jaws open, and not on the way down", async () => {
   /* A leap with the jaws open pays half again: 6 damage becomes 9. That is
      `lunge` climbing and `snap` across the top, eleven frames of a roughly

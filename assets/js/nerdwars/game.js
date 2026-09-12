@@ -410,7 +410,20 @@ const ROSTER = {
     drawn: false,
     blurb: 'Fights dirty: you cannot see, your controls are backwards, and there is a dog.',
     weight: 105, walk: 1.24, jump: 6.1, doubleJump: 5.6,
-    jab: { startup: 5, active: 5, recovery: 11, damage: 6,
+    /* John's whole kit is `mobile`: walking, turning and jumping all still
+       answer while any of it runs.
+
+       Nothing was holding him still on purpose. `rooted` never listed any of
+       his moves -- what stopped him was the plain non-mobile path, ground
+       friction with no way to accelerate out of it, for every frame of the
+       move. His longest is SIC 'EM at 36 frames, and two attacks back to
+       back is most of a second of a man who cannot walk. He is a dog handler
+       and a gunman: both are things you do while going somewhere.
+
+       `mobile` bundles jumping with walking, so this also makes his moves
+       jump-cancellable. That is a real buff beyond "let him walk" and it is
+       meant: he is last on the roster. */
+    jab: { startup: 5, active: 5, recovery: 11, damage: 6, mobile: true,
            base: 2.5, scale: 6.6, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829, ox: 2, oy: -9, w: 12, h: 10 },
     specials: {
       /* The damage is almost an afterthought -- three points and a shove.
@@ -419,7 +432,7 @@ const ROSTER = {
          does to them. It hangs where it lands, so it also just denies a
          piece of the stage. */
       neutral: {
-        kind: 'cloud', label: 'SMOKESCREEN',
+        kind: 'cloud', label: 'SMOKESCREEN', mobile: true,
         startup: 9, active: 4, recovery: 18,
         speed: 2.6, lift: -0.5, drop: 0.02, friction: 0.93,
         life: 200, ahead: 12, high: 9, r0: 8, r1: 15,
@@ -458,7 +471,7 @@ const ROSTER = {
          existing bounds check, so the moment it leaves, another is
          affordable. Nothing new had to track that. */
       down: {
-        kind: 'dog', label: "SIC 'EM",
+        kind: 'dog', label: "SIC 'EM", mobile: true,
         startup: 11, active: 5, recovery: 20,
         maxAlive: 1, leap: -4.4,
         speed: 2.1, life: 170,
@@ -479,7 +492,13 @@ const ROSTER = {
          somebody mid-swing pins them for a second and a quarter, which is a
          read rather than a poke. */
       up: {
-        kind: 'gun', label: 'SIDEARM',
+        /* Mobile like the rest of him, and his recovery survives it: the
+           mobile branch only assigns vx when he is GROUNDED, so the airborne
+           half of the recoil -- the vy kick and the air jump it hands back --
+           is untouched. On the ground, holding a direction now overrides the
+           horizontal shove, which is the honest trade: you chose to walk
+           instead of being pushed. */
+        kind: 'gun', label: 'SIDEARM', mobile: true,
         startup: 8, active: 3, recovery: 21,
         speed: 6.2, life: 46, tint: '#ffd76a',
         kickX: 1.9, kickY: 4.6, cue: 'gunshot',
@@ -491,7 +510,7 @@ const ROSTER = {
     // and everything after that belongs to the ham. None of this is a hitbox
     // on him -- all three payloads are the ham's.
     ult: {
-      kind: 'hamdrop', label: 'HONEY BAKED',
+      kind: 'hamdrop', label: 'HONEY BAKED', mobile: true,
       startup: 10, active: 4, recovery: 16,
       // Off the top of the screen, and slow enough that the shadow is on the
       // floor for about half a second before it arrives.
@@ -8559,7 +8578,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'b5b13f4987';
+const BUILD_ID = '3eefbdeaba';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8570,7 +8589,7 @@ const BUILD_ID = 'b5b13f4987';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.25';
+const VERSION = '2.26';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
