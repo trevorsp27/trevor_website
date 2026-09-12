@@ -764,26 +764,27 @@ test("the dog changes pose when it leaps", async () => {
     "only " + r.air + " frames used one");
 });
 
-test("the pole catches what the line touches, not a box around the whole arc", async () => {
-  /* The reported bug was "the fishing pole is not working as intended", and
-     what it was doing was hitting people it visibly missed.
+test("the cast is a thrown lure: it travels, it arcs, and the way home is live", async () => {
+  /* Four complaints in one move, so four things to hold down.
 
-     hitbox() returned ONE rectangle bounding the entire cast: near end to far
-     end, cast height to wherever the line had fallen to. On flat ground the
-     line is almost level, so the rectangle and the line are nearly the same
-     shape and it looked correct. Cast from a jump, the line drops sixty-odd
-     pixels, and the rectangle became 67 wide by 63 tall -- a third of the
-     screen's height -- catching anything in that whole quadrant.
+     It caught people it visibly missed: hitbox() returned ONE rectangle
+     bounding the entire cast, 67 wide by 63 tall from a jump. It arrived
+     instantly: poleCast walked the whole trajectory in a single call, so the
+     line existed at full length on the frame it appeared and "how fast does
+     it travel" had no answer. It went too far: 82px from height. And the
+     reel home was scenery -- six live frames at full extension, nothing
+     before, nothing after.
 
-     So the guard is not "the box is small". A short cast would pass that
-     while still being a bounding box. It is "the box is small WHILE THE ARC
-     IS LARGE", which only the walked line can satisfy. */
+     The lure is a real projectile now, thrown up and forward, and the box is
+     8x8 wherever it has got to. */
   const run = await bootEngine();
   run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
   assert.equal(run("fighters[0].def.specials.down.kind"), "pole",
     "player 1 should be the one with the rod");
+  assert.equal(run("!!fighters[0].def.specials.down.mobile"), true,
+    "and he should be able to move while casting");
 
   const DOWN_SPECIAL = 1024;
   const r = run(`(function () {
@@ -793,50 +794,165 @@ test("the pole catches what the line touches, not a box around the whole arc", a
     projectiles.length = 0;
     me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
     me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.grabbing = -1;
-    // High enough that the line has a long way to fall during the cast.
-    me.x = main.x + 40; me.y = main.y - 55; me.vy = 0;
-    me.grounded = false; me.facing = 1;
-    // Parked far away so nothing interrupts, and so the line hits the floor
-    // rather than a body.
-    foe.x = 10; foe.y = main.y; foe.setState('idle'); foe.hasHit = true;
-    var frames = [];
+    me.x = main.x + 40; me.y = main.y; me.vy = 0;
+    me.grounded = true; me.facing = 1;
+    // On the stage and untouchable: left off the edge it dies, respawns in
+    // the middle and gets caught, which freezes the cast in grab hitstop.
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.setState('idle');
+    foe.hasHit = true; foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.grounded = true; foe.vx = 0; foe.vy = 0;
+    var rows = [];
     netplay.active = true;
-    for (var i = 0; i < 24; i++) {
+    for (var i = 0; i < 60; i++) {
       netplay.framePads = [bitsToPad(i === 0 ? ${DOWN_SPECIAL} : 0), bitsToPad(0)];
       step();
+      var h = poleHook(me, s);
       var b = me.hitbox();
-      if (!b) continue;
-      var cast = poleCast(me, s);
-      var hook = polePoint(me, s);
-      frames.push({
-        w: b.box.w, h: b.box.h,
-        cx: b.box.x + b.box.w / 2, cy: b.box.y + b.box.h / 2,
-        hookX: hook.x, hookY: hook.y,
-        arcW: cast.fwd, arcH: cast.up - s.oy,
+      rows.push({
+        t: me.attackFrame - s.startup,
+        hx: h ? h.x : null, hy: h ? h.y : null, landed: h ? !!h.landed : false,
+        live: !!b,
+        w: b ? b.box.w : 0, h: b ? b.box.h : 0,
+        cx: b ? b.box.x + b.box.w / 2 : 0, cy: b ? b.box.y + b.box.h / 2 : 0,
+        mx: me.x, floor: main.y, launchY: me.poleY0,
       });
     }
     netplay.active = false; netplay.framePads = null;
-    return frames;
+    return rows;
   })()`);
 
-  assert.ok(r.length > 0, "the cast should have produced an active hitbox");
+  const live = r.filter((f) => f.live);
+  assert.ok(live.length > 0, "the cast should have produced a hitbox at all");
 
-  for (const f of r) {
+  // 1. A point on the line, not a box around the arc -- and the same point
+  //    the drawing paints, because both ask poleHook.
+  for (const f of live) {
     assert.ok(f.w <= 12 && f.h <= 12,
       "the hitbox should be a point on the line, got " + f.w + "x" + f.h);
-    // And it should be that point, not merely small and somewhere else.
-    assert.ok(Math.abs(f.cx - f.hookX) < 0.001 && Math.abs(f.cy - f.hookY) < 0.001,
-      "the box should be centered on the hook; box (" + f.cx + ", " + f.cy +
-      ") vs hook (" + f.hookX + ", " + f.hookY + ")");
+    assert.ok(Math.abs(f.cx - f.hx) < 0.001 && Math.abs(f.cy - f.hy) < 0.001,
+      "the box should be centered on the lure; box (" + f.cx + ", " + f.cy +
+      ") vs lure (" + f.hx + ", " + f.hy + ")");
   }
 
-  /* The half that makes the above mean something. If the arc were small here
-     too, a bounding box would also have passed. */
-  const arc = r[r.length - 1];
-  assert.ok(arc.arcW > 30,
-    "this cast should reach a long way, or the test proves nothing; " + arc.arcW);
-  assert.ok(arc.arcH > 30,
-    "and fall a long way, or the test proves nothing; " + arc.arcH);
+  /* 2. It TRAVELS. The old one was in its final position on the first live
+        frame, so every step below was zero; this is the assertion that fails
+        if anyone makes the line instant again. */
+  const flight = live.filter((f) => f.t >= 0 && !f.landed);
+  const steps = [];
+  for (let i = 1; i < flight.length; i++) {
+    const d = Math.abs(flight[i].hx - flight[i - 1].hx);
+    if (flight[i].t > flight[i - 1].t) steps.push(d);
+  }
+  assert.ok(steps.length >= 8,
+    "the lure should be in the air for several frames, saw " + steps.length);
+  assert.ok(steps.filter((d) => d > 0.3).length >= 6,
+    "it should move most frames rather than appearing at full length: " +
+    steps.map((d) => d.toFixed(1)).join(", "));
+  assert.ok(Math.max.apply(null, steps) < 8,
+    "and no single frame should jump most of the reach; biggest step " +
+    Math.max.apply(null, steps).toFixed(1));
+
+  /* 3. It ARCS: thrown upward, so it is HIGHER than where it left the rod
+        before it is lower. A monotonic fall is the straight line again. */
+  /* Measured out of the trace itself rather than against poleY0. The first
+     version compared the flight's high point to the recorded launch height
+     and did NOT fail when the upward throw was set to zero -- a green test
+     for a claim that was no longer true. Comparing the first sampled height
+     to the lowest sampled height cannot have that problem: with a flat
+     throw they are the same number. */
+  /* OUTBOUND only -- up to and including the frame it lands. `flight` runs
+     on to the reel, and the reel legitimately lifts the lure back toward his
+     hand, so a minimum taken over all of it is the return trip rather than
+     the arc. That is not a hypothetical: with the upward throw zeroed this
+     assertion still passed, because the reel supplied a 10px "rise" for a
+     cast that went out dead flat. */
+  const landIdx = live.findIndex((f) => f.landed);
+  const outbound = (landIdx >= 0 ? live.slice(0, landIdx + 1) : flight)
+    .filter((f) => f.t >= 0);
+  assert.ok(outbound.length >= 8,
+    "expected a real outbound flight to measure, got " + outbound.length);
+  const ys = outbound.map((f) => f.hy);
+  const startY = ys[0];
+  const highest = Math.min.apply(null, ys);       // smallest y is highest up
+  assert.ok(startY - highest > 1.5,
+    "the lure should rise above where it left the rod before it falls; " +
+    "started at " + startY.toFixed(1) + " and never got above " +
+    highest.toFixed(1));
+  const lowest = Math.max.apply(null, live.map((f) => f.hy));
+  assert.ok(lowest > startY + 6,
+    "and then come down well below it; reached " + lowest.toFixed(1) +
+    " from " + startY.toFixed(1));
+
+  /* 4. The way home is live. This is the half that did not exist: a cast
+        that missed going out can still catch somebody coming back. */
+  const landedAt = r.findIndex((f) => f.landed);
+  assert.ok(landedAt >= 0, "on flat ground the lure should reach the floor");
+  const afterLanding = r.slice(landedAt + 1).filter((f) => f.live);
+  assert.ok(afterLanding.length >= 8,
+    "the hitbox should stay live while it is reeled in, got " +
+    afterLanding.length + " frames");
+  const home = afterLanding[afterLanding.length - 1];
+  assert.ok(Math.abs(home.hx - home.mx) < Math.abs(r[landedAt].hx - r[landedAt].mx),
+    "and the lure should be coming back toward him while it is");
+
+  // 5. Shorter than it was: 46 on the flat and 82 from a jump, before.
+  const reach = Math.max.apply(null, live.map((f) => Math.abs(f.hx - f.mx)));
+  assert.ok(reach < 46,
+    "the cast should not reach as far as the old one; got " + reach.toFixed(1));
+});
+
+test("he can walk while casting, and letting go stops him", async () => {
+  /* Half of this is the feature and half is the bug it uncovered.
+
+     `mobile` gives walking, turning and jumping back during a move -- but it
+     did it by skipping the friction branch entirely rather than by taking
+     over from it, so a mobile move neither set vx nor damped it. Whatever
+     speed he carried in was frozen for the whole move: measured at 24.5px of
+     silent drift across a 55 frame cast with nothing held, vx pinned at
+     0.584 the entire time. "You may move while casting" had quietly meant
+     "you may not stop", and it slid him past whoever he was aiming at. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const DOWN_SPECIAL = 1024, RIGHT = 2;
+  const cast = (holdBits, enterMoving) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.grabbing = -1;
+    me.x = main.x + 30; me.y = main.y; me.vy = 0; me.grounded = true;
+    me.facing = 1;
+    me.vx = ${enterMoving} ? me.def.walk : 0;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.invuln = 9999;
+    foe.stocks = 99; foe.health = 1000; foe.setState('idle'); foe.hasHit = true;
+    var x0 = me.x, castFrames = 0;
+    netplay.active = true;
+    for (var i = 0; i < 55; i++) {
+      var bits = (i === 0 ? ${DOWN_SPECIAL} : 0) | (i === 0 ? 0 : ${holdBits});
+      netplay.framePads = [bitsToPad(bits), bitsToPad(0)];
+      step();
+      if (me.state === 'special') castFrames++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { moved: me.x - x0, castFrames: castFrames };
+  })()`);
+
+  const held = cast(RIGHT, false);
+  assert.ok(held.castFrames > 20,
+    "the cast should still be running for most of this; " + held.castFrames);
+  assert.ok(held.moved > 15,
+    "holding right through a cast should walk him; moved " +
+    held.moved.toFixed(1) + "px");
+
+  /* The negative control, and the actual bug: enter the cast at a walk, then
+     press nothing. He must stop, the same as letting go while walking. */
+  const drifting = cast(0, true);
+  assert.ok(Math.abs(drifting.moved) < 4,
+    "releasing everything should stop him rather than freezing his momentum; " +
+    "drifted " + drifting.moved.toFixed(1) + "px");
 });
 
 test("a status ticks damage every frame but only speaks every twentieth", async () => {

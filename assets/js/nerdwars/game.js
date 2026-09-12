@@ -823,8 +823,23 @@ const ROSTER = {
            grounded-gated and the pole is not rooted -- which is the "in the
            air and while moving" that was actually asked for. Steering mid-cast
            is a different thing, and it breaks the aim. */
-        kind: 'pole', label: 'FISHING POLE',
-        startup: 9, active: 6, recovery: 24,
+        /* `mobile`, so walking, turning and jumping all still answer while
+           the rod is out. That used to be refused on the grounds that
+           steering mid-cast breaks the aim, and it would have -- the line was
+           rebuilt from his CURRENT facing every frame, so turning round
+           teleported it to his other side. The lure is launched from a
+           remembered point in the world now (poleX0/poleY0/poleDir), so he
+           can walk away from a cast that is already in the air and the line
+           stays where he threw it. */
+        kind: 'pole', label: 'FISHING POLE', mobile: true,
+        /* `active` is the CAP on the flight now, not a window at full
+           extension: the lure travels until it lands, then POLE_REEL frames
+           of winding it back, and the hitbox rides it for all of both. Thirty
+           is what a cast from the top platform needs to reach the floor; on
+           flat ground it lands in sixteen and starts reeling straight away.
+           Six frames of a line that was already fully out is what made this
+           feel instant. */
+        startup: 9, active: 30, recovery: 16,
         ox: 4, oy: -12, w: 46, h: 10,
         grab: { hold: 32, damage: 5 },
         // Never read for knockback -- applyHit returns at the grab branch
@@ -1565,6 +1580,17 @@ class Fighter {
        spec, because restoreSim copies fighter fields and a live object in
        there is a way to end up with two machines holding different specs. */
     this.grabKind = 0;
+    /* Where the lure was thrown FROM, and which way. Declared here because
+       restoreSim deletes any key it does not find in a snapshot, so a field
+       first assigned mid-cast would vanish on the next rollback and take the
+       line with it.
+
+       The whole flight is a pure function of these three plus attackFrame,
+       which is why there is no velocity to carry: two machines replaying the
+       same frame integrate the identical path from the identical start. */
+    this.poleX0 = 0;
+    this.poleY0 = 0;
+    this.poleDir = 1;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
        than Fighter references, for the reason poisonBy is: snapValue keeps a
        Fighter by pointer inside a snapshot, and a stale pointer survives a
@@ -1662,28 +1688,22 @@ class Fighter {
     }
     if (this.state === 'special' || this.state === 'ult') {
       const s = this.moveFor(this.state);
-      /* The pole is the one move whose hitbox is not a fixed rectangle: the
-         line runs until it hits something, so the box has to be whatever the
-         line turned out to be. Same poleCast the drawing uses, so what is
-         painted and what can catch you are the same object by construction
-         rather than by two sets of numbers being kept in step by hand. */
+      /* The pole is the one move whose hitbox is not a fixed rectangle: it
+         is wherever the lure has got to. Same poleHook the drawing uses, so
+         what is painted and what can catch you are the same object by
+         construction rather than two sets of numbers kept in step by hand. */
       if (s && s.kind === 'pole') {
-        if (this.attackFrame < s.startup) return null;
-        if (this.attackFrame >= s.startup + s.active) return null;
-        /* Walk the line and hand back a box around the first thing it passes
-           through, rather than one rectangle bounding the whole arc.
+        /* One box, eight pixels square, wherever the lure is -- for the whole
+           flight out AND the whole reel back. It used to be six frames at
+           full extension and nothing else, so the line was scenery on the way
+           out and scenery again on the way home.
 
-           The bounding box was the bug. On flat ground the line is nearly
-           level and the two are the same thing, so it looked right; from a
-           jump the arc falls 60 pixels and the box became 67 wide by 63 tall
-           -- a third of the screen height -- grabbing people nowhere near the
-           line that was drawn. The move caught things it visibly missed.
-
-           Same integrator poleCast runs, so what catches you is the line you
-           can see, point for point. Reading `fighters` here is safe for the
-           same reason reading STAGE is: it is snapshotted, so a rollback
-           walks the identical path. */
-        const hook = polePoint(this, s);
+           poleHook returns null before the throw and after the reel, which is
+           what opens and closes the window; there is no frame arithmetic
+           here to fall out of step with the drawing, because the drawing
+           calls the same function. */
+        const hook = poleHook(this, s);
+        if (!hook) return null;
         return {
           box: { x: hook.x - 4, y: hook.y - 4, w: 8, h: 8 },
           move: s,
@@ -2184,6 +2204,17 @@ class Fighter {
         const dir = pad.left ? -1 : 1;
         this.facing = dir;
         if (this.grounded) this.vx = dir * this.def.walk * this.speedMul;
+      } else if (this.grounded) {
+        /* Let go and he stops, the same as letting go while walking.
+
+           Without this a mobile move neither sets vx nor damps it -- the
+           friction below is skipped for exactly these moves -- so whatever
+           speed he carried in was frozen for the whole move. Measured on a
+           55 frame cast entered at a walk: 24.5 pixels of silent drift with
+           nothing held, vx pinned at 0.584 the entire time. That is not
+           "you may move while casting", it is "you may not stop", and it
+           slid him clean past whoever he was aiming at. */
+        this.vx *= PHYS.groundFriction;
       }
       if (pad.jump) {
         if (this.grounded) {
@@ -2633,8 +2664,23 @@ class Fighter {
          The hold runs on its own timer rather than on attackFrame, so the
          throw happens when the hold ends and not when the animation does. */
       case 'pole':
-        // The hold itself is ticked by tickGrab() in update(), not here.
-        // This case exists only for the frames before the line connects.
+        /* The one frame that matters: the wind-up ends and the lure leaves
+           his hand. Everything after this is derived, so this is the only
+           place the cast touches state at all -- and the hold, once one
+           lands, is ticked by tickGrab() in update() rather than here. */
+        /* The aim is committed on the frame he STARTS the move, not on the
+           frame the lure leaves his hand. Those are nine frames apart, and
+           now that the cast is `mobile` he can turn round inside that window
+           -- so reading facing at the launch meant holding back to set up a
+           back-throw spun the cast away from the person he was aiming at,
+           and it caught nobody. Which way you were pointing when you pressed
+           it is the decision; everything after that is footwork. */
+        if (this.attackFrame === 1) this.poleDir = this.facing;
+        if (this.attackFrame === s.startup) {
+          // Where the rod actually is now, though -- he may have walked.
+          this.poleX0 = this.x + this.poleDir * s.ox;
+          this.poleY0 = this.y + s.oy;
+        }
         break;
 
       case 'shockwave':
@@ -3662,119 +3708,114 @@ function poleStroke(g, x0, y0, x1, y1, bow, fat) {
   }
 }
 
-/* Where the line ends: it pays out forward and droops until it meets a
-   surface, or until there is no more line.
+/* The cast, as a throw rather than as a shape.
 
-   The pole was a fixed 46px box, which is the one thing a fishing line is
-   not. 46 is exactly what this returns standing on flat ground -- the tip
-   sits 12 pixels up and the droop is 12/46 per pixel forward -- so nothing
-   about him on the floor changes at all, and everything about him in the air
-   does: cast from up high and the line runs down until it finds the stage.
+   Every number here is per FRAME, not per step along a line. That is the
+   whole difference: the old constants walked 140 steps of a static curve in
+   one call and handed back the far end, so the line existed at full length
+   the instant it appeared and "how fast does it travel" had no answer. These
+   are a velocity, a drag and a gravity, and the lure is somewhere new every
+   frame because of them.
 
-   Pure, and it reads only the platforms and his own position. Both are
-   snapshotted, so the simulation and the drawing call the same function and
-   cannot disagree, and a rollback recomputes the identical number. No trig
-   and no randomness, for the same reason.
+   Thrown UP as well as forward, which is what makes it read as an arc. The
+   rise is deliberately small -- three pixels, peaking four or five frames in
+   -- and that number is not an aesthetic choice. A hurtbox is HURT_H tall,
+   14 pixels, and the rod tip is already 12 up; an apex of six put the lure
+   and its box clean over the head of anyone standing within about 25px, so
+   the move sailed harmlessly over close targets and only worked at range.
+   Three keeps the box inside the band a standing fighter occupies for the
+   whole close half of the flight. What sells the arc is the accelerating
+   drop and the fact that it now takes fourteen frames instead of none.
 
-   The cap is not a reach limit dressed up as physics -- it is the length of
-   line on the reel, and a move that can cross most of the stage from the top
-   of it needed one. */
-/* The droop is quadratic, not linear, and the difference is the whole point.
+   On flat ground it lands about 33 pixels out; from height the drag
+   converges forward travel on about 43, down from the 82 the old
+   nearly-straight line reached.
 
-   A straight slope gentle enough to reach 46 on the flat travels 250 pixels
-   sideways before it has dropped far enough to find the floor from a jump --
-   so from high up the line ran out of reel while still in open air, which is
-   the one thing "it should go until it hits something" rules out. An arc
-   starts shallow and steepens, so it covers ground early and comes down
-   hard, which is also what a cast actually does.
+   Plain adds and multiplies on doubles, bit-identical everywhere, so the
+   simulation and the drawing can both run it and a rollback agrees. */
+const POLE_V0 = 4.8;        // pixels forward on the first FRAME
+const POLE_DRAG = 0.90;     // ...and this much of it on each frame after
+const POLE_VY0 = -1.34;     // thrown upward, which is what makes it an arc
+const POLE_GRAV = 0.30;     // pulling it back down again
+const POLE_MAX = 40;        // frames of line on the reel, a safety cap
+const POLE_REEL = 14;       // frames to wind it back in, hitbox still live
 
-   POLE_DROOP is set so a fall of 12 -- tip height on flat ground -- lands at
-   exactly 46 forward, which is the reach this move has always had. Nothing
-   about him standing on the floor changes. The cap is the length of line on
-   the reel, and 140 is enough to get from the highest platform on any stage
-   down to the floor. */
-/* The lure is thrown, not extruded, so it slows as it goes.
+/* The lure, n frames after it left his hand.
 
-   A pure arc had no drag: forward progress was constant and only the drop
-   accelerated, so a cast from height ran 101px across the stage and the move
-   had no natural end to its reach. Now the throw loses speed every step and
-   gravity does the rest, which is what a cast actually does and which puts a
-   ceiling on it that is a consequence rather than a rule -- forward travel
-   converges on about 82px no matter how high he is when he throws it.
+   A genuine projectile now: thrown up and forward, losing speed to drag and
+   height to gravity, stopping on the first platform it falls through. It used
+   to be a SHAPE -- poleCast walked the entire trajectory in one call and
+   handed back the far end, so the line existed at full length on the frame it
+   appeared. That is what "too fast" was. There was no travel to see.
 
-   Tuned so a fall of 12 -- tip height on flat ground -- still lands at 46
-   forward, the reach this move has always had. Nothing about him standing on
-   the floor changes. From a jump it reaches about 70 instead of 101.
-
-   Plain adds and multiplies on doubles, which are bit-identical everywhere,
-   so the simulation and the drawing can both run it and a rollback gets the
-   same answer. */
-const POLE_V0 = 3.4;        // pixels forward on the first step
-const POLE_DRAG = 0.96;     // ...and this much of it on each step after
-const POLE_GRAV = 0.0583;   // pixels per step per step, downward
-const POLE_MAX = 140;       // steps of line on the reel
-
-function poleCast(f, s) {
-  /* Only surfaces the line can descend ONTO. Without this a side platform
-     level with his shoulders ends the cast at one pixel, because "the line is
-     lower than that platform" is trivially true of every platform above it --
-     which is how the first version of this turned a 46px move into a 1px one
-     on the only stage with side platforms. */
-  const tipY = f.y + s.oy;
-  let fwd = 0;
-  let drop = 0;
+   Integrated from poleX0/poleY0 every frame rather than stepped from the last
+   position, so it stays a pure function of state a snapshot already carries
+   and a rollback lands on the identical pixel. Forty frames of walking is
+   nothing next to drawing it. */
+function poleFlight(f, s, n) {
+  let x = f.poleX0;
+  let y = f.poleY0;
   let vx = POLE_V0;
-  let vy = 0;
-  for (let n = 0; n < POLE_MAX; n++) {
+  let vy = POLE_VY0;
+  const steps = Math.min(n, POLE_MAX);
+  for (let i = 0; i < steps; i++) {
     vx *= POLE_DRAG;
     vy += POLE_GRAV;
-    fwd += vx;
-    drop += vy;
-    const x = f.x + f.facing * (s.ox + fwd);
-    const y = tipY + drop;
+    const nx = x + f.poleDir * vx;
+    const ny = y + vy;
+    /* Crossing a platform going DOWN, tested as a crossing rather than as
+       "is the lure below it". The old version needed a guard against side
+       platforms level with his shoulders, because "lower than that platform"
+       is trivially true of every platform above the line; a crossing test
+       cannot have that problem, and it lets the rising half of the arc pass
+       over a ledge it will land on later. */
     for (const pl of STAGE.platforms) {
-      if (pl.y < tipY) continue;
-      if (x < pl.x || x > pl.x + pl.w) continue;
-      if (y >= pl.y) return { fwd: fwd, up: s.oy + drop };
-    }
-  }
-  return { fwd: fwd, up: s.oy + drop };
-}
-
-/* Where along the line the hook actually is this frame: the first point that
-   touches somebody, or the far end if it touches nobody.
-
-   Returning the end when nothing is hit keeps the move honestly "active" for
-   its six frames -- resolveCombat wants a box either way -- and puts it where
-   the lure is drawn, which is the only place a miss should be able to catch
-   anything on the following frame. */
-function polePoint(f, s) {
-  let fwd = 0;
-  let drop = 0;
-  let vx = POLE_V0;
-  let vy = 0;
-  for (let n = 0; n < POLE_MAX; n++) {
-    vx *= POLE_DRAG;
-    vy += POLE_GRAV;
-    fwd += vx;
-    drop += vy;
-    const x = f.x + f.facing * (s.ox + fwd);
-    const y = f.y + s.oy + drop;
-    for (const other of fighters) {
-      if (other === f || other.eliminated) continue;
-      if (other.invulnerable || other.state === 'ko') continue;
-      const hb = other.hurtbox();
-      if (x >= hb.x && x <= hb.x + hb.w && y >= hb.y && y <= hb.y + hb.h) {
-        return { x: x, y: y };
+      if (nx < pl.x || nx > pl.x + pl.w) continue;
+      if (y <= pl.y && ny >= pl.y) {
+        return { x: nx, y: pl.y, landed: true, at: i + 1 };
       }
     }
-    for (const pl of STAGE.platforms) {
-      if (pl.y < f.y + s.oy) continue;
-      if (x < pl.x || x > pl.x + pl.w) continue;
-      if (y >= pl.y) return { x: x, y: y };
-    }
+    x = nx;
+    y = ny;
   }
-  return { x: f.x + f.facing * (s.ox + fwd), y: f.y + s.oy + drop };
+  return { x: x, y: y, landed: false, at: steps };
+}
+
+/* Where the hook is right now: out along the flight, or on its way back.
+
+   Null once the reel finishes, which is what closes the hitbox -- the rest of
+   the recovery is him putting the rod away and catches nothing. */
+function poleHook(f, s) {
+  const t = f.attackFrame - s.startup;
+  if (t < 0) return null;
+  /* How long the flight actually lasts, which is NOT s.active: that is only
+     the cap. The lure flies until it comes down on something, so a cast on
+     flat ground is over in sixteen frames and one thrown off the top platform
+     runs nearly twice that before it finds the floor.
+
+     Keeping "until it hits the ground" AND "an arc that does not go forever"
+     is the whole tension here, and this is where it resolves: the arc bounds
+     how FAR (drag converges forward travel on about 43px from any height),
+     and the landing bounds how LONG. A fixed sixteen-frame flight had the
+     lure stopping in mid-air 50 pixels above the stage. */
+  const full = poleFlight(f, s, s.active);
+  const end = full.at;
+  if (t <= end) return poleFlight(f, s, t);
+  const reeled = t - end;
+  if (reeled >= POLE_REEL) return null;
+  /* Winding it back in, and the hitbox comes with it. A cast that missed on
+     the way out can still catch somebody on the way home, which is most of
+     what was being asked for: the line is dangerous while it is out, not only
+     while it is extending.
+
+     Squared, because a reel takes up slowly and then all at once -- and
+     because it puts the fast part of the return nearest his hand, so the
+     dangerous, slow part is out where the lure actually was. Home is his
+     CURRENT rod tip, not the one he cast from: he may have walked. */
+  const e = (reeled / POLE_REEL) * (reeled / POLE_REEL);
+  const tipX = f.x + f.facing * POLE_REST[0];
+  const tipY = f.y + POLE_REST[1];
+  return { x: poleMix(full.x, tipX, e), y: poleMix(full.y, tipY, e), landed: false };
 }
 
 /** The rod, the line and the lure, for whoever is casting or holding one. */
@@ -3812,6 +3853,7 @@ function drawPole(g, f) {
   let bow = 0, rodBow = 0;
   let lineCol = POLE_LINE;
   let lure = true;
+  let hookAt = null;                // set while a lure is actually in flight
 
   if (holding) {
     /* THE HOLD. The engine has already dragged them to his side -- that is
@@ -3855,14 +3897,13 @@ function drawPole(g, f) {
        meet approximately put a three-pixel jump in the rod on the one frame
        the eye is already watching it hardest. */
     const whip = Math.max(2, s.startup - 4);
-    const live = s.startup + s.active;          // first recovery frame
-    /* Both of these used to be constants: the far edge of a fixed box, and
-       the height the box was centered on. They are the end of the line now,
-       which is wherever poleCast found the stage -- the same call the hitbox
-       makes, so the lure is painted exactly where it can catch somebody. */
-    const cast = poleCast(f, s);
-    const reach = s.ox + cast.fwd - 2;          // less the lure's half-width
-    const endUp = cast.up;
+    /* Where the lure is, in WORLD pixels rather than in front of him. The
+       rest of this function is forward-space -- measured ahead of the fighter
+       and mirrored once at the bottom -- and that works only for things bolted
+       to him. The lure is not bolted to him any more: he can turn round and
+       walk off while it is still in the air, and forward-space would drag it
+       along behind him. So it opts out, and `hook` overrides kx/ky below. */
+    const hook = poleHook(f, s);
 
     if (k < whip) {
       /* WIND-UP, frames 1-4. Rod from the carry pose up through vertical and
@@ -3877,74 +3918,48 @@ function drawPole(g, f) {
       tf = poleMix(a[0], b[0], h); tu = poleMix(a[1], b[1], h);
       kf = tf - 4; ku = tu + 5;
       bow = 2;
-    } else if (k <= s.startup) {
-      /* THE CAST, frames 5-9. The rod whips forward through vertical while
-         the lure flies from behind him to the far edge of the box, arriving
-         on exactly the frame the box goes live. Five frames rather than the
-         three a tighter wind-up would leave: four steps of travel is the
-         fewest that reads as a throw instead of as a teleport.
-
-         So the lure is out in front of him on frames 6 through 8, before
-         anything can hit. That is deliberate and it is the safe direction of
-         the error: it is 8, 23 and 35 pixels out, always SHORTER than the 46
-         the box will be, so nobody is ever hit from a spot the lure had not
-         reached yet. The reverse cheat -- a lure still traveling while the
-         box is already live at full length -- has the art advertising a
-         shorter move than this one is, and people walk into a tip they had
-         every reason to think was ten pixels further off.
-
-         Decelerating, so it leaves fast and arrives settling: steps of 19,
-         15, 12 and 9 pixels. The sag peaks mid-flight and is gone at full
-         extension, which is what makes the arrival frame -- the frame the
-         hitbox opens -- read as the line snapping tight. */
-      const u = (k - whip) / (s.startup - whip);
+    } else if (k < s.startup) {
+      /* THE WHIP, frames 5-8. The rod comes forward through vertical with the
+         lure still trailing it. Nothing has left his hand yet -- the throw is
+         on the frame the wind-up ends, which is where poleHook starts
+         answering -- so these frames are pure telegraph and catch nobody. */
+      const u = (k - whip) / Math.max(1, s.startup - whip);
       const e = u * (1.5 - 0.5 * u);
       const a = e < 0.5 ? POLE_BACK : POLE_HIGH;
       const b = e < 0.5 ? POLE_HIGH : POLE_FORE;
       const h = e < 0.5 ? e * 2 : e * 2 - 1;
       tf = poleMix(a[0], b[0], h); tu = poleMix(a[1], b[1], h);
-      kf = poleMix(POLE_BACK[0] - 4, reach, e);
-      ku = poleMix(POLE_BACK[1] + 5, endUp, e);
+      kf = poleMix(POLE_BACK[0] - 4, POLE_FORE[0] + 2, e);
+      ku = poleMix(POLE_BACK[1] + 5, POLE_FORE[1], e);
       bow = 22 * u * (1 - u);
-    } else if (k < live) {
-      /* LIVE, frames 9-14. Line dead straight and white, lure parked at full
-         reach with one pixel of tick on it, for exactly the six frames the
-         hitbox exists. Making the brightest frames the only ones that can
-         catch anybody is a free and completely honest tell. */
-      tf = POLE_FORE[0]; tu = POLE_FORE[1];
-      kf = reach; ku = endUp + ((k >> 1) & 1);
-      lineCol = POLE_TAUT;
-    } else {
-      const w = k - live;                       // 0 on the first recovery frame
-      if (w < 5) {
-        /* THE MISS, frames 15-19. Nothing took it, so nothing holds it up:
-           the tip drops, the lure falls out of the box it was tracing and
-           the line goes slack. Five frames of hanging there is the beat that
-           says nothing bit -- reeling from the instant the box closes reads
-           as putting the rod away, not as missing. */
-        const u = w / 5;
-        tf = poleMix(POLE_FORE[0], POLE_DIP[0], u);
-        tu = poleMix(POLE_FORE[1], POLE_DIP[1], u);
-        kf = reach; ku = endUp + 1 + w;
-        bow = 7 * u;
-      } else {
-        /* THE REEL, frames 20-38. Nineteen frames of winding it back in,
-           easing in the way a reel takes up: slow, then quick, then dangling
-           off the tip. It lands exactly on the carry pose, so the last frame
-           of the recovery is the first frame of the next cast.
+    } else if (hook) {
+      /* THE FLIGHT AND THE REEL. The rod holds the forward pose and the line
+         runs out to wherever the lure has got to -- which is the same point
+         the hitbox is sitting on, because both ask poleHook.
 
-           This is the part the complaint was actually about. A move that
-           reaches 46px and shows nothing when it misses has an invisible
-           punish window; these are the frames he is being punished IN, and
-           they now visibly cost him something. */
-        const v = clamp((w - 5) / Math.max(1, s.recovery - 7), 0, 1);
-        const e = v * v;
-        tf = poleMix(POLE_DIP[0], POLE_REST[0], e);
-        tu = poleMix(POLE_DIP[1], POLE_REST[1], e);
-        kf = poleMix(reach, tf - 4, e);
-        ku = poleMix(s.oy + 6, tu + 5, e);
-        bow = 7 * (1 - e);
-      }
+         The line is hot for all of it, not for six frames in the middle. It
+         used to go white only at full extension, on the honest grounds that
+         the brightest frames should be the ones that can catch you; that rule
+         is unchanged, it is just that the dangerous frames are now every
+         frame the lure is in the air, coming back included. */
+      tf = POLE_FORE[0]; tu = POLE_FORE[1];
+      lineCol = POLE_TAUT;
+      hookAt = hook;
+    } else {
+      /* PUTTING IT AWAY. The reel is finished and the hitbox with it, so
+         these frames catch nothing and say so: rod easing back to the carry
+         pose, lure dangling off the tip. They are the frames he is punished
+         in, and they are supposed to look like it. */
+      /* Eased off what is LEFT of the move rather than off frames since the
+         reel ended: the reel now ends whenever the lure happened to land, so
+         there is no fixed frame to count from. Counting backwards from the
+         total lands the rod on the carry pose on the last frame either way. */
+      const total = s.startup + s.active + s.recovery;
+      const e = clamp(1 - (total - k) / Math.max(1, s.recovery), 0, 1);
+      tf = poleMix(POLE_DIP[0], POLE_REST[0], e);
+      tu = poleMix(POLE_DIP[1], POLE_REST[1], e);
+      kf = tf - 4; ku = tu + 5;
+      bow = 7 * (1 - e);
     }
   }
 
@@ -3958,7 +3973,11 @@ function drawPole(g, f) {
   const hx = ax + Math.round(swordHandX(f) - f.x);   // the same fist the
   const hy = ay + Math.round(swordHandY(f) - f.y);   // laser sword hangs off
   const tx = ax + fw * Math.round(tf), ty = ay + Math.round(tu);
-  const kx = ax + fw * Math.round(kf), ky = ay + Math.round(ku);
+  /* The one thing here that is not measured in front of him: a lure already
+     in the air belongs to the world, not to whichever way he happens to be
+     looking this frame. `hookAt` is set only while one is out. */
+  const kx = hookAt ? Math.round(hookAt.x) : ax + fw * Math.round(kf);
+  const ky = hookAt ? Math.round(hookAt.y) : ay + Math.round(ku);
   /* The bows are forward-space like everything else. poleStroke applies one
      to whichever axis is across the walk, so a stroke that came out steep
      bows along x and needs the mirror the coordinates already got, while a
@@ -6059,7 +6078,17 @@ function applyHit(attacker, defender, move, sourceX) {
     attacker.grabbing = defender.slot;
     attacker.grabKind = move.basic ? 0 : 1;
     attacker.grabTimer = move.grab.hold;
+    /* Both of these, not just the aim. throwDirX survived from whatever was
+       last held BEFORE the catch, so walking left into a cast threw them left
+       however he was facing when it bit -- the direction was decided before
+       there was anybody on the line to throw. Now the catch clears the slate
+       and only what he presses during the hold counts, which is what makes
+       the hold a decision instead of a delay.
+
+       It matters more than it did: the cast is `mobile`, so he is far more
+       likely to have been holding a direction when it connects. */
     attacker.throwAim = 0;
+    attacker.throwDirX = attacker.facing;
     defender.grabbedBy = attacker.slot;
     defender.setState('grabbed');
     defender.hitstun = 0;
@@ -7917,7 +7946,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'bb85b06613';
+const BUILD_ID = '1023ab0f84';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7928,7 +7957,7 @@ const BUILD_ID = 'bb85b06613';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.19';
+const VERSION = '2.20';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
