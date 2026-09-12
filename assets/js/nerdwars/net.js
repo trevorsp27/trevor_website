@@ -590,7 +590,7 @@
     state.peer = peer;
 
     peer.on("open", function () {
-      say("Room ready. Send the code to your friends — up to three of them.", "good");
+      say("Room ready.", "good");
       renderLobby();
     });
 
