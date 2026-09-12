@@ -71,6 +71,15 @@ const COMBAT = {
   comboDecayPerHit: 0.1,
   comboDecayFloor: 0.45,
   comboWindow: 30,
+
+  /* The ceiling on ordinary hitstun, named rather than left as the literal it
+     was, because the pin overlay in drawFighter now reads it too: irons go on
+     a fighter exactly when his hitstun was set ABOVE this, which is the only
+     thing separating a two-second pin from a jab. Two loose copies of 30 in
+     two halves of the file is one tuning pass away from irons on every hit in
+     the game. Same number, same arithmetic -- this renames a literal and
+     computes nothing new. */
+  hitstunCap: 30,
   // A volley that lands every projectile at once is one input for six hits.
   volleyFalloff: [1, 0.7, 0.5, 0.35, 0.25, 0.2],
   hitstopLight: 3,
@@ -2955,6 +2964,100 @@ const KNIGHT_ART = [
   '#######',
 ];
 
+/* John's dog in the air. The trot stays a dozen fillRects; these are row
+   strings because a lunge is a mouth, and a mouth drawn in the dog's own
+   black is a hole in a black dog. The maw and the teeth have to carry their
+   own ink the way the duck's bill does, or the pose is the same silhouette
+   with the legs somewhere else.
+
+   Sixteen by nine, authored facing right and mirrored for the other way,
+   blitted at (x-8, y-9) -- the box the trot's own rects already fill, so the
+   two cut together without the dog changing size. What the bottom row does is
+   the whole airborne read at this scale: LUNGE lifts its feet one row off the
+   trot's line, SNAP clears two, POUNCE puts them back exactly where the trot
+   has them, so landing is seamless and the apex visibly floats.
+
+   Rasterized once through pixelArt and blitted after that. Filled a pixel at
+   a time these are around 90 fillStyle changes a frame for one dog, which is
+   the cost the matrix background was batched from 433 down to 28 to avoid. */
+
+// Climbing. Nose up, forepaws thrown out ahead under the open jaw, hind legs
+// trailing, feet off the trot's line -- the frame that says it left the
+// ground on purpose rather than walking off the end of something.
+const DOG_LUNGE_ROWS = [
+  '..........kkkk..',
+  '.........kkekk..',
+  '.......kkkkkkktt',
+  '.....kkkkkkkrrrt',
+  '...gkkkkkkkkrrrt',
+  '.ggkkkkkkkkkktt.',
+  'ggdd......dddmm.',
+  'mmd.............',
+  '................',
+];
+
+// The top of the arc, where the bite lands. Everything gathers, the gape goes
+// to its widest, and both bottom rows empty out -- at nine pixels tall, two
+// blank rows under the dog reads as airborne all by itself.
+const DOG_SNAP_ROWS = [
+  '..........kkkk..',
+  '.........kkekk..',
+  '........kkkkkktt',
+  '.....kkkkkkrrrrt',
+  '..gkkkkkkkkrrrrt',
+  '.ggkkkkkkkkkktt.',
+  '.gddkkkkkkdd....',
+  '................',
+  '................',
+];
+
+// Coming down: tail up, four legs splayed for the ground, jaw closing to a
+// single row. This is the one pose a leap and a walk off a ledge have to
+// share, so it is drawn as an arrival and not as an attack -- see draw() for
+// why the two cannot be told apart.
+const DOG_POUNCE_ROWS = [
+  'gg..............',
+  '.gg.......kkkk..',
+  '..gkkkkkkkkekk..',
+  '..kkkkkkkkkkkktt',
+  '..kkkkkkkkkkrrrt',
+  '..ddkkkkkkkdkkt.',
+  '..dd.......dd...',
+  '.dd.........dd..',
+  '.mm.........mm..',
+];
+
+/* The trot's four colors, plus three it never needed.
+
+   The maw is the reason this is pixel art at all: at 320x180 an open mouth
+   has to be a different color, not a gap. It is kept interior -- every run of
+   it ends in a tooth, never in background -- so the silhouette edge of the
+   bite is always the near-white, which is the one value that survives both
+   the beach sand and the lava pit. Same argument drawPole settles with a dark
+   halo, one size down.
+
+   The eye is lighter than the head, which is the duck's trick inverted: a
+   dark eye works on a cream bird and disappears on a black dog. The trot has
+   no eye at all, and does not need one -- nothing is looking at you. */
+const DOG_INK = {
+  k: '#2b2b2f',   // body and head -- the trot's body color
+  g: '#55555c',   // haunch and tail -- the trot's haunch color
+  m: '#8d8d95',   // paws -- the trot's muzzle color
+  d: '#1b1b1f',   // legs -- the trot's leg color
+  r: '#b03340',   // the open maw
+  t: '#f4efe2',   // teeth
+  e: '#ffd76a',   // the eye, the same hot value the gun is tinted in
+};
+
+/* Pose name to rows. The name is also half the pixelArt cache key, so this
+   table is the complete list of dog sprites that can end up in that cache:
+   three poses, two facings, six small canvases, and it never grows. */
+const DOG_AIR_POSES = {
+  lunge: DOG_LUNGE_ROWS,
+  snap: DOG_SNAP_ROWS,
+  pounce: DOG_POUNCE_ROWS,
+};
+
 /* The same dumbbell end-on, for when it is tumbling through the air. */
 const DUMBBELL_V_ART = [
   'wwwww',
@@ -4794,7 +4897,61 @@ class Dog {
     return { x: this.x - 7, y: this.y - 9, w: 14, h: 9 };
   }
 
+  /* The same question update() asks when it decides the dog is riding a
+     surface, asked again at draw time: same platform list, same two-pixel
+     tolerance either side. The equality is exact on purpose. While it rides,
+     y is not an accumulated float -- update assigns `this.y = p.y` on the
+     landing frame and assigns it again every frame after, because gravity
+     pushes it to p.y + 0.4 and the same branch snaps it straight back. So a
+     trotting dog is bit-identical to the platform top and can never take the
+     air branch, and a dog with nothing under it can never miss it.
+
+     A prototype method rather than a field, which is also why there is
+     nothing here for rollback to lose: restoreSim rebuilds a projectile with
+     Object.create(src.__proto) and then copies own keys, so methods survive
+     and its key-deletion pass never sees them. Reads the stage and the dog,
+     writes neither. */
+  onSurface() {
+    for (const p of STAGE.platforms) {
+      if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
+      if (this.y === p.y) return true;
+    }
+    return false;
+  }
+
   draw(g) {
+    /* In the air it bites instead of trotting, because the six-frame leg
+       shuffle below needs ground under it to read as running -- off the
+       ground the same shuffle read as a dog sliding upward, which is the bug
+       this fixes.
+
+       leap() is the only thing in the file that can write a negative vy:
+       update() adds 0.4 and the platform branch assigns exactly 0, so gravity
+       cannot produce one. A dog on the way up has therefore been told to
+       jump, and a dog that merely walked off a ledge -- which leaves at
+       vy 0.4 and only ever speeds up -- is arithmetically incapable of
+       reaching either open-jawed pose. That is the whole test, and it needs
+       no field: six frames of climb off a -4.4 launch, then five across the
+       top, where the bite lands.
+
+       The descent is the honest gap. A leap coming down and a ledge drop are
+       the same (x, y, vy) to the last bit, so the simulation cannot tell them
+       apart and neither can a renderer reading it. It gets a pose that is
+       true of both -- legs out, jaw shutting, arriving somewhere -- and the
+       open jaws stay on the half of the arc that is provably a leap.
+
+       Both comparisons are inclusive so no frame sits on a knife edge: the
+       accumulated launch passes -2 at -2.0000000000000004 and reaches its
+       apex at -5.6e-16 rather than at a clean zero, and both of those land
+       where they should without the thresholds having to be lucky. */
+    if (!this.onSurface()) {
+      const pose = this.vy <= -2 ? 'lunge' : this.vy <= 0 ? 'snap' : 'pounce';
+      const left = this.dir < 0;
+      g.drawImage(pixelArt('dog.' + pose + (left ? 'L' : 'R'),
+                           DOG_AIR_POSES[pose], DOG_INK, left),
+                  Math.round(this.x) - 8, Math.round(this.y) - 9);
+      return;
+    }
     // Black and grey, and its legs alternate every six frames so it reads as
     // running rather than sliding. Step parity is derived from the frame
     // count, which is snapshotted -- no timers of its own, nothing random.
@@ -5773,6 +5930,10 @@ function releaseGrab(grabber) {
 
 function applyHit(attacker, defender, move, sourceX) {
   let dmg = move.damage * attacker.damageMul;
+  /* What they were doing when it landed, captured before anything below can
+     change it. See the punish branch near the bottom. */
+  const committed = defender.state === 'attack' || defender.state === 'special' ||
+                    defender.state === 'ult';
 
   // A fan of projectiles is one input; without falloff a six-bone ult
   // would take more than half a health bar in a single press.
@@ -5906,7 +6067,8 @@ function applyHit(attacker, defender, move, sourceX) {
   // Hit out of a choke: whoever he was holding goes free.
   if (defender.grabbing >= 0) releaseGrab(defender);
 
-  defender.hitstun = Math.min(30, Math.round((6 + kb * 2.2) * decay));
+  defender.hitstun = Math.min(COMBAT.hitstunCap,
+                              Math.round((6 + kb * 2.2) * decay));
 
   /* Catching someone mid-swing. A `punish` move does ordinary damage on an
      ordinary hit and pins the victim if they were committed to an attack when
@@ -5918,8 +6080,14 @@ function applyHit(attacker, defender, move, sourceX) {
      bespoke timer would be snapshotted correctly and hashed by nothing. The
      min() above is skipped on purpose -- a longer pin than a normal hit can
      produce is the entire move. */
-  if (move.punish && (defender.state === 'attack' ||
-                      defender.state === 'special' || defender.state === 'ult')) {
+  /* `committed` is read at the top of applyHit, not here, and that is the
+     whole fix. This used to test defender.state directly -- twenty-six lines
+     after setState('hitstun') had already overwritten it -- so the condition
+     was 'hitstun' === 'attack' and could never once be true. SIDEARM's
+     forty-eight frame read, the thing the move is FOR, has never fired in the
+     game's life. Measured before the fix: catching somebody mid-swing gave
+     eleven frames of hitstun, the same as catching them standing still. */
+  if (move.punish && committed) {
     defender.hitstun = Math.max(defender.hitstun, move.punish.stun);
   }
 
@@ -6875,6 +7043,126 @@ function drawDuck(g, x, y, facing) {
   }
 }
 
+/* ---- PINNED ---- */
+
+/* Kel's LEG DAY holds everyone standing on the floor for two seconds and
+   takes the knockback almost all the way off, which is the whole design. It
+   does it by writing a big number into `hitstun`, deliberately: hitstun is
+   one of the eleven values stateHash covers, so two machines that ever
+   disagreed about a pin get caught by the desync check, where a bespoke stun
+   timer would be snapshotted correctly and hashed by nothing.
+
+   The bill for that choice is paid here. A pinned fighter and a fighter who
+   just ate a jab are the same state with different numbers in it, and
+   sprite() hands both of them `stand` -- which is why two seconds of pin read
+   as the game having locked up. `hitstun > 0` would put irons on every blow
+   landed in the match.
+
+   The number is the only tell, and the TOTAL is the one to read, not what is
+   left: hitstun counts down, so a 120-frame pin drops back under the cap for
+   its last half second and the irons would fall off a fighter who is still
+   held. hitstun + timer does not move. setState zeroes timer at the instant
+   of the hit and applyHit assigns hitstun immediately after, update() runs
+   timer++ and then hitstun-- on the same pass, and both hitstop and
+   freezeFrames return above the pair -- so the sum stays exactly the number
+   applyHit wrote for the whole pin, with nothing anywhere storing it. No new
+   field, so nothing for restoreSim to delete out from under it.
+
+   Nothing can forge that total. `hitstun` is only ever entered through
+   setState, which zeroes timer -- the three direct `this.state =` writes in
+   the file are 'idle', 'shield' and 'air' -- and every ordinary hit goes
+   through the Math.min(COMBAT.hitstunCap, ...) in applyHit. The only writes
+   that get above the cap are the two Math.max lines directly under it, which
+   skip it on purpose, so the threshold is not tuned: it is the ceiling on
+   everything that is not a pin. (Of those two, only `move.stun` reaches this
+   today -- `move.punish` is tested against defender.state AFTER applyHit has
+   already set it to 'hitstun', so the gun's 48-frame read never fires. That
+   is a combat bug, not an overlay one, and when it is fixed the gun gets
+   irons with no change here, which is the right answer.) */
+function isPinned(f) {
+  return f.state === 'hitstun' && f.hitstun + f.timer > COMBAT.hitstunCap;
+}
+
+/* Iron, and nothing in orbit. The confused ducks already own the ring above
+   the head, and a second ring up there in a second color is two statuses
+   competing to be read at six pixels tall -- the same status with a bug, not
+   a second one. So everything that can differ, differs: straight horizontal
+   bars where the ducks are round, bolted across the body where the ducks are
+   overhead, and dead still where the ducks sweep. Nothing here moves at all,
+   which is the entire read: he shakes, the irons do not.
+
+   Dark pass, steel pass, highlight pass -- three fillStyle changes for the
+   whole overlay however many bands it grows, which is why the geometry is
+   recomputed inside each loop rather than the bands being drawn one at a
+   time. Same trade the matrix rain made going from 433 changes a frame to 28. */
+const PIN_DARK  = '#14161c';
+const PIN_STEEL = '#8b93a8';
+const PIN_SHINE = '#e6ecf8';
+
+/* [rows above the feet, half-width]. Two bands rather than one, because one
+   band across a 16x16 sprite is a belt. The chest bar is the full width of
+   the sprite box and the shin bar is four narrower, so the pair reads as
+   fitted to him rather than as two identical rules laid over the art -- and
+   both overhang the 9-wide hurtbox, which is where the rivets go. A rivet
+   inside the silhouette is just a bright pixel on his shirt. */
+const PIN_BANDS = [[-9, 8], [-3, 6]];
+
+/* `strain` is the tremor the caller has already folded into the canvas
+   translate, subtracted straight back out here. That subtraction is the whole
+   overlay: a fighter and everything on him juddering together is what taking
+   a hit looks like, and taking a hit is the one thing this must not be
+   mistaken for. Held is a body moving against something that is not. */
+function drawPinIrons(g, f, strain) {
+  const cx = Math.round(f.x) - strain;
+  const fy = Math.round(f.y);
+
+  /* Thin out over the last two fifths of a second, the same courtesy the
+     confused ducks pay and for the same reason: knowing a status is about to
+     end is worth more than knowing it began, because it is the frame to start
+     holding a button on. */
+  g.globalAlpha = Math.min(1, f.hitstun / 24);
+
+  /* The clamp arriving. The bars do not slide in from anywhere -- an earlier
+     pass had them swing shut over ten frames and the open pair spent all of
+     it parked, because LEG DAY freezes the whole game for ten frames and then
+     leaves the victim in hitstop, and timer ticks through neither; the shin
+     bar sat under the floor for a quarter of a second. So the arrival is
+     carried by the highlight instead of by geometry: the iron is white the
+     whole way across while it locks and settles to steel the instant the
+     world starts moving again, which is exactly when the freeze ends. */
+  const locking = f.timer < 6;
+
+  g.fillStyle = PIN_DARK;
+  for (const b of PIN_BANDS) {
+    const by = fy + b[0], bx = cx - b[1], bw = b[1] * 2;
+    /* Halo under the bar, not around it. drawPole needs a dark edge on both
+       sides because a pale line dies over the beach sand and a dark one dies
+       over the lava; this bar spends most of its length over the sprite,
+       where a second dark row would eat another row of 2016 art to solve a
+       contrast problem it does not have there. The ends do cross background,
+       so those get a full block for the rivet to sit in. */
+    g.fillRect(bx, by + 1, bw, 1);
+    g.fillRect(bx - 1, by - 1, 3, 3);
+    g.fillRect(bx + bw - 2, by - 1, 3, 3);
+  }
+
+  g.fillStyle = PIN_STEEL;
+  for (const b of PIN_BANDS) g.fillRect(cx - b[1], fy + b[0], b[1] * 2, 1);
+
+  g.fillStyle = PIN_SHINE;
+  for (const b of PIN_BANDS) {
+    const by = fy + b[0], bx = cx - b[1], bw = b[1] * 2;
+    if (locking) {
+      g.fillRect(bx, by, bw, 1);
+    } else {
+      g.fillRect(bx, by, 2, 2);
+      g.fillRect(bx + bw - 2, by, 2, 2);
+    }
+  }
+
+  g.globalAlpha = 1;
+}
+
 function drawFighter(g, f) {
   // An eliminated fighter is still on screen while the KO that removed them
   // plays out. 'gone' is when they are actually off the board.
@@ -6885,7 +7173,26 @@ function drawFighter(g, f) {
   // Translating the context rather than offsetting each coordinate: this
   // function draws a seat arrow, a sprite, a poison glyph and a sword, and
   // every one of them has to move together. Nothing here writes to f.
-  const ex = visErrX[f.slot] || 0, ey = visErrY[f.slot] || 0;
+  /* Straining against the irons. A whole-pixel judder that flips every other
+     frame -- Dog.draw's `Math.floor(this.step / 6) % 2` trick on a much
+     shorter period -- and every frame over the last two fifths of a second,
+     so a pin about to break looks like one. The amplitude stays at a single
+     pixel either way: two pixels of travel is a shudder, four is a sprite
+     that looks broken.
+
+     Driven off hitstun, which is snapshotted AND hashed, so a rollback
+     replays the identical judder instead of re-rolling it. A wobble that
+     changed under a rewind would look exactly like the desync it is not.
+
+     Folded into the same translate the rollback correction already uses, so
+     the sword, the rod, the poison glyph and the seat arrow shake with him
+     and nothing tears off. drawPinIrons is handed the offset back so the
+     irons alone stay welded where they were. */
+  const pinned = isPinned(f);
+  const strain = pinned
+    ? (f.hitstun < 24 ? (f.hitstun % 2 ? 1 : -1) : (f.hitstun % 4 < 2 ? 1 : -1))
+    : 0;
+  const ex = (visErrX[f.slot] || 0) + strain, ey = visErrY[f.slot] || 0;
   const shifted = ex !== 0 || ey !== 0;
   if (shifted) { g.save(); g.translate(ex, ey); }
 
@@ -7007,6 +7314,11 @@ function drawFighter(g, f) {
 
   g.drawImage(im, x, y);
   g.globalAlpha = 1;
+
+  /* The irons go on straight after the body and before the sword and the rod,
+     which are things he is holding out in front of him: a bar drawn across a
+     burning blade reads as the blade being strapped down rather than him. */
+  if (pinned) drawPinIrons(g, f, strain);
 
   // The sword is drawn after the sprite, because he is holding it.
   if (f.swordTimer > 0) {
@@ -7521,7 +7833,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '8d8583371d';
+const BUILD_ID = 'bd51c11d6d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7532,7 +7844,7 @@ const BUILD_ID = '8d8583371d';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.15';
+const VERSION = '2.16';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

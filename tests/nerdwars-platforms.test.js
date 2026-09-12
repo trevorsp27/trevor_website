@@ -652,3 +652,114 @@ test("a direct sword hit sets them alight for 15 over four seconds", async () =>
   assert.ok(drawn.styles.some((c) => c === "#ff3c14"),
     "and in fire colors, not the poison pink; used " + JSON.stringify(drawn.styles));
 });
+
+test("SIDEARM actually pins somebody caught mid-swing", async () => {
+  /* It never had. applyHit tested defender.state against 'attack' twenty-six
+     lines AFTER setState('hitstun') had overwritten it, so the condition was
+     'hitstun' === 'attack' and could not once be true. The 48-frame read --
+     the thing the move is FOR -- had never fired in the game's life.
+     Measured before the fix: eleven frames, same as hitting them standing. */
+  const run = await bootEngine();
+  run("select.cursor=[1,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=2; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const hit = (state) => run(`(function(){
+    var me = fighters[0], foe = fighters[1];
+    var gun = ROSTER.johnnyham.specials.up;
+    foe.setState('${state}'); foe.timer = 0; foe.attackFrame = 2;
+    foe.hitstun = 0; foe.hitstop = 0; foe.invuln = 0; foe.health = 100;
+    foe.volleySince = 999; foe.volleyOf = null;
+    foe.x = me.x + 20; foe.y = me.y;
+    applyHit(me, foe, gun, me.x);
+    return foe.hitstun;
+  })()`);
+  const stun = run("ROSTER.johnnyham.specials.up.punish.stun");
+
+  for (const committed of ["attack", "special", "ult"]) {
+    assert.equal(hit(committed), stun,
+      "catching somebody in '" + committed + "' should pin them for " + stun +
+      " frames, got " + hit(committed));
+  }
+  for (const open of ["idle", "walk"]) {
+    assert.ok(hit(open) < stun,
+      "an ordinary hit on somebody in '" + open + "' must NOT pin: got " +
+      hit(open) + " of a possible " + stun);
+  }
+});
+
+test("the pin irons show on a pin and on nothing else", async () => {
+  /* The trap: the pin lives in `hitstun`, which every ordinary blow in the
+     game also writes, so a naive check would put irons on every hit. The
+     detection is that hitstun + timer stays exactly the number applyHit
+     assigned, and only the Math.max writes get above the ordinary cap. */
+  const run = await bootEngine();
+  run("select.cursor=[2,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const cap = run("COMBAT.hitstunCap");
+  const check = (hitstun) => run(`(function(){
+    var f = fighters[1];
+    f.setState('hitstun'); f.timer = 0; f.hitstun = ${hitstun}; f.invuln = 0;
+    var n = 0;
+    var rec = { globalAlpha: 1, fillStyle: '#000',
+      fillRect: function () { n++; }, drawImage: function () {},
+      save: function () {}, restore: function () {}, translate: function () {},
+      scale: function () {}, beginPath: function () {}, arc: function () {},
+      fill: function () {} };
+    drawFighter(rec, f);
+    return { pinned: isPinned(f), rects: n };
+  })()`);
+
+  const pinned = check(120);
+  assert.ok(pinned.pinned, "120 frames of hitstun is a pin");
+  assert.ok(pinned.rects >= 8,
+    "a pinned fighter should be visibly in irons, drew " + pinned.rects);
+
+  for (const ordinary of [6, 12, cap]) {
+    const r = check(ordinary);
+    assert.equal(r.pinned, false,
+      ordinary + " frames is an ordinary hit and must NOT show irons -- the " +
+      "cap on everything that is not a pin is " + cap);
+  }
+});
+
+test("the dog changes pose when it leaps", async () => {
+  const run = await bootEngine();
+  run("select.cursor=[1,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const SP_DOWN = 1024;
+  const r = run(`(function(){
+    var me = fighters[0];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.vy = 0;
+    me.x = main.x + 30; me.y = main.y; me.grounded = true; me.facing = 1;
+    var air = 0, ground = 0;
+    netplay.active = true;
+    for (var i = 0; i < 110; i++) {
+      netplay.framePads = [bitsToPad((i === 0 || i === 60) ? ${SP_DOWN} : 0), bitsToPad(0)];
+      step();
+      var d = projectiles.filter(function (b) { return b.constructor.name === 'Dog'; })[0];
+      if (!d) continue;
+      var blits = 0;
+      var rec = { globalAlpha: 1, fillStyle: '#000', fillRect: function () {},
+        drawImage: function () { blits++; }, save: function () {},
+        restore: function () {}, translate: function () {}, scale: function () {},
+        beginPath: function () {}, arc: function () {}, fill: function () {} };
+      d.draw(rec);
+      if (blits > 0) air++; else ground++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { air: air, ground: ground };
+  })()`);
+
+  assert.ok(r.ground > 20, "it should spend most of its life trotting");
+  assert.ok(r.air > 10,
+    "a leaping dog should be drawn as a pose rather than the running frames; " +
+    "only " + r.air + " frames used one");
+});
