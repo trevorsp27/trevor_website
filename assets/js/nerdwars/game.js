@@ -815,23 +815,19 @@ const ROSTER = {
 
          It still goes through a shield, which is what it always was for. */
       down: {
-        /* NOT `mobile`, and the reason is worth keeping: the throw is aimed
-           with a direction, and letting the cast answer direction too meant
-           aiming UP made him jump (W is jump) and aiming BACK turned him
-           round, so the line pointed away from whoever he was aiming at. He
-           is airborne-capable and keeps his momentum -- specials were never
-           grounded-gated and the pole is not rooted -- which is the "in the
-           air and while moving" that was actually asked for. Steering mid-cast
-           is a different thing, and it breaks the aim. */
-        /* `mobile`, so walking, turning and jumping all still answer while
-           the rod is out. That used to be refused on the grounds that
-           steering mid-cast breaks the aim, and it would have -- the line was
-           rebuilt from his CURRENT facing every frame, so turning round
-           teleported it to his other side. The lure is launched from a
-           remembered point in the world now (poleX0/poleY0/poleDir), so he
-           can walk away from a cast that is already in the air and the line
-           stays where he threw it. */
-        kind: 'pole', label: 'FISHING POLE', mobile: true,
+        /* NOT `mobile`. It was, briefly, and the trajectory work below is
+           what made that technically possible -- the lure is launched from a
+           remembered point in the world, so walking away no longer dragged
+           the line along behind him. It still plays worse. Committing to the
+           cast is the whole shape of the move: nine frames of telegraph, a
+           line anyone can see coming, and a long tail he cannot cancel. Being
+           free to walk through all of it took the decision out of it.
+
+           He is airborne-capable and keeps his momentum either way -- specials
+           were never grounded-gated and the pole is not in `rooted`'s list --
+           so casting out of a jump and drifting with it still works. What is
+           gone again is steering it on the ground. */
+        kind: 'pole', label: 'FISHING POLE',
         /* `active` is the CAP on the flight now, not a window at full
            extension: the lure travels until it lands, then POLE_REEL frames
            of winding it back, and the hitbox rides it for all of both. Thirty
@@ -2669,12 +2665,16 @@ class Fighter {
            place the cast touches state at all -- and the hold, once one
            lands, is ticked by tickGrab() in update() rather than here. */
         /* The aim is committed on the frame he STARTS the move, not on the
-           frame the lure leaves his hand. Those are nine frames apart, and
-           now that the cast is `mobile` he can turn round inside that window
-           -- so reading facing at the launch meant holding back to set up a
-           back-throw spun the cast away from the person he was aiming at,
-           and it caught nobody. Which way you were pointing when you pressed
-           it is the decision; everything after that is footwork. */
+           frame the lure leaves his hand nine frames later.
+
+           Nothing can turn him inside that window now that the cast is not
+           mobile -- facing is only reassigned in the `mobile` branch of
+           updateAttack -- so the two readings agree and this is belt and
+           braces. It is kept because it is the honest statement of the rule:
+           which way you were pointing when you pressed it is the decision.
+           When the cast WAS mobile, reading facing at the launch instead
+           meant holding back to set up a back-throw spun the line away from
+           whoever he was aiming at, and it caught nobody. */
         if (this.attackFrame === 1) this.poleDir = this.facing;
         if (this.attackFrame === s.startup) {
           // Where the rod actually is now, though -- he may have walked.
@@ -7946,7 +7946,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '1023ab0f84';
+const BUILD_ID = '735f4e4647';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7957,7 +7957,7 @@ const BUILD_ID = '1023ab0f84';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.20';
+const VERSION = '2.21';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

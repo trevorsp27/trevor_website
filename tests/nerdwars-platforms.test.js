@@ -783,8 +783,8 @@ test("the cast is a thrown lure: it travels, it arcs, and the way home is live",
   run("for (var i=0;i<130;i++) step();");
   assert.equal(run("fighters[0].def.specials.down.kind"), "pole",
     "player 1 should be the one with the rod");
-  assert.equal(run("!!fighters[0].def.specials.down.mobile"), true,
-    "and he should be able to move while casting");
+  assert.equal(run("!!fighters[0].def.specials.down.mobile"), false,
+    "casting should commit him -- see the rooting test below");
 
   const DOWN_SPECIAL = 1024;
   const r = run(`(function () {
@@ -901,23 +901,32 @@ test("the cast is a thrown lure: it travels, it arcs, and the way home is live",
     "the cast should not reach as far as the old one; got " + reach.toFixed(1));
 });
 
-test("he can walk while casting, and letting go stops him", async () => {
-  /* Half of this is the feature and half is the bug it uncovered.
+test("casting roots him, and the move that does not stops when you let go", async () => {
+  /* Two halves that only make sense together.
 
-     `mobile` gives walking, turning and jumping back during a move -- but it
-     did it by skipping the friction branch entirely rather than by taking
-     over from it, so a mobile move neither set vx nor damped it. Whatever
-     speed he carried in was frozen for the whole move: measured at 24.5px of
-     silent drift across a 55 frame cast with nothing held, vx pinned at
-     0.584 the entire time. "You may move while casting" had quietly meant
-     "you may not stop", and it slid him past whoever he was aiming at. */
+     The cast was briefly `mobile`, and the trajectory work is what made that
+     possible -- the lure launches from a remembered point in the world, so
+     walking away stopped dragging the line along behind him. It still played
+     worse, so it is rooted again: nine frames of telegraph and a long tail
+     he cannot cancel is the shape of the move, and being free to walk
+     through all of it took the decision out of it.
+
+     The bug that episode uncovered is real and stays fixed. A `mobile` move
+     neither set vx nor damped it -- the friction branch is skipped for
+     exactly these moves -- so whatever speed he carried in was frozen for the
+     whole move: measured at 24.5px of silent drift across a 55 frame cast
+     with nothing held, vx pinned at 0.584 the entire time. "You may move
+     while casting" had quietly meant "you may not stop". LASER SWORD is the
+     only mobile move left, so that is where the guard lives now. */
   const run = await bootEngine();
   run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
 
-  const DOWN_SPECIAL = 1024, RIGHT = 2;
-  const cast = (holdBits, enterMoving) => run(`(function () {
+  const DOWN_SPECIAL = 1024, ULT = 256, RIGHT = 2;
+  /* `enter` is the move: the bits that start it, plus any state it needs.
+     `hold` is what is held for every frame after. */
+  const drive = (startBits, hold, enterMoving, prep) => run(`(function () {
     var me = fighters[0], foe = fighters[1];
     var main = STAGE.platforms.find(function (p) { return p.main; });
     projectiles.length = 0;
@@ -926,33 +935,49 @@ test("he can walk while casting, and letting go stops him", async () => {
     me.x = main.x + 30; me.y = main.y; me.vy = 0; me.grounded = true;
     me.facing = 1;
     me.vx = ${enterMoving} ? me.def.walk : 0;
+    ${prep}
     foe.x = main.x + main.w - 6; foe.y = main.y; foe.invuln = 9999;
     foe.stocks = 99; foe.health = 1000; foe.setState('idle'); foe.hasHit = true;
-    var x0 = me.x, castFrames = 0;
+    var x0 = me.x, busy = 0;
     netplay.active = true;
-    for (var i = 0; i < 55; i++) {
-      var bits = (i === 0 ? ${DOWN_SPECIAL} : 0) | (i === 0 ? 0 : ${holdBits});
+    for (var i = 0; i < 40; i++) {
+      var bits = (i === 0 ? ${startBits} : ${hold});
       netplay.framePads = [bitsToPad(bits), bitsToPad(0)];
       step();
-      if (me.state === 'special') castFrames++;
+      if (me.state === 'special' || me.state === 'ult') busy++;
     }
     netplay.active = false; netplay.framePads = null;
-    return { moved: me.x - x0, castFrames: castFrames };
+    return { moved: me.x - x0, busy: busy };
   })()`);
 
-  const held = cast(RIGHT, false);
-  assert.ok(held.castFrames > 20,
-    "the cast should still be running for most of this; " + held.castFrames);
-  assert.ok(held.moved > 15,
-    "holding right through a cast should walk him; moved " +
-    held.moved.toFixed(1) + "px");
+  // --- the pole roots him ------------------------------------------------
+  const cast = drive(DOWN_SPECIAL, RIGHT, false, "");
+  assert.ok(cast.busy > 20,
+    "the cast should still be running for most of this; " + cast.busy);
+  assert.ok(Math.abs(cast.moved) < 4,
+    "holding right through a cast must NOT walk him any more; moved " +
+    cast.moved.toFixed(1) + "px");
 
-  /* The negative control, and the actual bug: enter the cast at a walk, then
-     press nothing. He must stop, the same as letting go while walking. */
-  const drifting = cast(0, true);
-  assert.ok(Math.abs(drifting.moved) < 4,
-    "releasing everything should stop him rather than freezing his momentum; " +
-    "drifted " + drifting.moved.toFixed(1) + "px");
+  /* And he still cannot be nudged out of it by carrying speed in: friction
+     applies, which is the ordinary non-mobile path. */
+  const carried = drive(DOWN_SPECIAL, 0, true, "");
+  assert.ok(Math.abs(carried.moved) < 6,
+    "entering the cast at a walk should bleed off, not coast; moved " +
+    carried.moved.toFixed(1) + "px");
+
+  // --- the sword is the mobile one, and it stops when you let go ---------
+  const SWORD = "me.swordTimer = 500;";     // sword in hand: ult swings it free
+  const swung = drive(ULT, RIGHT, false, SWORD);
+  assert.ok(swung.busy > 5,
+    "the sword swing should have run; " + swung.busy + " frames");
+  assert.ok(swung.moved > 5,
+    "holding right through the sword swing should walk him; moved " +
+    swung.moved.toFixed(1) + "px");
+
+  const drifting = drive(ULT, 0, true, SWORD);
+  assert.ok(Math.abs(drifting.moved) < 6,
+    "releasing everything during a mobile move should stop him rather than " +
+    "freezing his momentum; drifted " + drifting.moved.toFixed(1) + "px");
 });
 
 test("a status ticks damage every frame but only speaks every twentieth", async () => {
