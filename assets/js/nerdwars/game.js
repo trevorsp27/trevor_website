@@ -425,7 +425,24 @@ const ROSTER = {
         life: 200, ahead: 12, high: 9, r0: 8, r1: 15,
         hitEvery: 40, cue: 'smoke',
         tints: ['#9aa0a6', '#c8ccd0', '#7d838a'],
-        confuse: { frames: 240 },
+        /* Halved from 240. Four seconds of inverted controls was long enough
+           that the answer to the smoke was to stand still and wait it out,
+           which is not a fight.
+
+           Measured over 3600 CPU matches a side, three seeds, this takes
+           JohnnyHam from 44.8% to 21.3% -- every seed agreed (45.3 -> 21.0,
+           46.8 -> 19.5, 42.5 -> 23.3), so it is the change and not luck. That
+           is a bigger swing than the number suggests, because the CPU is the
+           worst possible victim of confusion: it walks off ledges it just
+           probed as safe. A person just walks the wrong way for a moment. So
+           read 21.3% as the floor of what this does, not the expectation.
+
+           Note the mana falls out of it too -- moveCost prices confusion at
+           frames * 0.07, so SMOKESCREEN goes from 31 to 22, and at half a
+           mana a frame it comes back roughly thirty percent sooner. The win
+           rate above already includes that, which is why the nerf is worth
+           less than halving the duration sounds. */
+        confuse: { frames: 120 },
         damage: 3, base: 1.6, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
       },
       /* Points, and it goes. It runs the ground rather than flying, so it is
@@ -7900,7 +7917,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'c0138b078d';
+const BUILD_ID = 'bb85b06613';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7911,7 +7928,7 @@ const BUILD_ID = 'c0138b078d';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.18';
+const VERSION = '2.19';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

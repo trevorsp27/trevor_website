@@ -403,7 +403,10 @@ test("smoke turns a victim's walk backwards, then wears off", async () => {
       gassed.toFixed(2) + "px"
   );
 
-  // 240 frames of it, and then it is over.
+  /* And then it is over. The wait is deliberately longer than the duration
+     rather than equal to it: confusion ticks inside update(), BELOW the
+     `if (this.hitstop > 0) return`, so a trade during the smoke stretches it
+     past its nominal length in wall-clock frames. */
   g.pump(260);
   const clear = drift("ArrowRight", 22);
   assert.ok(

@@ -1,6 +1,6 @@
 /* Confusion: the CPU's half of it, and the ducks that announce it.
  *
- * SMOKESCREEN swaps left and right for four seconds. The swap happens inside
+ * SMOKESCREEN swaps left and right for two seconds. The swap happens inside
  * Fighter.update, on a COPY of the pad, AFTER the AI has already decided what
  * to press -- so the CPU was steering by the direction it named rather than
  * the one it would get, and while confused those are opposites. It walked off
@@ -161,8 +161,13 @@ const TRIALS = 6;
 test("a confused CPU knocked off the stage still flies home", async () => {
   /* The unconfused run is the control. Without it this would be measuring
      whether the recovery AI works at all, not whether confusion breaks it. */
-  const moved = { 0: [], 240: [] };
-  for (const confused of [0, 240]) {
+  /* Read out of the moveset rather than written here. These tests are about
+     what confusion DOES, not how long it lasts, and a balance change to the
+     duration should not have to touch them -- a hardcoded 240 silently stops
+     matching the move the day somebody halves it. */
+  const FULL = "ROSTER.johnnyham.specials.neutral.confuse.frames";
+  const moved = { clear: [], dazed: [] };
+  for (const [how, confused] of [["clear", "0"], ["dazed", FULL]]) {
     for (let t = 0; t < TRIALS; t++) {
       const run = await cpuBattle(null, 1000 + t);
       const dx = run(`(function(){
@@ -178,12 +183,12 @@ test("a confused CPU knocked off the stage still flies home", async () => {
         for (var i = 0; i < 40; i++) step();
         return f.x - x0;
       })()`);
-      moved[confused].push(dx);
+      moved[how].push(dx);
     }
   }
   const avg = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-  const clear = avg(moved[0]);
-  const dazed = avg(moved[240]);
+  const clear = avg(moved.clear);
+  const dazed = avg(moved.dazed);
 
   assert.ok(
     clear > 2,
@@ -205,8 +210,9 @@ test("the CPU is still genuinely confused, not quietly immune", async () => {
      would not show up in the test above at all. On flat ground mid-stage,
      clear of every edge, a confused CPU should still be worse at closing on
      its target than a clear-headed one. */
-  const closed = { 0: [], 240: [] };
-  for (const confused of [0, 240]) {
+  const FULL = "ROSTER.johnnyham.specials.neutral.confuse.frames";
+  const closed = { clear: [], dazed: [] };
+  for (const [how, confused] of [["clear", "0"], ["dazed", FULL]]) {
     for (let t = 0; t < TRIALS; t++) {
       const run = await cpuBattle(null, 2000 + t);
       const gain = run(`(function(){
@@ -220,12 +226,12 @@ test("the CPU is still genuinely confused, not quietly immune", async () => {
         for (var i = 0; i < 34; i++) step();
         return d0 - Math.abs(me.x - foe.x);     // how much ground it closed
       })()`);
-      closed[confused].push(gain);
+      closed[how].push(gain);
     }
   }
   const avg = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-  const clear = avg(closed[0]);
-  const dazed = avg(closed[240]);
+  const clear = avg(closed.clear);
+  const dazed = avg(closed.dazed);
 
   assert.ok(
     clear > 3,
@@ -280,12 +286,12 @@ test("the ducks appear only while confused, and clear the seat arrow", async () 
   // and made the first version of this assertion fail on a duck-free crime.
   const duckRects = (ops) => ops.filter((o) => DUCK_INK.includes(o.c));
 
-  const clear = capture(0, 1);
+  const clear = capture("0", 1);
   assert.equal(bill(clear.ops[0]).length, 0,
     "negative control: a fighter who is not confused should draw no ducks");
 
   // A whole orbit, so every position the ducks can reach gets checked.
-  const dazed = capture(240, 80);
+  const dazed = capture("ROSTER.johnnyham.specials.neutral.confuse.frames", 80);
   const billsPerFrame = dazed.ops.map((ops) => bill(ops).length);
   assert.ok(
     billsPerFrame.every((n) => n === 3),
