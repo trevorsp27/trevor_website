@@ -338,7 +338,6 @@ const ROSTER = {
     origin: 'sprites',
     tag: 'PIZZA, RAINBOWS, KISSES',
     drawn: true,
-    blurb: 'Pizza forward, a kiss that keeps hurting, a rainbow lobbed over cover.',
     weight: 106, walk: 1.48, jump: 6.4, doubleJump: 5.9,
     jab: { startup: 5, active: 4, recovery: 11, damage: 7,
            base: 2.4, scale: 6.8, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925, ox: 2, oy: -9, w: 11, h: 10 },
@@ -408,7 +407,6 @@ const ROSTER = {
     origin: 'fresh',
     tag: 'SMOKE, DOG, SIDEARM',
     drawn: false,
-    blurb: 'Fights dirty: you cannot see, your controls are backwards, and there is a dog.',
     weight: 105, walk: 1.24, jump: 6.1, doubleJump: 5.6,
     /* John's whole kit is `mobile`: walking, turning and jumping all still
        answer while any of it runs.
@@ -540,7 +538,6 @@ const ROSTER = {
     origin: 'sprites',
     tag: 'BONES & BARBELLS',
     drawn: true,
-    blurb: 'A bone that comes back if he stands still, and the rest of it out of the gym.',
     weight: 98, walk: 1.52, jump: 6.5, doubleJump: 6.0,
     jab: { startup: 4, active: 4, recovery: 10, damage: 5,
            base: 2.2, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824, ox: 2, oy: -9, w: 11, h: 10 },
@@ -634,7 +631,6 @@ const ROSTER = {
     origin: 'notes',
     tag: 'SOCCER, DRUMS & THE STROKES',
     drawn: false,
-    blurb: 'Soccerball along the floor, drumsticks up close, notes overhead.',
     weight: 96, walk: 1.47, jump: 6.6, doubleJump: 6.1,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
@@ -719,7 +715,6 @@ const ROSTER = {
     origin: 'mixed',
     tag: 'SHIRTS OPTIONAL',
     drawn: true,
-    blurb: 'Never still. Everything is fast, nothing is committed. Ult loses the shirt.',
     weight: 96, walk: 1.58, jump: 6.6, doubleJump: 6.1,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.3, scale: 6.5, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
@@ -771,6 +766,8 @@ const ROSTER = {
         speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,
         life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
         hitEvery: 45, cue: 'belch',
+        // Off the ground it pushes back. See the cloud case in runSpecial.
+        liftSelf: 4.2,
         tints: ['#9dc25a', '#c3dd86', '#7fa347'],
         /* Was dps 0.11 over the same 150 frames, which is 16.5 damage from a
            cloud you drop and walk away from -- more than BELCH does for a
@@ -824,7 +821,6 @@ const ROSTER = {
     origin: 'notes',
     tag: 'CEREAL & LASER SWORD',
     drawn: false,
-    blurb: 'Cereal, a pawn you charge into the piece of your choosing, a fishing rod.',
     weight: 96, walk: 1.46, jump: 6.9, doubleJump: 6.2,
     jab: { startup: 4, active: 4, recovery: 9, damage: 5,
            base: 2.2, scale: 6.2, angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725, ox: 2, oy: -9, w: 11, h: 10 },
@@ -976,6 +972,8 @@ const ROSTER = {
          recovery. The swing below has always been mobile; there was never a
          reason the draw should not be. */
       kind: 'equip', label: 'LASER SWORD', blade: '#ff8a2a', mobile: true,
+      // Nothing else in his kit answers while he is holding it.
+      exclusive: true,
       startup: 10, active: 1, recovery: 20,
       duration: 600,                       // ten seconds at 60Hz
       damage: 0, base: 0, scale: 0,
@@ -2150,7 +2148,18 @@ class Fighter {
         return;
       }
     }
-    if (pad.special && this.landLag <= 0) {
+    /* A weapon in hand is a MODE, not an accessory. While the sword is out
+       he swings it and nothing else: no cereal, no pole, no pawn. Ten seconds
+       of being able to do everything he could before AND hold a laser sword
+       made the ult a strict addition to his kit rather than a decision about
+       what he wanted to be doing with it.
+
+       Read off the ult's own `exclusive` rather than off swordTimer alone, so
+       this is a property of that weapon and not a rule about everybody who
+       ever picks something up. */
+    const weaponLocked = this.swordTimer > 0 &&
+                         this.def.ult && this.def.ult.exclusive;
+    if (pad.special && this.landLag <= 0 && !weaponLocked) {
       /* A command, not a cast. While his dog is out the button talks to it
          instead of spending mana on another one -- checked before canSpecial
          so that a full-mana John cannot quietly get two. */
@@ -2526,6 +2535,21 @@ class Fighter {
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           projectiles.push(new Cloud(this, s));
+          /* Let off in the air, it shoves him up. Every action has an equal
+             and opposite one and this is the funniest available reading of
+             that -- and mechanically it gives him a second way back that is
+             not JITTERS, which is a committed horizontal dash and useless if
+             what he needs is height.
+
+             Assigned rather than added, like SIDEARM's vertical kick: a fart
+             cancels the fall and replaces it. Adding would let a fast enough
+             descent eat the whole thing, which is precisely the moment you
+             want it to work. Nothing to cap here -- the cloud is on a 45
+             frame re-arm and costs real mana, so it cannot be chained the way
+             an uncapped recoil could. */
+          if (!this.grounded && s.liftSelf) {
+            this.vy = Math.min(this.vy, 0) - s.liftSelf;
+          }
           addEffect('puff', this.x + this.facing * 10, this.y - 10,
                     (s.tints && s.tints[0]) || '#9aa0a6');
           cue(s.cue || 'hit', { slot: this.slot, x: this.x });
@@ -8567,7 +8591,6 @@ function drawSelect() {
   };
   text(focus.tag, VW / 2, VH - 22, 7,
        ORIGIN_TINT[origin] || '#7d849c', 'center', 700);
-  text(focus.blurb, VW / 2, VH - 13, 6, '#98a0bc', 'center', 500);
   text(ORIGIN_LINE[origin] || ORIGIN_LINE.notes,
        VW / 2, VH - 5, 5.5, '#5a6280', 'center', 500);
 
@@ -8685,7 +8708,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'fd13c8f2f9';
+const BUILD_ID = '8f392e7bfd';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8696,7 +8719,7 @@ const BUILD_ID = 'fd13c8f2f9';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.29';
+const VERSION = '2.30';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -9672,7 +9695,7 @@ window.NerdWars = {
   get roster() {
     return ORDER.map((k) => ({
       key: k, name: ROSTER[k].name, tag: ROSTER[k].tag,
-      blurb: ROSTER[k].blurb, drawn: !!ROSTER[k].drawn,
+      drawn: !!ROSTER[k].drawn,
       origin: ROSTER[k].origin || (ROSTER[k].drawn ? 'sprites' : 'notes'),
       accent: SPRITES[k].accent,
       moves: Object.keys(ROSTER[k].specials).map((slot) => ({

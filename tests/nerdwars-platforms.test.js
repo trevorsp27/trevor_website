@@ -1296,6 +1296,127 @@ test("Kel's bone is three throws, and which one depends on what he was doing", a
     running.far.toFixed(1) + " against " + still.far.toFixed(1));
 });
 
+test("the fart shoves Reese upward, but only in the air", async () => {
+  /* Every action has an equal and opposite one. Mechanically it hands him a
+     second way back that is not JITTERS, which is a committed horizontal dash
+     and no use at all when what he needs is height.
+
+     Assigned rather than added, like SIDEARM's vertical kick: it cancels the
+     fall and replaces it, because adding would let a fast enough descent eat
+     the whole thing -- which is exactly the moment you want it to work. */
+  const run = await bootEngine();
+  run("select.cursor=[4,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.specials.down.label"), "CROP DUST",
+    "player 1 should be the one with the fart");
+
+  const SP_D = 1024;
+  const fart = (inAir) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.grabbing = -1;
+    me.facing = 1; me.specialSpawned = false; me.x = main.x + 60;
+    /* 120 up, not 50. Falling at 4.5 he covers 50 pixels inside the move's
+       own nine frames of startup, lands, and the airborne branch never runs
+       -- which reads as "the lift does not work" when it is the setup that
+       is wrong. */
+    if (${inAir}) { me.grounded = false; me.y = main.y - 120; me.vy = 4.5; }
+    else { me.grounded = true; me.y = main.y; me.vy = 0; }
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    var before = null, after = null, air = null;
+    netplay.active = true;
+    for (var i = 0; i < 30; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_D} : 0), bitsToPad(0)];
+      if (!me.specialSpawned) { before = me.vy; air = !me.grounded; }
+      step();
+      if (me.specialSpawned && after === null) after = me.vy;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { before: before, after: after, airborne: air };
+  })()`);
+
+  const up = fart(true);
+  assert.ok(up.airborne,
+    "he has to still be off the ground when it goes off, or this measures nothing");
+  assert.ok(up.before > 0, "he should be falling into it; vy was " + up.before);
+  assert.ok(up.after < 0,
+    "letting one off while falling should send him upward; vy went from " +
+    up.before.toFixed(1) + " to " + up.after.toFixed(1));
+
+  const flat = fart(false);
+  assert.ok(Math.abs(flat.after) < 0.01,
+    "on the ground it should shove him nowhere; vy became " + flat.after);
+});
+
+test("Trev's sword is a mode: nothing else in his kit answers", async () => {
+  /* Ten seconds of being able to do everything he could before AND hold a
+     laser sword made the ult a strict addition to his kit rather than a
+     decision about what he wanted to be doing with it. While it is in his
+     hand he swings it and that is all.
+
+     Read off the ult's own `exclusive` rather than off swordTimer, so it is a
+     property of that weapon and not a rule about anyone who picks something
+     up. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("!!ROSTER.trev.ult.exclusive"), true,
+    "the sword should declare itself exclusive");
+
+  const ULT = 256;
+  const tryIt = (bits, sword) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = main.x + 40; me.y = main.y; me.specialSpawned = false;
+    me.swordTimer = ${sword};
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    var acted = false, ulted = false;
+    netplay.active = true;
+    for (var i = 0; i < 26; i++) {
+      me.hitstop = 0;
+      netplay.framePads = [bitsToPad(i === 0 ? ${bits} : 0), bitsToPad(0)];
+      step();
+      if (me.state === 'special') acted = true;
+      if (me.state === 'ult') ulted = true;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { acted: acted, ulted: ulted };
+  })()`);
+
+  for (const [name, bits] of [["CEREAL", 512], ["FISHING POLE", 1024],
+                              ["PAWN", 2048]]) {
+    assert.ok(tryIt(bits, 0).acted,
+      name + " should cast normally with no sword out, or this proves nothing");
+    assert.ok(!tryIt(bits, 400).acted,
+      name + " must not come out while the sword is in his hand");
+  }
+
+  // ...but the sword itself still swings, which is the whole point of holding it.
+  assert.ok(tryIt(ULT, 400).ulted,
+    "he should still be able to swing the thing he is holding");
+});
+
+test("the character select screen does not describe anybody", async () => {
+  const run = await bootEngine();
+  const carries = run("NerdWars.roster.filter(function (c) {" +
+    " return Object.keys(c).indexOf('blurb') >= 0; }).length");
+  assert.equal(carries, 0, "no character should carry a blurb any more");
+  assert.equal(run("Object.keys(ROSTER).filter(function (k) {" +
+    " return ROSTER[k].blurb !== undefined; }).length"), 0,
+    "and the roster data should not hold one either");
+});
+
 test("John can walk through his whole kit, and still stops when you let go", async () => {
   /* Nothing was holding him still on purpose. `rooted` never listed any of
      his moves -- what stopped him was the plain non-mobile path, ground
