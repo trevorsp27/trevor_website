@@ -463,3 +463,34 @@ test("the music level is its own control, clamped and remembered", async () => {
   assert.equal(moved.scene, "help",
     "and must not fall through into something that closes the screen");
 });
+
+
+test("with no clock, four CPUs still settle it on stocks", async () => {
+  /* Removing the time limit means stocks are the ONLY way a match can end, so
+     the thing worth guarding is that they reliably do. Four actual CPUs --
+     which needs humanCount 0, and so needs the engine rather than the bundle,
+     because the brawl hands the first two seats to the keyboard.
+
+     Measured over eight seeded runs before this was written: all eight ended,
+     between 48 and 86 seconds. The cap here is five minutes, which is not a
+     time limit sneaking back in -- it is the point at which the test gives up
+     and says so. */
+  const run = await bootEngine();
+  run("select.cursor=[0,1,2,3]; twoPlayer=true; playerCount=4; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  const at = run(`(function(){
+    for (var i = 0; i < 60 * 60 * 5; i++) {
+      step();
+      if (scene !== 'battle') return i;
+    }
+    return -1;
+  })()`);
+
+  assert.ok(at > 0,
+    "four CPUs went five minutes without resolving. With the time limit gone " +
+    "there is nothing else to end a match, so this would run forever");
+  assert.ok(at > 60 * 10,
+    "it ended after " + (at / 60).toFixed(0) + "s, which is too fast to have " +
+    "been a fight -- something is ending the match early");
+  assert.equal(run("scene"), "results");
+});

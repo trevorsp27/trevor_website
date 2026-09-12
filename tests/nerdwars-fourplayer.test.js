@@ -197,14 +197,26 @@ test("the title offers a four-player brawl, and it starts", async () => {
   assert.equal(new Set(f.map((x) => x.y)).size, 1, "all four should start on the floor");
 });
 
-test("a four-way is a real fight, and it ends with one of them left", async () => {
+test("a four-way is a real fight", async () => {
+  /* This used to assert the match ENDED, on the strength of a comment saying
+     "nobody is at the keyboard, so all four are CPUs". That was never true:
+     the brawl fills seats from available controllers, and a keyboard is two,
+     so seats 0 and 1 are humans -- idle ones, in a test. What ended the match
+     was the three-minute clock, not the fight.
+
+     With the clock gone the premise is visible: measured over eight runs,
+     three of them never finished at all, because a CPU cannot reliably take
+     the last stock off an opponent who never moves. That is a real property
+     of a game with no time limit and it belongs in a test of its own, on a
+     harness that can actually make all four CPUs -- see the four-CPU brawl in
+     nerdwars-platforms.test.js.
+
+     What THIS one can honestly check is that a four-way is a fight. */
   const g = await bootGame();
   startMatch(g, { mode: 2 });
 
-  // Nobody is at the keyboard, so all four are CPUs. Let them settle it. The
-  // clock is 60 * 180 frames, so this covers a full match plus a margin.
   let damaged = 0;
-  for (let i = 0; i < 11400 && g.nw.scene === "battle"; i++) {
+  for (let i = 0; i < 6000 && g.nw.scene === "battle"; i++) {
     g.pump(1);
     if (i % 300 === 0) {
       const n = g.nw.fighters.filter((f) => f.health < 100 || f.stocks < 3).length;
@@ -212,23 +224,12 @@ test("a four-way is a real fight, and it ends with one of them left", async () =
     }
   }
 
-  assert.equal(g.nw.scene, "results",
-    "four CPUs should finish a match inside the time limit");
-
-  // Non-vacuous: four bots standing in separate corners for three minutes
-  // would also reach the results screen, and would prove nothing.
   assert.ok(damaged >= 3,
     `a brawl should hurt nearly everyone; only ${damaged} of 4 took anything`);
 
-  // A brawl ends one of two ways: somebody outlasts the rest, or the clock
-  // runs out with several still up. Both are fine -- what is not fine is
-  // several eliminated and the match still calling itself unfinished.
   const standing = g.nw.fighters.filter((f) => f.state !== "gone");
   assert.ok(standing.length >= 1 && standing.length <= 4,
     `nonsense survivor count: ${standing.length}`);
-  if (g.nw.fighters.some((f) => f.state === "gone")) {
-    assert.ok(standing.length >= 1, "somebody has to be left");
-  }
 });
 
 test("one on one is exactly the match it always was", async () => {

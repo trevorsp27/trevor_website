@@ -36,7 +36,15 @@ const PHYS = {
 };
 
 const COMBAT = {
-  timeLimitFrames: 60 * 180,   // 3 minutes, then most stocks / most health
+  /* There is no time limit. There was one -- three minutes, then the win
+     went to most stocks and then most health -- and it was removed because a
+     match that ends on a clock ends on the clock's terms rather than on
+     anybody's play, and nothing on screen was even saying it existed.
+
+     Deliberately gone rather than set enormous. A huge number is a limit you
+     have not met yet, and the next person to read this file would have to
+     work out whether it was load-bearing. The constant is gone, the branch
+     that read it is gone, and stocks are the only way a match ends now. */
 
   // Health, not accumulated damage. A hit takes health away; at zero you lose
   // a stock and come back full. Moves deal 3-24, so 100 health is roughly a
@@ -6013,29 +6021,9 @@ function updateBattle() {
     return;
   }
 
+  /* Still counted, because the HUD shows it and a snapshot has to carry it,
+     but nothing ends on it any more. */
   battleFrames++;
-  if (battleFrames >= COMBAT.timeLimitFrames) {
-    // Most stocks, then most health. With four people a draw is far more
-    // likely than it was head to head, so an outright tie for the lead is a
-    // draw rather than whoever happens to sort first.
-    let best = null;
-    let tied = false;
-    for (const f of alive) {
-      if (!best) { best = f; continue; }
-      if (f.stocks !== best.stocks) {
-        if (f.stocks > best.stocks) { best = f; tied = false; }
-        continue;
-      }
-      if (f.health !== best.health) {
-        if (f.health > best.health) { best = f; tied = false; }
-        continue;
-      }
-      tied = true;
-    }
-    winnerKey = best && !tied ? best.key : null;
-    scene = 'results';
-    resultTimer = 0;
-  }
 }
 
 /* =====================================================================
@@ -6540,12 +6528,15 @@ function drawHUD() {
 
      Drawn before everything else so the bars below stay where they were. */
   if (scene === 'battle') {
-    const left = Math.max(0, COMBAT.timeLimitFrames - battleFrames);
-    const secs = Math.ceil(left / 60);
+    // Counting up, not down. It used to run toward a three-minute limit that
+    // decided the match; with the limit gone a countdown would be promising
+    // an ending that never comes, so it says how long this one has taken
+    // instead. No color change: there is nothing to warn about.
+    const secs = Math.floor(battleFrames / 60);
     const mm = Math.floor(secs / 60);
     const ss = secs % 60;
     text(mm + ':' + (ss < 10 ? '0' : '') + ss, VW / 2, 9, 8,
-         secs <= 10 ? '#ff6b6b' : '#8892b0', 'center', 700);
+         '#8892b0', 'center', 700);
   }
   // Fixed rows: five things share the 32px strip above the bottom of the
   // screen, and the stages are laid out on the promise that nothing here
@@ -6948,7 +6939,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'aa1ce62332';
+const BUILD_ID = 'e36b4098a5';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
