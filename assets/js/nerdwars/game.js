@@ -1662,8 +1662,18 @@ class Fighter {
 
     // --- jumping ---
     if (pad.jump && this.landLag <= 0) {
-      if (this.grounded && pad.down) {
-        // Drop through the platform you're standing on.
+      /* Only the thin platforms are one-way. The main floor is the stage, and
+         dropping through it is not a movement option -- there is nothing
+         underneath it, so it is a stock, instantly, with no way to recover.
+         Down+jump is also exactly the combination you end up holding while
+         fast-falling into a landing, so it was being hit by accident.
+
+         Standing on the main floor, down+jump now just jumps, which is what
+         every other platform fighter does. A null from standingOn falls into
+         the same branch: if we cannot tell what is underfoot, jumping is the
+         answer that cannot kill anybody. */
+      const under = this.grounded && pad.down ? this.standingOn() : null;
+      if (under && !under.main) {
         this.dropThrough = 10;
         this.grounded = false;
         this.y += 1;
@@ -2309,6 +2319,17 @@ class Fighter {
     this.hitstop = COMBAT.hitstopLight;
     for (let i = 0; i < 7; i++) addEffect('spark', this.x, hz.y, '#ff8a2a');
     addEffect('hit', this.x, hz.y - 4, '#ffb347');
+  }
+
+  /* Which platform this fighter is standing on, or null. collidePlatforms
+     snaps y exactly to the surface on landing, so a tight match is enough and
+     a miss is safe: every caller treats null as "not on a thin platform". */
+  standingOn() {
+    for (const p of STAGE.platforms) {
+      if (this.x < p.x - 3 || this.x > p.x + p.w + 3) continue;
+      if (Math.abs(this.y - p.y) < 1) return p;
+    }
+    return null;
   }
 
   collidePlatforms() {
@@ -5967,9 +5988,24 @@ function drawFighter(g, f) {
     g.fillRect(mx, my + 3, 1, 1);
   }
 
-  // Respawn invulnerability blinks; roll/dodge invulnerability is solid
-  // but dimmed, so you can read the difference at a glance.
-  if (f.invuln > 0 && Math.floor(f.invuln / 4) % 2 === 0) return;
+  /* Respawn invulnerability blinks; roll/dodge invulnerability is solid
+     but dimmed, so you can read the difference at a glance.
+
+     The restore is repeated here rather than left to the one at the bottom,
+     because this return sits BETWEEN the save above and that restore. Leaving
+     it out translated the world canvas permanently: the transform survives the
+     frame, so the next one starts shifted and the one after that shifts again,
+     and drawWorld's clearRect then clears a rectangle that is no longer the
+     screen -- which is why the stage crept sideways and left a stale strip
+     down the edge it was uncovering.
+
+     It only ever happened online and only sometimes, because it needs a
+     rollback correction and a respawn at the same instant: visErr is zero
+     offline, so `shifted` is false and the unbalanced save never happens. */
+  if (f.invuln > 0 && Math.floor(f.invuln / 4) % 2 === 0) {
+    if (shifted) g.restore();
+    return;
+  }
 
   const x = Math.round(f.x - 8);
   const y = Math.round(f.y - 16);
@@ -6072,6 +6108,13 @@ function drawFighter(g, f) {
 }
 
 function drawWorld() {
+  /* Start from a known transform. Nothing here should leave one behind -- the
+     rollback shift in drawFighter is save/restore balanced -- but a canvas
+     transform outlives the frame that set it, so the cost of being wrong is
+     not one bad frame, it is every frame after it, drifting further each time
+     and clearing the wrong rectangle on the way. A frame is cheap to start
+     honestly. */
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, VW, VH);
   drawBackground(ctx);
   drawStage(ctx);
