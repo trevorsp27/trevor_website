@@ -366,3 +366,100 @@ test("an online results screen returns to picking without a keypress", async () 
       "the room, and taking the screen away from them is not a kindness"
   );
 });
+
+
+/* The sword, and the clock -- both need the engine itself: the meter is
+   earned elsewhere, and drawHUD is not on the public surface. */
+
+test("Trev walks and jumps while swinging the sword", async () => {
+  /* Thirty-three frames a swing and eighteen swings in the ult. Rooted, the
+     reward for filling the meter was ten seconds of standing still. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const RIGHT = 2, JUMP = 16, ULT = 256;
+  const r = run(`(function(){
+    var f = fighters[0];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    f.setState('idle'); f.timer = 0; f.hitstun = 0; f.hitstop = 0; f.landLag = 0;
+    f.invuln = 0; f.vx = 0; f.vy = 0; f.grounded = true; f.facing = 1;
+    f.x = main.x + 40; f.y = main.y;
+    f.swordTimer = 400;                  // hand him the sword
+    var x0 = f.x, y0 = f.y, airborne = false, swung = false;
+    netplay.active = true;
+    for (var i = 0; i < 22; i++) {
+      var bits = ${RIGHT};
+      if (i === 0) bits |= ${ULT};       // swing
+      if (i === 8) bits |= ${JUMP};
+      netplay.framePads = [bitsToPad(bits), bitsToPad(0)];
+      step();
+      if (f.state === 'ult') swung = true;
+      if (f.y < y0 - 4) airborne = true;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { moved: f.x - x0, airborne: airborne, swung: swung };
+  })()`);
+
+  assert.ok(r.swung, "precondition: he should actually be swinging");
+  assert.ok(r.moved > 4,
+    "he should walk through a swing; moved " + r.moved.toFixed(1) + "px");
+  assert.ok(r.airborne, "and jump through it");
+});
+
+test("the match clock is drawn, because it decides matches", async () => {
+  /* Three minutes, and nothing displayed it. When it expired the winner was
+     decided on stocks then health and the results appeared -- which, with
+     everybody still standing, looks exactly like the game stopping at
+     random. It was never a bug, it was an invisible rule. */
+  const run = await bootEngine();
+  run("select.cursor=[1,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<40;i++) step();");
+
+  const drawn = run(`(function(){
+    var seen = [];
+    var real = text;
+    text = function (str) { seen.push(String(str)); return real.apply(null, arguments); };
+    try { drawHUD(); } finally { text = real; }
+    return seen;
+  })()`);
+
+  assert.ok(
+    drawn.some(function (t) { return /^[0-9]+:[0-9][0-9]$/.test(t); }),
+    "the HUD should show the time remaining; it drew " + JSON.stringify(drawn)
+  );
+});
+
+test("the music level is its own control, clamped and remembered", async () => {
+  /* Two different complaints -- "this game is loud" and "I like the game but
+     not the song for the ninth time" -- so music multiplies the master rather
+     than replacing it. */
+  const run = await bootEngine();
+  assert.equal(run("AUDIO.music"), 1, "full by default");
+
+  run("window.NerdWars.audio.setMusicVolume(0.4);");
+  assert.ok(Math.abs(run("window.NerdWars.audio.musicVolume") - 0.4) < 1e-9);
+  assert.ok(
+    Math.abs(run("AUDIO.volume") - 0.7) < 1e-9,
+    "turning the music down must not touch the master, or the two controls " +
+      "are one control"
+  );
+
+  assert.equal(run("window.NerdWars.audio.setMusicVolume(5)"), 1, "clamped at the top");
+  assert.equal(run("window.NerdWars.audio.setMusicVolume(-3)"), 0, "and at the bottom");
+
+  // The help screen drives it, which is where a player will actually find it.
+  run("window.NerdWars.audio.setMusicVolume(0.5); scene = 'help';");
+  const moved = run(`(function(){
+    var real = tapped;
+    tapped = function (code) { return code === 'KeyD'; };
+    try { updateHelp(); } finally { tapped = real; }
+    return { music: AUDIO.music, scene: scene };
+  })()`);
+  assert.ok(moved.music > 0.5, "right should turn it up, got " + moved.music);
+  assert.equal(moved.scene, "help",
+    "and must not fall through into something that closes the screen");
+});

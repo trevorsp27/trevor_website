@@ -400,9 +400,19 @@ const ROSTER = {
       /* Points, and it goes. It runs the ground rather than flying, so it is
          answered by jumping -- which is exactly what the smoke and the gun
          want you doing. */
+      /* One dog. Pressing the button again does not fetch a second one, it
+         tells the one that is out to JUMP -- as often as you like, midair
+         included, so it can be walked up over a platform or onto somebody
+         standing where a ground-running dog could never reach.
+
+         `maxAlive` is what enforces the one, and it is also what gives the
+         dog back: a dog that runs off the side of the screen is dead by the
+         existing bounds check, so the moment it leaves, another is
+         affordable. Nothing new had to track that. */
       down: {
         kind: 'dog', label: "SIC 'EM",
         startup: 11, active: 5, recovery: 20,
+        maxAlive: 1, leap: -4.4,
         speed: 2.1, life: 170,
         hitEvery: 34, cue: 'bark',
         damage: 6, base: 2.2, scale: 5.4, angle: 35, kx: 0.81915204428899180, ky: 0.57357643635104605,
@@ -654,6 +664,12 @@ const ROSTER = {
            leaves him at 61.8%, which is where the fart nerf alone had him.
            More range at the same strength, rather than more of both. */
         damage: 7, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
+        /* moveCost said 21, which at half a mana a frame is a burp every
+           four fifths of a second -- and with the longer box there is no
+           spacing that answers it. The formula prices damage and knockback;
+           what it cannot see is that this one is safe, fast and now long, so
+           the ceiling on it has to be the meter. */
+        manaOverride: 36,
         ox: -1, oy: -15, w: 30, h: 24,
       },
       /* The fart. Same class as John's smoke and the same hitEvery pacing --
@@ -736,30 +752,44 @@ const ROSTER = {
         tints: ['#e8b060'],
         damage: 4, base: 1.4, scale: 4, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
       },
-      /* The only grab in the game, and the only thing that beats a raised
-         shield. That is a lot of power for one button, so everything else
-         about it is a liability: eleven frames of startup, a hitbox that
-         barely reaches past his own arm, and if it misses he is stood in
-         place for twenty-two frames doing nothing.
+      /* Everybody can grab now, on Y, so his own grab has to be worth being
+         one of his three specials. It is a fishing pole: it reaches four
+         times as far as anyone's arm, it works in the air, he keeps walking
+         and jumping through the cast, and what it catches it throws
+         noticeably harder.
 
-         Land it and he chokes them for half a second -- then throws them
-         wherever he is holding. Forward, up, down, or back over his own
-         shoulder, which is the one that puts somebody off the ledge they
-         were standing safely on. */
+         The reel-in is free. A held fighter is parked at the grabber's side
+         by the `grabbed` branch in update(), so catching somebody at the end
+         of a 46px line drags them the whole way in without a line of code
+         about it -- which is exactly what a fishing pole should look like.
+
+         It still goes through a shield, which is what it always was for. */
       down: {
-        kind: 'guillotine', label: 'GUILLOTINE',
-        startup: 11, active: 4, recovery: 22,
-        ox: 1, oy: -13, w: 13, h: 13,
-        grab: { hold: 34, damage: 6 },
+        /* NOT `mobile`, and the reason is worth keeping: the throw is aimed
+           with a direction, and letting the cast answer direction too meant
+           aiming UP made him jump (W is jump) and aiming BACK turned him
+           round, so the line pointed away from whoever he was aiming at. He
+           is airborne-capable and keeps his momentum -- specials were never
+           grounded-gated and the pole is not rooted -- which is the "in the
+           air and while moving" that was actually asked for. Steering mid-cast
+           is a different thing, and it breaks the aim. */
+        kind: 'pole', label: 'FISHING POLE',
+        startup: 9, active: 6, recovery: 24,
+        ox: 4, oy: -12, w: 46, h: 10,
+        grab: { hold: 32, damage: 5 },
         // Never read for knockback -- applyHit returns at the grab branch
         // long before it computes any. Present because the throws below are
         // where the force actually is.
         damage: 0, base: 0, scale: 0,
-        throwFwd: { damage: 12, base: 3.6, scale: 7.4, angle: 32,
+        // Farther than anyone else throws. Against BASIC_GRAB's 2.8/5.6 this
+        // is half again as much launch, which past mid-health is the
+        // difference between a throw that resets the exchange and one that
+        // takes the stock.
+        throwFwd: { damage: 12, base: 4.6, scale: 9.6, angle: 32,
                     kx: 0.84804809615642596, ky: 0.52991926423320490 },
-        throwUp: { damage: 10, base: 3.5, scale: 8.2, angle: 84,
+        throwUp: { damage: 10, base: 4.4, scale: 10.2, angle: 84,
                    kx: 0.10452846326765346, ky: 0.99452189536827329 },
-        throwDown: { damage: 14, base: 3.4, scale: 6.2, angle: 12,
+        throwDown: { damage: 14, base: 4.2, scale: 8.0, angle: 12,
                      kx: 0.97814760073380569, ky: 0.20791169081775934 },
       },
       // His recovery, kept as the rising attack it always was so the balance
@@ -791,8 +821,13 @@ const ROSTER = {
       // What the ult button does while he is holding it. No mana: the cost of
       // an ult is the meter it took to earn, and the ceiling is the animation
       // -- 33 frames a swing, about eighteen swings in the ten seconds.
+      /* `mobile` is the difference between holding a sword and being held by
+         one. Thirty-three frames a swing, eighteen swings in the ten seconds
+         -- rooted, that is the whole ult spent standing still, and the sword
+         he waited an entire match for reads as a punishment. He walks and
+         jumps through it now. */
       swing: {
-        kind: 'laser', label: 'LASER SWORD',
+        kind: 'laser', label: 'LASER SWORD', mobile: true,
         blade: '#fff6d8', tint: '#ffb347',
         startup: 6, active: 5, recovery: 22,
         damage: 7, base: 2.6, scale: 6.4, angle: 40, kx: 0.766044443118978, ky: 0.6427876096865393,
@@ -830,6 +865,21 @@ function moveCost(m) {
   // the terms it is told about.
   if (m.confuse) power += m.confuse.frames * 0.07;
   if (m.punish) power += m.punish.stun * 0.18;
+  /* A grab does none of its damage through `damage` -- applyHit returns at
+     the grab branch long before it reads one -- so moveCost was pricing the
+     only shield-beating move in the game off a field that is deliberately
+     zero, and charging six mana for it. Price the hold plus whichever throw
+     hits hardest, since the thrower picks. */
+  if (m.grab) {
+    power += m.grab.damage || 0;
+    let best = 0;
+    for (const t of [m.throwFwd, m.throwUp, m.throwDown]) {
+      if (!t) continue;
+      const p = (t.damage || 0) + (t.base || 0) * 1.6 + (t.scale || 0) * 0.7;
+      if (p > best) best = p;
+    }
+    power += best;
+  }
   // Worth more per frame than `punish`: that one has to catch somebody
   // mid-swing, this one only has to land.
   if (m.stun) power += m.stun * 0.25;
@@ -849,11 +899,48 @@ function moveCost(m) {
   return Math.max(6, Math.round(3 + power * 1.15));
 }
 
+/* The grab everybody has, on its own button.
+
+   Deliberately worse than Trev's in every dimension -- shorter, slower to
+   start, a briefer hold and a much gentler throw -- because his is one of his
+   three specials and this is a universal option that costs no mana at all.
+   What it buys is an answer to a raised shield, which the roster otherwise
+   simply did not have: every other move in the game either bounces off one or
+   chips it.
+
+   Grounded only. Trev's pole is the thing that works in the air, and that is
+   most of what makes it his.
+
+   The angle/kx/ky triples are lifted from the throws they replace rather than
+   recomputed, because build.py verifies every one of them against its angle
+   to 1e-12 and a hand-typed cosine is exactly the kind of thing that passes
+   review and fails the build. */
+const BASIC_GRAB = {
+  kind: 'grab', label: 'GRAB', basic: true,
+  startup: 7, active: 3, recovery: 18,
+  ox: 1, oy: -12, w: 12, h: 14,
+  grab: { hold: 26, damage: 4 },
+  // Never read for knockback: applyHit returns at the grab branch long before
+  // it computes any. The force lives in the throws.
+  damage: 0, base: 0, scale: 0,
+  throwFwd: { damage: 8, base: 2.8, scale: 5.6, angle: 32,
+              kx: 0.84804809615642596, ky: 0.52991926423320490 },
+  throwUp: { damage: 7, base: 2.7, scale: 6.0, angle: 84,
+             kx: 0.10452846326765346, ky: 0.99452189536827329 },
+  throwDown: { damage: 9, base: 2.6, scale: 4.6, angle: 12,
+               kx: 0.97814760073380569, ky: 0.20791169081775934 },
+};
+
 // Priced once at load. Jabs and ults stay free (see COMBAT.manaMax).
 for (const key in ROSTER) {
   const def = ROSTER[key];
   for (const slot in def.specials) {
-    def.specials[slot].mana = moveCost(def.specials[slot]);
+    /* moveCost prices a move by what it does on paper. `manaOverride` is for
+       the cases where that and how it actually plays come apart -- it is an
+       admission that the formula missed something, so it is written down as
+       one rather than smuggled in by inflating a damage number. */
+    const spec = def.specials[slot];
+    spec.mana = spec.manaOverride || moveCost(spec);
   }
 }
 
@@ -1020,11 +1107,14 @@ const BINDS = [
     // Space jumps too. It is the button every platformer has trained people
     // to reach for, and W is easy to miss while your hand is on A or D.
     jump2: 'Space',
-    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyL',
+    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyL', grab: 'KeyY',
     spNeutral: 'KeyH', spDown: 'KeyJ', spUp: 'KeyK' },
   { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
     // Comma, not L: L is player 1's ult now.
     attack: 'Comma', shield: 'ShiftRight', ult: 'Quote',
+    // The punctuation cluster is full, so seat two's grab is the bracket
+    // beside it, with a numpad alternate like everything else here.
+    grab: 'BracketRight', grab2: 'Numpad6',
     spNeutral: 'Period', spDown: 'Slash', spUp: 'Semicolon',
     // Numpad alternates, for keyboards where the punctuation cluster is awkward.
     attack2: 'Numpad0', shield2: 'Numpad4', ult2: 'Numpad5',
@@ -1122,6 +1212,9 @@ function gpState(g, action) {
     case 'spNeutral': return on(1);
     case 'spDown':    return on(6);
     case 'spUp':      return on(7);
+    // Left stick click. 8 and 9 are Back and Start on every common layout and
+    // a grab that also opens a system menu is not a grab.
+    case 'grab':      return on(10);
   }
   return false;
 }
@@ -1152,6 +1245,7 @@ function readGamepad(i) {
     special: spN || spD || spU,
     shield: gpDown(i, 'shield'),
     ult: gpTapped(i, 'ult'),
+    grab: gpTapped(i, 'grab'),
   };
 }
 
@@ -1190,6 +1284,7 @@ function readPad(idx) {
     down: down(b.down),
     jump: anyTap(b.up, b.jump2),
     attack: anyTap(b.attack, b.attack2),
+    grab: anyTap(b.grab, b.grab2),
     spNeutral: spN,
     spDown: spD,
     spUp: spU,
@@ -1201,7 +1296,7 @@ function readPad(idx) {
 
 const NEUTRAL = {
   left: false, right: false, up: false, down: false,
-  jump: false, attack: false, special: false,
+  jump: false, attack: false, special: false, grab: false,
   spNeutral: false, spDown: false, spUp: false,
   shield: false, ult: false,
 };
@@ -1382,6 +1477,11 @@ class Fighter {
        the roll wants a fresh press, which is what this disarms until the
        stick comes back to neutral. */
     this.evadeArm = 0;
+    /* Which grab is holding somebody: 0 for the universal one, 1 for the
+       character's own down special. A number rather than a reference to the
+       spec, because restoreSim copies fighter fields and a live object in
+       there is a way to end up with two machines holding different specs. */
+    this.grabKind = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
        than Fighter references, for the reason poisonBy is: snapValue keeps a
        Fighter by pointer inside a snapshot, and a stale pointer survives a
@@ -1458,6 +1558,12 @@ class Fighter {
 
   /* ---- the active hitbox this frame, or null ---- */
   hitbox() {
+    if (this.state === 'grab') {
+      const m = BASIC_GRAB;
+      if (this.attackFrame < m.startup) return null;
+      if (this.attackFrame >= m.startup + m.active) return null;
+      return { box: this.relBox(m), move: m };
+    }
     if (this.state === 'attack') {
       const m = this.def.jab;
       if (this.attackFrame < m.startup) return null;
@@ -1642,7 +1748,7 @@ class Fighter {
     if (this.state === 'roll') { this.updateRoll(); return; }
     if (this.state === 'dodge') { this.updateDodge(); return; }
     if (this.state === 'attack' || this.state === 'special' ||
-        this.state === 'ult') {
+        this.state === 'ult' || this.state === 'grab') {
       this.updateAttack(pad);
       this.checkBlastZones();
       return;
@@ -1655,6 +1761,15 @@ class Fighter {
   updateFree(pad) {
     const d = this.def;
     const speed = d.walk * this.speedMul;
+
+    /* Grab. Ahead of shield and movement because it is the answer TO a
+       shield, and behind nothing: a button that only sometimes comes out is
+       worse than no button. Grounded only, and not while already holding
+       somebody. */
+    if (pad.grab && this.grounded && this.landLag <= 0 && this.grabbing < 0) {
+      this.startAttack('grab', pad);
+      return;
+    }
 
     // --- shield / roll / spot dodge ---
     if (pad.shield && this.grounded && this.landLag <= 0) {
@@ -1742,6 +1857,17 @@ class Fighter {
       }
     }
     if (pad.special && this.landLag <= 0) {
+      /* A command, not a cast. While his dog is out the button talks to it
+         instead of spending mana on another one -- checked before canSpecial
+         so that a full-mana John cannot quietly get two. */
+      const intent = this.def.specials[this.slotFor(pad)];
+      if (intent && intent.kind === 'dog') {
+        let told = false;
+        for (const b of projectiles) {
+          if (b instanceof Dog && b.owner === this && !b.dead) { b.leap(); told = true; }
+        }
+        if (told) return;
+      }
       if (this.canSpecial(pad)) {
         this.mana -= this.def.specials[this.slotFor(pad)].mana;
         this.startAttack('special', pad);
@@ -1838,7 +1964,8 @@ class Fighter {
   }
 
   moveFor(state) {
-    return state === 'attack' ? this.def.jab
+    return state === 'grab' ? BASIC_GRAB
+         : state === 'attack' ? this.def.jab
          : state === 'ult'
            ? (this.swordSwing && this.def.ult.swing ? this.def.ult.swing
                                                     : this.def.ult)
@@ -1855,7 +1982,7 @@ class Fighter {
       releaseGrab(this);
       return;
     }
-    const s = this.def.specials.down;
+    const s = this.grabKind === 0 ? BASIC_GRAB : this.def.specials.down;
     this.vx = 0;
     if (!this.grounded) this.vy = Math.min(this.vy, 0.6);
     if (this.grabTimer % 7 === 0) {
@@ -1904,10 +2031,33 @@ class Fighter {
     if (this.state === 'special' || this.state === 'ult') this.runSpecial(m);
 
     // Roots and dashes control their own horizontal motion.
-    const rooted = (this.state === 'special' || this.state === 'ult') &&
+    /* A `mobile` move is one you keep playing the game through: walking,
+       turning and jumping all still answer while it runs. Everything else
+       commits, which is what makes a swing a decision. */
+    if (m.mobile && pad) {
+      if (pad.left || pad.right) {
+        const dir = pad.left ? -1 : 1;
+        this.facing = dir;
+        if (this.grounded) this.vx = dir * this.def.walk * this.speedMul;
+      }
+      if (pad.jump) {
+        if (this.grounded) {
+          this.vy = -this.def.jump;
+          this.grounded = false;
+          this.jumpsLeft = PHYS.airJumps;
+          cue('jump', { slot: this.slot, x: this.x });
+        } else if (this.jumpsLeft > 0) {
+          this.vy = -this.def.doubleJump;
+          this.jumpsLeft--;
+          cue('airjump', { slot: this.slot, x: this.x });
+        }
+      }
+    }
+
+    const rooted = !m.mobile && (this.state === 'special' || this.state === 'ult') &&
       ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut' ||
-       m.kind === 'knightmove' || m.kind === 'guillotine');
-    if (!rooted) {
+       m.kind === 'knightmove');
+    if (!rooted && !m.mobile) {
       if (this.grounded) this.vx *= PHYS.groundFriction;
       else if (pad && (pad.left || pad.right)) {
         this.vx += (pad.left ? -1 : 1) * PHYS.airAccel * 0.5;
@@ -2330,15 +2480,16 @@ class Fighter {
         }
         break;
 
-      /* The guillotine. Startup is slow and the reach is short, because it
-         goes through a shield and a move that beats every defensive option
-         has to lose to being seen coming.
+      /* The pole. It goes through a shield, and a move that beats every
+         defensive option has to lose to being seen coming -- which here is
+         the cast: nine frames of startup and a line that is obvious on
+         screen long before it closes.
 
          The hold runs on its own timer rather than on attackFrame, so the
-         throw happens when the choke ends and not when the animation does. */
-      case 'guillotine':
-        // The choke itself is ticked by tickGrab() in update(), not here.
-        // This case exists only for the frames before it connects.
+         throw happens when the hold ends and not when the animation does. */
+      case 'pole':
+        // The hold itself is ticked by tickGrab() in update(), not here.
+        // This case exists only for the frames before the line connects.
         break;
 
       case 'shockwave':
@@ -4109,7 +4260,18 @@ class Dog {
     }
 
     if (this.life <= 0) this.dead = true;
-    if (this.x < -14 || this.x > VW + 14 || this.y > VH + 30) this.dead = true;
+    // Off any edge is gone -- including the top, which nothing could reach
+    // before it could jump.
+    if (this.x < -14 || this.x > VW + 14 ||
+        this.y > VH + 30 || this.y < -40) this.dead = true;
+  }
+
+  /* Told to jump. Deliberately unconditional: there is no grounded check and
+     no cooldown, so holding the button walks it up through the air. It is one
+     dog at a time and it dies the moment it leaves the screen, which is the
+     cost that keeps that honest. */
+  leap() {
+    this.vy = this.spec.leap || -4.4;
   }
 
   box() {
@@ -4214,6 +4376,11 @@ const AUDIO = {
   master: null,          // master GainNode
   enabled: true,
   volume: 0.7,
+  /* Music has its own level, separate from `volume`, because they are two
+     different complaints: "this game is loud" and "I like the game but not
+     the song for the ninth time". Multiplies the master rather than
+     replacing it, so turning everything down still turns the music down. */
+  music: 1,
   step: 0,               // our own monotonic step counter, for offline keying
   // Which clock frame() actually advanced on the tick now running. Written
   // by frame() itself, right before it calls into the simulation, so
@@ -4308,6 +4475,35 @@ const MUSIC_FADE = 0.035;        // volume per frame, so ~0.5s to cross over
 const audioMusicEls = Object.create(null);
 let audioMusicReady = false;
 
+/* Remembered across visits, because a volume you have to set every time you
+   open the page is not a setting, it is a chore.
+
+   Wrapped in try/catch on both sides: localStorage throws outright in a
+   private window in some browsers and in a sandboxed frame in all of them,
+   and a music slider is not worth taking the game down over. A failure here
+   means the level is simply not remembered, which is the correct outcome. */
+const MUSIC_LEVEL_KEY = 'nerdwars.music';
+
+function musicLevelLoad() {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const raw = localStorage.getItem(MUSIC_LEVEL_KEY);
+    if (raw === null) return;
+    const v = parseFloat(raw);
+    if (isFinite(v)) AUDIO.music = clamp(v, 0, 1);
+  } catch (e) { /* no storage: the default stands */ }
+}
+
+function musicLevelSet(v) {
+  AUDIO.music = clamp(v, 0, 1);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(MUSIC_LEVEL_KEY, String(AUDIO.music));
+    }
+  } catch (e) { /* no storage: it just will not be remembered */ }
+  return AUDIO.music;
+}
+
 /* Which track a scene wants. Everything that is not a fight is the menu. */
 function audioMusicRole() {
   return scene === 'battle' ? 'battle' : 'menu';
@@ -4317,6 +4513,7 @@ function audioMusicRole() {
    because an <audio> element is under the same autoplay rule. */
 function audioMusicInit() {
   if (audioMusicReady) return;
+  musicLevelLoad();
   if (typeof Audio !== 'function') return;      // headless harness: no music
   const table = typeof MUSIC === 'undefined' ? null : MUSIC;
   if (!table) return;
@@ -4344,7 +4541,7 @@ function audioMusicUpdate() {
   const want = AUDIO.enabled ? audioMusicRole() : null;
   for (const role of Object.keys(audioMusicEls)) {
     const el = audioMusicEls[role];
-    const target = role === want ? MUSIC_GAIN * AUDIO.volume : 0;
+    const target = role === want ? MUSIC_GAIN * AUDIO.volume * AUDIO.music : 0;
     if (el.volume < target) el.volume = Math.min(target, el.volume + MUSIC_FADE);
     else if (el.volume > target) el.volume = Math.max(target, el.volume - MUSIC_FADE);
     if (target > 0 && el.paused) {
@@ -5086,6 +5283,7 @@ function applyHit(attacker, defender, move, sourceX) {
   if (move.grab) {
     if (defender.eliminated || defender.grabbedBy >= 0 || attacker.grabbing >= 0) return;
     attacker.grabbing = defender.slot;
+    attacker.grabKind = move.basic ? 0 : 1;
     attacker.grabTimer = move.grab.hold;
     attacker.throwAim = 0;
     defender.grabbedBy = attacker.slot;
@@ -5610,7 +5808,20 @@ function updateTitle() {
    SCENE: HELP
    ===================================================================== */
 
+const MUSIC_STEP = 0.1;
+
 function updateHelp() {
+  /* Left and right, on both schemes, because this screen belongs to whoever
+     wandered onto it. Checked before the exits so a held direction cannot
+     fall through into something that closes the screen. */
+  if (tapped('KeyA') || tapped('ArrowLeft')) {
+    musicLevelSet(AUDIO.music - MUSIC_STEP);
+    return;
+  }
+  if (tapped('KeyD') || tapped('ArrowRight')) {
+    musicLevelSet(AUDIO.music + MUSIC_STEP);
+    return;
+  }
   if (menuBack() || menuConfirm() || tapped('KeyH')) scene = 'title';
 }
 
@@ -6321,6 +6532,21 @@ function text(str, x, y, size, color, align, weight) {
 }
 
 function drawHUD() {
+  /* The match has always had a three-minute limit, and nothing on screen has
+     ever said so. When it expired the winner was decided on stocks and then
+     health and the results appeared -- which, with everybody still standing,
+     looks exactly like the game ending for no reason. It was not a bug; it
+     was an invisible rule. Now it is a visible one.
+
+     Drawn before everything else so the bars below stay where they were. */
+  if (scene === 'battle') {
+    const left = Math.max(0, COMBAT.timeLimitFrames - battleFrames);
+    const secs = Math.ceil(left / 60);
+    const mm = Math.floor(secs / 60);
+    const ss = secs % 60;
+    text(mm + ':' + (ss < 10 ? '0' : '') + ss, VW / 2, 9, 8,
+         secs <= 10 ? '#ff6b6b' : '#8892b0', 'center', 700);
+  }
   // Fixed rows: five things share the 32px strip above the bottom of the
   // screen, and the stages are laid out on the promise that nothing here
   // climbs above y=148.
@@ -6497,6 +6723,7 @@ const HELP_ROWS = [
   ['JUMP', 'W / SPACE', 'again in the air for a second jump'],
   ['DROP', 'S', 'with jump, drops through a side platform'],
   ['SHIELD', 'SHIFT', 'stops you; then tap a direction to roll'],
+  ['GRAB', 'Y', 'beats a shield -- aim, and it throws them there'],
   ['SPECIALS', 'H J K', 'right hand attacks; each costs mana'],
   ['ULT', 'L', 'only once the ult bar is full'],
   ['JAB', 'G', 'free -- it still works at zero mana'],
@@ -6516,11 +6743,24 @@ function drawHelp() {
   });
 
   text('specials cost mana -- the blue bar, which refills on its own',
-       VW / 2, 142, 5.5, '#5a6280', 'center', 500);
+       VW / 2, 136, 5.5, '#5a6280', 'center', 500);
   text('the ult bar fills as you deal damage and as you take it',
-       VW / 2, 150, 5.5, '#5a6280', 'center', 500);
+       VW / 2, 143, 5.5, '#5a6280', 'center', 500);
 
-  drawButton('back', VW / 2, 167, 52, () => { scene = 'title'; });
+  /* The music level. Ten cells rather than a smooth bar, so it is obvious
+     that left and right move it by a step and where the ends are. */
+  text('MUSIC', VW / 2 - 46, 155, 6, '#5f6884', 'right', 700);
+  const cells = 10;
+  const lit = Math.round(AUDIO.music * cells);
+  for (let i = 0; i < cells; i++) {
+    sctx.fillStyle = i < lit ? '#8fd6ff' : '#2a3048';
+    sctx.fillRect(px(VW / 2 - 40 + i * 7), px(150), px(5), px(6));
+  }
+  text(AUDIO.music <= 0 ? 'off' : Math.round(AUDIO.music * 100) + '%',
+       VW / 2 + 36, 155, 6, '#98a0bc', 'left', 600);
+  text('A / D or left / right to change it', VW / 2, 163, 5, '#454c66', 'center', 500);
+
+  drawButton('back', VW / 2, 172, 46, () => { scene = 'title'; });
 }
 
 function drawSelect() {
@@ -6708,7 +6948,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'a96b3597e5';
+const BUILD_ID = 'aa1ce62332';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -6994,12 +7234,13 @@ function netMissingAt(f) {
   return false;
 }
 
-// Bit 64 used to be the single SPECIAL button. It is now three bits (512,
-// 1024, 2048), one per special, and `special` is derived from them rather
-// than sent -- there is no way for the two to disagree across the wire.
+// Bit 64 used to be the single SPECIAL button, which is now three bits (512,
+// 1024, 2048) with `special` derived from them rather than sent -- there is
+// no way for the two to disagree across the wire. 64 came free when that
+// happened, and grab has it now.
 function padToBits(p) {
   return (p.left ? 1 : 0) | (p.right ? 2 : 0) | (p.up ? 4 : 0) | (p.down ? 8 : 0) |
-         (p.jump ? 16 : 0) | (p.attack ? 32 : 0) |
+         (p.jump ? 16 : 0) | (p.attack ? 32 : 0) | (p.grab ? 64 : 0) |
          (p.shield ? 128 : 0) | (p.ult ? 256 : 0) |
          (p.spNeutral ? 512 : 0) | (p.spDown ? 1024 : 0) | (p.spUp ? 2048 : 0);
 }
@@ -7008,7 +7249,7 @@ function bitsToPad(b) {
   const spN = !!(b & 512), spD = !!(b & 1024), spU = !!(b & 2048);
   return {
     left: !!(b & 1), right: !!(b & 2), up: !!(b & 4), down: !!(b & 8),
-    jump: !!(b & 16), attack: !!(b & 32), shield: !!(b & 128),
+    jump: !!(b & 16), attack: !!(b & 32), grab: !!(b & 64), shield: !!(b & 128),
     ult: !!(b & 256),
     spNeutral: spN, spDown: spD, spUp: spU,
     special: spN || spD || spU,
@@ -7587,6 +7828,11 @@ window.NerdWars = {
     get ready() { return !!AUDIO.ac; },
     get enabled() { return AUDIO.enabled; },
     get volume() { return AUDIO.volume; },
+    // Separate from `volume` on purpose: see AUDIO.music. Settable, because a
+    // page that wraps the game may want its own slider rather than sending
+    // people to the controls screen to find this one.
+    get musicVolume() { return AUDIO.music; },
+    setMusicVolume: musicLevelSet,
     // Test hook for the pruning horizon: how many played keys are still
     // held. Not used by the game itself.
     get pending() { return audioPlayed.size; },

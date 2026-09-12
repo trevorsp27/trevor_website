@@ -483,12 +483,12 @@ function waitOutSpawnInvuln(g) {
 
 
 
-test("Trev's kit is the knight's move and the guillotine", async () => {
+test("Trev's kit is the knight's move and the fishing pole", async () => {
   const g = await bootGame();
   const trev = g.nw.roster.find((c) => c.key === "trev");
   assert.deepEqual(
     trev.moves.map((m) => m.slot + ":" + m.label).sort(),
-    ["down:GUILLOTINE", "neutral:CEREAL", "up:KNIGHT"]
+    ["down:FISHING POLE", "neutral:CEREAL", "up:KNIGHT"]
   );
   assert.equal(trev.ult, "LASER SWORD", "the sword stays");
 });
@@ -693,4 +693,152 @@ test("shield blocks and stops you even with a direction held", async () => {
   );
   g.release("KeyD");
   g.release("ShiftLeft");
+});
+
+
+/* ------------------------------------------------------------------ *
+ * The grab everybody has, and the one that is still Trev's.
+ * ------------------------------------------------------------------ */
+
+test("every character can grab, and it beats a raised shield", async () => {
+  /* The roster had no answer to a held shield except Trev's, which is a lot
+     to hang on one character being picked. Y is that answer now, so it is
+     checked on somebody who owns no grab of their own. */
+  const g = await bootGame();
+  startAs(g, "kel", "reese");
+  g.pump(130);
+  closeToGap(g, 18);
+
+  const V = () => g.nw.fighters[1];
+  g.press("ShiftRight");                 // seat 1 blocks
+  g.pump(6);
+  assert.equal(V().state, "shield", "precondition: the victim is shielding");
+
+  g.press("KeyY");
+  g.pump(2);
+  g.release("KeyY");
+  let grabbed = false;
+  for (let i = 0; i < 40 && !grabbed; i++) {
+    g.pump(1);
+    if (V().state === "grabbed") grabbed = true;
+  }
+  g.release("ShiftRight");
+  assert.ok(grabbed,
+    "Y should grab straight through a raised shield; the victim never left " +
+    "state " + JSON.stringify(V().state));
+
+  let freed = false;
+  for (let i = 0; i < 160 && !freed; i++) {
+    g.pump(1);
+    if (V().state !== "grabbed") freed = true;
+  }
+  assert.ok(freed, "a grab that never releases ends the match for the victim");
+});
+
+test("the fishing pole reaches further than a bare grab, and throws harder", async () => {
+  /* Both of the things that make it worth one of his three slots, measured
+     rather than read back out of the spec it was written into. */
+  const attempt = async (key, gap) => {
+    const g = await bootGame();
+    startAs(g, "trev", "reese");
+    g.pump(130);
+    closeToGap(g, gap);
+    const V = () => g.nw.fighters[1];
+    g.press(key); g.pump(3); g.release(key);
+    let held = false, at = null, dist = null;
+    for (let i = 0; i < 150; i++) {
+      g.pump(1);
+      if (V().state === "grabbed") held = true;
+      else if (held && at === null) at = { x: V().x, i: i };
+      if (at && i === at.i + 14) { dist = Math.abs(V().x - at.x); break; }
+    }
+    return { caught: held, thrown: dist };
+  };
+
+  const reach = async (key) => {
+    let best = 0;
+    for (const gap of [14, 22, 30, 38, 46]) {
+      const r = await attempt(key, gap);
+      if (r.caught) best = gap;
+    }
+    return best;
+  };
+  const poleReach = await reach("KeyJ");
+  const bareReach = await reach("KeyY");
+  assert.ok(bareReach > 0, "the bare grab should connect at SOME range");
+  assert.ok(
+    poleReach > bareReach,
+    "the pole reached " + poleReach + "px and the bare grab " + bareReach +
+    "px; if his own grab is not longer than the free one it is not a slot"
+  );
+
+  const poleThrow = (await attempt("KeyJ", 16)).thrown;
+  const bareThrow = (await attempt("KeyY", 16)).thrown;
+  assert.ok(poleThrow !== null && bareThrow !== null, "both should land and let go");
+  assert.ok(
+    poleThrow > bareThrow + 3,
+    "the pole threw " + poleThrow.toFixed(0) + "px and the bare grab " +
+    bareThrow.toFixed(0) + "px -- his is the one meant to end stocks"
+  );
+});
+
+/* ------------------------------------------------------------------ *
+ * John's dog: one out at a time, and it answers the button.
+ * ------------------------------------------------------------------ */
+
+const dogsOut = (g) => g.nw.projectiles.filter((b) => b.kind === "Dog").length;
+const theDog = (g) => g.nw.projectiles.find((b) => b.kind === "Dog");
+
+test("John gets one dog, and pressing again makes it jump", async () => {
+  const g = await bootGame();
+  startAs(g, "johnnyham", "reese");
+  g.pump(130);
+
+  g.press("KeyJ"); g.pump(3); g.release("KeyJ");   // SIC 'EM
+  g.pump(20);
+  assert.equal(dogsOut(g), 1, "one dog after one press");
+
+  /* Three separate things swallow a single well-timed press, and between
+     them they cost an afternoon: SIC 'EM runs 36 frames and the press is
+     edge-triggered, so one sent mid-cast is dropped; the special branch sits
+     behind `landLag <= 0`; and update() returns early during hitstop, which
+     John is in constantly because his own dog keeps connecting. None of that
+     is new -- it is true of every input in the game -- so the test presses
+     the way a player does, more than once, and checks the invariant that
+     actually matters on every single frame: there is never a second dog. */
+  g.pump(40);
+  const resting = theDog(g).y;
+
+  let rose = false;
+  let everTwo = false;
+  for (let attempt = 0; attempt < 8 && !rose; attempt++) {
+    g.press("KeyJ"); g.pump(2); g.release("KeyJ");
+    for (let i = 0; i < 8 && !rose; i++) {
+      g.pump(1);
+      if (dogsOut(g) > 1) everTwo = true;
+      const d = theDog(g);
+      if (d && d.y < resting - 4) rose = true;
+    }
+  }
+  assert.ok(!everTwo,
+    "pressing again must command the dog, never fetch a second one");
+  assert.ok(rose,
+    "the dog should jump when the button is pressed again; it never left " +
+    "y=" + resting);
+});
+
+test("a new dog waits for the old one to leave the screen", async () => {
+  const g = await bootGame();
+  startAs(g, "johnnyham", "reese");
+  g.pump(130);
+  g.press("KeyJ"); g.pump(3); g.release("KeyJ");
+  g.pump(20);
+  assert.equal(dogsOut(g), 1);
+
+  for (let i = 0; i < 400 && dogsOut(g) > 0; i++) g.pump(1);
+  assert.equal(dogsOut(g), 0, "the dog should eventually run off the screen");
+
+  g.press("KeyJ"); g.pump(3); g.release("KeyJ");
+  g.pump(20);
+  assert.equal(dogsOut(g), 1, "with the first one gone, a second is allowed");
 });
