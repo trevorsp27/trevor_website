@@ -549,7 +549,9 @@ const ROSTER = {
     ult: {
       kind: 'deadlift', label: 'LEG DAY',
       startup: 20, active: 3, recovery: 30,
-      freeze: 10, stun: 180,
+      // Two seconds. Three was asked for first and played too long: with a
+      // jab recovering in nine frames, 180 is not a pin, it is a turn.
+      freeze: 10, stun: 120,
       damage: 19, base: 0.5, scale: 0.9, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
     },
   },
@@ -1594,6 +1596,26 @@ class Fighter {
     }
     if (this.state === 'special' || this.state === 'ult') {
       const s = this.moveFor(this.state);
+      /* The pole is the one move whose hitbox is not a fixed rectangle: the
+         line runs until it hits something, so the box has to be whatever the
+         line turned out to be. Same poleCast the drawing uses, so what is
+         painted and what can catch you are the same object by construction
+         rather than by two sets of numbers being kept in step by hand. */
+      if (s && s.kind === 'pole') {
+        if (this.attackFrame < s.startup) return null;
+        if (this.attackFrame >= s.startup + s.active) return null;
+        const cast = poleCast(this, s);
+        const near = this.facing > 0 ? this.x + s.ox : this.x - s.ox - cast.fwd;
+        return {
+          box: {
+            x: near,
+            y: this.y + s.oy - s.h / 2,
+            w: cast.fwd,
+            h: s.h + (cast.up - s.oy),
+          },
+          move: s,
+        };
+      }
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
@@ -3456,6 +3478,60 @@ function poleStroke(g, x0, y0, x1, y1, bow, fat) {
   }
 }
 
+/* Where the line ends: it pays out forward and droops until it meets a
+   surface, or until there is no more line.
+
+   The pole was a fixed 46px box, which is the one thing a fishing line is
+   not. 46 is exactly what this returns standing on flat ground -- the tip
+   sits 12 pixels up and the droop is 12/46 per pixel forward -- so nothing
+   about him on the floor changes at all, and everything about him in the air
+   does: cast from up high and the line runs down until it finds the stage.
+
+   Pure, and it reads only the platforms and his own position. Both are
+   snapshotted, so the simulation and the drawing call the same function and
+   cannot disagree, and a rollback recomputes the identical number. No trig
+   and no randomness, for the same reason.
+
+   The cap is not a reach limit dressed up as physics -- it is the length of
+   line on the reel, and a move that can cross most of the stage from the top
+   of it needed one. */
+/* The droop is quadratic, not linear, and the difference is the whole point.
+
+   A straight slope gentle enough to reach 46 on the flat travels 250 pixels
+   sideways before it has dropped far enough to find the floor from a jump --
+   so from high up the line ran out of reel while still in open air, which is
+   the one thing "it should go until it hits something" rules out. An arc
+   starts shallow and steepens, so it covers ground early and comes down
+   hard, which is also what a cast actually does.
+
+   POLE_DROOP is set so a fall of 12 -- tip height on flat ground -- lands at
+   exactly 46 forward, which is the reach this move has always had. Nothing
+   about him standing on the floor changes. The cap is the length of line on
+   the reel, and 140 is enough to get from the highest platform on any stage
+   down to the floor. */
+const POLE_DROOP = 12 / (46 * 46);
+const POLE_MAX = 140;
+
+function poleCast(f, s) {
+  /* Only surfaces the line can descend ONTO. Without this a side platform
+     level with his shoulders ends the cast at one pixel, because "the line is
+     lower than that platform" is trivially true of every platform above it --
+     which is how the first version of this turned a 46px move into a 1px one
+     on the only stage with side platforms. */
+  const tipY = f.y + s.oy;
+  for (let d = 1; d <= POLE_MAX; d++) {
+    const x = f.x + f.facing * (s.ox + d);
+    const drop = d * d * POLE_DROOP;
+    const y = tipY + drop;
+    for (const pl of STAGE.platforms) {
+      if (pl.y < tipY) continue;
+      if (x < pl.x || x > pl.x + pl.w) continue;
+      if (y >= pl.y) return { fwd: d, up: s.oy + drop };
+    }
+  }
+  return { fwd: POLE_MAX, up: s.oy + POLE_MAX * POLE_MAX * POLE_DROOP };
+}
+
 /** The rod, the line and the lure, for whoever is casting or holding one. */
 function drawPole(g, f) {
   const s = f.def.specials && f.def.specials.down;
@@ -3535,8 +3611,13 @@ function drawPole(g, f) {
        the eye is already watching it hardest. */
     const whip = Math.max(2, s.startup - 4);
     const live = s.startup + s.active;          // first recovery frame
-    const reach = s.ox + s.w - 2;               // relBox's far edge, less the
-                                                // lure's own half-width
+    /* Both of these used to be constants: the far edge of a fixed box, and
+       the height the box was centered on. They are the end of the line now,
+       which is wherever poleCast found the stage -- the same call the hitbox
+       makes, so the lure is painted exactly where it can catch somebody. */
+    const cast = poleCast(f, s);
+    const reach = s.ox + cast.fwd - 2;          // less the lure's half-width
+    const endUp = cast.up;
 
     if (k < whip) {
       /* WIND-UP, frames 1-4. Rod from the carry pose up through vertical and
@@ -3578,7 +3659,7 @@ function drawPole(g, f) {
       const h = e < 0.5 ? e * 2 : e * 2 - 1;
       tf = poleMix(a[0], b[0], h); tu = poleMix(a[1], b[1], h);
       kf = poleMix(POLE_BACK[0] - 4, reach, e);
-      ku = poleMix(POLE_BACK[1] + 5, s.oy, e);
+      ku = poleMix(POLE_BACK[1] + 5, endUp, e);
       bow = 22 * u * (1 - u);
     } else if (k < live) {
       /* LIVE, frames 9-14. Line dead straight and white, lure parked at full
@@ -3586,7 +3667,7 @@ function drawPole(g, f) {
          hitbox exists. Making the brightest frames the only ones that can
          catch anybody is a free and completely honest tell. */
       tf = POLE_FORE[0]; tu = POLE_FORE[1];
-      kf = reach; ku = s.oy + ((k >> 1) & 1);
+      kf = reach; ku = endUp + ((k >> 1) & 1);
       lineCol = POLE_TAUT;
     } else {
       const w = k - live;                       // 0 on the first recovery frame
@@ -3599,7 +3680,7 @@ function drawPole(g, f) {
         const u = w / 5;
         tf = poleMix(POLE_FORE[0], POLE_DIP[0], u);
         tu = poleMix(POLE_FORE[1], POLE_DIP[1], u);
-        kf = reach; ku = s.oy + 1 + w;
+        kf = reach; ku = endUp + 1 + w;
         bow = 7 * u;
       } else {
         /* THE REEL, frames 20-38. Nineteen frames of winding it back in,
@@ -7314,7 +7395,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'df41fa4dbc';
+const BUILD_ID = '5b12417a6d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -7325,7 +7406,7 @@ const BUILD_ID = 'df41fa4dbc';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.12';
+const VERSION = '2.13';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
