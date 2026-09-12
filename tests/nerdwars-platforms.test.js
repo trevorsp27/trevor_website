@@ -1064,6 +1064,46 @@ test("the burst is a firework: it slows, and it reaches as far as it hits hard",
     "a knight goes two squares and then one, so the L should be near 2:1; " +
     "got " + ratio.toFixed(2) + ":1 (" + corner.across.toFixed(1) + " across, " +
     corner.down.toFixed(1) + " down)");
+
+  /* And it is drawn as a TRACER -- the whole ray from where it started to
+     where it has got to -- rather than as a dot with a smudge behind it. A
+     firework is its line; the bright point at the end is the least of it.
+
+     The alpha count is part of the contract, not trivia: a globalAlpha
+     assignment costs more than the fills it guards, and eight rays of sixty
+     pixels is a lot of pixels. Per-pixel fading would be the obvious way to
+     write this and the wrong one. */
+  const drawn = run(`(function () {
+    var me = fighters[0];
+    var piece = CHESS_PIECES.filter(function (c) { return c.key === 'queen'; })[0];
+    var fake = { owner: me, x: 160, y: 90, spec: ROSTER.trev.specials.up };
+    var sh = new PieceShard(fake, piece, { dx: 1, dy: 0 });
+    for (var i = 0; i < 20; i++) sh.update();
+    var rects = [];
+    var rec = { globalAlpha: 1, fillStyle: '#000',
+      fillRect: function (x, y, w, h) { rects.push({ x: x, a: this.globalAlpha }); },
+      drawImage: function () {}, save: function () {}, restore: function () {},
+      translate: function () {}, scale: function () {}, beginPath: function () {},
+      arc: function () {}, fill: function () {} };
+    sh.draw(rec);
+    var xs = rects.map(function (r) { return r.x; });
+    var alphas = [];
+    for (var i = 0; i < rects.length; i++) {
+      var a = +rects[i].a.toFixed(3);
+      if (alphas.indexOf(a) < 0) alphas.push(a);
+    }
+    return { rects: rects.length,
+             span: Math.max.apply(null, xs) - Math.min.apply(null, xs),
+             ray: sh.x - sh.ox, alphas: alphas.length };
+  })()`);
+  assert.ok(drawn.span > drawn.ray * 0.8,
+    "the ray should be drawn along its whole length; drew " +
+    drawn.span + "px of a " + drawn.ray.toFixed(1) + "px ray");
+  assert.ok(drawn.rects > 8,
+    "a line, not a dot and three smudges; drew " + drawn.rects + " rects");
+  assert.ok(drawn.alphas <= 6,
+    "the fade should be a few bands, not one alpha per pixel; used " +
+    drawn.alphas + " distinct alphas over " + drawn.rects + " rects");
 });
 
 test("the dog bites harder with its jaws open, and not on the way down", async () => {
@@ -1375,6 +1415,20 @@ test("casting roots him, and the move that does not stops when you let go", asyn
   assert.ok(Math.abs(drifting.moved) < 6,
     "releasing everything during a mobile move should stop him rather than " +
     "freezing his momentum; drifted " + drifting.moved.toFixed(1) + "px");
+
+  /* Drawing the sword is mobile too, which the swing always was. `equip` is
+     not in `rooted`'s list, so what used to stop him was the plain
+     non-mobile path -- friction on the ground with no way to accelerate out
+     of it -- for all 31 frames of startup, active and recovery. Half a
+     second of standing still to take a weapon out. */
+  const DRAW = "me.ultMeter = 999; me.swordTimer = 0;";
+  const drawing = drive(ULT, RIGHT, false, DRAW);
+  assert.ok(drawing.busy > 20,
+    "the ult animation should still be running for most of this; " +
+    drawing.busy + " frames");
+  assert.ok(drawing.moved > 15,
+    "he should be able to walk while drawing the sword; moved " +
+    drawing.moved.toFixed(1) + "px");
 });
 
 test("a status ticks damage every frame but only speaks every twentieth", async () => {

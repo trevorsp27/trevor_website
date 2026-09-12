@@ -572,6 +572,47 @@ test("only the button that opened a charge can hold it open", async () => {
   g.release("KeyH");
 });
 
+test("one pawn at a time, and pressing again promotes the one that is out", async () => {
+  /* The move is a decision twice: the piece on the way in, the moment on the
+     way out. A pawn that is about to walk harmlessly past somebody is still
+     worth something, because the button that would have sent a second one
+     promotes this one where it stands instead.
+
+     That also enforces the one-at-a-time by construction rather than with a
+     counter -- there is no path that spawns a second while the first lives,
+     because the press that would do it detonates. Same shape as John's dog,
+     where the button talks to the dog that is out instead of fetching
+     another, and checked before canSpecial for the same reason: a full-mana
+     Trev must not be able to quietly get two. */
+  const g = await bootGame();
+  startAs(g, "trev", "reese");
+  waitOutSpawnInvuln(g);
+  const pawns = () => g.nw.projectiles.filter((p) => p.kind === "Pawn");
+  const shards = () => g.nw.projectiles.filter((p) => p.kind === "PieceShard");
+
+  g.press("KeyK"); g.pump(2); g.release("KeyK");
+  g.pump(14);
+  assert.equal(pawns().length, 1, "the first tap sends one");
+  assert.equal(shards().length, 0, "and one tap alone must not also blow it up");
+
+  // Let it walk a while, then press again: it promotes where it stands.
+  g.pump(30);
+  assert.equal(pawns().length, 1, "still exactly one out");
+  g.press("KeyK"); g.pump(2); g.release("KeyK");
+  g.pump(2);
+  assert.equal(pawns().length, 0, "pressing again should consume the pawn");
+  assert.ok(shards().length > 0,
+    "and burst it into its piece; saw " + shards().length + " shards");
+
+  /* And only then can he send another. Waiting out the shards first, because
+     what is being checked is that the pawn slot is free again, not how long
+     a burst lasts. */
+  g.pump(60);
+  g.press("KeyK"); g.pump(2); g.release("KeyK");
+  g.pump(14);
+  assert.equal(pawns().length, 1, "with the first one spent, a second may go");
+});
+
 test("a tapped pawn walks off in front of him", async () => {
   /* PAWN replaced KNIGHT, and KNIGHT was his recovery -- two squares up and
      one across, generous on the vertical precisely because it was his way

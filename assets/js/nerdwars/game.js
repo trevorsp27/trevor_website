@@ -925,7 +925,13 @@ const ROSTER = {
     // is handed the sword and keeps it for ten seconds, and the ult button
     // swings it for as long as he has it.
     ult: {
-      kind: 'equip', label: 'LASER SWORD', blade: '#ff8a2a',
+      /* `mobile`, so drawing the sword is not half a second of standing
+         still. `equip` is not in `rooted`'s list, so what was stopping him
+         was the plain non-mobile path: friction on the ground and no way to
+         accelerate out of it, for all 31 frames of startup, active and
+         recovery. The swing below has always been mobile; there was never a
+         reason the draw should not be. */
+      kind: 'equip', label: 'LASER SWORD', blade: '#ff8a2a', mobile: true,
       startup: 10, active: 1, recovery: 20,
       duration: 600,                       // ten seconds at 60Hz
       damage: 0, base: 0, scale: 0,
@@ -2107,6 +2113,27 @@ class Fighter {
         let told = false;
         for (const b of projectiles) {
           if (b instanceof Dog && b.owner === this && !b.dead) { b.leap(); told = true; }
+        }
+        if (told) return;
+      }
+      /* Same idea for the pawn, and it is what makes the move a decision
+         twice over. While one is walking the button does not send another --
+         it promotes the one that is out, wherever it has got to. So the piece
+         is chosen on the way in and the moment is chosen on the way out, and
+         a pawn that is about to walk past somebody is still worth something.
+
+         It also enforces the one-at-a-time by construction rather than with a
+         count: there is no path that spawns a second while the first lives,
+         because the button that would have done it detonates instead. Ahead
+         of canSpecial for the same reason the dog is -- a full-mana Trev
+         must not be able to quietly get two. */
+      if (intent && intent.kind === 'pawn') {
+        let told = false;
+        for (const b of projectiles) {
+          if (b instanceof Pawn && b.owner === this && !b.dead) {
+            b.burst();
+            told = true;
+          }
         }
         if (told) return;
       }
@@ -5508,6 +5535,15 @@ class PieceShard {
     this.t = 0;
     this.x = pawn.x + this.dx * 5;
     this.y = pawn.y - 4 + this.dy * 5;
+    /* Where the ray started, and where it turned, so the whole thing can be
+       drawn as a LINE rather than as a dot that happens to be moving. A
+       firework is its trail; the bright point at the end is the least of it.
+       Kept as plain numbers on the projectile, which snapObject copies and
+       restoreSim rebuilds with the rest of it. */
+    this.ox = this.x;
+    this.oy = this.y;
+    this.turnX = 0;
+    this.turnY = 0;
     /* Launch speed for the distance this piece is supposed to cover. A knight
        gets 24 pixels and a queen 62, so a queen leaves noticeably faster and
        they both coast to a stop on the same frame -- the burst stays one
@@ -5523,6 +5559,9 @@ class PieceShard {
     this.life--;
     if (this.turns && !this.turned && this.t >= (this.spec.turnAfter || 22)) {
       this.turned = true;
+      // The corner, remembered: the tracer is two segments after this.
+      this.turnX = this.x;
+      this.turnY = this.y;
       this.dx = this.turnDx;
       this.dy = this.turnDy;
     }
@@ -5539,33 +5578,60 @@ class PieceShard {
     return { x: this.x - 2, y: this.y - 2, w: 4, h: 4 };
   }
 
-  /* An ember: bright and fat on the way out, dim and small as it settles,
-     with a short trail of what it just was.
+  /* A tracer: the whole ray, drawn from where it started to where it has
+     got to, dim at the tail and hot at the head. Not a dot with three
+     smudges behind it -- that read as a spark travelling, and what a firework
+     actually is is the line.
 
-     The trail is drawn from the shard's own position and speed rather than
-     from a remembered path -- three points back along the direction it is
-     travelling, spaced by the distance it is currently covering. That costs
-     no state, which matters twice over: nothing extra to snapshot, and
-     nothing a rollback can disagree about, because there is nothing here the
-     simulation can see at all. */
+     Drawn in three alpha bands rather than per-pixel, because a globalAlpha
+     assignment costs more than the fills it guards and eight rays of sixty
+     pixels is a lot of pixels. Three is enough to read as a fade.
+
+     A knight is two segments, because a knight turned a corner and the line
+     has to show it -- that is the only thing that distinguishes eight L's
+     from eight odd diagonals once they are lines. */
   draw(g) {
     const left = Math.max(0, this.life) / this.born;
-    const x = Math.round(this.x), y = Math.round(this.y);
-    const step = Math.max(0.6, this.speed);
-    g.globalAlpha = 0.25 * left;
-    for (let i = 3; i >= 1; i--) {
-      g.fillStyle = this.ink;
-      g.fillRect(Math.round(this.x - this.dx * step * i) - 1,
-                 Math.round(this.y - this.dy * step * i) - 1, 2, 2);
+    const segs = this.turned
+      ? [[this.ox, this.oy, this.turnX, this.turnY],
+         [this.turnX, this.turnY, this.x, this.y]]
+      : [[this.ox, this.oy, this.x, this.y]];
+
+    /* Total length, so the bands are a constant fraction of the ray however
+       long it happens to be -- a knight's 24 pixels fades the same shape a
+       queen's 62 does. */
+    let total = 0;
+    for (const g2 of segs) {
+      total += Math.abs(g2[2] - g2[0]) + Math.abs(g2[3] - g2[1]);
     }
-    // The head, shrinking from four pixels to one as it burns out.
-    g.globalAlpha = Math.min(1, 0.35 + left);
-    const r = left > 0.55 ? 2 : left > 0.25 ? 1.5 : 1;
+    if (total < 0.5) return;
+
+    const BANDS = [[0, 0.45, 0.18], [0.45, 0.8, 0.38], [0.8, 1, 0.7]];
     g.fillStyle = this.ink;
-    g.fillRect(x - Math.round(r), y - Math.round(r),
-               Math.round(r * 2), Math.round(r * 2));
-    // A white core for the first third, which is what makes it read as hot.
-    if (left > 0.66) {
+    let travelled = 0;
+    for (const band of BANDS) {
+      g.globalAlpha = band[2] * left;
+      let walked = travelled;
+      for (const sg of segs) {
+        const ax = sg[0], ay = sg[1], bx = sg[2], by = sg[3];
+        const len = Math.abs(bx - ax) + Math.abs(by - ay);
+        if (len < 0.5) continue;
+        for (let d = 0; d < len; d += 2) {
+          const at = (walked + d) / total;
+          if (at < band[0] || at >= band[1]) continue;
+          const u = d / len;
+          g.fillRect(Math.round(ax + (bx - ax) * u) - 1,
+                     Math.round(ay + (by - ay) * u) - 1, 2, 2);
+        }
+        walked += len;
+      }
+    }
+
+    // The head, and a white core while it is still hot.
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.globalAlpha = Math.min(1, 0.4 + left);
+    g.fillRect(x - 2, y - 2, 4, 4);
+    if (left > 0.6) {
       g.fillStyle = '#ffffff';
       g.fillRect(x - 1, y - 1, 2, 2);
     }
@@ -8493,7 +8559,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'b20f4d3d2f';
+const BUILD_ID = 'b5b13f4987';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8504,7 +8570,7 @@ const BUILD_ID = 'b20f4d3d2f';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.24';
+const VERSION = '2.25';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
