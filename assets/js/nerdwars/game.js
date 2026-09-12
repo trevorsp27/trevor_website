@@ -345,15 +345,29 @@ const ROSTER = {
         speed: 3.6, lift: -0.5, drop: 0.05, dropSpeed: 4.2, life: 240,
         damage: 15, base: 3.4, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       },
-      // Their original note for this one was a joke about giving people a
-      // disease. Kept as the mechanic underneath it: a kiss that lands
-      // almost no damage up front and then bleeds them for seven seconds.
+      /* Their original note for this one was a joke about giving people a
+         disease. Kept as the mechanic underneath it: a mark that lands, and
+         then keeps costing them while it is on.
+
+         Ten on the kiss and ten over the next three and a half seconds. The
+         bleed was 24 -- more than twice the hit that delivered it -- which
+         made a poke the single hardest thing in his kit and meant the right
+         play was to land it and walk away. Twenty total, half of it now and
+         half of it later, is the shape it was supposed to have.
+
+         (The comment here used to claim seven seconds. It was never seven:
+         200 frames at 60Hz is 3.3, and it has been 3.3 the whole time.)
+
+         The duration is untouched on purpose. What the mark is FOR is
+         following somebody around the stage after he has stopped hitting
+         them, and that is a function of how long it lasts, not how hard it
+         ticks. */
       down: {
         kind: 'kiss', label: 'KISS',
         startup: 6, active: 6, recovery: 20,
         damage: 10, base: 2.2, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
         ox: 2, oy: -10, w: 11, h: 9,
-        poison: { frames: 200, dps: 0.12 },
+        poison: { frames: 200, dps: 0.05 },
       },
       // Tuned against the stage, not by feel. Apex is lift^2/(2*drop) at
       // speed*lift/drop away: ~40px up, ~78px out. The side platforms sit
@@ -7283,7 +7297,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '66aff1a91d';
+const BUILD_ID = 'e5f9abcb21';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
