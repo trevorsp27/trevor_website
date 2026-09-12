@@ -842,3 +842,45 @@ test("a new dog waits for the old one to leave the screen", async () => {
   g.pump(20);
   assert.equal(dogsOut(g), 1, "with the first one gone, a second is allowed");
 });
+
+/* maxAlive used to count every projectile a fighter owned, so one move's cap
+ * was spent by a different move's projectile: a smoke cloud in the air stopped
+ * John calling his dog, and a bone still rolling stopped Kel dropping a
+ * weight. Both looked simply broken, because nothing on screen connects a
+ * cloud to a dog.
+ */
+test("one move's projectile does not spend another move's limit", async () => {
+  const g = await bootGame();
+  startAs(g, "johnnyham", "reese");
+  g.pump(130);
+
+  g.press("KeyH"); g.pump(3); g.release("KeyH");        // SMOKESCREEN
+  g.pump(50);
+  const clouds = g.nw.projectiles.filter((b) => b.kind === "Cloud").length;
+  assert.ok(clouds > 0,
+    "precondition: the smoke should be in the air, saw " +
+    JSON.stringify(g.nw.projectiles.map((b) => b.kind)));
+
+  g.press("KeyJ"); g.pump(3); g.release("KeyJ");        // SIC 'EM
+  g.pump(25);
+  assert.equal(dogsOut(g), 1,
+    "a cloud is not a dog and must not occupy the dog's one slot. Projectiles " +
+    "out: " + JSON.stringify(g.nw.projectiles.map((b) => b.kind)));
+});
+
+test("a move still caps itself", async () => {
+  /* The other half, and the one that breaks if the fix is too broad: SIC 'EM
+     is meant to allow exactly one dog, which is what the whole leap mechanic
+     rests on. */
+  const g = await bootGame();
+  startAs(g, "johnnyham", "reese");
+  g.pump(130);
+  g.press("KeyJ"); g.pump(3); g.release("KeyJ");
+  g.pump(50);
+  assert.equal(dogsOut(g), 1, "precondition: one dog");
+
+  for (let i = 0; i < 4; i++) {
+    g.press("KeyJ"); g.pump(2); g.release("KeyJ"); g.pump(8);
+    assert.equal(dogsOut(g), 1, "still exactly one dog after press " + (i + 2));
+  }
+});

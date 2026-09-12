@@ -1962,7 +1962,19 @@ class Fighter {
     if (!s) return false;
     if (this.mana < s.mana) return false;
     if (s.maxAlive) {
-      return projectiles.filter((b) => b.owner === this).length < s.maxAlive;
+      /* Count only what THIS move put out there. It used to count everything
+         the fighter owned, so one move's cap was spent by another move's
+         projectile: a smoke cloud in the air stopped John calling his dog,
+         and a bone still rolling stopped Kel dropping a weight. Both moves
+         looked simply broken, because nothing on screen connects a cloud to
+         a dog.
+
+         Every projectile class stores the spec it was built from, so identity
+         is the whole test -- and it is identity rather than kind on purpose,
+         since two moves can share a class (the cloud is the same class as the
+         fart) and must not share a budget. */
+      return projectiles.filter((b) => b.owner === this && b.spec === s).length <
+        s.maxAlive;
     }
     if (s.kind === 'buff') return this.buffTimer <= 0;
     return true;
@@ -7297,7 +7309,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'e5f9abcb21';
+const BUILD_ID = '7cf4da9081';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
