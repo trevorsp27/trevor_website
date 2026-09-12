@@ -7035,6 +7035,11 @@ function drawTitle() {
   sctx.fillStyle = '#0d1020';
   sctx.fillRect(0, 0, view.width, view.height);
 
+  // Bottom right, dim, out of the way of everything. Drawn before the
+  // onlineOnly return below so the embedded build carries it too -- that is
+  // the build most people are looking at.
+  text('v' + VERSION, VW - 4, VH - 3, 5, '#3a4059', 'right', 500);
+
   // A line of the whole crew across the top.
   ORDER.forEach((k, i) => {
     const cx = VW / 2 + (i - (ORDER.length - 1) / 2) * 40;
@@ -7309,7 +7314,18 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '7cf4da9081';
+const BUILD_ID = 'df41fa4dbc';
+
+/* The version people say out loud. BUILD_ID above says which exact bytes are
+   running and is what the lobby compares; this says which release they belong
+   to, and is the one on the title screen. Two different jobs: a content hash
+   is useless in a sentence, and a version number nobody can verify is useless
+   to a version gate.
+
+   BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
+   only thing keeping it honest is remembering -- which is exactly why the
+   gate uses the hash instead. */
+const VERSION = '2.12';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -8158,6 +8174,8 @@ function frame(now) {
 window.NerdWars = {
   // What the lobby compares before it will start a match. See BUILD_ID.
   get build() { return BUILD_ID; },
+  // What a person would call this release. See VERSION.
+  get version() { return VERSION; },
   get scene() { return scene; },
   get stage() { return STAGE.key; },
   get focused() { return hasFocus; },

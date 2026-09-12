@@ -561,3 +561,27 @@ test("the fishing pole is visible while it is cast, and when it misses", async (
       " -- only " + richer.length + " frames showed anything extra"
   );
 });
+
+test("the title screen says which version it is", async () => {
+  /* Two identifiers, two jobs: BUILD_ID is a content hash the lobby compares
+     and is useless in a sentence; VERSION is the one somebody can read off
+     the screen and tell you. Nothing derives VERSION, so this at least
+     catches it going missing. */
+  const run = await bootEngine();
+  assert.match(run("window.NerdWars.version"), /^\d+\.\d+$/,
+    "version should look like a version, got " +
+      JSON.stringify(run("window.NerdWars.version")));
+
+  run("scene = 'title';");
+  const drawn = run(`(function(){
+    var seen = [];
+    var real = text;
+    text = function (str) { seen.push(String(str)); return real.apply(null, arguments); };
+    try { drawTitle(); } finally { text = real; }
+    return seen;
+  })()`);
+  assert.ok(
+    drawn.some((t) => t === "v" + run("window.NerdWars.version")),
+    "the title screen should show the version; it drew " + JSON.stringify(drawn)
+  );
+});
