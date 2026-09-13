@@ -10030,7 +10030,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'def2e9e144';
+const BUILD_ID = '20ad6341e1';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10041,7 +10041,7 @@ const BUILD_ID = 'def2e9e144';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.45';
+const VERSION = '2.46';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -11030,6 +11030,39 @@ window.NerdWars = {
   get version() { return VERSION; },
   get scene() { return scene; },
   get stage() { return STAGE.key; },
+  /* What just happened, for whoever is keeping score.
+
+     `winnerSlot`, not `winnerKey`. The engine's own winner is a CHARACTER --
+     `winnerKey = alive[0].key` -- and a character does not name a person:
+     nothing stops two people picking Kel, and then 'kel' identifies neither
+     of them. The seat index does, and the room knows which person is in
+     which seat. This is the difference between a match log and a rumour.
+
+     null is a real answer twice over: before anything has finished, and on a
+     genuine draw, where the last two stocks go on the same frame. A draw is
+     a result, not a disagreement, and anything scoring these has to say so.
+
+     Every field here is simulation state that saveSim already carries, so
+     two machines that stayed in step produce identical values without
+     exchanging a word about it. */
+  get result() {
+    if (scene !== 'results' && scene !== 'battle') return null;
+    let winnerSlot = null;
+    for (let i = 0; i < fighters.length; i++) {
+      if (fighters[i].stocks > 0 && !fighters[i].eliminated) {
+        winnerSlot = winnerSlot === null ? i : -1;   // more than one alive
+      }
+    }
+    return {
+      over: scene === 'results',
+      winnerSlot: winnerSlot === -1 ? null : winnerSlot,
+      chars: fighters.map((f) => f.key),
+      stocks: fighters.map((f) => f.stocks),
+      stage: STAGE.key,
+      frames: battleFrames,
+      build: BUILD_ID,
+    };
+  },
   get focused() { return hasFocus; },
   get ready() { return assetsReady; },
   // Read-only copies, so a page can build a lobby without duplicating the

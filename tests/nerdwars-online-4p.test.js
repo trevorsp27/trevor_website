@@ -48,6 +48,7 @@ const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
 const GAME = readFileSync(path.join(JS_DIR, "game.js"), "utf8");
 const NET = readFileSync(path.join(JS_DIR, "net.js"), "utf8");
+const LADDER = readFileSync(path.join(JS_DIR, "ladder.js"), "utf8");
 
 /* ---------------- a fake broker, shared by the browsers in one test ------- */
 
@@ -61,7 +62,18 @@ let pending = [];
 let LAG = 0;
 const later = (fn) => pending.push({ fn, due: LAG });
 
+/* One shared database for every machine in a test -- the storage equivalent
+   of the single `brokers` Map that makes the fake PeerJS work. Without a
+   SHARED store, "the host writes the match and the guest confirms it" is two
+   machines writing to two different databases and agreeing with nobody. */
+let world = null;
+function freshStore() {
+  world = { matches: {}, profiles: {} };
+  return world;
+}
+
 function resetWorld() {
+  freshStore();
   brokers = new Map();
   pending = [];
   LAG = 0;
@@ -263,6 +275,11 @@ async function browser(opts) {
   }
   vm.runInContext(gameSrc, sb, { filename: "game.js" });
   for (let i = 0; i < 5; i++) await Promise.resolve();
+  vm.runInContext(LADDER, sb, { filename: "ladder.js" });
+  sb.window.NerdWarsFakeStore =
+    sb.window.NerdWarsLadderKit.memoryStore(world);
+  sb.window.NerdWarsLadder =
+    sb.window.NerdWarsLadderKit.createLadder(sb.window.NerdWarsFakeStore);
   vm.runInContext(netSrc, sb, { filename: "net.js" });
 
   return {
@@ -291,6 +308,7 @@ async function browser(opts) {
        the page and the room is drawn on the canvas. These reach net.js
        through window.NerdWarsLobby, which is the path that actually ships. */
     api: () => sb.window.NerdWarsLobby,
+    ladder: () => sb.window.NerdWarsLadder,
     startDisabled: () => els["nw-start"].disabled,
     code: () => els["nw-code"].textContent,
     status: () => els["nw-status"].textContent,
@@ -1100,4 +1118,135 @@ test("nothing starts until everybody in the room has locked in", async () => {
   flush();
   assert.equal(h2.api().snapshot().canStart, false,
     "somebody unlocking should take the start away again");
+});
+
+
+test("a finished match is written down, by both players, for themselves", async () => {
+  /* The end of the whole chain: two people sign in, play a real match to a
+     real KO, and a record appears that names PEOPLE rather than characters.
+
+     The naming is the point. The engine's own winner is a character key --
+     two people can both pick Kel, and then 'kel' identifies neither of them
+     -- so the room ships a uid list indexed the same way as the character
+     list, and the result is reported by SEAT. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+
+  host.api().setMe({ uid: "u-trev", name: "Trev" });
+  guest.api().setMe({ uid: "u-kel", name: "Kel" });
+
+  host.api().host(); flush();
+  guest.api().join(host.api().snapshot().code); flush();
+  host.api().pick("kel", true); guest.api().pick("trev", true);
+  flush();
+
+  // The room knows who is in it, not just what they picked.
+  const seats = host.api().snapshot().seats;
+  assert.equal(seats.find((s) => s.slot === 1).uid, "u-kel",
+    "the host should know which PERSON is in seat 1");
+  assert.equal(guest.api().snapshot().seats.find((s) => s.slot === 0).name,
+    "Trev", "and the guest should know who the host is");
+
+  host.api().start();
+  flush();
+  assert.ok([host, guest].every((m) => m.nw.scene === "battle"));
+
+  // Play it out for real, then let the results screen time out.
+  const ms = [host, guest];
+  for (let i = 0; i < 4000 && ms.some((m) => m.nw.scene === "battle"); i++) {
+    for (const m of ms) m.press("KeyA");
+    playOut(ms, 1);
+  }
+  for (const m of ms) m.release("KeyA");
+  playOut(ms, 400);
+
+  const mids = Object.keys(world.matches);
+  assert.equal(mids.length, 1,
+    "exactly one match document should exist, got " + mids.length);
+  const rec = world.matches[mids[0]];
+
+  assert.deepEqual([...rec.uids], ["u-trev", "u-kel"],
+    "the record should name the people, in fighter order");
+  assert.deepEqual([...rec.chars], ["kel", "trev"],
+    "and the characters they played, in the same order");
+  assert.equal(rec.host, "u-trev", "the host wrote it");
+  assert.ok(rec.winnerSlot === null || rec.winnerSlot === 0 || rec.winnerSlot === 1,
+    "winnerSlot should be a seat or a draw, got " + rec.winnerSlot);
+  assert.ok(rec.frames > 0, "and should carry how long it took");
+
+  /* The guest confirmed it rather than writing a second copy. One document
+     per match is what makes the log orderable: four machines have four
+     clocks, so a per-player record has no canonical time to sort by. */
+  assert.deepEqual(Object.keys(rec.confirm), ["u-kel"],
+    "the guest should have confirmed, not written its own match");
+  assert.equal(rec.confirm["u-kel"].agree, true);
+  assert.equal(rec.confirm["u-kel"].winnerSlot, rec.winnerSlot,
+    "and should agree about who won -- both machines simulate the same match");
+
+  // Which the ladder then counts.
+  const view = host.ladder().__fold(
+    Object.keys(world.matches).map((k) => ({ ...world.matches[k], mid: k })));
+  assert.equal(view.counted, 1, "the match should count");
+  assert.equal(view.disputed, 0);
+  assert.equal(view.rows.length, 2, "two players on the board");
+  const names = view.rows.map((r) => r.name).sort();
+  assert.deepEqual(names, ["Kel", "Trev"]);
+});
+
+test("nothing is written down when a match ends any other way", async () => {
+  /* Only `reason === "match over"` is a result. The other three endings --
+     Escape, a peer's `bye`, a desync -- never reach the branch that decides
+     a winner, so the engine still holds whatever it last decided: null on a
+     first match, or the PREVIOUS match's winner on a rematch.
+
+     Reporting on `stopped` without checking the reason would write last
+     match's result down as this one's, and it would look entirely normal. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+  host.api().setMe({ uid: "u-a", name: "A" });
+  guest.api().setMe({ uid: "u-b", name: "B" });
+  host.api().host(); flush();
+  guest.api().join(host.api().snapshot().code); flush();
+  host.api().pick("kel", true); guest.api().pick("trev", true);
+  flush();
+  host.api().start(); flush();
+  assert.equal(host.nw.scene, "battle");
+
+  playOut([host, guest], 60);
+  guest.press("Escape");
+  playOut([host, guest], 4);
+  guest.release("Escape");
+  playOut([host, guest], 200);
+
+  assert.deepEqual(Object.keys(world.matches), [],
+    "a match nobody finished should leave no record at all");
+});
+
+test("a match with anybody unidentified is not recorded", async () => {
+  /* Somebody who has not signed in has no uid, and a record with a hole in
+     it names a ghost -- worse, it would silently attribute their loss to
+     nobody and still move the other player's rating. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+  host.api().setMe({ uid: "u-a", name: "A" });
+  // guest deliberately does not sign in
+  host.api().host(); flush();
+  guest.api().join(host.api().snapshot().code); flush();
+  host.api().pick("kel", true); guest.api().pick("trev", true);
+  flush();
+  host.api().start(); flush();
+
+  const ms = [host, guest];
+  for (let i = 0; i < 4000 && ms.some((m) => m.nw.scene === "battle"); i++) {
+    for (const m of ms) m.press("KeyA");
+    playOut(ms, 1);
+  }
+  for (const m of ms) m.release("KeyA");
+  playOut(ms, 400);
+
+  assert.deepEqual(Object.keys(world.matches), [],
+    "a match with an anonymous player should not be scored");
 });

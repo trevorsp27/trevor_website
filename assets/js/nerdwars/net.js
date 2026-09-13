@@ -92,11 +92,19 @@
     lobbySlot: null,
     myChar: "kel",
     myReady: false,
+    /* Who this machine is, for the match log. Supplied by the page once
+       somebody has signed in -- net.js never talks to Firebase and never
+       learns how identity is established, it just carries it. Null until
+       then, and a room full of nulls still plays perfectly; it simply does
+       not produce a scoreable result. */
+    me: null,            // { uid, name } | null
     // What the host believes is in the room. Guests receive this wholesale
     // rather than tracking it, so there is one source of truth.
     seats: [],         // [{ slot, char, here }]
     stage: "space",
     phase: "idle",     // idle | hosting | joining | lobby | playing
+    // The match now being played, as agreed at the moment it started.
+    match: null,       // { mid, uids[], names[], chars[], stage, host }
   };
 
   var lastSay = { text: "", kind: "" };
@@ -111,6 +119,20 @@
     (window.crypto || window.msCrypto).getRandomValues(bytes);
     for (var i = 0; i < CODE_LEN; i++) {
       out += CODE_CHARS[bytes[i] % CODE_CHARS.length];
+    }
+    return out;
+  }
+
+  /* 128 bits from the platform RNG. Not derived from the room, because a
+     room code is reused verbatim by every rematch in it -- two matches five
+     seconds apart would collide, and colliding reports merge into one
+     document where neither match is ever scoreable. */
+  function newMatchId() {
+    var b = new Uint32Array(4);
+    (window.crypto || window.msCrypto).getRandomValues(b);
+    var out = "";
+    for (var i = 0; i < b.length; i++) {
+      out += ("00000000" + b[i].toString(16)).slice(-8);
     }
     return out;
   }
@@ -181,17 +203,21 @@
      have settled on it. The two are separate because the room shows both:
      everybody watches everybody else's box move around the grid, and a
      locked-in pick has to look different from one still wandering. */
-  function setSeat(slot, char, here, ready) {
+  function setSeat(slot, char, here, ready, who) {
     var s = seatFor(slot);
     if (!s) {
       s = { slot: slot, char: char || "kel", here: here !== false,
-            ready: !!ready };
+            ready: !!ready, uid: (who && who.uid) || null,
+            name: (who && who.name) || null };
       state.seats.push(s);
       state.seats.sort(function (a, b) { return a.slot - b.slot; });
     } else {
       if (char) s.char = char;
       if (here !== undefined) s.here = here;
       if (ready !== undefined) s.ready = !!ready;
+      // Only overwrite identity when some is offered: a `pick` carries none,
+      // and letting it blank the seat would lose the person on every move.
+      if (who && who.uid) { s.uid = who.uid; s.name = who.name || s.name; }
     }
     return s;
   }
@@ -210,7 +236,8 @@
     sendAll({
       t: "seats",
       seats: state.seats.map(function (s) {
-        return { slot: s.slot, char: s.char, here: s.here, ready: !!s.ready };
+        return { slot: s.slot, char: s.char, here: s.here, ready: !!s.ready,
+                 uid: s.uid || null, name: s.name || null };
       }),
     });
     renderLobby();
@@ -412,7 +439,8 @@
       // forgetting a field is a silent one-way mirror: the host saw every
       // guest settle and no guest ever saw the host.
       state.seats = (msg.seats || []).map(function (s) {
-        return { slot: s.slot, char: s.char, here: s.here, ready: !!s.ready };
+        return { slot: s.slot, char: s.char, here: s.here, ready: !!s.ready,
+                 uid: s.uid || null, name: s.name || null };
       });
       renderLobby();
       return;
@@ -434,8 +462,9 @@
         renderLobby();
         return;
       }
-      setSeat(fromSlot, msg.char, true, msg.ready);
-      say(charName(msg.char) + " joined.", "good");
+      setSeat(fromSlot, msg.char, true, msg.ready,
+              { uid: msg.uid, name: msg.name });
+      say((msg.name || charName(msg.char)) + " joined.", "good");
       broadcastSeats();
       return;
     }
@@ -459,6 +488,10 @@
       }
       // The host decides the pairing, so everyone starts from one source of
       // truth rather than each assembling their own idea of the match.
+      state.match = { mid: msg.mid || null, uids: msg.uids || [],
+                      names: msg.names || [], chars: msg.chars || [],
+                      stage: msg.stage, host: (msg.uids || [])[0] || null,
+                      at: msg.at || Date.now() };
       beginMatch(msg.chars, msg.stage, msg.delay, state.mySlot);
       return;
     }
@@ -495,6 +528,7 @@
           } else if (reason === "match over") {
             // The normal ending. Everybody is back in the room they were
             // already in, so this is an invitation rather than a warning.
+            recordMatch();
             endMatch("Pick a fighter and go again.", "ok");
           } else {
             endMatch(reason ? "Match ended: " + reason + "." : "");
@@ -554,6 +588,8 @@
            then typed a code -- and a hello that carried only the character
            seated them as still-choosing, so a full room could never start. */
         send({ t: "hello", char: state.myChar, ready: state.myReady,
+               uid: state.me && state.me.uid,
+               name: state.me && state.me.name,
                build: MY_BUILD });
         say("Connected.", "good");
       }
@@ -605,7 +641,7 @@
     state.seats = [];
     // Carrying whatever they had already settled on: hosting a room does
     // not un-choose the fighter they picked before opening it.
-    setSeat(0, state.myChar, true, state.myReady);
+    setSeat(0, state.myChar, true, state.myReady, state.me);
     setPhase("hosting");
     say("Creating a room…");
     renderLobby();
@@ -797,6 +833,21 @@
       start: startMatch,
       leave: leaveRoom,
       setStage: function (key) { if (key) state.stage = key; },
+      /* Who this machine is. The page calls this once somebody has signed
+         in; net.js neither knows nor cares how that happened. */
+      setMe: function (me) {
+        state.me = me && me.uid ? { uid: me.uid, name: me.name || null } : null;
+        if (state.role === "host") {
+          setSeat(0, state.myChar, true, state.myReady, state.me);
+          broadcastSeats();
+        } else if (state.role === "guest") {
+          send({ t: "hello", char: state.myChar, ready: state.myReady,
+                 uid: state.me && state.me.uid,
+                 name: state.me && state.me.name, build: MY_BUILD });
+        }
+        renderLobby();
+      },
+      me: function () { return state.me; },
       snapshot: snapshot,
     };
   }
@@ -824,7 +875,7 @@
     state.myChar = key;
     state.myReady = !!ready;
     if (state.role === "host") {
-      setSeat(0, state.myChar, true, state.myReady);
+      setSeat(0, state.myChar, true, state.myReady, state.me);
       broadcastSeats();
     } else {
       send({ t: "pick", char: state.myChar, ready: state.myReady });
@@ -849,13 +900,26 @@
     // seats fighters by array position: if player 2 left, the person in
     // seat 3 has to become fighter 2 rather than leaving a hole.
     var chars = here.map(function (s) { return s.char; });
+    /* Indexed the SAME WAY as chars, and that is the whole point: the seats
+       are compacted here so fighter 2 is whoever is third in the room, and
+       only the host knows that mapping. Without shipping it, a guest can see
+       that fighter 2 played Reese and has no idea whose Reese it was. */
+    var uids = here.map(function (s) { return s.uid || null; });
+    var names = here.map(function (s) { return s.name || null; });
+    /* One id for this match, made by the host and carried to everyone. It
+       cannot be derived: the room code is reused by every rematch, and there
+       is no shared clock and no seed in the simulation to borrow from. */
+    var mid = newMatchId();
     for (var i = 0; i < here.length; i++) {
       var conn = state.conns[here[i].slot];
       if (conn) post(conn, { t: "seat", slot: i, match: true, build: MY_BUILD });
     }
     state.mySlot = 0;
     sendAll({ t: "go", chars: chars, stage: state.stage,
-             delay: DEFAULT_DELAY, build: MY_BUILD });
+             delay: DEFAULT_DELAY, build: MY_BUILD,
+             mid: mid, uids: uids, names: names, at: Date.now() });
+    state.match = { mid: mid, uids: uids, names: names, chars: chars,
+                    stage: state.stage, host: uids[0], at: Date.now() };
     beginMatch(chars, state.stage, DEFAULT_DELAY, 0);
     return true;
   }
@@ -867,6 +931,39 @@
     setPhase("idle");
     say("Left the room.");
     renderLobby();
+  }
+
+  /* Write down what just happened.
+
+     Called on exactly ONE ending -- `reason === "match over"` -- and that
+     restriction is the whole of its correctness. A match can also end by
+     somebody pressing Escape, by a `bye`, or by a desync, and in every one
+     of those the engine never reached the branch that decides a winner. Its
+     winner field is still whatever it was: null on a first match, or the
+     PREVIOUS match's winner on a rematch. Anything reporting on `stopped`
+     without checking the reason would write last match's result down as
+     this one's, confidently, and be believed.
+
+     The host writes the match; everybody else writes a one-line confirm.
+     Nobody reports on anybody else's behalf, so nobody can be recorded as
+     having lost by a machine that is not theirs. */
+  function recordMatch() {
+    var L = window.NerdWarsLadder;
+    var m = state.match;
+    if (!L || !m || !m.mid) return;
+    if (!state.me || !state.me.uid) return;       // nobody is signed in
+    var r = window.NerdWars && window.NerdWars.result;
+    if (!r || !r.over) return;
+    // Everybody in the match has to be known, or the record names a ghost.
+    for (var i = 0; i < m.uids.length; i++) if (!m.uids[i]) return;
+
+    L.report({
+      mid: m.mid, me: state.me.uid, host: m.host, at: m.at,
+      uids: m.uids, names: m.names, chars: r.chars, stage: r.stage,
+      winnerSlot: r.winnerSlot, stocks: r.stocks, frames: r.frames,
+      build: r.build,
+    });
+    state.match = null;
   }
 
   /* What the canvas draws the room from. A plain snapshot, rebuilt on
@@ -887,8 +984,14 @@
       status: lastSay.text,
       statusKind: lastSay.kind,
       seats: state.seats.map(function (seat) {
+        /* Identity travels here too. There are THREE places a seat gets
+           rebuilt field by field -- the broadcast, the guest's unpack, and
+           this snapshot -- and each one that forgets a field is a silent
+           one-way mirror. This one was missed first time round: the wire
+           carried the uid perfectly and the room could not see it. */
         return { slot: seat.slot, char: seat.char, here: !!seat.here,
-                 ready: !!seat.ready, you: seat.slot === mine };
+                 ready: !!seat.ready, you: seat.slot === mine,
+                 uid: seat.uid || null, name: seat.name || null };
       }),
       here: occupiedSeats().length,
       /* Everybody in the room has to have settled on a fighter first.
