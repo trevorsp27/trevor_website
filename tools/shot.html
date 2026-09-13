@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- A hand-cranked NerdWars, for looking at.
+
+     Not linked from anywhere and not part of the site: it exists because a
+     headless or backgrounded browser never fires requestAnimationFrame, so
+     the game loads, reports scene "title", and paints nothing. Here the
+     shim below catches the frame callback instead of the browser, and
+     __pump(n) runs n frames on demand.
+
+       __pump(30)            settle
+       __key('ArrowDown')    a tap, held for three frames
+       document.getElementById('nw-canvas').toDataURL()
+
+     __now has to keep counting across pumps. The loop is a fixed-step
+     accumulator over the timestamp it is handed, so restarting the clock at
+     zero makes dt hugely negative and nothing steps again. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>shot</title>
+<script>
+  /* Installed BEFORE game.js, which is the whole point: the engine asks for
+     the next frame and this keeps the callback instead of the browser, so
+     frames can be pumped from the console. */
+  window.__frames = [];
+  window.requestAnimationFrame = function (cb) {
+    window.__frames.push(cb);
+    return window.__frames.length;
+  };
+  window.cancelAnimationFrame = function () {};
+  window.__now = 100000;
+  window.__pump = function (n) {
+    for (let i = 0; i < n; i++) {
+      const q = window.__frames;
+      window.__frames = [];
+      window.__now += 1000 / 60;
+      q.forEach((cb) => cb(window.__now));
+    }
+    return window.__now;
+  };
+  window.__key = function (code) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+    window.__pump(3);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+    window.__pump(3);
+  };
+</script>
+<style>
+  body { margin: 0; background: #0d1020; }
+  #nw-stage { width: 960px; height: 540px; }
+  canvas { image-rendering: pixelated; display: block; }
+</style>
+</head>
+<body>
+  <div id="nw-stage"><canvas id="nw-canvas"></canvas></div>
+  <script src="../assets/js/nerdwars/sprites.js"></script>
+  <script src="../assets/js/nerdwars/ladder.js"></script>
+  <script src="../assets/js/nerdwars/game.js"></script>
+</body>
+</html>

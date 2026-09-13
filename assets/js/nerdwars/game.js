@@ -8525,6 +8525,21 @@ function drawOnline() {
          VW / 2, 100, 6, '#5f6884', 'center', 500);
   }
 
+  /* Whether this is going on anybody's record, said before the match rather
+     than discovered afterwards. recordMatch refuses a match with an
+     unidentified player in it -- correctly, since a record with a hole in it
+     names a ghost -- and that refusal is completely silent. */
+  if (ladderAuth()) {
+    const who = ladderMe();
+    text(who ? 'signed in as ' + who.name
+             : 'not signed in -- matches will not count',
+         VW / 2, 142, 6, who ? '#5f6884' : '#ff9f43', 'center', 600);
+    if (!who) {
+      text('sign in from the LEADERBOARD on the title screen', VW / 2, 151, 5.5,
+           '#5f6884', 'center', 500);
+    }
+  }
+
   if (snap.status) {
     text(snap.status, VW / 2, VH - 22, 6,
          snap.statusKind === 'warn' ? '#ff9f43' : '#8fe08f', 'center', 600);
@@ -8709,6 +8724,13 @@ function ladderMe() {
   return me && me.uid ? me : null;
 }
 
+/* Signing in is a page thing -- Google's popup, Firebase's session -- so the
+   game only ever asks for it and reads back the answer. Absent in the
+   standalone build, which has nobody to play and nothing to record. */
+function ladderAuth() {
+  return (typeof window !== 'undefined' && window.NerdWarsAuth) || null;
+}
+
 const ladderView = { row: 0 };
 const NAME_COL = 24;      // characters of name the rating column leaves room for
 
@@ -8721,6 +8743,18 @@ function enterLadder() {
 
 function updateLadder() {
   if (menuBack()) { scene = 'title'; return; }
+
+  /* The one screen you can sign in from. It belongs here rather than on the
+     title because this is the screen where "who am I" is the subject -- and
+     because a popup only opens off a real keypress, which this is. */
+  const auth = ladderAuth();
+  if (auth) {
+    if (!ladderMe() && !auth.busy() && tapped('Enter')) { auth.signIn(); return; }
+    // O for out. Not near WASD, because a stray keypress here signs somebody
+    // out of a board they are in the middle of reading.
+    if (ladderMe() && tapped('KeyO')) { auth.signOut(); return; }
+  }
+
   const L = ladderApi();
   if (!L) return;
   const rows = L.view().rows;
@@ -8757,6 +8791,21 @@ function drawLadder() {
 
   const v = L.view();
   const me = ladderMe();
+
+  /* Reading the log takes an account, so a signed-out visitor gets a
+     permission error rather than an empty board. Saying "could not reach the
+     ladder" there would be true and useless -- what is missing is a sign-in,
+     and that is one keypress away. */
+  if (!me && ladderAuth()) {
+    text('sign in to see the ladder', VW / 2, 64, 8, '#c8cee6', 'center', 600);
+    text('ENTER to sign in with Google', VW / 2, 80, 7, '#8fe08f', 'center', 700);
+    text('one click, once per device -- it is how a rating', VW / 2, 100, 6,
+         '#5f6884', 'center', 500);
+    text('follows you from your laptop to your desktop', VW / 2, 110, 6,
+         '#5f6884', 'center', 500);
+    text('ESC to go back', VW / 2, VH - 6, 5.5, '#454c66', 'center', 500);
+    return;
+  }
 
   if (v.error) {
     text('could not reach the ladder', VW / 2, 64, 8, '#ff9f43', 'center', 600);
@@ -8836,7 +8885,8 @@ function drawLadder() {
          v.disputed ? '#ff9f43' : '#6b7392', 'center', 600);
   }
 
-  text('W/S to look    R to refresh    ESC to go back',
+  text(me ? 'W/S to look   R to refresh   O to sign out   ESC to go back'
+          : 'W/S to look    R to refresh    ESC to go back',
        VW / 2, VH - 4, 5.5, '#454c66', 'center', 500);
 }
 
@@ -10193,7 +10243,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'ad6d74006e';
+const BUILD_ID = 'c7f7463cfc';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong

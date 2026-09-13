@@ -3975,3 +3975,131 @@ test("a leaderboard row stays inside the screen whatever a name is", async () =>
   }
   assert.ok(checked >= 8, "every visible row should have been checked, did " + checked);
 });
+
+
+/* The page's half of signing in: a popup, a Firebase session, a uid. None of
+   that can happen in a vm, and none of it needs to -- the game only ever asks
+   for it and reads the answer back. */
+function stubAuth(run, me) {
+  run(`(function () {
+    window.__auth = { calls: [], me: ` + JSON.stringify(me || null) + ` };
+    window.NerdWarsAuth = {
+      me: function () { return __auth.me; },
+      busy: function () { return !!__auth.busy; },
+      signIn: function () {
+        __auth.calls.push('signIn');
+        /* The real one goes through Google and comes back through net.js --
+           there is one identity in the game and net.js holds it. */
+        __auth.me = { uid: 'u-trev', name: 'TREV' };
+        __lobby.me = __auth.me;
+      },
+      signOut: function () {
+        __auth.calls.push('signOut');
+        __auth.me = null; __lobby.me = null;
+      },
+    };
+    return true;
+  })()`);
+}
+
+test("signed out, the leaderboard asks you in rather than looking empty", async () => {
+  /* Reading the log takes an account -- the Firestore rules say so -- so a
+     signed-out visitor gets a permission error, not an empty collection.
+     Drawing that as "could not reach the ladder" would be true and useless:
+     what is missing is a sign-in, and it is one key away. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, null);
+  stubAuth(run, null);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("__lobby.me = null; scene = 'ladder';");
+  // What a locked-out read actually looks like coming back.
+  run(`(function () {
+    var K = window.NerdWarsLadderKit;
+    window.NerdWarsLadder = K.createLadder({
+      listMatches: function () {
+        return Promise.reject(new Error('Missing or insufficient permissions.'));
+      },
+      writeMatch: function () { return Promise.resolve(false); },
+      writeConfirm: function () { return Promise.resolve(false); },
+      getProfile: function () { return Promise.resolve(null); },
+      setProfile: function () { return Promise.resolve(false); },
+    });
+    return window.NerdWarsLadder.refresh();
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+
+  const out = parseLines(drawnLadder(run)).map((l) => l.s);
+  assert.ok(out.some((s) => /sign in/i.test(s)),
+    "it should ask for a sign-in, got: " + out.join(" / "));
+  assert.ok(out.some((s) => /ENTER/.test(s)),
+    "and say which key does it, got: " + out.join(" / "));
+  assert.ok(!out.some((s) => /could not reach|insufficient permissions/i.test(s)),
+    "and not report the permission error as a fault, got: " + out.join(" / "));
+  assert.ok(!out.some((s) => /RATING/.test(s)),
+    "with no empty table under it");
+
+  // ENTER asks the page to sign in, and the board comes back.
+  assert.equal(tapKey(run, 'Enter'), 'ladder');
+  assert.equal(run("__auth.calls.join(',')"), 'signIn',
+    "ENTER should ask the page for a sign-in");
+  const after = parseLines(drawnLadder(run)).map((s) => s.s);
+  assert.ok(!after.some((s) => /^sign in to see the ladder/.test(s)),
+    "and once signed in the prompt should be gone, got: " + after.join(" / "));
+});
+
+test("two friends on one laptop can hand the account over", async () => {
+  /* The reason sign-out exists at all. Without it the second person plays
+     ranked matches under the first person's name, and the ladder has no way
+     to know it happened. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  stubAuth(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("scene = 'ladder'; ladderView.row = 0;");
+
+  assert.ok(parseLines(drawnLadder(run)).some((l) => /sign out/i.test(l.s)),
+    "the way out should be on screen");
+  tapKey(run, 'KeyO');
+  assert.equal(run("__auth.calls.join(',')"), 'signOut');
+  assert.equal(run("NerdWarsLobby.me()"), null,
+    "and net.js should stop believing anybody is signed in");
+
+  /* W and S read the board. They must not also sign somebody out of it --
+     the key for that is deliberately nowhere near them. */
+  run("__auth.calls.length = 0; __auth.me = { uid: 'u-trev', name: 'TREV' };" +
+      "__lobby.me = __auth.me;");
+  for (const k of ['KeyW', 'KeyS', 'KeyR', 'Enter']) tapKey(run, k);
+  assert.equal(run("__auth.calls.join(',')"), '',
+    "reading the board should not sign anybody in or out");
+});
+
+test("the online screen says whether the match is going on anybody's record", async () => {
+  /* net.js refuses to record a match with an unidentified player in it, which
+     is right -- a record with a hole in it names a ghost -- and completely
+     silent. Four people can play all evening and find out afterwards that
+     none of it counted. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubAuth(run, null);
+  run("__lobby.me = null; scene = 'online'; online.choice = 0;");
+
+  const out = () => run(`(function () {
+    var lines = [], realText = text;
+    text = function (str) { lines.push(String(str)); };
+    try { drawOnline(); } finally { text = realText; }
+    return lines;
+  })()`);
+
+  const anon = out();
+  assert.ok(anon.some((s) => /will not count/i.test(s)),
+    "signed out, it should say so before the match, got: " + anon.join(" / "));
+
+  run("__auth.me = { uid: 'u-trev', name: 'TREV' }; __lobby.me = __auth.me;");
+  const named = out();
+  assert.ok(named.some((s) => /signed in as TREV/.test(s)),
+    "signed in, it should say who as, got: " + named.join(" / "));
+  assert.ok(!named.some((s) => /will not count/i.test(s)),
+    "and stop warning about it");
+});
