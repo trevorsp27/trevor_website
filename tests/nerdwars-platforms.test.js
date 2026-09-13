@@ -1821,6 +1821,77 @@ test("the cast is a thrown lure: it travels, it arcs, and the way home is live",
     "the cast should not reach as far as the old one; got " + reach.toFixed(1));
 });
 
+test("the lure carries his momentum, so a moving cast does not stall", async () => {
+  /* The complaint: move in the direction you are fishing and the bait
+     basically goes nowhere. It was true, and the reason is that the lure is
+     launched from a REMEMBERED point in the world and flies on its own -- so
+     drifting forward at roughly the speed it travels left it hanging in front
+     of him, gaining almost nothing.
+
+     poleVX is his speed at the moment it left his hand, added to the flight
+     every frame and NOT subject to the drag. Drag is what the cast loses to
+     the air; the momentum he handed it is not something the air takes back,
+     and decaying it would put the lure back to stalling a second later. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const DOWN_SPECIAL = 1024;
+  /* `killCarry` reproduces the old behavior by zeroing poleVX every frame.
+     Without it this measures only that the lure moves, which it always did --
+     what is being tested is that it keeps its lead over a MOVING thrower. */
+  const cast = (drift, killCarry) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    var s = me.def.specials.down;
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.grabbing = -1;
+    me.x = main.x + 30; me.y = main.y - 70; me.vy = 0; me.vx = ${drift};
+    me.grounded = false; me.facing = 1;
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    var lead = 0, box = null;
+    netplay.active = true;
+    for (var i = 0; i < 40; i++) {
+      me.hitstop = 0; me.mana = 999;
+      // Held up and drifting, so the only variable is the carry.
+      me.vy = 0; me.y = main.y - 70; me.grounded = false; me.vx = ${drift};
+      netplay.framePads = [bitsToPad(i === 0 ? ${DOWN_SPECIAL} : 0), bitsToPad(0)];
+      step();
+      if (${killCarry}) me.poleVX = 0;
+      var h = (me.state === 'special') ? poleHook(me, s) : null;
+      if (!h) continue;
+      if (h.x - me.x > lead) lead = h.x - me.x;
+      var b = me.hitbox();
+      if (b && !box) box = { w: b.box.w, h: b.box.h };
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { lead: lead, box: box };
+  })()`);
+
+  // Standing still, the carry changes nothing -- there is nothing to carry.
+  const still = cast(0, false), stillOld = cast(0, true);
+  assert.ok(Math.abs(still.lead - stillOld.lead) < 0.01,
+    "with no drift the carry must be a no-op; " + still.lead.toFixed(1) +
+    " against " + stillOld.lead.toFixed(1));
+
+  /* Drifting, it is the whole difference. Measured: at 1.0 the lure leads by
+     50.8 with the carry and 28.1 without; at 1.9, 34.9 against 15.9. */
+  for (const drift of [1.0, 1.9]) {
+    const now = cast(drift, false), before = cast(drift, true);
+    assert.ok(now.lead > before.lead * 1.5,
+      "drifting at " + drift + ", the lure should keep a real lead: " +
+      now.lead.toFixed(1) + " with the carry against " +
+      before.lead.toFixed(1) + " without");
+  }
+
+  // And the hook is a little more forgiving than it was.
+  assert.equal(still.box.w, 12, "the hook box should be 12 wide");
+  assert.equal(still.box.h, 12, "and 12 tall");
+});
+
 test("casting roots him, and the move that does not stops when you let go", async () => {
   /* Two halves that only make sense together.
 

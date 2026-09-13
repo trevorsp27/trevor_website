@@ -1742,6 +1742,12 @@ class Fighter {
     this.poleX0 = 0;
     this.poleY0 = 0;
     this.poleDir = 1;
+    /* How fast HE was going when it left his hand, kept so the lure carries
+       it. Without this the line is thrown into a world that is standing
+       still while he is not: drift forward at the speed it travels and it
+       hangs in front of him going nowhere, which is exactly what it looked
+       like. A thrown thing keeps the momentum of the arm that threw it. */
+    this.poleVX = 0;
     /* The charge on PAWN: which piece is showing, and how long it has been
        showing for. Declared here because restoreSim deletes any key it does
        not find in a snapshot, so a field first written mid-charge would
@@ -1867,8 +1873,11 @@ class Fighter {
            calls the same function. */
         const hook = poleHook(this, s);
         if (!hook) return null;
+        /* Twelve, up from eight. Still small next to a hurtbox -- those are 9
+           by 14 -- so this is a couple of pixels of forgiveness on a line you
+           have to place, not a change of shape. */
         return {
-          box: { x: hook.x - 4, y: hook.y - 4, w: 8, h: 8 },
+          box: { x: hook.x - 6, y: hook.y - 6, w: 12, h: 12 },
           move: s,
         };
       }
@@ -2992,6 +3001,7 @@ class Fighter {
           // Where the rod actually is now, though -- he may have walked.
           this.poleX0 = this.x + this.poleDir * s.ox;
           this.poleY0 = this.y + s.oy;
+          this.poleVX = this.vx;
         }
         break;
 
@@ -4173,13 +4183,18 @@ function poleStroke(g, x0, y0, x1, y1, bow, fat) {
    whole close half of the flight. What sells the arc is the accelerating
    drop and the fact that it now takes fourteen frames instead of none.
 
-   On flat ground it lands about 33 pixels out; from height the drag
-   converges forward travel on about 43, down from the 82 the old
-   nearly-straight line reached.
+   On flat ground it comes down at the floor about 41 pixels out, on the last
+   frame of the flight; from height the drag converges forward travel on about
+   50. Both went up a quarter when POLE_V0 went 4.8 -> 5.6, and both are still
+   well inside the 82 the old nearly-straight line reached.
+
+   None of that includes what he was carrying: poleVX is added on top and is
+   not subject to the drag, so a cast thrown while moving goes as much further
+   again as his speed times the time of flight.
 
    Plain adds and multiplies on doubles, bit-identical everywhere, so the
    simulation and the drawing can both run it and a rollback agrees. */
-const POLE_V0 = 4.8;        // pixels forward on the first FRAME
+const POLE_V0 = 5.6;        // pixels forward on the first FRAME
 const POLE_DRAG = 0.90;     // ...and this much of it on each frame after
 const POLE_VY0 = -1.34;     // thrown upward, which is what makes it an arc
 const POLE_GRAV = 0.30;     // pulling it back down again
@@ -4207,7 +4222,11 @@ function poleFlight(f, s, n) {
   for (let i = 0; i < steps; i++) {
     vx *= POLE_DRAG;
     vy += POLE_GRAV;
-    const nx = x + f.poleDir * vx;
+    /* His speed is added WITHOUT drag, unlike the throw itself. Drag is what
+       the cast loses to the air; the momentum he handed it is not something
+       the air takes back, and decaying it would put the lure right back to
+       stalling in front of a moving thrower a second later. */
+    const nx = x + f.poleDir * vx + f.poleVX;
     const ny = y + vy;
     /* Crossing a platform going DOWN, tested as a crossing rather than as
        "is the lure below it". The old version needed a guard against side
@@ -8738,7 +8757,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '8f2c6d1446';
+const BUILD_ID = '21e6e66fb6';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8749,7 +8768,7 @@ const BUILD_ID = '8f2c6d1446';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.32';
+const VERSION = '2.33';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
