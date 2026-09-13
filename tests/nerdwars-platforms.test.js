@@ -75,7 +75,14 @@ function stubCanvas(w, h) {
   const el = {
     width: w, height: h, style: {},
     getContext: () => stubContext(),
-    addEventListener() {},
+    /* Kept rather than thrown away, so a test can deliver a real mousedown to
+       the engine's own listener instead of reaching past it. Everything the
+       menus do with a mouse -- mapping a client point onto the canvas, hit
+       testing the rects the last frame registered, running the action -- is
+       behind this one handler, and a test that calls the action directly is
+       testing none of it. */
+    __on: {},
+    addEventListener(type, fn) { (el.__on[type] = el.__on[type] || []).push(fn); },
     getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h }),
     toDataURL: () => "",
   };
@@ -4102,4 +4109,198 @@ test("the online screen says whether the match is going on anybody's record", as
     "signed in, it should say who as, got: " + named.join(" / "));
   assert.ok(!named.some((s) => /will not count/i.test(s)),
     "and stop warning about it");
+});
+
+
+/* ---------------------------------------------------------------------
+   Getting back out.
+
+   In fullscreen the browser keeps Escape for itself: it closes fullscreen and
+   the keydown never reaches the page. So a screen whose only advertised way
+   out is ESC is a dead end for the player with the fewest options left --
+   no address bar, no tab strip, nothing on screen but the game.
+   --------------------------------------------------------------------- */
+
+/** Render a frame, then click the middle of one of the buttons it registered,
+    through the engine's own mousedown listener. Nothing here reaches past the
+    engine: the point is to exercise viewPoint(), buttonAt() and the hit rects.
+
+    The client coordinate is worked out inside the vm, as the exact inverse of
+    viewPoint(). It has to be: the canvas's backing store and its CSS box are
+    different sizes -- 640 wide holding a 960-wide element in this harness --
+    so a test that multiplies virtual pixels by SCALE and calls the result a
+    client coordinate misses every button by half its own width. */
+const clickButton = (run, i) => run(`(function () {
+  render();
+  var b = uiButtons[${i}];
+  if (!b) return 'no button ' + ${i};
+  var r = view.getBoundingClientRect();
+  (view.__on.mousedown || []).forEach(function (fn) {
+    fn({ clientX: (b.x + b.w / 2) / (view.width / r.width) + r.left,
+         clientY: (b.y + b.h / 2) / (view.height / r.height) + r.top });
+  });
+  return scene;
+})()`);
+
+/** Where every button the last frame registered actually is, in virtual px. */
+const buttonsOn = (run, setup) => run(`(function () {
+  ${setup}
+  render();
+  return uiButtons.map(function (b) {
+    return [b.x / SCALE, b.y / SCALE, (b.x + b.w) / SCALE, (b.y + b.h) / SCALE]
+      .join('|');
+  });
+})()`).map((r) => {
+  const [x0, y0, x1, y1] = r.split('|').map(Number);
+  return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+});
+
+/** Every string a screen draws, with no mouse or ladder plumbing involved. */
+const textOn = (run, setup) => run(`(function () {
+  ${setup}
+  var lines = [], realText = text;
+  text = function (str) { lines.push(String(str)); };
+  try { render(); } finally { text = realText; }
+  return lines;
+})()`);
+
+test("the leaderboard can be left with a mouse, in all three of its states", async () => {
+  /* Reported from fullscreen: "you cant go back if you are in the leaderboard,
+     esc takes you out of fullscreen". Two of these three states are pure dead
+     ends -- they draw a message and return -- so the button has to be
+     registered BEFORE those returns, not after. render() empties uiButtons and
+     then calls one draw function, so a button drawn past a `return` was never
+     registered at all. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+
+  // The harness itself works: the title's own START button still answers.
+  run("scene = 'title'; titleChoice = 0;");
+  const start = buttonsOn(run, "");
+  assert.equal(start.length, 2, "the title should have START and HELP");
+  assert.equal(clickButton(run, 0), 'select',
+    "clicking START should start a game -- if not, the click plumbing is wrong " +
+    "and nothing below this line means anything");
+
+  // 1. No ladder at all: the standalone build's dead end.
+  run("delete window.NerdWarsLadder; scene = 'ladder';");
+  let b = buttonsOn(run, "");
+  assert.equal(b.length, 1, "the leaderboard should offer exactly one button");
+  assert.equal(clickButton(run, 0), 'title',
+    "clicking BACK on a build with no ladder should go back");
+
+  // 2. Signed out: the other dead end.
+  stubLadder(run, null);
+  stubAuth(run, null);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("__lobby.me = null; scene = 'ladder';");
+  b = buttonsOn(run, "");
+  assert.equal(b.length, 1, "and when signed out");
+  assert.equal(clickButton(run, 0), 'title');
+
+  // 3. The board itself.
+  run("__auth.me = { uid: 'u-trev', name: 'TREV' }; __lobby.me = __auth.me;" +
+      "scene = 'ladder'; ladderView.row = 0;");
+  b = buttonsOn(run, "");
+  assert.equal(b.length, 1, "and with a board on screen");
+  assert.equal(clickButton(run, 0), 'title');
+
+  // The online screen is the same dead end and gets the same way out.
+  run("scene = 'online'; online.typing = false;");
+  b = buttonsOn(run, "");
+  assert.equal(b.length, 1, "the online screen should have one too");
+  assert.equal(clickButton(run, 0), 'title');
+
+  /* Including on a build with no netplay at all, which is the same early
+     return as the ladder's: it draws "online play lives on the website copy"
+     and stops. A button drawn past that return is never registered. */
+  run("window.__savedLobby = window.NerdWarsLobby; delete window.NerdWarsLobby;" +
+      "scene = 'online';");
+  b = buttonsOn(run, "");
+  assert.equal(b.length, 1,
+    "the offline build's online screen should still offer a way back");
+  assert.equal(clickButton(run, 0), 'title');
+  run("window.NerdWarsLobby = window.__savedLobby;");
+});
+
+test("a back button does not sit on top of the screen behind it", async () => {
+  /* A width-44 button is 17.3 virtual pixels tall, and the leaderboard's first
+     row draws a highlight rectangle from y=26. Centering the button on 18 --
+     which is where the character select puts its own -- lands its bottom edge
+     at 26.7, under the highlight. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  stubAuth(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+
+  const scenes = ['title', 'help', 'online', 'ladder'];
+  for (const sc of scenes) {
+    const bs = buttonsOn(run, "scene = " + JSON.stringify(sc) + ";");
+    assert.ok(bs.length > 0, sc + " should have at least one button");
+    for (const b of bs) {
+      assert.ok(b.x0 >= 0 && b.x1 <= 320 && b.y0 >= 0 && b.y1 <= 180,
+        sc + ": a button spans x " + b.x0.toFixed(1) + ".." + b.x1.toFixed(1) +
+        " y " + b.y0.toFixed(1) + ".." + b.y1.toFixed(1) +
+        " on a 320x180 screen");
+    }
+  }
+
+  // And specifically: clear of the leaderboard's first row.
+  run("scene = 'ladder'; ladderView.row = 0;");
+  const [back] = buttonsOn(run, "");
+  const firstRowTop = 34 - 8;     // drawLadder highlights from y-8 at y=34
+  assert.ok(back.y1 <= firstRowTop,
+    "the back button ends at y " + back.y1.toFixed(1) +
+    " and the first row's highlight starts at " + firstRowTop);
+});
+
+test("the key a screen names is the key that works, in or out of fullscreen", async () => {
+  /* The screens that have no button say which key goes back. Escape is the
+     browser's in fullscreen, so saying ESC there is a promise the game cannot
+     keep -- and this reads the promise off the canvas and then tries it. */
+  const run = await bootEngine();
+  stubLobby(run, 'lobby');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  stubAuth(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+
+  const CASES = [
+    { scene: 'ladder', setup: "scene='ladder';", lands: 'title' },
+    { scene: 'online', setup: "scene='online'; online.typing=false; __lobby.phase='idle';",
+      lands: 'title' },
+    { scene: 'room', setup: "scene='room'; __lobby.phase='lobby';", lands: 'online' },
+  ];
+
+  for (const full of [false, true]) {
+    run("document.fullscreenElement = " + (full ? "{}" : "null") + ";");
+    for (const c of CASES) {
+      const said = textOn(run, c.setup)
+        .map((s) => /\b(ESC|BACKSPACE)\b\s+to\s+(go back|leave)/.exec(s))
+        .find(Boolean);
+      assert.ok(said,
+        c.scene + (full ? ' (fullscreen)' : '') +
+        " should say on screen which key goes back");
+      const named = said[1];
+      assert.equal(named, full ? 'BACKSPACE' : 'ESC',
+        c.scene + (full ? ' in fullscreen' : '') + " named " + named);
+
+      // Now press it, and see whether the screen keeps its word.
+      run(c.setup);
+      const code = named === 'ESC' ? 'Escape' : 'Backspace';
+      assert.equal(tapKey(run, code), c.lands,
+        c.scene + ": the screen says " + named + ", so " + code +
+        " has to leave it");
+    }
+  }
+
+  /* And the key it names in fullscreen must be one the browser actually
+     delivers. Escape is not, which is the entire bug -- so in fullscreen no
+     screen may name it. */
+  run("document.fullscreenElement = {};");
+  for (const c of CASES) {
+    const lines = textOn(run, c.setup).join(' | ');
+    assert.ok(!/\bESC\b/.test(lines),
+      c.scene + " must not offer ESC in fullscreen: " + lines);
+  }
 });

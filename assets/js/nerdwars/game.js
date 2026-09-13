@@ -1930,6 +1930,17 @@ function menuBack() {
   return tapped('Escape') || tapped('Backspace');
 }
 
+/* Which of those two to put on the screen.
+
+   In fullscreen Escape belongs to the browser: it closes fullscreen and the
+   keydown never reaches the page at all. So every screen saying "ESC to go
+   back" was lying to exactly the player with the fewest other options -- no
+   address bar, no tab strip, nothing on screen but the game. Backspace has
+   always worked and in fullscreen it is the only key that does. */
+function backKey() {
+  return fullscreenActive() ? 'BACKSPACE' : 'ESC';
+}
+
 /* Shield doubles as "back" on the menus, but deliberately NOT through
    menuBack(): updateBattle uses that to quit a match, and a shield button
    that quits the fight is not a shield button. */
@@ -8473,6 +8484,12 @@ function drawOnline() {
   sctx.fillRect(0, 0, view.width, view.height);
   text('PLAY ONLINE', VW / 2, 24, 11, '#ffffff', 'center', 800);
 
+  /* Same dead end as the leaderboard, and one state worse: while the code
+     field is open Backspace is a character key, so it takes a letter off the
+     code rather than backing out. Five presses still get you to the title,
+     and nothing on screen says so. */
+  drawButton('back', 30, 16, 44, () => { scene = 'title'; });
+
   const lb = lobby();
   const snap = lb && lb.snapshot();
   if (!lb || !snap.available) {
@@ -8488,7 +8505,7 @@ function drawOnline() {
     text(lb ? 'could not reach the matchmaking service'
             : 'this copy is the offline one',
          VW / 2, 100, 6, '#5f6884', 'center', 500);
-    text('ESC to go back', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
+    text(backKey() + ' to go back', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
     return;
   }
 
@@ -8516,8 +8533,8 @@ function drawOnline() {
       sctx.lineWidth = 1;
       if (ch) text(ch, x + boxW / 2, 110, 11, '#ffffff', 'center', 800);
     }
-    text('type the code, ENTER to join, ESC to go back', VW / 2, 126, 6,
-         '#5f6884', 'center', 500);
+    text('type the code, ENTER to join, ' + backKey() + ' to go back',
+         VW / 2, 126, 6, '#5f6884', 'center', 500);
   } else {
     text(online.choice === 0
            ? 'a code appears; read it out to your friends'
@@ -8544,7 +8561,7 @@ function drawOnline() {
     text(snap.status, VW / 2, VH - 22, 6,
          snap.statusKind === 'warn' ? '#ff9f43' : '#8fe08f', 'center', 600);
   }
-  text('W/S to choose    ENTER to confirm    ESC to go back',
+  text('W/S to choose    ENTER to confirm    ' + backKey() + ' to go back',
        VW / 2, VH - 8, 5.5, '#454c66', 'center', 500);
 }
 
@@ -8691,7 +8708,13 @@ function drawRoom() {
         : 'waiting for the host to start';
   text(line, VW / 2, VH - 13, 7, snap.canStart ? '#ffffff' : '#8792b0',
        'center', snap.canStart ? 800 : 500);
-  text('WASD to move    SPACE to lock in and out    ESC to leave the room',
+  /* No button on this one. The room's way out is to LEAVE it, which drops
+     your seat and tells everybody else -- and the only gap on this screen is
+     sixteen pixels tall, between the code and the fighter grid. A destructive
+     action wedged into a gap that tight is a mis-click waiting to happen, so
+     the room gets the honest key instead. */
+  text('WASD to move    SPACE to lock in and out    ' + backKey() +
+       ' to leave the room',
        VW / 2, VH - 3, 5, '#454c66', 'center', 500);
 }
 
@@ -8775,6 +8798,17 @@ function drawLadder() {
   sctx.fillRect(0, 0, view.width, view.height);
   text('LEADERBOARD', VW / 2, 18, 11, '#ffffff', 'center', 800);
 
+  /* Before either early return below, and that is the whole point: render()
+     empties uiButtons and then calls one draw function, so a button drawn
+     after a `return` is a button that was never registered and cannot be
+     clicked. All three states of this screen need the way out, and the two
+     that are a dead end need it most.
+
+     Two pixels higher than the select screen's (30, 18): a width-44 button
+     is 17.3 tall, and at 18 its bottom edge lands on 26.7 -- which is where
+     the first row's highlight rectangle starts. */
+  drawButton('back', 30, 16, 44, () => { scene = 'title'; });
+
   const L = ladderApi();
   if (!L) {
     /* The standalone build has no ladder in it for the same reason it has no
@@ -8785,7 +8819,7 @@ function drawLadder() {
          '#c8cee6', 'center', 600);
     text('trevorspinosa.com/pages/nerdwars.html', VW / 2, 84, 7,
          '#8fe08f', 'center', 600);
-    text('ESC to go back', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
+    text(backKey() + ' to go back', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
     return;
   }
 
@@ -8803,7 +8837,7 @@ function drawLadder() {
          '#5f6884', 'center', 500);
     text('follows you from your laptop to your desktop', VW / 2, 110, 6,
          '#5f6884', 'center', 500);
-    text('ESC to go back', VW / 2, VH - 6, 5.5, '#454c66', 'center', 500);
+    text(backKey() + ' to go back', VW / 2, VH - 6, 5.5, '#454c66', 'center', 500);
     return;
   }
 
@@ -8885,8 +8919,8 @@ function drawLadder() {
          v.disputed ? '#ff9f43' : '#6b7392', 'center', 600);
   }
 
-  text(me ? 'W/S to look   R to refresh   O to sign out   ESC to go back'
-          : 'W/S to look    R to refresh    ESC to go back',
+  text((me ? 'W/S to look   R to refresh   O to sign out   '
+           : 'W/S to look    R to refresh    ') + backKey() + ' to go back',
        VW / 2, VH - 4, 5.5, '#454c66', 'center', 500);
 }
 
@@ -10048,7 +10082,9 @@ function drawHelp() {
        VW / 2 + 36, 155, 6, '#98a0bc', 'left', 600);
   text('A / D or left / right to change it', VW / 2, 163, 5, '#454c66', 'center', 500);
 
-  drawButton('back', VW / 2, 172, 46, () => { scene = 'title'; });
+  // 170, not 172: at width 46 the art is 18.1 tall, so centering it on 172
+  // put its last two pixel rows off the bottom of a 180px screen.
+  drawButton('back', VW / 2, 170, 46, () => { scene = 'title'; });
 }
 
 function drawSelect() {
@@ -10243,7 +10279,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'c7f7463cfc';
+const BUILD_ID = '9bbdc98584';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10254,7 +10290,7 @@ const BUILD_ID = 'c7f7463cfc';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.47';
+const VERSION = '2.48';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
