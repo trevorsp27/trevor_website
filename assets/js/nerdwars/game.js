@@ -1193,18 +1193,25 @@ ROSTER.cobeus = {
          front of him rather than across the stage. */
       speed: 3.0, lift: -1.9, drop: 0.20, life: 200,
       spin: 3,                        // frames per rotation frame
-      /* Hold it instead of throwing it and he drinks the thing. Three
-         seconds is a long time to stand still in a fight -- it is most of
-         a stock's worth of openings -- so the payoff has to be worth being
-         a statue for, and half his walk speed for five seconds is the cost
-         that stops it being free.
+      /* Hold it instead of throwing it and he drinks the thing.
+
+         Two seconds to get it down, and ten seconds of double damage at
+         half his walking speed once it is. Both numbers moved together and
+         deliberately: three seconds of standing still was most of a stock's
+         worth of openings to buy five seconds back, which made it a thing
+         you did when you were already winning. At 120 frames in for 600
+         out it is a real decision -- you are still a statue while you drink
+         it, and now the thing you bought lasts long enough to spend.
+
+         Half speed for ten seconds is a genuine cost, not a token one: he
+         cannot chase anybody down while it is running, so the damage has to
+         come to him.
 
          `hold` and `drink` are read in updateAttack and runSpecial
          respectively; neither is known to moveCost, so the price is set by
-         hand. 34 is the bottle's own 22 plus the buff, which is roughly
-         what Reese pays for his. */
-      charge: { hold: 180 },
-      drink: { duration: 300, damageMul: 2, speedMul: 0.5 },
+         hand. */
+      charge: { hold: 120 },
+      drink: { duration: 600, damageMul: 2, speedMul: 0.5 },
       manaOverride: 34,
       damage: 6, base: 2.4, scale: 5.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       /* What it leaves behind. `hitEvery` is the re-arm, so standing in it
@@ -2973,7 +2980,7 @@ class Fighter {
           projectiles.push(new Slug(this, s));
           // At the end of the barrel, which is 11px forward of the hands.
           for (let i = 0; i < 3; i++) {
-            addEffect('spark', this.x + this.facing * (15 + i), this.y - 10,
+            addEffect('spark', this.x + this.facing * (15 + i), this.y - 8,
                       i ? '#ffd76a' : '#fff6cf');
           }
           cue(s.cue || 'gunshot', { slot: this.slot, x: this.x });
@@ -7404,8 +7411,13 @@ function drawEffects(g) {
              tall -- at full size it was longer than he is and read as a
              decal laid over him rather than a thing he is holding.
 
-             AK_HOLD is where his hands are: 4px forward of his centre and
-             9px off the floor. The stock is drawn 7px BEHIND that anchor so
+             The anchor is where his hands are: 4px forward of his
+             centre and 7px off the floor. It was 9, which put the rifle
+             across his chest -- shouldered rather than held, and on a 16px
+             sprite those two pixels are the whole difference between a gun
+             in his hands and a gun slung under his chin.
+
+             The stock is drawn 7px BEHIND that anchor so
              it overlaps his torso, which is the whole difference. Before,
              the near end of the gun started at his front edge and every
              pixel of it was outside his outline -- nothing touching, so
@@ -7418,7 +7430,7 @@ function drawEffects(g) {
           const bob = (e.spec && e.spec.bob) || 0;
           g.save();
           g.translate(Math.round(e.x + e.dir * (4 - kick)),
-                      Math.round(e.y - 9 + bob - (kick ? 1 : 0)));
+                      Math.round(e.y - 7 + bob - (kick ? 1 : 0)));
           if (e.dir < 0) g.scale(-1, 1);
           g.rotate(0.06);
           g.drawImage(im, -7, -3, 18, 6);
@@ -9569,7 +9581,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '8493b67d2e';
+const BUILD_ID = '2c134bb535';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9580,7 +9592,7 @@ const BUILD_ID = '8493b67d2e';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.39';
+const VERSION = '2.40';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

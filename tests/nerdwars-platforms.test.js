@@ -2893,19 +2893,33 @@ test("Cobeus can throw the bottle or drink it, on the same button", async () => 
   const held = go(200);
   assert.equal(held.threw, false,
     "holding should drink it, not throw it as well");
-  assert.ok(held.drankAt > 150 && held.drankAt < 220,
-    "three seconds is 180 frames; he drank on frame " + held.drankAt);
+  assert.ok(held.drankAt > 100 && held.drankAt < 160,
+    "two seconds is 120 frames; he drank on frame " + held.drankAt);
   assert.equal(held.dmg, 2, "double damage");
   assert.ok(held.spd < 1, "and slower: speedMul was " + held.spd);
-  assert.ok(held.lasts >= 290 && held.lasts <= 310,
-    "for about five seconds; it was " + held.lasts + " frames");
+  assert.ok(held.lasts >= 590 && held.lasts <= 610,
+    "for about ten seconds; it was " + held.lasts + " frames");
 
   /* A half-second hold is still a throw. The boundary matters: if any hold
      at all drank, the normal throw would be unreachable for anyone who does
-     not release the button instantly. */
+     not release the button instantly. 30 frames is comfortably under the
+     120 the drink needs, and stays under it if the threshold moves again. */
   const brief = go(30);
   assert.ok(brief.threw && brief.drankAt === -1,
     "half a second of hold should still be a throw");
+
+  /* And the threshold is where the spec says it is, not merely somewhere
+     between 30 and 200. Just under should throw, just over should drink --
+     this is what would have caught the hold quietly drifting. */
+  const hold = run("ROSTER.cobeus.specials.neutral.charge.hold");
+  const under = go(hold - 25);
+  assert.ok(under.threw && under.drankAt === -1,
+    "holding " + (hold - 25) + " frames is short of " + hold + ", so it " +
+    "should still throw");
+  const over = go(hold + 40);
+  assert.equal(over.threw, false,
+    "holding " + (hold + 40) + " frames is past " + hold + ", so it should " +
+    "drink");
 });
 
 
