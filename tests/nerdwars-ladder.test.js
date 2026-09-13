@@ -30,10 +30,16 @@ function kit() {
   return sb.window.NerdWarsLadderKit;
 }
 
+/* Matches before the ladder's reset do not count -- see SEASON_START in
+   ladder.js -- so every fixture here is stamped after it. Tests about the
+   RULES should not be quietly testing the cutoff as well, and a fixture at
+   `at: 1` is thirty thousand years before it. */
+const BASE = kit().SEASON_START;
+
 /** A match as the host writes it, with whatever confirms came back. */
 function match(mid, at, uids, winnerSlot, confirm) {
   return {
-    mid, at, uids,
+    mid, at: BASE + at, uids,
     names: uids.map((u) => u.toUpperCase()),
     chars: uids.map(() => "kel"),
     stage: "space",
@@ -225,7 +231,7 @@ test("the store is create-only, so a result cannot be rewritten", async () => {
      which is also what the Firestore rules will enforce. */
   const L = kit();
   const store = L.memoryStore();
-  const doc = { at: 1, uids: ["a", "b"], names: ["A", "B"], chars: ["kel", "trev"],
+  const doc = { at: BASE + 1, uids: ["a", "b"], names: ["A", "B"], chars: ["kel", "trev"],
                 stage: "space", winnerSlot: 0, stocks: [1, 0], frames: 900,
                 build: "x", host: "a" };
   assert.equal(await store.writeMatch("m1", doc), true);
@@ -254,7 +260,7 @@ test("the ladder only reads what it has not already seen", async () => {
   });
   const ladder = L.createLadder(counting);
 
-  await store.writeMatch("m1", { at: 10, uids: ["a", "b"], names: ["A", "B"],
+  await store.writeMatch("m1", { at: BASE + 10, uids: ["a", "b"], names: ["A", "B"],
     chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
   await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
   await ladder.refresh();
@@ -262,7 +268,7 @@ test("the ladder only reads what it has not already seen", async () => {
 
   await ladder.refresh();
   assert.equal(reads[0], 0, "the first read starts from the beginning");
-  assert.ok(reads[1] >= 10,
+  assert.ok(reads[1] >= BASE + 10,
     "the second should only ask for what is newer than it already has, asked from " +
     reads[1]);
 });
@@ -270,7 +276,7 @@ test("the ladder only reads what it has not already seen", async () => {
 
 /** The match document as the host writes it. */
 function hostDoc(uids) {
-  return { at: 1, uids, names: uids.map((u) => u.toUpperCase()),
+  return { at: BASE + 1, uids, names: uids.map((u) => u.toUpperCase()),
            chars: uids.map(() => "kel"), stage: "space", winnerSlot: 0,
            stocks: [1, 0], frames: 900, build: "x", host: uids[0] };
 }
@@ -290,7 +296,7 @@ test("two machines reporting the same match write one record between them", asyn
   const store = L.memoryStore();
   const ladder = L.createLadder(store, { wait: () => Promise.resolve() });
   const report = (me) => ladder.report({
-    mid: "m1", me, at: 1, uids: ["a", "b"], names: ["A", "B"],
+    mid: "m1", me, at: BASE + 1, uids: ["a", "b"], names: ["A", "B"],
     chars: ["kel", "trev"], stage: "space", winnerSlot: 1, stocks: [0, 2],
     frames: 900, build: "x",
   });
@@ -324,7 +330,7 @@ test("it counts whichever machine happened to write it down", async () => {
     const store = L.memoryStore();
     const ladder = L.createLadder(store, { wait: () => Promise.resolve() });
     const report = (me) => ladder.report({
-      mid: "m1", me, at: 1, uids: ["a", "b"], names: ["A", "B"],
+      mid: "m1", me, at: BASE + 1, uids: ["a", "b"], names: ["A", "B"],
       chars: ["kel", "trev"], stage: "space", winnerSlot: 1, stocks: [0, 2],
       frames: 900, build: "x",
     });
@@ -471,7 +477,7 @@ test("choosing a name sticks, and shows up on the board at once", async () => {
   const store = L.memoryStore();
   const ladder = L.createLadder(store, { wait: () => Promise.resolve() });
 
-  await store.writeMatch("m1", { at: 10, uids: ["a", "b"], names: ["A", "B"],
+  await store.writeMatch("m1", { at: BASE + 10, uids: ["a", "b"], names: ["A", "B"],
     chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
   await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
   await ladder.refresh();
@@ -507,7 +513,7 @@ test("names are read once per refresh, not once per player", async () => {
   const ladder = L.createLadder(counting, { wait: () => Promise.resolve() });
 
   for (const uid of ["a", "b", "c", "d"]) await store.setProfile(uid, { name: uid.toUpperCase() });
-  await store.writeMatch("m1", { at: 1, uids: ["a", "b"], names: ["x", "y"],
+  await store.writeMatch("m1", { at: BASE + 1, uids: ["a", "b"], names: ["x", "y"],
     chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
   await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
 
@@ -526,7 +532,7 @@ test("a board with no names to read is still a board", async () => {
     listProfiles: () => Promise.reject(new Error("nope")),
   });
   const ladder = L.createLadder(noNames, { wait: () => Promise.resolve() });
-  await store.writeMatch("m1", { at: 1, uids: ["a", "b"], names: ["A", "B"],
+  await store.writeMatch("m1", { at: BASE + 1, uids: ["a", "b"], names: ["A", "B"],
     chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
   await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
 
@@ -536,4 +542,62 @@ test("a board with no names to read is still a board", async () => {
   assert.equal(v.counted, 1, "and the matches still count");
   assert.equal(v.rows.find((r) => r.uid === "b").name, "B",
     "falling back to the name they played under");
+});
+
+
+test("the reset draws a line, it does not burn the log", async () => {
+  /* Asked for after an evening of testing: "reset the leaderboard so that our
+     previous matches didnt count". Deleting them would have done it and been
+     irreversible; a line across the log does it and is a number.
+
+     Matches before the line are still in the database and still come back
+     from it -- the screen says how many, because a board that silently drops
+     matches people remember playing is a board nobody trusts -- but they
+     score nothing and seat nobody. */
+  const L = kit();
+  const log = [
+    match("old1", -1000, ["a", "b"], 0, agrees("b", 0)),
+    match("old2", -900, ["a", "c"], 0, agrees("c", 0)),
+    match("new1", 10, ["a", "b"], 1, agrees("b", 1)),
+  ];
+  const v = L.fold(log);
+
+  assert.equal(v.before, 2, "two matches are behind the line");
+  assert.equal(v.counted, 1, "and only the one after it counts");
+  assert.equal(v.rows.length, 2,
+    "only the people who have played since, got " +
+    v.rows.map((r) => r.uid).join(", "));
+  assert.equal(v.rows.find((r) => r.uid === "c"), undefined,
+    "somebody whose only match is behind the line is not on the board at all");
+  assert.equal(v.rows.find((r) => r.uid === "a").w, 0, "and no old wins carry over");
+  assert.equal(v.rows.find((r) => r.uid === "a").l, 1);
+  assert.equal(v.rows.find((r) => r.uid === "a").played, 1);
+  assert.deepEqual(here(L.between(v, "a", "b")), { w: 0, l: 1, d: 0 },
+    "head-to-head starts again too");
+
+  // Still in the log, still readable, just not counted.
+  assert.equal(v.matches.length, 3, "nothing was thrown away");
+  assert.equal(v.matches.filter((m) => m.verdict === "before").length, 2);
+
+  // And the line can be moved back.
+  const all = L.fold(log, null, 0);
+  assert.equal(all.before, 0);
+  assert.equal(all.counted, 3, "un-resetting brings the whole history back");
+  assert.equal(all.rows.find((r) => r.uid === "a").w, 2);
+});
+
+test("everybody folds the same log to the same board after a reset", async () => {
+  /* The cutoff is a constant every client folds against, so two people on the
+     same bundle cannot disagree about which matches count. */
+  const L = kit();
+  assert.equal(typeof L.SEASON_START, "number");
+  assert.ok(L.SEASON_START > 0, "a reset that is zero is not a reset");
+  const log = [match("a", -5, ["a", "b"], 0, agrees("b", 0)),
+               match("b", 5, ["a", "b"], 0, agrees("b", 0))];
+  const mine = L.fold(log);
+  const theirs = kit().fold(log);
+  assert.equal(mine.counted, theirs.counted);
+  assert.equal(mine.before, theirs.before);
+  assert.equal(mine.rows.map((r) => r.uid + r.rating).join(","),
+               theirs.rows.map((r) => r.uid + r.rating).join(","));
 });

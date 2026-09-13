@@ -3617,7 +3617,8 @@ function stubLadder(run, me) {
   run(`(function () {
     var K = window.NerdWarsLadderKit;
     var db = { matches: {}, profiles: {} };
-    var n = 0;
+    // After the ladder's reset, or the board would correctly show nothing.
+    var n = K.SEASON_START;
     var NAME = { 'u-trev': 'TREV', 'u-kel': 'KEL', 'u-nick': 'NICK',
                  'u-reese': 'REESE', 'u-simon': 'SIMON', 'u-squalls': 'SQUALLS',
                  'u-ladeane': 'LADEANE', 'u-johnny': 'JOHNNY', 'u-cobeus': 'COBEUS' };
@@ -4481,4 +4482,55 @@ test("nobody who is signed out can rename anybody", async () => {
   assert.equal(run("ladderView.editing"), false,
     "there is nobody to rename until somebody signs in");
   assert.equal(run("__auth.named.length"), 0);
+});
+
+
+test("the board says what the reset took off it", async () => {
+  /* The reset is a line across the log, not a delete: the matches are still
+     in the database. A board that silently dropped games people remember
+     playing would be a board nobody trusts, so it says how many. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  stubAuth(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+
+  // Push three of the fixture's matches back behind the line.
+  run(`(function () {
+    var K = window.NerdWarsLadderKit;
+    var keys = Object.keys(__ladderDb.matches).slice(0, 3);
+    keys.forEach(function (k) { __ladderDb.matches[k].at = K.SEASON_START - 5000; });
+    window.NerdWarsLadder = K.createLadder(K.memoryStore(__ladderDb));
+    return window.NerdWarsLadder.refresh();
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("scene = 'ladder'; ladderView.row = 0;");
+
+  const got = drawnLadder(run);
+  const lines = parseLines(got).map((l) => l.s);
+  assert.ok(lines.some((s) => /3 before the reset/.test(s)),
+    "it should say how many are behind the line, got: " + lines.join(" / "));
+
+  // And nothing behind the line is scored.
+  const counted = run("NerdWarsLadder.view().counted");
+  const before = run("NerdWarsLadder.view().before");
+  assert.equal(before, 3);
+  assert.ok(counted > 0, "the rest still count");
+
+  /* With everything behind the line, the board is empty and says why --
+     "no matches yet" would be a lie about an evening somebody remembers. */
+  run(`(function () {
+    var K = window.NerdWarsLadderKit;
+    Object.keys(__ladderDb.matches).forEach(function (k) {
+      __ladderDb.matches[k].at = K.SEASON_START - 5000;
+    });
+    window.NerdWarsLadder = K.createLadder(K.memoryStore(__ladderDb));
+    return window.NerdWarsLadder.refresh();
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  const empty = parseLines(drawnLadder(run)).map((l) => l.s);
+  assert.ok(empty.some((s) => /the board was reset/.test(s)),
+    "an empty board after a reset should say so, got: " + empty.join(" / "));
+  assert.ok(!empty.some((s) => /no matches yet/.test(s)),
+    "and must not claim nobody has ever played");
 });

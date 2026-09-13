@@ -8911,8 +8911,9 @@ function drawLadder() {
     text('could not reach the ladder', VW / 2, 64, 8, '#ff9f43', 'center', 600);
     text(String(v.error).slice(0, 54), VW / 2, 78, 5.5, '#8792b0', 'center', 500);
   } else if (!v.rows.length) {
-    text(v.loading ? 'loading...' : 'no matches yet', VW / 2, 70, 8,
-         '#8792b0', 'center', 600);
+    text(v.loading ? 'loading...'
+                   : v.before ? 'the board was reset' : 'no matches yet',
+         VW / 2, 70, 8, '#8792b0', 'center', 600);
     text('play somebody online and it turns up here', VW / 2, 84, 6,
          '#5f6884', 'center', 500);
   }
@@ -9002,6 +9003,11 @@ function drawLadder() {
   const notes = [];
   if (v.pending) notes.push(v.pending + ' waiting to be confirmed');
   if (v.disputed) notes.push(v.disputed + ' disputed');
+  /* Said out loud rather than left as a gap in the record. Those matches are
+     still in the database -- the reset is a line across the log, not a delete
+     -- and a board that quietly dropped games people remember playing would
+     be a board nobody trusts. */
+  if (v.before) notes.push(v.before + ' before the reset');
   if (notes.length) {
     text(notes.join('    '), VW / 2, VH - 14, 6,
          v.disputed ? '#ff9f43' : '#6b7392', 'center', 600);
@@ -10409,7 +10415,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '359f9b3efc';
+const BUILD_ID = '297d0be5ed';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10420,7 +10426,7 @@ const BUILD_ID = '359f9b3efc';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.50';
+const VERSION = '2.51';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

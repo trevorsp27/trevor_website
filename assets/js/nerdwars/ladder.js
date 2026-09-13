@@ -102,12 +102,13 @@
   /* A name somebody actually chose beats the one their Google account came
      with. `names` is uid -> chosen name; anybody not in it keeps the name
      they last played under, which is all there ever was before. */
-  function fold(matches, names) {
+  function fold(matches, names, since) {
     var chosen = names || {};
+    var cut = since == null ? SEASON_START : since;
     var log = (matches || []).slice().sort(inOrder);
     var players = {};        // uid -> { uid, name, rating, w, l, d, played }
     var h2h = {};            // uid -> opponent uid -> { w, l, d }
-    var counted = 0, disputed = 0, pending = 0, unrated = 0;
+    var counted = 0, disputed = 0, pending = 0, unrated = 0, before = 0;
 
     function seat(uid, name) {
       if (!players[uid]) {
@@ -128,9 +129,21 @@
     }
 
     var out = log.map(function (m) {
-      var verdict = verdictOf(m);
       var uids = (m.uids || []);
       var names = (m.names || []);
+
+      /* Before the line. Returned so the screen can say how many there are --
+         a board that silently drops matches people remember playing is a
+         board nobody trusts -- but not seated, so nobody turns up on the
+         table for a match that no longer counts. */
+      if (m.at < cut) {
+        before++;
+        return { mid: m.mid, at: m.at, verdict: "before", uids: uids,
+                 names: names, chars: m.chars || [], stage: m.stage,
+                 winnerSlot: m.winnerSlot, rated: false };
+      }
+
+      var verdict = verdictOf(m);
       uids.forEach(function (u, i) { if (u) seat(u, names[i]); });
 
       if (verdict !== "counted") {
@@ -191,7 +204,7 @@
 
     return { rows: rows, h2h: h2h, matches: out,
              counted: counted, disputed: disputed, pending: pending,
-             unrated: unrated };
+             unrated: unrated, before: before, since: cut };
   }
 
   /** Head-to-head between two people, from a folded view. */
@@ -272,6 +285,21 @@
      this file, the Firestore rules, and the column it is drawn in. Letters,
      digits, spaces and a few joiners; trimmed; and short enough to fit beside
      a rating on a 320px screen. */
+  /* THE RESET.
+   *
+   * Matches before this do not count: no rating, no record, no head-to-head,
+   * and nobody appears on the board for them. They stay in the database --
+   * this is a line drawn across the log, not a delete -- so moving it back to
+   * 0 brings the whole history back exactly as it was.
+   *
+   * Currently: 2026-09-13 04:17 UTC. Everything before it is the evening the
+   * ladder was built and tested, including the two matches that went missing
+   * to the bug where a guest's win was never confirmed.
+   *
+   * One number, in one file, that every client folds against -- so a reset is
+   * a deploy, and everybody sees the same board the moment they have it. */
+  var SEASON_START = 1789273046313;
+
   var NAME_MAX = 16;
   function cleanName(raw) {
     var s = String(raw == null ? "" : raw)
@@ -358,7 +386,8 @@
         return { loading: cache.loading, error: cache.error,
                  rows: cache.view.rows, matches: cache.view.matches,
                  counted: cache.view.counted, disputed: cache.view.disputed,
-                 pending: cache.view.pending };
+                 pending: cache.view.pending, before: cache.view.before,
+                 since: cache.view.since };
       },
       between: function (a, b) { return between(cache.view, a, b); },
       refresh: refresh,
@@ -446,6 +475,7 @@
   var api = { createLadder: createLadder, memoryStore: memoryStore,
               fold: fold, verdictOf: verdictOf, between: between,
               cleanName: cleanName, NAME_MAX: NAME_MAX,
+              SEASON_START: SEASON_START,
               START: START, K: K, K_NEW: K_NEW, PROVISIONAL: PROVISIONAL };
 
   if (typeof window !== "undefined") {
