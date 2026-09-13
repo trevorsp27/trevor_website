@@ -2673,3 +2673,237 @@ test("Simon is in the game off one sheet, with a kit that works", async () => {
     "all five moves -- jab, three specials, ult -- should connect with " +
     "somebody standing right next to him; only " + fought.took + " did");
 });
+
+
+test("the rainbow is an arch that paints, waits, and falls", async () => {
+  /* It used to be a lobbed dot with a flag of color on it -- 15 damage and
+     nothing else -- and it was the weakest move on the weakest character.
+
+     Now it is three phases in one object, and the middle one is the move:
+     it paints a 144x66 arch, holds for forty frames while you decide whether
+     you are standing under it, and then comes down in seven colored bars.
+
+     The hold is what this test exists for. `box()` has to be genuinely
+     inert for those forty frames, and the obvious way to write that -- a
+     zero-size box -- is WRONG in a way that is invisible in play. overlap()
+     is `a.x < b.x + b.w && a.x + a.w > b.x`; with a width of zero both
+     comparisons pass for any point strictly inside the other box, so a
+     degenerate box is not empty, it is maximally overlapping. Written that
+     way the arch would have parked a silent, artless, piercing hitbox at the
+     far foot for the whole hold -- exactly where somebody who just walked
+     out from under it is standing. */
+  const run = await bootEngine();
+  run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.name"), "AUTISNICK");
+  assert.equal(run("ROSTER.autisnick.specials.up.label"), "DOUBLE RAINBOW");
+
+  const SP_U = 2048;
+  const r = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true;
+    me.facing=1; me.stocks=99; me.eliminated=false; me.specialSpawned=false;
+    me.buffTimer=0; me.buffStats=null; me.chargeTimer=0;
+    me.x=main.x+30; me.y=main.y;
+    foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
+    foe.y=main.y; foe.hasHit=true; foe.grounded=true;
+    foe.x = main.x + 180; foe.invuln = 9999;
+    var live = [], bars = 0, apexY = 999, spanL = 9999, spanR = -9999, held = 0;
+    netplay.active = true;
+    for (var i = 0; i < 130; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_U} : 0), bitsToPad(0)];
+      step();
+      var a = projectiles.filter(function (p) { return p.constructor.name === 'Arch'; })[0];
+      var d = projectiles.filter(function (p) { return p.constructor.name === 'ArchDrop'; });
+      if (a) {
+        var b = a.box();
+        if (b.x > -5000) {
+          live.push(i);
+          spanL = Math.min(spanL, b.x); spanR = Math.max(spanR, b.x + b.w);
+          apexY = Math.min(apexY, b.y);
+        } else { held++; }
+      }
+      if (d.length > bars) bars = d.length;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { live: live.length, held: held, bars: bars, apexY: apexY,
+             width: spanR - spanL, floor: main.y, VH: VH };
+  })()`);
+
+  assert.ok(r.live >= 30 && r.live <= 36,
+    "the paint phase should be about 33 frames; it was " + r.live);
+  assert.ok(r.held >= 35,
+    "and it should then HOLD, hitless, for about forty; it held " + r.held);
+  assert.equal(r.bars, 7, "seven bars, one per color of the rainbow");
+  assert.ok(r.width > 120,
+    "the arch should span most of the stage; it spanned " + r.width + "px");
+  assert.ok(r.apexY > 2,
+    "and its top must stay on screen; the apex drew at y " + r.apexY);
+  assert.ok(r.apexY < r.floor - 40,
+    "while still arcing well clear of the floor at " + r.floor);
+});
+
+test("the arch's hold phase cannot hurt anybody", async () => {
+  /* Split from the test above because this is the one that would have
+     shipped broken, and it needs the victim pinned exactly where a
+     zero-size box would have sat: the far foot, where the painting head
+     comes to rest. Anywhere else and the bug hides. */
+  const run = await bootEngine();
+  run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const SP_U = 2048;
+  const hurt = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true;
+    me.facing=1; me.stocks=99; me.eliminated=false; me.specialSpawned=false;
+    me.buffTimer=0; me.buffStats=null; me.chargeTimer=0;
+    me.x=main.x+30; me.y=main.y;
+    foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
+    foe.y=main.y; foe.hasHit=true; foe.grounded=true;
+    var rest = me.x + ARCH_ARC[ARCH_ARC.length - 1][0];
+    var duringHold = 0, duringPaint = 0, h0;
+    netplay.active = true;
+    for (var i = 0; i < 130; i++) {
+      me.hitstop = 0; me.mana = 999;
+      // Pinned at the resting point of the head, every frame.
+      foe.hitstop = 0; foe.invuln = 0; foe.hitstun = 0; foe.setState('idle');
+      foe.x = rest; foe.vx = 0; foe.y = main.y; foe.grounded = true;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_U} : 0), bitsToPad(0)];
+      h0 = foe.health;
+      step();
+      var a = projectiles.filter(function (p) { return p.constructor.name === 'Arch'; })[0];
+      if (a && foe.health < h0) {
+        if (a.t > a.spec.paintEnd) duringHold++; else duringPaint++;
+      }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { hold: duringHold, paint: duringPaint };
+  })()`);
+
+  assert.equal(hurt.hold, 0,
+    "the hold phase dealt damage on " + hurt.hold + " frames. A zero-size " +
+    "box is INSIDE everything -- park it off the world instead.");
+});
+
+test("Cobeus's AK fires three rounds, spaced apart", async () => {
+  /* Three objects leaving at three different times, not one shotgun blast.
+     The gap is the move: it is three chances to miss, and a gap somebody
+     can walk through. */
+  const run = await bootEngine();
+  run("select.cursor=[6,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("ROSTER.cobeus.specials.down.label"), "FULL AUTO");
+  assert.ok(run("!!IMG.ak"),
+    "the rifle sprite never became an Image -- loadAssets names every " +
+    "non-character sprite by hand, and art it misses is silently invisible");
+
+  const SP_D = 1024;
+  const r = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true;
+    me.facing=1; me.stocks=99; me.eliminated=false; me.specialSpawned=false;
+    me.buffTimer=0; me.buffStats=null; me.chargeTimer=0;
+    me.x=main.x+30; me.y=main.y;
+    foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
+    foe.y=main.y; foe.hasHit=true; foe.grounded=true;
+    foe.x = main.x + main.w - 8; foe.invuln = 9999;
+    var shots = 0, at = [];
+    netplay.active = true;
+    for (var i = 0; i < 70; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_D} : 0), bitsToPad(0)];
+      step();
+      var slugs = projectiles.filter(function (p) { return p.constructor.name === 'Slug'; });
+      for (var j = 0; j < slugs.length; j++) {
+        if (!slugs[j].__seen) { slugs[j].__seen = 1; shots++; at.push(i); }
+      }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { shots: shots, at: at };
+  })()`);
+
+  assert.equal(r.shots, 3, "three rounds per trigger pull, got " + r.shots);
+  const gaps = r.at.slice(1).map((v, i) => v - r.at[i]);
+  assert.deepEqual([...gaps], [5, 5],
+    "and they should be spaced, not simultaneous; gaps were " + gaps.join(", "));
+});
+
+test("Cobeus can throw the bottle or drink it, on the same button", async () => {
+  /* Tap and it goes where it always went. Hold it for three seconds and he
+     drinks the thing: half speed, double damage, five seconds.
+
+     The whole mechanism is the charge the pawn already uses -- holding pins
+     him on the startup frame and counts -- plus buffTimer/buffStats, which
+     Reese's shirtless buff already owns. Neither is new state on the
+     Fighter, and that matters: restoreSim deletes any key missing from a
+     snapshot, so a bespoke "is drinking" field would survive local play and
+     vanish on the first online rollback. */
+  const run = await bootEngine();
+  run("select.cursor=[6,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const SP_N = 512, HOLD_N = 4096;
+  const go = (holdFrames) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true;
+    me.facing=1; me.stocks=99; me.eliminated=false; me.specialSpawned=false;
+    me.buffTimer=0; me.buffStats=null; me.chargeTimer=0;
+    me.x=main.x+30; me.y=main.y;
+    foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
+    foe.y=main.y; foe.hasHit=true; foe.grounded=true;
+    foe.x = main.x + main.w - 8; foe.invuln = 9999;
+    var threw = false, drankAt = -1, dmg = 1, spd = 1, lasts = 0;
+    netplay.active = true;
+    for (var i = 0; i < 260; i++) {
+      me.hitstop = 0; me.mana = 999;
+      var bits = (i === 0 ? ${SP_N} : 0) | (i < ${holdFrames} ? ${HOLD_N} : 0);
+      netplay.framePads = [bitsToPad(bits), bitsToPad(0)];
+      step();
+      if (projectiles.some(function (p) { return p.constructor.name === 'Bottle'; })) threw = true;
+      if (me.buffTimer > 0 && drankAt < 0) {
+        drankAt = i; dmg = me.damageMul; spd = me.speedMul; lasts = me.buffTimer;
+      }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { threw: threw, drankAt: drankAt, dmg: dmg, spd: spd, lasts: lasts };
+  })()`);
+
+  const tapped = go(0);
+  assert.ok(tapped.threw, "a tap should throw the bottle as it always did");
+  assert.equal(tapped.drankAt, -1, "and must not drink it");
+
+  const held = go(200);
+  assert.equal(held.threw, false,
+    "holding should drink it, not throw it as well");
+  assert.ok(held.drankAt > 150 && held.drankAt < 220,
+    "three seconds is 180 frames; he drank on frame " + held.drankAt);
+  assert.equal(held.dmg, 2, "double damage");
+  assert.ok(held.spd < 1, "and slower: speedMul was " + held.spd);
+  assert.ok(held.lasts >= 290 && held.lasts <= 310,
+    "for about five seconds; it was " + held.lasts + " frames");
+
+  /* A half-second hold is still a throw. The boundary matters: if any hold
+     at all drank, the normal throw would be unreachable for anyone who does
+     not release the button instantly. */
+  const brief = go(30);
+  assert.ok(brief.threw && brief.drankAt === -1,
+    "half a second of hold should still be a throw");
+});

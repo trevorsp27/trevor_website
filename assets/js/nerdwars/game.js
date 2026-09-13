@@ -392,15 +392,48 @@ const ROSTER = {
         ox: 2, oy: -10, w: 11, h: 9,
         poison: { frames: 200, dps: 0.05 },
       },
-      // Tuned against the stage, not by feel. Apex is lift^2/(2*drop) at
-      // speed*lift/drop away: ~40px up, ~78px out. The side platforms sit
-      // 38px above the floor, so the arc reaches the one place the flat
-      // shot never can.
+      /* It was a lobbed dot with a flag of colour on it: 15 damage, an arc
+         78px long, and nothing else. Three separate times the answer to
+         "what does the rainbow do" was "not much", and he has been last on
+         the roster the whole time.
+
+         Now he paints one. It goes up and over as a 144x66 arch, the stage
+         dims behind it, it stands there for two thirds of a second being the
+         largest thing in the game, and then it comes down on whoever is
+         under it in seven coloured bars.
+
+         Three phases, one object:
+
+           PAINT     33 frames. The head sweeps the arc and IS the hitbox,
+                     leaving his feet almost straight up -- the only
+                     anti-air he has ever had.
+           HOLD      40 frames. Nothing connects. This is the move: long
+                     enough to look up, work out where the bars will land,
+                     and leave.
+           COLLAPSE  Seven bars, one per colour, pouring outside-in.
+
+         The bars are 13 wide, not 5. At 5 the gaps between them were 11 to
+         25 pixels and a hurtbox is 9 wide, so the honest answer to the hold
+         was to stand still and hope -- and this file already learned that
+         lesson once, in the comment on THE STROKES. At 13 the answer has to
+         be to move, which is what the telegraph was selling all along.
+
+         Widening them costs no damage: all seven share one spec object, so
+         `count: 7` runs them through applyHit's volley falloff and the full
+         curtain is capped no matter how wide the bars get. */
       up: {
-        kind: 'rainbow', label: 'RAINBOW',
-        startup: 9, active: 1, recovery: 13, maxAlive: 2,
-        speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
-        damage: 15, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        kind: 'arch', label: 'DOUBLE RAINBOW',
+        startup: 9, active: 1, recovery: 13, maxAlive: 1,
+        /* moveCost cannot see a three-phase object, and 38 is deliberately
+           more than a third of his bar. The screen dims for a second and a
+           half per cast; being able to hold it there permanently is how a
+           spectacle turns into a strobe. */
+        manaOverride: 38,
+        paintEnd: 33, hold: 40, dim: 0.40, hitEvery: 30,
+        damage: 8, base: 3.0, scale: 6.0, angle: 70, kx: 0.34202014332566871, ky: 0.93969262078590843,
+        fall: { count: 7, speed: 3.6, life: 90, w: 13, h: 11,
+                damage: 5, base: 2.4, scale: 4.0,
+                angle: 62, kx: 0.46947156278589086, ky: 0.88294759285892688 },
       },
     },
     // "mike Tyson flies in from trees, sounds of rainforest". This used to be
@@ -1160,6 +1193,19 @@ ROSTER.cobeus = {
          front of him rather than across the stage. */
       speed: 3.0, lift: -1.9, drop: 0.20, life: 200,
       spin: 3,                        // frames per rotation frame
+      /* Hold it instead of throwing it and he drinks the thing. Three
+         seconds is a long time to stand still in a fight -- it is most of
+         a stock's worth of openings -- so the payoff has to be worth being
+         a statue for, and half his walk speed for five seconds is the cost
+         that stops it being free.
+
+         `hold` and `drink` are read in updateAttack and runSpecial
+         respectively; neither is known to moveCost, so the price is set by
+         hand. 34 is the bottle's own 22 plus the buff, which is roughly
+         what Reese pays for his. */
+      charge: { hold: 180 },
+      drink: { duration: 300, damageMul: 2, speedMul: 0.5 },
+      manaOverride: 34,
       damage: 6, base: 2.4, scale: 5.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       /* What it leaves behind. `hitEvery` is the re-arm, so standing in it
          keeps costing rather than costing once -- it is glass, not a trap. */
@@ -1167,15 +1213,21 @@ ROSTER.cobeus = {
                damage: 5, base: 1.6, scale: 3.2,
                angle: 78, kx: 0.20791169081775934, ky: 0.97814760073380569 },
     },
-    // PLACEHOLDER. A short hop and a shove, nothing more.
+    /* Three rounds, five frames apart. Not a shotgun and not a machine gun:
+       the gap is the whole point, because three objects leaving at three
+       different times is three separate chances to miss and a thing you can
+       walk through between. 6 apiece, so all three is 18 -- more than any
+       other projectile in the game lands in one press, and it should be,
+       because it is also the easiest to whiff two thirds of.
+
+       `mobile` so he can walk the burst onto somebody rather than rooting
+       to fire it, which is the difference between a rifle and a turret. */
     down: {
-      kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
-      startup: 7, active: 8, recovery: 16,
-      // Negative is UP. `riseFrames` was here and is not a field this kind
-      // reads -- that belongs to the knight's move -- so it is gone.
-      rise: -3.0, drift: 1.2,
-      damage: 7, base: 2.4, scale: 5.6, angle: 60, kx: 0.5, ky: 0.86602540378443865,
-      ox: 2, oy: -12, w: 13, h: 16,
+      kind: 'ak', label: 'FULL AUTO', mobile: true,
+      startup: 9, active: 18, recovery: 17,
+      burst: 3, gap: 5,
+      speed: 5.4, life: 44, tint: '#ffe08a', cue: 'gunshot',
+      damage: 6, base: 2.0, scale: 4.6, angle: 18, kx: 0.95105651629515353, ky: 0.309016994374947451,
     },
     /* PLACEHOLDER, but a working recovery: every other character's `up` is
        how they get home, and a fighter who cannot is not playable. */
@@ -1446,6 +1498,7 @@ function loadAssets(done) {
   SPRITES.bottle.forEach((uri, i) => grab('bottle.' + i, uri));
   grab('glass', SPRITES.glass);
   grab('car', SPRITES.car);
+  grab('ak', SPRITES.ak);
 
   for (const theme in TILES) {
     for (const role in TILES[theme]) grab('tile.' + theme + '.' + role, TILES[theme][role]);
@@ -2065,11 +2118,11 @@ class Fighter {
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
-          s.kind === 'rainbow' || s.kind === 'scatter' ||
+          s.kind === 'arch' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
-          s.kind === 'deadlift') return null;
+          s.kind === 'ak' || s.kind === 'deadlift') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -2603,11 +2656,25 @@ class Fighter {
 
        `specialSpawned` guards the other half: a charge that has already
        fired must not be able to start charging again on its way out. */
+    /* Holding the button pins him on the startup frame and counts. Two
+       moves use it now and they want opposite things from the counter, so
+       neither branch is taken unless its field is present:
+
+         swapEvery  cycle something every N frames, and keep cycling
+                    forever (Trev's pawn walking the chess pieces)
+         hold       count ONCE up to N and then stop pinning, which lets
+                    the move resolve itself (Cobeus drinking the bottle)
+
+       `hold` releasing the pin is what makes three seconds an event rather
+       than a requirement to let go on the right frame. The counter stops,
+       attackFrame advances, and the case below fires on startup + 1 with a
+       chargeTimer that has reached the threshold. */
     if (m.charge && !this.specialSpawned && this.attackFrame >= m.startup &&
-        pad && pad[HOLD_FOR_SLOT[this.chargeKey] || 'holdNeutral']) {
+        pad && pad[HOLD_FOR_SLOT[this.chargeKey] || 'holdNeutral'] &&
+        !(m.charge.hold && this.chargeTimer >= m.charge.hold)) {
       this.attackFrame = m.startup;
       this.chargeTimer++;
-      if (this.chargeTimer >= m.charge.swapEvery) {
+      if (m.charge.swapEvery && this.chargeTimer >= m.charge.swapEvery) {
         this.chargeTimer = 0;
         this.chargePiece = (this.chargePiece + 1) % CHESS_PIECES.length;
         cue('swap', { slot: this.slot, x: this.x });
@@ -2707,10 +2774,11 @@ class Fighter {
         }
         break;
 
-      case 'rainbow':
+      case 'arch':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Rainbow(this, s));
+          projectiles.push(new Arch(this, s));
+          cue('promote', { slot: this.slot, x: this.x });
         }
         break;
 
@@ -2845,11 +2913,73 @@ class Fighter {
         }
         break;
 
+      /* Throw it, or drink it.
+
+         Same button. Tap and the bottle goes where it always went; hold it
+         for three seconds and he drinks the thing instead, which costs him
+         his speed and doubles what he hits for.
+
+         It fires on startup + 1 and never on startup, for the reason the
+         pawn does: startup is the frame the hold pins him to, so a spawn
+         there would go off on the first HELD frame instead of the released
+         one -- the tap and the three-second hold would both throw on the
+         same frame and the drink would be unreachable. */
       case 'bottle':
-        if (this.attackFrame === s.startup && !this.specialSpawned) {
+        if (this.attackFrame === 1) this.chargeTimer = 0;
+        if (this.attackFrame === s.startup + 1 && !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Bottle(this, s));
-          cue('shoot', { slot: this.slot, x: this.x });
+          const d = s.drink;
+          if (d && this.chargeTimer >= (s.charge ? s.charge.hold : 1e9)) {
+            /* buffTimer and buffStats are Fighter CONSTRUCTOR fields, which
+               is the only reason this is safe: restoreSim deletes any key
+               not in the snapshot, so a bespoke `drunk` field here would
+               vanish on the first online rollback. Reese's shirtless buff
+               already owns this machinery -- speedMul and damageMul are
+               getters that read it -- so drinking is the same mechanism
+               pointed the other way: his is all upside, this one trades. */
+            this.buffTimer = d.duration;
+            this.buffStats = {
+              damageMul: d.damageMul || 1,
+              speedMul: d.speedMul || 1,
+              knockbackTakenMul: d.knockbackTakenMul || 1,
+            };
+            for (let i = 0; i < 9; i++) {
+              addEffect('spark', this.x + rand(-5, 5), this.y - rand(8, 18),
+                        i % 2 ? '#d8b24a' : this.accent);
+            }
+            const r = addEffect('ring', this.x, this.y - 10, '#d8b24a');
+            if (r) { r.vx = 0; r.vy = 0; }
+            cue('drink', { slot: this.slot, x: this.x });
+          } else {
+            projectiles.push(new Bottle(this, s));
+            cue('shoot', { slot: this.slot, x: this.x });
+          }
+        }
+        break;
+
+      /* Three rounds, one trigger pull. The gap is what makes it a burst
+         rather than a shotgun: at 5 frames apart they leave as three
+         separate objects with three separate chances to miss, and walking
+         through the gap is a real thing a person can do.
+
+         No recoil. The SIDEARM's kick is its whole character -- it shoves
+         John backwards and hands him an air jump -- and giving the same
+         thing to a three-round burst would move him three times per press,
+         which is how John used to end up off the stage. */
+      case 'ak':
+        if (this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + (s.burst || 1) * (s.gap || 5) &&
+            (this.attackFrame - s.startup) % (s.gap || 5) === 0) {
+          projectiles.push(new Slug(this, s));
+          addEffect('spark', this.x + this.facing * 13, this.y - 11, '#ffd76a');
+          cue(s.cue || 'gunshot', { slot: this.slot, x: this.x });
+        }
+        // Held for the whole move, not just the frames that fire.
+        if (this.attackFrame >= s.startup - 2 &&
+            this.attackFrame < s.startup + (s.burst || 1) * (s.gap || 5) + 4) {
+          const e = addEffect('ak', this.x + this.facing * 7, this.y - 11,
+                              null, this.facing);
+          if (e) { e.vx = 0; e.vy = 0; e.life = 2; }
         }
         break;
 
@@ -4527,6 +4657,48 @@ function drawCharge(g, f) {
           f.x, f.y - 30 - fresh);
 }
 
+/* Cobeus tipping the bottle back, for as long as he is holding the button.
+
+   Reads chargeTimer and attackFrame and writes nothing at all -- the same
+   contract drawCharge and drawPole keep. A draw that mutated the simulation
+   would desync online, because rendering happens once per displayed frame
+   while the simulation may run that frame several times over a rollback.
+
+   The rotation frames the thrown bottle spins through are reused as the tip:
+   at rest it hangs at his side, and over three seconds it comes up and goes
+   over. There is no separate drinking sprite and none is invented -- he is
+   the only character in the game with a prop, and the prop already has eight
+   angles drawn for it. */
+function drawDrink(g, f) {
+  const s = f.def.specials && f.def.specials.neutral;
+  if (!s || s.kind !== 'bottle' || !s.charge || !s.drink) return;
+  if (f.state !== 'special' || f.chargeKey !== 'neutral') return;
+  if (f.chargeTimer <= 0) return;
+
+  const prog = Math.min(1, f.chargeTimer / s.charge.hold);
+  const im = IMG['bottle.' + Math.min(7, Math.floor(prog * 7.999))];
+  if (im && im.complete) {
+    // Up to his mouth and back over his shoulder as it empties.
+    const hx = Math.round(f.x + f.facing * (3 + prog * 2));
+    const hy = Math.round(f.y - 11 - prog * 5);
+    g.drawImage(im, hx - 4, hy - 4, im.naturalWidth || 8, im.naturalHeight || 8);
+  }
+
+  /* How far along he is, without a number and without a bar: the ring of
+     gold closes as it fills. Three seconds is long enough that a player who
+     cannot see the progress will let go early every time. */
+  const cx = Math.round(f.x), cy = Math.round(f.y - 24);
+  for (let i = 0; i < 7; i++) {
+    g.fillStyle = i / 7 < prog ? '#d8b24a' : '#3a3550';
+    g.fillRect(cx - 7 + i * 2, cy, 1, 2);
+  }
+  if (prog >= 1) {
+    // Full, and it fires on the next frame: a flash so the release reads.
+    g.fillStyle = '#ffe9a8';
+    g.fillRect(cx - 8, cy - 1, 16, 4);
+  }
+}
+
 /** The rod, the line and the lure, for whoever is casting or holding one. */
 function drawPole(g, f) {
   const s = f.def.specials && f.def.specials.down;
@@ -4942,69 +5114,184 @@ class Pizza {
   }
 }
 
-/* =====================================================================
-   RAINBOW - AutisNick's arcing shot.
+/* THE ARCH. One object, three phases, and all of it a pure function of its
+   own frame counter -- it reads the fighter once, in the constructor, and
+   never again, so cast in the air it hangs where it was cast instead of
+   dragging along behind him.
 
-   Nobody drew art for this one, so it is drawn in code from the spectrum on
-   his shirt: the same bands, lobbed. It arcs high enough to come down behind
-   a platform, which is the point of having it alongside the flat pizza.
-   ===================================================================== */
+   The shape is baked rather than computed. build.py bans the substrings
+   "Math" + ".cos(", ".tan(" and ".atan" anywhere in this file, comments
+   included, because a desync between two machines running slightly
+   different trig is unfixable from inside the game -- and a table of
+   integers cannot disagree with itself. 67 points of a half ellipse 144
+   wide and 66 tall, in steps of 2.8 to 4.1 pixels, which is tight enough
+   that the 13x13 head cannot step over a 9x14 hurtbox. */
+const ARCH_ARC = [
+  [0,0],[0,-3],[0,-6],[1,-9],[1,-12],[2,-16],[3,-19],[4,-22],[5,-25],[7,-27],
+  [8,-30],[10,-33],[11,-36],[13,-38],[15,-41],[18,-43],[20,-46],[22,-48],[25,-50],[27,-52],
+  [30,-54],[33,-56],[36,-57],[39,-59],[42,-60],[45,-61],[48,-62],[52,-63],[55,-64],[58,-65],
+  [62,-65],[65,-66],[69,-66],[72,-66],[75,-66],[79,-66],[82,-65],[86,-65],[89,-64],[92,-63],
+  [96,-62],[99,-61],[102,-60],[105,-59],[108,-57],[111,-56],[114,-54],[117,-52],[119,-50],[122,-48],
+  [124,-46],[126,-43],[129,-41],[131,-38],[133,-36],[134,-33],[136,-30],[137,-27],[139,-25],[140,-22],
+  [141,-19],[142,-16],[143,-12],[143,-9],[144,-6],[144,-3],[144,0]
+];
 
-class Rainbow {
+/* Which points of the arc the seven bars fall from, one per colour, spread
+   so the curtain covers the whole span. */
+const ARCH_BANDS = [8, 17, 25, 34, 42, 50, 59];
+
+class Arch {
   constructor(owner, spec) {
     this.owner = owner;
     this.spec = spec;
-    this.x = owner.x + owner.facing * 7;
-    this.y = owner.y - 9;
-    this.vx = owner.facing * spec.speed;
-    this.vy = spec.lift;
+    this.dir = owner.facing;
+    this.ax = owner.x;
+    /* Clamped so the top of the arch stays on a 180px screen. Off a double
+       jump he is routinely 60px up, which would put the apex and both
+       shoulders above the ceiling -- and the entire argument for this move
+       is that you can SEE it. It still hangs where it was cast; it just
+       cannot hang higher than there is room for. */
+    this.ay = Math.max(owner.y, 66 + 5);
+    this.t = 0;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  head() {
+    return Math.min(ARCH_ARC.length - 1, this.t * 2);
+  }
+
+  update() {
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.t++;
+    if (this.t % 4 === 0 && this.t <= this.spec.paintEnd) {
+      const p = ARCH_ARC[this.head()];
+      addEffect('spark', this.ax + this.dir * p[0], this.ay + p[1],
+                RAINBOW[this.head() % RAINBOW.length]);
+    }
+    if (this.t > this.spec.paintEnd + this.spec.hold) {
+      const f = this.spec.fall;
+      for (let i = 0; i < ARCH_BANDS.length; i++) {
+        projectiles.push(new ArchDrop(this, f, ARCH_BANDS[i], i));
+      }
+      this.dead = true;
+    }
+  }
+
+  box() {
+    /* Parked OFF THE WORLD during the hold, and the phase check is the
+       thing doing the work: without it the 13x13 head box stays live for
+       all 40 hold frames, parked at the far foot, and the move's whole
+       premise -- that the hold is safe and the collapse is not -- is a lie
+       the player cannot see.
+
+       Off the world rather than {w:0,h:0} because a zero-size box is NOT
+       inert in this engine. overlap() is `a.x < b.x + b.w && a.x + a.w >
+       b.x`, and with a.w of 0 both tests pass for any point strictly inside
+       b -- a degenerate box is maximally overlapping, not empty.
+
+       Measured, so as not to overstate it: at THIS resting point a zero box
+       would in fact be harmless, because the arc's last point has dy 0 and
+       so sits exactly at floor level, which is the bottom edge of a grounded
+       hurtbox -- `a.y < b.y + b.h` is `floor < floor`, false. Seven pixels
+       higher it returns true. So the hazard is real but the geometry here
+       happens to dodge it, which is exactly the kind of luck that stops
+       being true the first time somebody edits the arc table.
+
+       Returning null would be worse than either: resolveCombat calls
+       overlap(shot.box(), ...) with no guard and would throw. Nothing in
+       this file has ever needed to say "no hitbox this frame", so there is
+       no idiom to copy. */
+    if (this.t > this.spec.paintEnd) return { x: -9999, y: -9999, w: 0, h: 0 };
+    const p = ARCH_ARC[this.head()];
+    return { x: this.ax + this.dir * p[0] - 6, y: this.ay + p[1] - 6,
+             w: 13, h: 13 };
+  }
+
+  draw(g) {
+    const s = this.spec;
+    const painting = this.t <= s.paintEnd;
+    /* The stage goes dark behind it. Projectiles draw after the stage and
+       before the fighters, so one fillRect dims the whole world and leaves
+       both players lit in front of it -- the only moment in this game where
+       the entire screen changes.
+
+       It ramps in over the paint and back out over the hold rather than
+       snapping on, because he can have one of these up most of the time and
+       a hard cut once a second is a strobe, not a spectacle. */
+    const ramp = painting ? this.t / s.paintEnd
+      : Math.max(0, 1 - (this.t - s.paintEnd) / s.hold);
+    g.globalAlpha = s.dim * ramp;
+    g.fillStyle = '#07040f';
+    g.fillRect(0, 0, VW, VH);
+    g.globalAlpha = 1;
+
+    // Every point up to the head, one colour per seventh of the arc.
+    const upto = this.head();
+    for (let i = 0; i <= upto; i++) {
+      const p = ARCH_ARC[i];
+      g.fillStyle = RAINBOW[((i * RAINBOW.length / ARCH_ARC.length) | 0) %
+                            RAINBOW.length];
+      g.fillRect(Math.round(this.ax + this.dir * p[0]) - 1,
+                 Math.round(this.ay + p[1]) - 1, 3, 3);
+    }
+    if (painting) {
+      const p = ARCH_ARC[upto];
+      g.fillStyle = '#ffffff';
+      g.fillRect(Math.round(this.ax + this.dir * p[0]) - 2,
+                 Math.round(this.ay + p[1]) - 2, 4, 4);
+    }
+  }
+}
+
+/* One band of the arch coming down. Constant speed and no gravity: this is a
+   curtain falling, not seven rocks dropping, and a constant rate is what
+   makes it something a player can read and walk out from under. */
+class ArchDrop {
+  constructor(arch, spec, idx, band) {
+    this.owner = arch.owner;
+    this.spec = spec;
+    const p = ARCH_ARC[idx];
+    this.x = arch.ax + arch.dir * p[0];
+    this.y = arch.ay + p[1];
+    this.band = band;
     this.life = spec.life;
-    this.trail = [];
     this.dead = false;
   }
 
   update() {
     const prevY = this.y;
-    this.trail.push({ x: this.x, y: this.y });
-    if (this.trail.length > 14) this.trail.shift();
-    this.x += this.vx;
-    this.y += this.vy;
-    this.vy += this.spec.drop;
+    this.y += this.spec.speed;
     this.life--;
-
-    if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
-        if (this.x < p.x || this.x > p.x + p.w) continue;
-        if (prevY <= p.y && this.y >= p.y) {
-          this.dead = true;
-          for (let i = 0; i < 6; i++) {
-            addEffect('spark', this.x, p.y, RAINBOW[i % RAINBOW.length]);
-          }
-          break;
+    for (const p of STAGE.platforms) {
+      if (this.x < p.x || this.x > p.x + p.w) continue;
+      if (prevY <= p.y && this.y >= p.y) {
+        for (let i = 0; i < 3; i++) {
+          addEffect('spark', this.x + rand(-5, 5), p.y,
+                    RAINBOW[this.band % RAINBOW.length]);
         }
+        this.dead = true;
+        return;
       }
     }
-
-    if (this.life <= 0) this.dead = true;
-    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+    if (this.life <= 0 || this.y > VH + 20) this.dead = true;
   }
 
   box() {
-    return { x: this.x - 3, y: this.y - 3, w: 6, h: 6 };
+    const w = this.spec.w, h = this.spec.h;
+    return { x: this.x - w / 2, y: this.y - h / 2, w: w, h: h };
   }
 
   draw(g) {
-    for (let i = 0; i < this.trail.length; i++) {
-      const t = this.trail[i];
-      g.globalAlpha = (i / this.trail.length) * 0.7;
-      g.fillStyle = RAINBOW[(i + (this.life | 0)) % RAINBOW.length];
-      g.fillRect(Math.round(t.x) - 1, Math.round(t.y) - 1, 2, 2);
-    }
+    g.fillStyle = RAINBOW[this.band % RAINBOW.length];
+    g.globalAlpha = 0.92;
+    g.fillRect(Math.round(this.x - this.spec.w / 2),
+               Math.round(this.y - this.spec.h / 2),
+               this.spec.w, this.spec.h);
     g.globalAlpha = 1;
-    for (let i = 0; i < RAINBOW.length; i++) {
-      g.fillStyle = RAINBOW[i];
-      g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 3 + i, 6, 1);
-    }
   }
 }
 
@@ -6765,6 +7052,13 @@ const AUDIO_RECIPES = {
              noise: { dur: 0.10, lp: 7200, lp1: 520 } },
   bark:   { osc: 'sawtooth', f0: 430, f1: 170, dur: 0.13, gain: 0.42,
             noise: { dur: 0.05, lp: 2400 } },
+  /* Three gulps going DOWN, which is the whole trick -- a swallow drops in
+     pitch as the bottle empties, and a rising one reads as a question. Low,
+     soft and short: it plays while he is standing still doing nothing else,
+     so it does not have to compete with anything, and this is a sound that
+     will be heard three or four times a match. */
+  drink:  { osc: 'sine', f0: 210, gain: 0.20, seq: [0, -3, -7], step: 0.12,
+            dur: 0.11, noise: { dur: 0.06, lp: 700 } },
 
   // Menus. Quietest things in the game: you hear them while deciding, not
   // while playing.
@@ -7048,6 +7342,23 @@ function drawEffects(g) {
         g.fillRect(Math.round(e.x), Math.round(e.y), 1, 1);
         g.globalAlpha = 1;
         break;
+      /* The rifle itself. Respawned every frame of the burst with life 2
+         rather than held as fighter state, for the same reason the blade and
+         the overhead are: an effect is cosmetic, it is never snapshotted,
+         and addEffect returns null during resimulation so it cannot feed
+         anything the simulation reads. */
+      case 'ak': {
+        const im = IMG.ak;
+        if (im && im.complete) {
+          const w = im.naturalWidth || 23, h = im.naturalHeight || 7;
+          g.save();
+          g.translate(Math.round(e.x), Math.round(e.y));
+          if (e.dir < 0) g.scale(-1, 1);
+          g.drawImage(im, -4, -Math.round(h / 2), w, h);
+          g.restore();
+        }
+        break;
+      }
       case 'dust':
         g.fillStyle = '#9aa3b8';
         g.globalAlpha = k * 0.7;
@@ -8690,6 +9001,7 @@ function drawFighter(g, f) {
      a rollback correction carries the rod with the hand holding it. */
   drawPole(g, f);
   drawCharge(g, f);
+  drawDrink(g, f);
 
   /* Confused had no tell at all. The only way to find out your controls were
      inverted was to walk the wrong way off a ledge, which is a lesson that
@@ -9190,7 +9502,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '3088f7e866';
+const BUILD_ID = '152b10324f';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9201,7 +9513,7 @@ const BUILD_ID = '3088f7e866';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.37';
+const VERSION = '2.38';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
