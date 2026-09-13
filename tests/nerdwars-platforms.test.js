@@ -4325,3 +4325,160 @@ test("Escape still leaves a local results screen straight away", async () => {
   assert.notEqual(tapKey(run, 'Escape'), 'results',
     "and work once it is");
 });
+
+
+test("you can type yourself a different name on the leaderboard", async () => {
+  /* The names on the board are the first word of whatever Google was told to
+     call somebody, which made one of the nine "The". */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  stubAuth(run, { uid: 'u-trev', name: 'TREV' });
+  // The page half of renaming, which is Firebase's job in production.
+  run(`(function () {
+    window.__auth.named = [];
+    window.NerdWarsAuth.setName = function (n) {
+      __auth.named.push(n);
+      __auth.me = { uid: 'u-trev', name: n };
+      __lobby.me = __auth.me;
+      return Promise.resolve(true);
+    };
+    return true;
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("scene = 'ladder'; ladderView.row = 0;");
+
+  assert.ok(parseLines(drawnLadder(run)).some((l) => /E rename/.test(l.s)),
+    "the screen should say the key");
+
+  tapKey(run, 'KeyE');
+  assert.equal(run("ladderView.editing"), true, "E should open the field");
+  assert.equal(run("ladderView.draft"), "TREV",
+    "starting from what you are called now, not from nothing");
+
+  /* Typing is a MODE. Every key this screen navigates with is also a letter,
+     so with the field open they have to type instead of moving.
+
+     One key at a time and in one direction: W and S together walk the cursor
+     up and then back down to where it started, which looks exactly like a
+     cursor that never moved. */
+  run("ladderView.draft = ''; ladderView.row = 1; __auth.calls.length = 0;");
+  tapKey(run, 'KeyS');
+  assert.equal(run("ladderView.draft"), "s", "S should type an s");
+  assert.equal(run("ladderView.row"), 1, "and must not also move the cursor");
+  tapKey(run, 'KeyW');
+  assert.equal(run("ladderView.row"), 1, "nor W");
+  tapKey(run, 'KeyR');
+  tapKey(run, 'KeyO');
+  assert.equal(run("ladderView.draft"), "swro",
+    "W, R and O must type too, got " + run("ladderView.draft"));
+  assert.equal(run("__auth.calls.join(',')"), '',
+    "and O must not sign you out mid-name");
+  assert.equal(run("__ladderReads"), run("__ladderReads"),
+    "and R must not go and refetch the board");
+
+  // Shift is the difference between Trev and TREV.
+  run(`(function () {
+    ladderView.draft = '';
+    held.clear(); prevHeld.clear();
+    held.add('ShiftLeft'); held.add('KeyK'); step();
+    prevHeld = new Set(held); held.delete('KeyK'); step();
+    held.delete('ShiftLeft');
+    held.add('KeyA'); prevHeld.clear(); step();
+    held.clear(); prevHeld.clear();
+    return true;
+  })()`);
+  assert.equal(run("ladderView.draft"), "Ka",
+    "shift should give a capital, got " + run("ladderView.draft"));
+
+  // Backspace takes one off; it must not fall through and leave the screen.
+  tapKey(run, 'Backspace');
+  assert.equal(run("ladderView.draft"), "K");
+  assert.equal(run("scene"), 'ladder', "and must not back out of the screen");
+
+  // A name cannot outgrow the column it goes in.
+  run("ladderView.draft = '';");
+  for (let i = 0; i < 40; i++) tapKey(run, 'KeyX');
+  const cap = run("(window.NerdWarsLadderKit && NerdWarsLadderKit.NAME_MAX) || 16");
+  assert.equal(run("ladderView.draft").length, cap,
+    "the field should stop at " + cap + " characters");
+
+  // ENTER hands it to the page, which is the only thing that can store it.
+  run("ladderView.draft = 'Kam';");
+  tapKey(run, 'Enter');
+  assert.equal(run("ladderView.editing"), false, "ENTER should close the field");
+  assert.equal(run("__auth.named.join(',')"), 'Kam',
+    "and ask the page to save it");
+  assert.equal(run("NerdWarsLobby.me().name"), 'Kam',
+    "so the next match is recorded under the new name");
+});
+
+test("changing your mind about a name changes nothing", async () => {
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  stubAuth(run, { uid: 'u-trev', name: 'TREV' });
+  run(`(function () {
+    window.__auth.named = [];
+    window.NerdWarsAuth.setName = function (n) { __auth.named.push(n); return Promise.resolve(true); };
+    return true;
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("scene = 'ladder';");
+
+  tapKey(run, 'KeyE');
+  run("ladderView.draft = 'Nonsense';");
+  assert.equal(tapKey(run, 'Escape'), 'ladder',
+    "ESC should close the field, not the screen");
+  assert.equal(run("ladderView.editing"), false);
+  assert.equal(run("__auth.named.length"), 0, "and save nothing");
+
+  // A second ESC now leaves, the way it always did.
+  assert.equal(tapKey(run, 'Escape'), 'title');
+
+  /* And coming back does not find the field still open behind you.
+
+     Leaving WITH it open takes the mouse: ESC closes the field rather than
+     the screen, so the BACK button is the only way out from inside the
+     field -- and it sets the scene without knowing anything about names. */
+  run("scene = 'ladder';");
+  tapKey(run, 'KeyE');
+  assert.equal(run("ladderView.editing"), true, "the field should be open again");
+  assert.equal(clickButton(run, 0), 'title',
+    "the BACK button should leave even with the field open");
+  run("scene = 'title'; titleChoice = 2;");
+  tapKey(run, 'Enter');
+  assert.equal(run("ladderView.editing"), false,
+    "the field should not still be open on the way back in");
+
+  // An empty name is not a name, and is not saved.
+  tapKey(run, 'KeyE');
+  run("ladderView.draft = '   ';");
+  tapKey(run, 'Enter');
+  assert.equal(run("__auth.named.length"), 0,
+    "a name made of spaces should not be sent anywhere");
+});
+
+test("nobody who is signed out can rename anybody", async () => {
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, null);
+  stubAuth(run, null);
+  /* The page offers setName whether or not anybody is signed in -- it is a
+     method on an object, not a capability -- so the check that matters is
+     whether there is a person to rename. Without this the test would pass on
+     a missing method rather than on a working guard. */
+  run(`(function () {
+    window.__auth.named = [];
+    window.NerdWarsAuth.setName = function (n) {
+      __auth.named.push(n); return Promise.resolve(true);
+    };
+    return true;
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("__lobby.me = null; scene = 'ladder';");
+  tapKey(run, 'KeyE');
+  assert.equal(run("ladderView.editing"), false,
+    "there is nobody to rename until somebody signs in");
+  assert.equal(run("__auth.named.length"), 0);
+});

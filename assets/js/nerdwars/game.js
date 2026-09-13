@@ -8759,17 +8759,71 @@ function ladderAuth() {
   return (typeof window !== 'undefined' && window.NerdWarsAuth) || null;
 }
 
-const ladderView = { row: 0 };
+const ladderView = { row: 0, editing: false, draft: '' };
 const NAME_COL = 24;      // characters of name the rating column leaves room for
+
+/* What a name may contain, asked of the ladder rather than repeated here --
+   this file draws it, ladder.js stores it and the Firestore rules police it,
+   and three copies of one rule is two too many. */
+function nameMax() {
+  const kit = typeof window !== 'undefined' && window.NerdWarsLadderKit;
+  return (kit && kit.NAME_MAX) || 16;
+}
+
+/* A character for the name field.
+
+   Not typedChar(): that one exists to type a ROOM CODE, whose alphabet is
+   deliberately missing I, O, 0 and 1 because people read codes out loud to
+   each other. A name is read off a screen, so it gets the whole keyboard --
+   and a shift key, because "Trev" and "TREV" are different names. */
+function typedNameChar() {
+  const caps = held.has('ShiftLeft') || held.has('ShiftRight');
+  for (let i = 0; i < 26; i++) {
+    const up = String.fromCharCode(65 + i);
+    if (tapped('Key' + up)) return caps ? up : up.toLowerCase();
+  }
+  for (let d = 0; d <= 9; d++) if (tapped('Digit' + d)) return String(d);
+  if (tapped('Space')) return ' ';
+  if (tapped('Minus')) return '-';
+  if (tapped('Period')) return '.';
+  if (tapped('Quote')) return "'";
+  return null;
+}
 
 function enterLadder() {
   ladderView.row = 0;
+  ladderView.editing = false;
   const L = ladderApi();
   if (L && L.refresh) L.refresh();
   scene = 'ladder';
 }
 
 function updateLadder() {
+  /* Typing is a MODE, the same way the room code is, and for the same
+     reason: every key this screen navigates with -- W, S, R, O -- is also a
+     letter somebody might want in their name. Either the letters move the
+     cursor or they type, and which one is decided by whether the field is
+     open. */
+  if (ladderView.editing) {
+    const L = ladderApi();
+    const me = ladderMe();
+    if (tapped('Escape')) { ladderView.editing = false; return; }
+    if (tapped('Backspace')) {
+      ladderView.draft = ladderView.draft.slice(0, -1);
+      return;
+    }
+    if (tapped('Enter') || tapped('NumpadEnter')) {
+      const auth = ladderAuth();
+      const want = ladderView.draft.replace(/^ +| +$/g, '');
+      ladderView.editing = false;
+      if (want && auth && auth.setName) auth.setName(want);
+      return;
+    }
+    const c = typedNameChar();
+    if (c && ladderView.draft.length < nameMax()) ladderView.draft += c;
+    return;
+  }
+
   if (menuBack()) { scene = 'title'; return; }
 
   /* The one screen you can sign in from. It belongs here rather than on the
@@ -8781,6 +8835,13 @@ function updateLadder() {
     // O for out. Not near WASD, because a stray keypress here signs somebody
     // out of a board they are in the middle of reading.
     if (ladderMe() && tapped('KeyO')) { auth.signOut(); return; }
+    /* Renaming yourself. Only your own row can be renamed, so there is
+       nothing to aim at and no cursor to move first. */
+    if (ladderMe() && auth.setName && tapped('KeyE')) {
+      ladderView.editing = true;
+      ladderView.draft = (ladderMe().name || '').slice(0, nameMax());
+      return;
+    }
   }
 
   const L = ladderApi();
@@ -8895,6 +8956,28 @@ function drawLadder() {
     text(String(r.played), VW - 12, y, 6, '#5f6884', 'right', 500);
   }
 
+  /* The name field takes over the bottom of the screen while it is open.
+     The table stays up behind it, because the point of renaming yourself is
+     usually that you have just seen what you are currently called. */
+  if (ladderView.editing) {
+    const w = 8 + nameMax() * 4.6;
+    const x0 = Math.round(VW / 2 - w / 2);
+    sctx.fillStyle = '#141829';
+    sctx.fillRect(px(x0), px(VH - 38), px(w), px(16));
+    sctx.strokeStyle = '#8fe08f';
+    sctx.lineWidth = Math.max(1, SCALE);
+    sctx.strokeRect(px(x0), px(VH - 38), px(w), px(16));
+    sctx.lineWidth = 1;
+    const caret = (Math.floor(frameCount / 20) % 2) ? '_' : ' ';
+    text(ladderView.draft + caret, VW / 2, VH - 27, 8,
+         '#ffffff', 'center', 700);
+    text('what everybody sees you called', VW / 2, VH - 43, 5.5,
+         '#5f6884', 'center', 500);
+    text('ENTER to save    ESC to cancel', VW / 2, VH - 4, 5.5,
+         '#454c66', 'center', 500);
+    return;
+  }
+
   /* Head to head against whoever the cursor is on -- the half of the screen
      with no model behind it, just what happened. */
   const pick = v.rows[ladderView.row];
@@ -8924,7 +9007,7 @@ function drawLadder() {
          v.disputed ? '#ff9f43' : '#6b7392', 'center', 600);
   }
 
-  text((me ? 'W/S to look   R to refresh   O to sign out   '
+  text((me ? 'W/S look   E rename   R refresh   O sign out   '
            : 'W/S to look    R to refresh    ') + backKey() + ' to go back',
        VW / 2, VH - 4, 5.5, '#454c66', 'center', 500);
 }
@@ -10326,7 +10409,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '7822b5545a';
+const BUILD_ID = '359f9b3efc';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10337,7 +10420,7 @@ const BUILD_ID = '7822b5545a';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.49';
+const VERSION = '2.50';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

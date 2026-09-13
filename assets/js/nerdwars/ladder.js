@@ -99,7 +99,11 @@
    * Returns players (rating, record, provisional), head-to-head, and the
    * matches themselves with a verdict on each.
    */
-  function fold(matches) {
+  /* A name somebody actually chose beats the one their Google account came
+     with. `names` is uid -> chosen name; anybody not in it keeps the name
+     they last played under, which is all there ever was before. */
+  function fold(matches, names) {
+    var chosen = names || {};
     var log = (matches || []).slice().sort(inOrder);
     var players = {};        // uid -> { uid, name, rating, w, l, d, played }
     var h2h = {};            // uid -> opponent uid -> { w, l, d }
@@ -110,8 +114,10 @@
         players[uid] = { uid: uid, name: name || uid, rating: START,
                          w: 0, l: 0, d: 0, played: 0 };
       }
-      // The most recent name a person played under is the one to show.
-      if (name) players[uid].name = name;
+      // The most recent name a person played under, unless they have since
+      // picked one, in which case that wins everywhere and retroactively.
+      if (chosen[uid]) players[uid].name = chosen[uid];
+      else if (name) players[uid].name = name;
       return players[uid];
     }
 
@@ -227,6 +233,17 @@
       getProfile: function (uid) {
         return Promise.resolve(db.profiles[uid] ? clone(db.profiles[uid]) : null);
       },
+      /* Everybody's, in one read. The leaderboard needs a name for every row
+         at once, and asking per row is one Firestore read per player per
+         refresh -- which is how a free tier gets spent on nine friends. */
+      listProfiles: function () {
+        var out = [];
+        for (var uid in db.profiles) {
+          if (!Object.prototype.hasOwnProperty.call(db.profiles, uid)) continue;
+          out.push({ uid: uid, name: db.profiles[uid].name });
+        }
+        return Promise.resolve(out);
+      },
       setProfile: function (uid, doc) {
         db.profiles[uid] = clone(doc);
         return Promise.resolve(true);
@@ -251,6 +268,19 @@
      anything slower than that is a connection in trouble, and a confirm that
      never lands still leaves a visible pending match rather than a wrong
      result. */
+  /* What a name may be, in one place, because three of them have to agree:
+     this file, the Firestore rules, and the column it is drawn in. Letters,
+     digits, spaces and a few joiners; trimmed; and short enough to fit beside
+     a rating on a 320px screen. */
+  var NAME_MAX = 16;
+  function cleanName(raw) {
+    var s = String(raw == null ? "" : raw)
+      .replace(/[^A-Za-z0-9 ._'-]/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/^ | $/g, "");
+    return s.slice(0, NAME_MAX);
+  }
+
   var CONFIRM_TRIES = 6;
   var CONFIRM_WAIT = 400;
 
@@ -263,12 +293,30 @@
 
   function createLadder(store, opts) {
     var cache = { loading: false, error: null, at: 0, matches: [],
-                  view: fold([]) };
+                  names: {}, view: fold([]) };
     // Injectable so a test does not have to wait eight real seconds to prove
     // that it waits.
     var wait = (opts && opts.wait) || laterBy;
 
-    function refold() { cache.view = fold(cache.matches); return cache.view; }
+    function refold() {
+      cache.view = fold(cache.matches, cache.names);
+      return cache.view;
+    }
+
+    /* Chosen names, all of them, once per refresh. Unlike the match log this
+       is NOT append-only -- a name can change -- so it is re-read whole every
+       time rather than incrementally. It is one document per player. */
+    function readNames() {
+      if (!store || !store.listProfiles) return Promise.resolve(cache.names);
+      return store.listProfiles().then(function (rows) {
+        var next = {};
+        (rows || []).forEach(function (r) {
+          if (r && r.uid && r.name) next[r.uid] = r.name;
+        });
+        cache.names = next;
+        return next;
+      }, function () { return cache.names; });   // a name is not worth failing over
+    }
 
     function refresh() {
       if (!store || cache.loading) return Promise.resolve(cache.view);
@@ -279,7 +327,9 @@
          Reading the whole log on every view is what breaks first on the free
          tier: a year of play is thousands of documents and a handful of
          leaderboard views a day would spend the daily read quota. */
-      return store.listMatches(cache.at).then(function (fresh) {
+      return Promise.all([store.listMatches(cache.at), readNames()])
+        .then(function (both) {
+        var fresh = both[0];
         var seen = {};
         cache.matches.forEach(function (m) { seen[m.mid] = true; });
         (fresh || []).forEach(function (m) {
@@ -362,6 +412,30 @@
       profile: function (uid) { return store ? store.getProfile(uid) : Promise.resolve(null); },
       setProfile: function (uid, doc) { return store ? store.setProfile(uid, doc) : Promise.resolve(false); },
 
+      /** What this person is called on the board right now. */
+      nameOf: function (uid) {
+        return cache.names[uid] ||
+          (cache.view.rows.filter(function (r) { return r.uid === uid; })[0] || {}).name ||
+          null;
+      },
+
+      /**
+       * Pick a name. Applies to the whole board at once, including matches
+       * already played -- a leaderboard that showed one person under two
+       * names depending on when the match happened would be worse than not
+       * letting them change it at all.
+       */
+      setName: function (uid, name) {
+        var clean = cleanName(name);
+        if (!store || !uid || !clean) return Promise.resolve(false);
+        return store.setProfile(uid, { name: clean }).then(function (ok) {
+          if (!ok) return false;
+          cache.names[uid] = clean;
+          refold();
+          return true;
+        });
+      },
+
       // Pure, and exported so the rules can be tested without a store.
       __fold: fold,
       __verdict: verdictOf,
@@ -371,6 +445,7 @@
 
   var api = { createLadder: createLadder, memoryStore: memoryStore,
               fold: fold, verdictOf: verdictOf, between: between,
+              cleanName: cleanName, NAME_MAX: NAME_MAX,
               START: START, K: K, K_NEW: K_NEW, PROVISIONAL: PROVISIONAL };
 
   if (typeof window !== "undefined") {

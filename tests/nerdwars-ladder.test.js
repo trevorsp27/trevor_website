@@ -423,3 +423,117 @@ test("the machine that wrote it down does not wait around for itself", async () 
   assert.equal(L.verdictOf(Object.assign({ mid: "m1" }, m)), "pending",
     "so the match is still waiting on somebody else");
 });
+
+
+test("a name somebody picked beats the one Google gave them", async () => {
+  /* Names on the board came off a Google account, first word only, which
+     turned one of the nine into "The". A chosen name has to win -- and win
+     RETROACTIVELY, over matches already played, or the board would show one
+     person under two names depending on when the match happened. */
+  const L = kit();
+  const log = [
+    match("m1", 1, ["a", "b"], 0, agrees("b", 0)),
+    match("m2", 2, ["a", "b"], 1, agrees("b", 1)),
+  ];
+  const plain = L.fold(log);
+  assert.equal(plain.rows.find((r) => r.uid === "b").name, "B",
+    "with no profile, the name played under is the name shown");
+
+  const renamed = L.fold(log, { b: "Kam" });
+  assert.equal(renamed.rows.find((r) => r.uid === "b").name, "Kam",
+    "a chosen name wins");
+  assert.equal(renamed.rows.find((r) => r.uid === "a").name, "A",
+    "and only for the person who chose it");
+  assert.equal(renamed.counted, plain.counted, "nothing else changes");
+  assert.equal(renamed.rows.find((r) => r.uid === "b").w,
+               plain.rows.find((r) => r.uid === "b").w);
+});
+
+test("a name is trimmed, bounded, and not a place to draw pictures", async () => {
+  /* Three things have to agree about what a name may be: this file, the
+     Firestore rules, and the 320px column it is drawn in. */
+  const L = kit();
+  assert.equal(L.cleanName("  Kam  "), "Kam", "trimmed");
+  assert.equal(L.cleanName("Kam   the   Man"), "Kam the Man",
+    "runs of spaces collapse");
+  assert.equal(L.cleanName("Kam<script>"), "Kamscript",
+    "anything that is not a letter, digit, space or joiner is dropped");
+  assert.equal(L.cleanName("\u2588\u2588\u2588"), "",
+    "including block characters, which would just be a smear on the board");
+  assert.ok(L.cleanName("x".repeat(200)).length <= L.NAME_MAX,
+    "and it cannot be longer than the column it goes in");
+  assert.equal(L.cleanName(null), "", "nothing is not a name");
+  assert.equal(L.cleanName(undefined), "");
+});
+
+test("choosing a name sticks, and shows up on the board at once", async () => {
+  const L = kit();
+  const store = L.memoryStore();
+  const ladder = L.createLadder(store, { wait: () => Promise.resolve() });
+
+  await store.writeMatch("m1", { at: 10, uids: ["a", "b"], names: ["A", "B"],
+    chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
+  await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
+  await ladder.refresh();
+  assert.equal(ladder.view().rows.find((r) => r.uid === "b").name, "B");
+
+  assert.equal(await ladder.setName("b", "  Kam  "), true);
+  assert.equal(ladder.nameOf("b"), "Kam", "cleaned on the way in");
+  assert.equal(ladder.view().rows.find((r) => r.uid === "b").name, "Kam",
+    "and on the board immediately, without waiting for a refresh");
+
+  // And it survives a reload -- it is in the store, not in the tab.
+  const fresh = L.createLadder(store, { wait: () => Promise.resolve() });
+  await fresh.refresh();
+  assert.equal(fresh.view().rows.find((r) => r.uid === "b").name, "Kam",
+    "a name is not a thing you have to set again on every device");
+
+  assert.equal(await ladder.setName("b", "   "), false,
+    "a name made entirely of spaces is not a name");
+  assert.equal(ladder.nameOf("b"), "Kam", "and does not replace the old one");
+});
+
+test("names are read once per refresh, not once per player", async () => {
+  /* The board needs a name for every row at once. Asking per row is one
+     Firestore read per player per refresh, which is how nine friends spend a
+     free tier. */
+  const L = kit();
+  const store = L.memoryStore();
+  let lists = 0, gets = 0;
+  const counting = Object.assign({}, store, {
+    listProfiles: () => { lists++; return store.listProfiles(); },
+    getProfile: (u) => { gets++; return store.getProfile(u); },
+  });
+  const ladder = L.createLadder(counting, { wait: () => Promise.resolve() });
+
+  for (const uid of ["a", "b", "c", "d"]) await store.setProfile(uid, { name: uid.toUpperCase() });
+  await store.writeMatch("m1", { at: 1, uids: ["a", "b"], names: ["x", "y"],
+    chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
+  await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
+
+  await ladder.refresh();
+  assert.equal(lists, 1, "one query for all of them, got " + lists);
+  assert.equal(gets, 0, "and none one at a time, got " + gets);
+  assert.equal(ladder.view().rows.find((r) => r.uid === "a").name, "A");
+});
+
+test("a board with no names to read is still a board", async () => {
+  /* A store that cannot answer about names -- an older one, or a refused
+     read -- must not take the leaderboard down with it. */
+  const L = kit();
+  const store = L.memoryStore();
+  const noNames = Object.assign({}, store, {
+    listProfiles: () => Promise.reject(new Error("nope")),
+  });
+  const ladder = L.createLadder(noNames, { wait: () => Promise.resolve() });
+  await store.writeMatch("m1", { at: 1, uids: ["a", "b"], names: ["A", "B"],
+    chars: ["kel", "trev"], stage: "space", winnerSlot: 0, host: "a" });
+  await store.writeConfirm("m1", "b", { agree: true, winnerSlot: 0 });
+
+  await ladder.refresh();
+  const v = ladder.view();
+  assert.equal(v.error, null, "a missing name is not an error worth showing");
+  assert.equal(v.counted, 1, "and the matches still count");
+  assert.equal(v.rows.find((r) => r.uid === "b").name, "B",
+    "falling back to the name they played under");
+});

@@ -167,6 +167,17 @@ function firestoreStore(db) {
       return d.exists() ? d.data() : null;
     },
 
+    /* Everybody's name in one read. The leaderboard needs a name for every
+       row at once, and asking per row would be one read per player per
+       refresh. Unlike the match log this is not append-only -- a name can
+       change -- so there is no cursor and it comes back whole. */
+    async listProfiles() {
+      const snap = await getDocs(collection(db, PROFILES));
+      const out = [];
+      snap.forEach((d) => out.push({ uid: d.id, name: (d.data() || {}).name }));
+      return out;
+    },
+
     async setProfile(uid, p) {
       try {
         await setDoc(doc(db, PROFILES, uid), { name: String(p.name || "") });
@@ -199,8 +210,10 @@ function brokenStore(why) {
 
 function shortName(user) {
   const raw = (user.displayName || user.email || "player").trim();
-  // The first name is what nine friends call each other, and it is what fits
-  // in the column. The full one is nobody's choice to shorten but their own.
+  /* A STARTING POINT, not a decision. It is the first word of whatever Google
+     was told to call them, which for one of the nine turned out to be "The".
+     Anybody can change it on the leaderboard, and once they have, this is
+     never consulted again. */
   const first = raw.split(/[\s@]+/)[0];
   return first.length >= 3 ? first : raw.split("@")[0];
 }
@@ -265,7 +278,22 @@ function wire() {
     if (window.NerdWarsLobby && window.NerdWarsLobby.setMe) {
       window.NerdWarsLobby.setMe(me);
     }
-    if (me) ladder.setProfile(me.uid, { name: me.name });
+    /* Only if they have never picked one. Writing the Google-derived name on
+       every sign-in would quietly undo somebody's chosen name the next time
+       they opened the page, which is the kind of bug nobody reports because
+       it looks like they imagined changing it. */
+    if (me) {
+      ladder.profile(me.uid).then((p) => {
+        if (p && p.name) {
+          me = { uid: me.uid, name: p.name };
+          if (window.NerdWarsLobby && window.NerdWarsLobby.setMe) {
+            window.NerdWarsLobby.setMe(me);
+          }
+        } else {
+          ladder.setProfile(me.uid, { name: me.name });
+        }
+      }).catch(() => {});
+    }
     // A different person is a different leaderboard highlight, and the first
     // sign-in is usually the first time the board can be read at all.
     ladder.refresh();
@@ -274,6 +302,26 @@ function wire() {
   window.NerdWarsAuth = {
     me: () => me,
     busy: () => signingIn,
+
+    /**
+     * What this person is called on the leaderboard. Applies to every match
+     * they have already played as well as the next one -- a board showing one
+     * person under two names depending on when the match happened would be
+     * worse than not letting them change it.
+     */
+    setName(name) {
+      if (!me) return Promise.resolve(false);
+      return ladder.setName(me.uid, name).then((ok) => {
+        if (!ok) return false;
+        me = { uid: me.uid, name: ladder.nameOf(me.uid) || me.name };
+        // net.js holds the one identity the room and the match record use.
+        if (window.NerdWarsLobby && window.NerdWarsLobby.setMe) {
+          window.NerdWarsLobby.setMe(me);
+        }
+        return true;
+      });
+    },
+
     signIn,
     signOut: () => signOut(auth).catch((e) =>
       console.error("[nerdwars] sign-out failed:", e)),
