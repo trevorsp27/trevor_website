@@ -2907,3 +2907,76 @@ test("Cobeus can throw the bottle or drink it, on the same button", async () => 
   assert.ok(brief.threw && brief.drankAt === -1,
     "half a second of hold should still be a throw");
 });
+
+
+test("only the chess move draws a chess piece", async () => {
+  /* The charge mechanism is generic -- hold the button, get pinned on the
+     startup frame, count -- and two moves use it now: Trev cycling chess
+     pieces, and Cobeus drinking his bottle.
+
+     drawCharge tested `m.charge` alone, so the moment the bottle gained a
+     charge a floating white pawn appeared over Cobeus's head for the whole
+     three seconds, sitting on top of his own progress meter. It shipped, and
+     the report was that the drinking animation "mixes with the chess piece
+     one".
+
+     `swapEvery` is the field that actually means "this charge cycles
+     pieces", so that is what the draw tests now. This pins both directions:
+     the piece still draws for Trev, and never for anybody else. */
+  const run = await bootEngine();
+
+  const drawnBy = (who, slot, bit, holdBit, frames) => run(`(function () {
+    select.cursor=[${run("ORDER.indexOf('" + who + "')")},2];
+    twoPlayer=true; playerCount=2; humanCount=0; stagePick=0; startBattle();
+    for (var i=0;i<130;i++) step();
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1;
+    me.grounded=true; me.facing=1; me.stocks=99; me.eliminated=false;
+    me.specialSpawned=false; me.chargeTimer=0;
+    me.x=main.x+60; me.y=main.y;
+    foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.eliminated=false;
+    foe.x=main.x+200; foe.y=main.y; foe.grounded=true;
+    netplay.active = true;
+    for (var i = 0; i < ${frames}; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad((i === 0 ? ${bit} : 0) | ${holdBit}),
+                           bitsToPad(0)];
+      step();
+    }
+    netplay.active = false; netplay.framePads = null;
+    // A context that records nothing but whether anything was painted.
+    var painted = 0;
+    var rec = { globalAlpha: 1, fillStyle: '#000', strokeStyle: '#000',
+      lineWidth: 1,
+      fillRect: function(){ painted++; }, strokeRect: function(){ painted++; },
+      drawImage: function(){ painted++; },
+      save: function(){}, restore: function(){}, translate: function(){},
+      scale: function(){}, rotate: function(){}, beginPath: function(){},
+      arc: function(){}, ellipse: function(){}, moveTo: function(){},
+      lineTo: function(){}, stroke: function(){}, fill: function(){},
+      closePath: function(){}, fillText: function(){} };
+    drawCharge(rec, me);
+    return { painted: painted, charging: me.chargeTimer,
+             slot: me.def.specials.${slot}.label };
+  })()`);
+
+  const SP_U = 2048, SP_N = 512, HOLD_U = 16384, HOLD_N = 4096;
+
+  // Trev, holding his up special: the pieces are his, and they still draw.
+  const trev = drawnBy("trev", "up", SP_U, HOLD_U, 40);
+  assert.ok(trev.charging > 0,
+    "Trev should be mid-charge; chargeTimer was " + trev.charging);
+  assert.ok(trev.painted > 0,
+    "the chess piece preview must still draw for " + trev.slot);
+
+  // Cobeus, holding the bottle: same mechanism, no chess piece.
+  const cob = drawnBy("cobeus", "neutral", SP_N, HOLD_N, 60);
+  assert.ok(cob.charging > 0,
+    "Cobeus should be mid-charge; chargeTimer was " + cob.charging);
+  assert.equal(cob.painted, 0,
+    "drawCharge painted " + cob.painted + " times while Cobeus was drinking " +
+    "-- a chess piece over the head of a man holding a bottle");
+});

@@ -2971,14 +2971,32 @@ class Fighter {
             this.attackFrame < s.startup + (s.burst || 1) * (s.gap || 5) &&
             (this.attackFrame - s.startup) % (s.gap || 5) === 0) {
           projectiles.push(new Slug(this, s));
-          addEffect('spark', this.x + this.facing * 13, this.y - 11, '#ffd76a');
+          // At the end of the barrel, which is 11px forward of the hands.
+          for (let i = 0; i < 3; i++) {
+            addEffect('spark', this.x + this.facing * (15 + i), this.y - 10,
+                      i ? '#ffd76a' : '#fff6cf');
+          }
           cue(s.cue || 'gunshot', { slot: this.slot, x: this.x });
         }
-        // Held for the whole move, not just the frames that fire.
-        if (this.attackFrame >= s.startup - 2 &&
-            this.attackFrame < s.startup + (s.burst || 1) * (s.gap || 5) + 4) {
-          const e = addEffect('ak', this.x + this.facing * 7, this.y - 11,
-                              null, this.facing);
+        /* Held for the whole move, not just the frames that fire, and given
+           the two things that stop a sprite pasted over another sprite
+           looking pasted on: it KICKS when it fires, and it rides his walk
+           cycle. Both are passed through per frame rather than kept on the
+           fighter -- effects are respawned every frame here, so the spec
+           object is the natural place for anything the draw needs. */
+        if (this.attackFrame >= s.startup - 3 &&
+            this.attackFrame < s.startup + (s.burst || 1) * (s.gap || 5) + 5) {
+          const gap = s.gap || 5;
+          const into = this.attackFrame - s.startup;
+          const firing = into >= 0 &&
+                         into < (s.burst || 1) * gap;
+          // 3, 2, 1, 0 over the frames after each round leaves the barrel.
+          const kick = firing ? Math.max(0, 3 - (into % gap)) : 0;
+          // He walks through this move, so the gun has to walk with him.
+          const bob = this.grounded && Math.abs(this.vx) > 0.2 &&
+                      Math.floor(this.walkAnim) % 2 ? 1 : 0;
+          const e = addEffect('ak', this.x, this.y, null, this.facing,
+                              { kick: kick, bob: bob });
           if (e) { e.vx = 0; e.vy = 0; e.life = 2; }
         }
         break;
@@ -4648,7 +4666,13 @@ function poleHook(f, s) {
 function drawCharge(g, f) {
   if (f.state !== 'special' || f.specialSpawned) return;
   const m = f.moveFor('special');
-  if (!m || !m.charge || f.attackFrame < m.startup) return;
+  /* `m.charge` is not enough any more, and this shipped wrong because of it.
+     The charge mechanism is generic -- Cobeus holds the same way to drink his
+     bottle -- but the ART here is a chess piece, so drawing it for anything
+     with a charge put a floating white pawn over his head for the whole three
+     seconds, on top of his own progress meter. `swapEvery` is the field that
+     means "this charge cycles pieces", so it is the honest thing to test. */
+  if (!m || !m.charge || !m.charge.swapEvery || f.attackFrame < m.startup) return;
   const piece = CHESS_PIECES[f.chargePiece % CHESS_PIECES.length];
   // One pixel of lift for the first few frames after a swap.
   const fresh = f.chargeTimer < 4 ? 1 : 0;
@@ -4676,24 +4700,49 @@ function drawDrink(g, f) {
   if (f.chargeTimer <= 0) return;
 
   const prog = Math.min(1, f.chargeTimer / s.charge.hold);
+
+  /* It has to READ as drinking, and the first pass did not: the bottle sat
+     on his face from the first frame and rotated in place, which looks like
+     a sticker on his head rather than a drink.
+
+     So it travels. It starts low and in front of him, at his chest, held
+     out where you can see what it is; over three seconds it comes up to his
+     mouth and tips back past vertical. The rotation frames are the thrown
+     bottle's own eight, played forward, so the tip is drawn art rather than
+     a transform.
+
+     Kept just off his face rather than over it -- half the read is his
+     expression, and a 8x8 sprite centred on a 16px head hides all of it. */
+  const lift = prog * prog;                    // slow start, committed finish
+  const bx = f.x + f.facing * (5 - lift * 1.5);
+  const by = f.y - 7 - lift * 5;
   const im = IMG['bottle.' + Math.min(7, Math.floor(prog * 7.999))];
   if (im && im.complete) {
-    // Up to his mouth and back over his shoulder as it empties.
-    const hx = Math.round(f.x + f.facing * (3 + prog * 2));
-    const hy = Math.round(f.y - 11 - prog * 5);
-    g.drawImage(im, hx - 4, hy - 4, im.naturalWidth || 8, im.naturalHeight || 8);
+    g.drawImage(im, Math.round(bx) - 4, Math.round(by) - 4,
+                im.naturalWidth || 8, im.naturalHeight || 8);
   }
 
-  /* How far along he is, without a number and without a bar: the ring of
-     gold closes as it fills. Three seconds is long enough that a player who
-     cannot see the progress will let go early every time. */
-  const cx = Math.round(f.x), cy = Math.round(f.y - 24);
+  /* What is coming out of it, once it is actually tipped up. Three amber
+     pixels falling from the neck: the part that says he is swallowing
+     rather than holding a bottle near his head. */
+  if (prog > 0.35) {
+    const phase = f.chargeTimer % 18;
+    if (phase < 6) {
+      g.fillStyle = '#d8b24a';
+      g.fillRect(Math.round(bx - f.facing * 2), Math.round(by + 3 + phase), 1, 2);
+    }
+  }
+
+  /* How far along he is, with no number and no bar: seven pips, one per
+     swallow, filling left to right. It sits where the chess piece used to
+     be drawn over it, which it no longer does. */
+  const cx = Math.round(f.x), cy = Math.round(f.y - 23);
   for (let i = 0; i < 7; i++) {
     g.fillStyle = i / 7 < prog ? '#d8b24a' : '#3a3550';
     g.fillRect(cx - 7 + i * 2, cy, 1, 2);
   }
   if (prog >= 1) {
-    // Full, and it fires on the next frame: a flash so the release reads.
+    // Full, and it resolves on the next frame: a flash so the release reads.
     g.fillStyle = '#ffe9a8';
     g.fillRect(cx - 8, cy - 1, 16, 4);
   }
@@ -7350,11 +7399,29 @@ function drawEffects(g) {
       case 'ak': {
         const im = IMG.ak;
         if (im && im.complete) {
-          const w = im.naturalWidth || 23, h = im.naturalHeight || 7;
+          /* Drawn at 18x6 rather than its own 23x7. The art is a rifle at a
+             sensible scale for a 32px canvas, and the fighters are 16px
+             tall -- at full size it was longer than he is and read as a
+             decal laid over him rather than a thing he is holding.
+
+             AK_HOLD is where his hands are: 4px forward of his centre and
+             9px off the floor. The stock is drawn 7px BEHIND that anchor so
+             it overlaps his torso, which is the whole difference. Before,
+             the near end of the gun started at his front edge and every
+             pixel of it was outside his outline -- nothing touching, so
+             nothing holding.
+
+             The small rotation matters more than it should: a pixel sprite
+             laid perfectly level against another pixel sprite looks
+             composited, and three degrees of droop looks carried. */
+          const kick = (e.spec && e.spec.kick) || 0;
+          const bob = (e.spec && e.spec.bob) || 0;
           g.save();
-          g.translate(Math.round(e.x), Math.round(e.y));
+          g.translate(Math.round(e.x + e.dir * (4 - kick)),
+                      Math.round(e.y - 9 + bob - (kick ? 1 : 0)));
           if (e.dir < 0) g.scale(-1, 1);
-          g.drawImage(im, -4, -Math.round(h / 2), w, h);
+          g.rotate(0.06);
+          g.drawImage(im, -7, -3, 18, 6);
           g.restore();
         }
         break;
@@ -9502,7 +9569,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '152b10324f';
+const BUILD_ID = '8493b67d2e';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9513,7 +9580,7 @@ const BUILD_ID = '152b10324f';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.38';
+const VERSION = '2.39';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
