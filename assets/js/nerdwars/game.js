@@ -1157,11 +1157,13 @@ ROSTER.cobeus = {
                damage: 5, base: 1.6, scale: 3.2,
                angle: 78, kx: 0.20791169081775934, ky: 0.97814760073380569 },
     },
-    // PLACEHOLDER. A short shove, nothing more.
+    // PLACEHOLDER. A short hop and a shove, nothing more.
     down: {
       kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
       startup: 7, active: 8, recovery: 16,
-      rise: 0, riseFrames: 0,
+      // Negative is UP. `riseFrames` was here and is not a field this kind
+      // reads -- that belongs to the knight's move -- so it is gone.
+      rise: -3.0, drift: 1.2,
       damage: 7, base: 2.4, scale: 5.6, angle: 60, kx: 0.5, ky: 0.86602540378443865,
       ox: 2, oy: -12, w: 13, h: 16,
     },
@@ -1170,7 +1172,10 @@ ROSTER.cobeus = {
     up: {
       kind: 'uppercut', label: 'PLACEHOLDER',
       startup: 5, active: 14, recovery: 18,
-      rise: 5.4, riseFrames: 12,
+      /* -6.2 matches HIGH NOTE, which is the shortest of the real recoveries.
+         It was 5.4 -- POSITIVE, which drives him down -- so the one slot that
+         had to work was the one that worked backwards. */
+      rise: -6.2, drift: 0.9,
       damage: 6, base: 2.2, scale: 5.2, angle: 76, kx: 0.24192189559966773, ky: 0.97029572627599647,
       ox: -6, oy: -20, w: 13, h: 24,
     },
@@ -3051,8 +3056,20 @@ class Fighter {
               addEffect('milk', this.x + rand(-6, 6), this.y - rand(2, 10));
             }
           }
-          this.vy = s.rise;
-          this.vx = this.facing * s.drift;
+          /* Defaulted, because the failure mode without it is genuinely
+             awful: a move that omits `drift` makes this `facing * undefined`
+             = NaN, vx goes NaN, x goes NaN on the next move(), and the
+             fighter is drawn at NaN -- which is to say not drawn at all. He
+             does not fall through the floor or freeze, he VANISHES, with no
+             error anywhere. That shipped, and the report was "his player
+             model literally disappears".
+
+             Note `rise` is negative for up. Every real uppercut in the file
+             uses -6.1 or -6.2; a positive value here drives him into the
+             floor, which is how a placeholder recovery ended up being an
+             anti-recovery. */
+          this.vy = s.rise || 0;
+          this.vx = this.facing * (s.drift || 0);
           this.grounded = false;
         }
         break;
@@ -9091,7 +9108,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '8199aae36e';
+const BUILD_ID = '37ad90717d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9102,7 +9119,7 @@ const BUILD_ID = '8199aae36e';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.35';
+const VERSION = '2.36';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

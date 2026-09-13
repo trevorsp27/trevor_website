@@ -1374,6 +1374,171 @@ test("the shout is red waves that travel, and the box goes as far as they do", a
   }
 });
 
+test("no move puts any fighter at a coordinate that is not a number", async () => {
+  /* Cobeus shipped able to VANISH. Two of his five moves erased his player
+     model outright -- not fell through the floor, not froze: gone.
+
+     `case 'uppercut':` reads two fields off the spec:
+
+         this.vy = s.rise;
+         this.vx = this.facing * s.drift;
+
+     Both of his placeholder specials were written without a `drift`. That
+     makes the second line `1 * undefined` = NaN, vx is NaN, x is NaN on the
+     next move(), and drawImage(img, NaN, NaN) paints nothing at all.
+
+     Nothing caught it, and nothing could have. NaN does not throw. Every
+     comparison against it is false, so the off-stage test never fires, the
+     KO never happens, and he is still in fighters[] simulating happily at no
+     location. The only symptom is that he is not on the screen.
+
+     The contract for `uppercut` -- rise AND drift, and rise is NEGATIVE for
+     up -- lived nowhere except in the two moves that happened to honor it.
+     So this test does not check that one field on one character; it drives
+     every move in every kit and demands a real number come out, because the
+     next kind added will have an undocumented contract too. */
+  const run = await bootEngine();
+  const MOVES = [["jab", 32], ["neutral", 512], ["down", 1024], ["up", 2048],
+                 ["ult", 256]];
+  const order = run("ORDER.slice()");
+  const broken = [];
+
+  for (let i = 0; i < order.length; i++) {
+    run(`select.cursor=[${i},4]; twoPlayer=true; playerCount=2; humanCount=0;
+         stagePick=0; startBattle();`);
+    run("for (var i=0;i<130;i++) step();");
+    const name = run("fighters[0].def.name");
+    for (const [label, bits] of MOVES) {
+      const r = run(`(function () {
+        var me = fighters[0], foe = fighters[1];
+        var main = STAGE.platforms.find(function (p) { return p.main; });
+        projectiles.length = 0; effects.length = 0;
+        me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0;
+        me.landLag=0; me.invuln=0; me.mana=999; me.ultMeter=999;
+        me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true; me.facing=1;
+        me.stocks=99; me.eliminated=false; me.health=0;
+        me.x=main.x+50; me.y=main.y; me.specialSpawned=false;
+        foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.health=1000;
+        foe.eliminated=false; foe.x=main.x+main.w-6; foe.y=main.y;
+        foe.hasHit=true; foe.grounded=true;
+        var nan = -1;
+        netplay.active = true;
+        for (var i = 0; i < 90; i++) {
+          me.hitstop = 0; me.mana = 999; me.ultMeter = 999;
+          netplay.framePads = [bitsToPad(i === 0 ? ${bits} : 0), bitsToPad(0)];
+          step();
+          if (nan < 0 && !(isFinite(me.x) && isFinite(me.y) &&
+                           isFinite(me.vx) && isFinite(me.vy))) nan = i;
+        }
+        netplay.active = false; netplay.framePads = null;
+        return nan;
+      })()`);
+      if (r >= 0) broken.push(name + "'s " + label + " (frame " + r + ")");
+    }
+  }
+
+  assert.deepEqual(broken, [],
+    "these moves put the fighter at a NaN coordinate, which draws as nothing " +
+    "at all: " + broken.join(", "));
+
+  /* The kit as it stands is clean, which means the line above can only catch
+     this the NEXT time somebody writes a move -- and only if they run it.
+     So check the engine's own floor directly: hand it an uppercut with the
+     fields deliberately missing, exactly as a half-written move would, and
+     it must still produce a real number. A move that does nothing is a bug
+     you can see and fix. A move that erases the player is not. */
+  const halfWritten = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    // Clone a real uppercut and take away the two fields the case reads.
+    var spec = {};
+    for (var k in me.def.specials.up) spec[k] = me.def.specials.up[k];
+    spec.kind = 'uppercut';
+    delete spec.rise;
+    delete spec.drift;
+    var was = me.def.specials.up;
+    me.def.specials.up = spec;
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1;
+    me.grounded=true; me.facing=1; me.stocks=99; me.eliminated=false;
+    me.x=main.x+50; me.y=main.y; me.specialSpawned=false;
+    foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.eliminated=false;
+    foe.x=main.x+main.w-6; foe.y=main.y; foe.hasHit=true;
+    var nan = -1;
+    netplay.active = true;
+    for (var i = 0; i < 40; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? 2048 : 0), bitsToPad(0)];
+      step();
+      if (nan < 0 && !(isFinite(me.x) && isFinite(me.y) &&
+                       isFinite(me.vx) && isFinite(me.vy))) nan = i;
+    }
+    netplay.active = false; netplay.framePads = null;
+    me.def.specials.up = was;
+    return nan;
+  })()`);
+
+  assert.equal(halfWritten, -1,
+    "an uppercut written without `rise`/`drift` must fall back to zero, not " +
+    "multiply the facing by undefined; it went NaN on frame " + halfWritten);
+});
+
+test("every up-special that is a recovery actually gains height", async () => {
+  /* `rise` is NEGATIVE for up -- every real uppercut uses -6.1 or -6.2 --
+     and Cobeus's placeholder shipped as POSITIVE 5.4, which drove him
+     DOWNWARD. His recovery was a fast way to die.
+
+     A grounded test cannot see this: on a platform a downward rise just sets
+     you back on the floor. It only shows up off the ledge, which is the only
+     place the move matters, so that is where this measures.
+
+     Not everyone's `up` is a recovery -- AutisNick throws a rainbow and Trev
+     sends a pawn, and Trev's jump gets him home by design -- so this asserts
+     only about the ones whose `kind` claims to move the fighter. */
+  const run = await bootEngine();
+  const order = run("ORDER.slice()");
+  const failed = [];
+
+  for (let i = 0; i < order.length; i++) {
+    run(`select.cursor=[${i},4]; twoPlayer=true; playerCount=2; humanCount=0;
+         stagePick=0; startBattle();`);
+    run("for (var i=0;i<130;i++) step();");
+    const r = run(`(function () {
+      var me = fighters[0], foe = fighters[1];
+      var main = STAGE.platforms.find(function (p) { return p.main; });
+      var up = me.def.specials.up;
+      if (up.kind !== 'uppercut') return null;
+      projectiles.length = 0; effects.length = 0;
+      foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.eliminated=false;
+      foe.x=main.x+10; foe.y=main.y; foe.hasHit=true;
+      // Hanging past the ledge, which is the only place a recovery matters.
+      me.setState('fall'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+      me.invuln=0; me.mana=999; me.stocks=99; me.eliminated=false; me.health=0;
+      me.grabbing=-1; me.grounded=false; me.facing=-1;
+      me.x=main.x-30; me.y=main.y-40; me.vx=0; me.vy=0; me.specialSpawned=false;
+      var y0 = me.y, best = me.y;
+      netplay.active = true;
+      for (var i = 0; i < 24; i++) {
+        me.hitstop = 0; me.mana = 999;
+        netplay.framePads = [bitsToPad(i === 0 ? 2048 : 0), bitsToPad(0)];
+        step();
+        if (me.y < best) best = me.y;   // smaller y is higher up
+      }
+      netplay.active = false; netplay.framePads = null;
+      return { name: me.def.name, label: up.label,
+               gained: +(y0 - best).toFixed(1) };
+    })()`);
+    if (r && r.gained < 8) {
+      failed.push(r.name + "'s " + r.label + " gained " + r.gained + "px");
+    }
+  }
+
+  assert.deepEqual(failed, [],
+    "an up-special of kind 'uppercut' has to lift the fighter -- `rise` is " +
+    "negative for up: " + failed.join(", "));
+});
+
 test("Cobeus is in the game, off a sprite sheet, and the select screen fits him", async () => {
   /* He is the seventh character and the first whose art arrived as ONE sheet
      rather than eight files, so this guards the whole chain: build.py slicing
