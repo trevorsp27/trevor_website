@@ -98,6 +98,8 @@
     phase: "idle",     // idle | hosting | joining | lobby | playing
   };
 
+  var lastSay = { text: "", kind: "" };
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -121,6 +123,11 @@
   }
 
   function say(message, kind) {
+    /* Recorded as well as written. The room is drawn on the canvas now, so
+       the engine needs the text; the DOM write stays because #nw-status is
+       an aria-live region and it is the only thing on this page a screen
+       reader can follow. One line of markup buys that, so it keeps it. */
+    lastSay = { text: message || "", kind: kind || "" };
     if (!els.status) return;
     els.status.textContent = message || "";
     els.status.dataset.kind = kind || "";
@@ -701,8 +708,11 @@
   /* ---------- wiring ---------- */
 
   function init() {
+    /* The panel used to be required, and its absence returned early -- which
+       made sense when the panel WAS the lobby. The room is on the canvas
+       now, so a page with no panel is the normal case and this has to wire
+       up anyway. Every element below is optional from here down. */
     els.panel = $("nw-online");
-    if (!els.panel) return;
 
     els.hostBtn = $("nw-host");
     els.joinBtn = $("nw-join");
@@ -721,60 +731,126 @@
     renderLobby();
     setPhase("idle");
 
-    els.hostBtn.addEventListener("click", function () { host(); });
-    els.joinBtn.addEventListener("click", function () { join(els.joinCode.value); });
-    els.joinCode.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); join(els.joinCode.value); }
-    });
+    if (els.hostBtn) {
+      els.hostBtn.addEventListener("click", function () { host(); });
+    }
+    if (els.joinBtn && els.joinCode) {
+      els.joinBtn.addEventListener("click", function () { join(els.joinCode.value); });
+      els.joinCode.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); join(els.joinCode.value); }
+      });
+    }
 
-    els.chars.addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-char]");
-      if (!btn) return;
-      state.myChar = btn.dataset.char;
-      if (state.role === "host") {
-        setSeat(0, state.myChar, true);
-        broadcastSeats();
-      } else {
-        send({ t: "pick", char: state.myChar });
-      }
-      renderLobby();
-    });
+    if (els.chars) {
+      els.chars.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-char]");
+        if (btn) pickChar(btn.dataset.char);
+      });
+    }
 
-    els.stages.addEventListener("change", function () {
-      state.stage = els.stages.value;
-    });
+    if (els.stages) {
+      els.stages.addEventListener("change", function () {
+        state.stage = els.stages.value;
+      });
+    }
 
-    els.start.addEventListener("click", function () {
-      if (state.role !== "host") return;
-      var here = occupiedSeats();
-      if (here.length < 2) return;
-      // Seats are renumbered to be contiguous from zero, because the engine
-      // seats fighters by array position: if player 2 left, the person in
-      // seat 3 has to become fighter 2 rather than leaving a hole.
-      var chars = here.map(function (s) { return s.char; });
-      for (var i = 0; i < here.length; i++) {
-        var conn = state.conns[here[i].slot];
-        if (conn) post(conn, { t: "seat", slot: i, match: true, build: MY_BUILD });
-      }
-      state.mySlot = 0;
-      sendAll({ t: "go", chars: chars, stage: state.stage,
-               delay: DEFAULT_DELAY, build: MY_BUILD });
-      beginMatch(chars, state.stage, DEFAULT_DELAY, 0);
-    });
+    if (els.start) {
+      els.start.addEventListener("click", function () { startMatch(); });
+    }
 
-    els.leave.addEventListener("click", function () {
-      // `part`, not `bye`: this one gives up the seat.
-      sendAll({ t: "part" });
-      teardown();
-      setPhase("idle");
-      say("Left the room.");
-      renderLobby();
-    });
+    if (els.leave) {
+      els.leave.addEventListener("click", function () { leaveRoom(); });
+    }
 
     window.addEventListener("beforeunload", function () {
       sendAll({ t: "part" });
       teardown();
     });
+
+    /* The room is drawn by the game, so the game needs a handle on it.
+       Everything above this line is transport -- PeerJS, seats, the
+       protocol -- and everything the engine does goes through here. */
+    window.NerdWarsLobby = {
+      host: function () { host(); },
+      join: function (code) { join(code); },
+      pick: pickChar,
+      start: startMatch,
+      leave: leaveRoom,
+      setStage: function (key) { if (key) state.stage = key; },
+      snapshot: snapshot,
+    };
+  }
+
+  /* ---------- the room, as things you can call ----------
+
+     These three were the bodies of three click handlers. They are functions
+     now because the room moved onto the canvas: the engine draws it and
+     calls these, and the DOM panel -- when a page still has one -- is just
+     another caller. Nothing about the protocol changed. */
+
+  function pickChar(key) {
+    if (!key) return;
+    state.myChar = key;
+    if (state.role === "host") {
+      setSeat(0, state.myChar, true);
+      broadcastSeats();
+    } else {
+      send({ t: "pick", char: state.myChar });
+    }
+    renderLobby();
+  }
+
+  function startMatch() {
+    if (state.role !== "host") return false;
+    var here = occupiedSeats();
+    if (here.length < 2) return false;
+    // Seats are renumbered to be contiguous from zero, because the engine
+    // seats fighters by array position: if player 2 left, the person in
+    // seat 3 has to become fighter 2 rather than leaving a hole.
+    var chars = here.map(function (s) { return s.char; });
+    for (var i = 0; i < here.length; i++) {
+      var conn = state.conns[here[i].slot];
+      if (conn) post(conn, { t: "seat", slot: i, match: true, build: MY_BUILD });
+    }
+    state.mySlot = 0;
+    sendAll({ t: "go", chars: chars, stage: state.stage,
+             delay: DEFAULT_DELAY, build: MY_BUILD });
+    beginMatch(chars, state.stage, DEFAULT_DELAY, 0);
+    return true;
+  }
+
+  function leaveRoom() {
+    // `part`, not `bye`: this one gives up the seat.
+    sendAll({ t: "part" });
+    teardown();
+    setPhase("idle");
+    say("Left the room.");
+    renderLobby();
+  }
+
+  /* What the canvas draws the room from. A plain snapshot, rebuilt on
+     demand: the engine reads it once per frame and owns no lobby state of
+     its own, so there is exactly one source of truth and it is this file. */
+  function snapshot() {
+    var mine = state.role === "guest" && state.lobbySlot !== null
+      ? state.lobbySlot : state.mySlot;
+    return {
+      available: peerLoaded(),
+      phase: state.phase,
+      role: state.role,
+      code: state.code || "",
+      mySlot: mine,
+      myChar: state.myChar,
+      stage: state.stage,
+      status: lastSay.text,
+      statusKind: lastSay.kind,
+      seats: state.seats.map(function (seat) {
+        return { slot: seat.slot, char: seat.char, here: !!seat.here,
+                 you: seat.slot === mine };
+      }),
+      here: occupiedSeats().length,
+      canStart: state.role === "host" && occupiedSeats().length >= 2,
+    };
   }
 
   function renderStages() {

@@ -281,6 +281,12 @@ async function browser(opts) {
     },
     start() { els["nw-start"].fire("click"); },
     leave() { els["nw-leave"].fire("click"); },
+    /* The same room, driven the way the GAME drives it now. Every method
+       above fires a DOM click, which is how the lobby used to be operated
+       and is no longer how it is operated anywhere: the panel is gone from
+       the page and the room is drawn on the canvas. These reach net.js
+       through window.NerdWarsLobby, which is the path that actually ships. */
+    api: () => sb.window.NerdWarsLobby,
     startDisabled: () => els["nw-start"].disabled,
     code: () => els["nw-code"].textContent,
     status: () => els["nw-status"].textContent,
@@ -759,4 +765,65 @@ test("a peer too old to send a build at all is also turned away", async () => {
   assert.match(host.status(), /different version/i,
     "and the host should be told, so they can pass the word on. Saw: " +
     JSON.stringify(host.status()));
+});
+
+
+test("the room can be run through the API the game uses, not the DOM", async () => {
+  /* Every other test in this file operates the lobby by firing DOM clicks at
+     elements the page no longer has. That was the only way in when the room
+     WAS those elements; it is now a legacy path, and a test that only
+     exercises a legacy path is a test that stops telling you the truth.
+
+     So this one does the same job through window.NerdWarsLobby -- host,
+     join, pick, start, leave -- which is what the canvas calls. If the room
+     on screen can do it, this can do it. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+  assert.ok(host.api(), "net.js should expose the lobby API");
+
+  host.api().host();
+  flush();
+  const code = host.api().snapshot().code;
+  assert.match(code, /^[A-Z2-9]{4}$/,
+    "hosting should produce a four-character room code, got " + code);
+
+  guest.api().join(code);
+  flush();
+
+  const seatsOf = (m) => m.api().snapshot().seats.filter((x) => x.here).length;
+  assert.equal(seatsOf(host), 2, "the guest should be in the host's room");
+  assert.equal(seatsOf(guest), 2, "and the guest should see both of them");
+  assert.equal(host.api().snapshot().role, "host");
+  assert.equal(guest.api().snapshot().role, "guest");
+
+  // Picking through the API is what the grid on the canvas does.
+  host.api().pick("kel");
+  guest.api().pick("trev");
+  flush();
+  const charAt = (m, slot) => {
+    const seat = m.api().snapshot().seats.find((x) => x.slot === slot);
+    return seat && seat.char;
+  };
+  assert.equal(charAt(host, 0), "kel");
+  assert.equal(charAt(host, 1), "trev", "the host should see the guest's pick");
+
+  // Only the host may start, and the snapshot says so before it is tried.
+  assert.equal(host.api().snapshot().canStart, true);
+  assert.equal(guest.api().snapshot().canStart, false,
+    "a guest should not be told it can start the match");
+  assert.equal(guest.api().start(), false, "and should not be able to");
+
+  assert.equal(host.api().start(), true, "the host starts the match");
+  flush();
+  assert.equal(host.nw.scene, "battle");
+  assert.equal(guest.nw.scene, "battle");
+  assert.equal(JSON.stringify(host.nw.fighters.map((f) => f.key)),
+               JSON.stringify(["kel", "trev"]));
+
+  // And leaving through the API frees the seat, the way ESC in the room does.
+  guest.api().leave();
+  flush();
+  assert.equal(guest.api().snapshot().phase, "idle",
+    "leaving should put the guest back to no room at all");
 });

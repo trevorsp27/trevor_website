@@ -859,6 +859,10 @@ const ROSTER = {
         kind: 'dash', label: 'JITTERS',
         startup: 3, active: 9, recovery: 10, speed: 5.4,
         airRise: 4.4,
+        // Frames after an air dash during which the side of the map wraps
+        // rather than kills. Long enough to cover the coast: the dash is
+        // nine active frames and he is still moving well past the end of it.
+        wrapFor: 100,
         damage: 6, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
         ox: -4, oy: -9, w: 14, h: 12,
       },
@@ -1383,7 +1387,7 @@ const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
 const mount = document.querySelector('[data-nerdwars]');
 // data-nerdwars="online" hides local play entirely: the only way into a match
 // is the lobby on the host page.
-const onlineOnly = !!mount && mount.dataset.nerdwars === 'online';
+
 const view = document.getElementById('nw-canvas') || document.getElementById('game');
 const embedded = !!mount;
 let hasFocus = !embedded;
@@ -2039,6 +2043,12 @@ class Fighter {
 
     this.buffTimer = 0;
     this.buffStats = null;
+    /* How much longer a dash off the side wraps instead of killing him.
+       Declared here and not only where it is set, because restoreSim
+       DELETES any Fighter key missing from a snapshot -- a field first
+       assigned mid-move works perfectly offline and vanishes on the first
+       online rollback. */
+    this.dashWrap = 0;
     this.walkAnim = 0;
     // Trev's ult hands him a sword for ten seconds. While swordTimer is
     // running the ult button swings it instead of casting anything.
@@ -2176,6 +2186,8 @@ class Fighter {
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
     if (this.buffTimer > 0) this.buffTimer--;
+    // Landing means he got home on his own; the window is spent either way.
+    if (this.dashWrap > 0) { if (this.grounded) this.dashWrap = 0; else this.dashWrap--; }
     /* The choke, ticked wherever the grabber happens to be.
 
        It cannot live in runSpecial: the special is 37 frames end to end and
@@ -3193,6 +3205,14 @@ class Fighter {
           if (s.airRise && !this.grounded) {
             this.vy = -s.airRise;
             this.jumpsLeft = Math.max(this.jumpsLeft, 1);
+            /* And arm the wrap. The dash is only nine active frames but it
+               leaves at 5.4 a frame, so he is usually still travelling when
+               it ends -- he crosses the blast line WELL after the move is
+               over. Latching a window rather than checking inside the move
+               is the difference between a wrap that fires and one that
+               never does; the first version checked during the active
+               frames and never once triggered. */
+            this.dashWrap = s.wrapFor || 100;
           }
         }
         if (this.attackFrame >= s.startup &&
@@ -3519,6 +3539,32 @@ class Fighter {
     if (this.state === 'ko' || this.eliminated) return;
     this.checkHazard();
     const bz = STAGE.blast;
+    /* Reese dashing off the side comes back on the other one.
+
+       His dash is his recovery, and it keeps every pixel of its speed in the
+       air on purpose -- which meant the move that was supposed to save him
+       was the one killing him. Now the side of the map wraps while the dash
+       window is open: he reappears at the far edge, near the top, carrying
+       the SAME vx, which from that side points back onto the stage.
+
+       Only the SIDES, and only sideways. Falling out of the bottom still
+       ends the stock, and so does being launched through the ceiling -- a
+       wrap that caught those would make him unkillable for the whole window
+       rather than forgiving one specific mistake. */
+    if (this.dashWrap > 0 && this.y >= bz.top && this.y <= bz.bottom &&
+        (this.x < bz.left || this.x > bz.right)) {
+      const wentLeft = this.x < bz.left;
+      this.x = wentLeft ? bz.right - 6 : bz.left + 6;
+      this.y = Math.min(this.y, bz.top + 16);
+      this.prevY = this.y;
+      this.dashWrap = 0;          // once per dash, not a revolving door
+      for (let i = 0; i < 8; i++) {
+        addEffect('spark', this.x + rand(-4, 4), this.y + rand(-8, 8),
+                  this.accent);
+      }
+      cue('jump', { slot: this.slot, x: this.x });
+      return;
+    }
     if (this.x < bz.left || this.x > bz.right ||
         this.y < bz.top || this.y > bz.bottom) {
       this.koed();
@@ -3580,6 +3626,7 @@ class Fighter {
     this.shield = COMBAT.shieldMax;
     this.buffTimer = 0;
     this.buffStats = null;
+    this.dashWrap = 0;
     this.poison = 0;
     this.burn = 0;
     this.confused = 0;
@@ -8141,7 +8188,6 @@ let projectiles = [];
 let freezeFrames = 0;
 let battleFrames = 0;
 let banner = null;
-let twoPlayer = true;
 let winnerKey = null;
 let stagePick = 0;
 
@@ -8183,7 +8229,16 @@ function announce(text, color) {
 }
 
 function startBattle() {
+  /* freezeFrames is in saveSim, which makes it simulation state by this
+     file's own definition, and nothing used to clear it between matches.
+     A match ended by Escape stops the two machines on DIFFERENT frames --
+     a `bye` is a wall-clock event, not a simulated one -- so each could
+     carry a different leftover into the next match, and updateBattle skips
+     a frame entirely while it is positive. That is a guaranteed desync on
+     a rematch, and stateHash does not cover it, so it would not even be
+     reported for up to thirty frames. */
   STAGE = STAGES[stagePick];
+  freezeFrames = 0;
   projectiles = [];
   effects.length = 0;
   banner = null;
@@ -8212,22 +8267,28 @@ let titleChoice = 0;
 /* `humans: null` means "as many as there are controllers for", which is two
    on the keyboard plus one per pad. A four-way with nobody's pad plugged in
    is still a four-way -- two friends and two bots. */
+/* Two ways to play, and they are different in kind rather than in seat
+   count: one of them is a fight against the machine, the other is a room
+   with your friends in it.
+
+   Local 2-player and the 4-player brawl are gone. Both were one keyboard
+   shared between people sitting in one room, which is not how this game
+   actually gets played -- and the 4-player brawl in particular advertised
+   three friends and quietly handed you two bots. FOUR-PLAYER STILL EXISTS,
+   online: `netStart` sets playerCount from how many seats the room filled
+   and never reads this table, so the engine's four-seat support is
+   untouched. What went away is the title entry that reached it locally. */
 const MODES = [
   { label: '1 PLAYER  (vs CPU)', players: 2, humans: 1 },
-  { label: '2 PLAYERS  (local)', players: 2, humans: 2 },
-  { label: '4-PLAYER BRAWL', players: 4, humans: null },
+  { label: 'PLAY ONLINE  (with friends)', online: true },
 ];
 
 // Shared by the keyboard and the START button, so the two can't drift apart.
 function enterSelect() {
   const m = MODES[titleChoice] || MODES[0];
+  if (m.online) { enterOnline(); return; }
   playerCount = m.players;
-  humanCount = m.humans === null
-    ? Math.max(1, Math.min(m.players, humansAvailable()))
-    : m.humans;
-  // Still read by the select screen, and it now means what it says: two
-  // people picking at the same time on one keyboard.
-  twoPlayer = playerCount === 2 && humanCount === 2;
+  humanCount = m.humans;
   select.locked = new Array(MAX_PLAYERS).fill(false);
   select.activeSlot = 0;
   scene = 'select';
@@ -8236,7 +8297,6 @@ function enterSelect() {
 function updateTitle() {
   // The HELP button still works online -- it is a mouse action, so it sets
   // the scene without going through here.
-  if (onlineOnly) return;      // the lobby drives everything here
   if (tapped('KeyW') || tapped('ArrowUp')) {
     titleChoice = (titleChoice + MODES.length - 1) % MODES.length;
   }
@@ -8245,6 +8305,282 @@ function updateTitle() {
   }
   if (tapped('KeyH')) { scene = 'help'; return; }
   if (menuConfirm()) enterSelect();
+}
+
+/* =====================================================================
+   SCENE: ONLINE  --  making and joining a room, in the game
+
+   The room used to live in HTML underneath the canvas: a panel with a host
+   button, a text input for the code, a list of seats and a row of portraits.
+   That worked, but it meant the game was a thing you played inside a web
+   page rather than a thing you played -- fullscreen had no lobby at all, and
+   after a match everyone had to look away from the screen to set up another.
+
+   So the lobby moved in here. net.js still owns the whole of the transport
+   -- PeerJS, seats, the protocol, who is allowed to start -- and this file
+   owns none of it: `lobby().snapshot()` is read once a frame and drawn, and
+   every action is a call back into net.js. One source of truth, and it is
+   not this one.
+   ===================================================================== */
+
+/** The lobby, if this build has one. The standalone does not. */
+function lobby() {
+  return (typeof window !== 'undefined' && window.NerdWarsLobby) || null;
+}
+
+const online = {
+  choice: 0,          // 0 host, 1 join
+  code: '',           // what has been typed into the join field
+  typing: false,
+};
+
+// The alphabet room codes are drawn from. No I, O, 0 or 1: they are the
+// characters people mis-read and mis-type, and a room code is read aloud
+// across a table more often than it is copied.
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function enterOnline() {
+  online.choice = 0;
+  online.code = '';
+  online.typing = false;
+  scene = 'online';
+}
+
+/** Whichever code key was pressed this frame, as a character, or null. */
+function typedChar() {
+  for (let i = 0; i < CODE_CHARS.length; i++) {
+    const c = CODE_CHARS[i];
+    // Letters arrive as KeyA..KeyZ and digits as Digit2..Digit9, which is
+    // the whole alphabet a room code uses. `held` is keyed by e.code, so
+    // this needs no separate text input and no hidden DOM field.
+    if (tapped(c >= '0' && c <= '9' ? 'Digit' + c : 'Key' + c)) return c;
+  }
+  return null;
+}
+
+function updateOnline() {
+  const lb = lobby();
+  /* ESCAPE only, not menuBack(), because menuBack() is Escape OR Backspace
+     and Backspace is a character key while the field is open -- routing it
+     here wiped the whole code instead of taking one letter off it.
+
+     Escape backs out of the field first and off the screen second. */
+  if (tapped('Escape')) {
+    if (online.typing) { online.typing = false; online.code = ''; }
+    else scene = 'title';
+    return;
+  }
+  if (!online.typing && tapped('Backspace')) { scene = 'title'; return; }
+  if (!lb || !lb.snapshot().available) return;   // nothing to drive
+
+  const snap = lb.snapshot();
+  // The moment net.js has a room, the room scene takes over.
+  if (snap.phase === 'lobby' || snap.phase === 'hosting' ||
+      snap.phase === 'joining') {
+    scene = 'room';
+    return;
+  }
+
+  /* Typing is a MODE, and it has to be, because the code alphabet contains
+     the navigation keys. The first version let you type whenever JOIN was
+     highlighted, so pressing S to move down to JOIN also typed an S into the
+     field -- and S is a perfectly good character in a room code, so it
+     cannot simply be excluded. Either the letters navigate or they type, and
+     which one is decided by whether you have opened the field.
+
+     ENTER opens it, ESC and a backspace off the end close it again. */
+  if (!online.typing) {
+    if (tapped('KeyW') || tapped('ArrowUp')) online.choice = 0;
+    if (tapped('KeyS') || tapped('ArrowDown')) online.choice = 1;
+    if (menuConfirm()) {
+      if (online.choice === 0) lb.host();
+      else { online.typing = true; online.code = ''; }
+    }
+    return;
+  }
+
+  const c = typedChar();
+  if (c && online.code.length < 4) online.code += c;
+  if (tapped('Backspace')) {
+    if (!online.code) online.typing = false;
+    else online.code = online.code.slice(0, -1);
+  }
+  if (menuConfirm() && online.code.length === 4) lb.join(online.code);
+}
+
+function drawOnline() {
+  sctx.fillStyle = '#0d1020';
+  sctx.fillRect(0, 0, view.width, view.height);
+  text('PLAY ONLINE', VW / 2, 24, 11, '#ffffff', 'center', 800);
+
+  const lb = lobby();
+  const snap = lb && lb.snapshot();
+  if (!lb || !snap.available) {
+    /* The standalone build has no netplay in it at all -- build.py inlines
+       the sprites and the engine, and PeerJS is a CDN tag on the website.
+       Rather than hide the menu entry on one build and show it on the
+       other, which would give the two builds different title screens, the
+       entry is always there and this says why it cannot do anything. */
+    text('online play lives on the website copy', VW / 2, 70, 8,
+         '#c8cee6', 'center', 600);
+    text('trevorspinosa.com/pages/nerdwars.html', VW / 2, 84, 7,
+         '#8fe08f', 'center', 600);
+    text(lb ? 'could not reach the matchmaking service'
+            : 'this copy is the offline one',
+         VW / 2, 100, 6, '#5f6884', 'center', 500);
+    text('ESC to go back', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
+    return;
+  }
+
+  const rows = ['CREATE A ROOM', 'JOIN A ROOM'];
+  rows.forEach((label, i) => {
+    const on = online.choice === i;
+    text((on ? '> ' : '  ') + label, VW / 2, 62 + i * 14, 9,
+         on ? '#ffffff' : '#5f6884', 'center', on ? 800 : 500);
+  });
+
+  if (online.typing) {
+    // Four boxes, filled as you type. A code is four characters and the
+    // shape of the field should say so before anybody presses a key.
+    const boxW = 16, gap = 5;
+    const total = 4 * boxW + 3 * gap;
+    const x0 = Math.round(VW / 2 - total / 2);
+    for (let i = 0; i < 4; i++) {
+      const x = x0 + i * (boxW + gap);
+      const ch = online.code[i];
+      sctx.fillStyle = ch ? '#1b2138' : '#141829';
+      sctx.fillRect(px(x), px(96), px(boxW), px(18));
+      sctx.strokeStyle = i === online.code.length ? '#8fe08f' : '#2c3350';
+      sctx.lineWidth = Math.max(1, SCALE);
+      sctx.strokeRect(px(x), px(96), px(boxW), px(18));
+      sctx.lineWidth = 1;
+      if (ch) text(ch, x + boxW / 2, 110, 11, '#ffffff', 'center', 800);
+    }
+    text('type the code, ENTER to join, ESC to go back', VW / 2, 126, 6,
+         '#5f6884', 'center', 500);
+  } else {
+    text(online.choice === 0
+           ? 'a code appears; read it out to your friends'
+           : 'ENTER to type the code they read out to you',
+         VW / 2, 100, 6, '#5f6884', 'center', 500);
+  }
+
+  if (snap.status) {
+    text(snap.status, VW / 2, VH - 22, 6,
+         snap.statusKind === 'warn' ? '#ff9f43' : '#8fe08f', 'center', 600);
+  }
+  text('W/S to choose    ENTER to confirm    ESC to go back',
+       VW / 2, VH - 8, 5.5, '#454c66', 'center', 500);
+}
+
+/* =====================================================================
+   SCENE: ROOM  --  who is here, and who they are playing
+
+   This is also the character select for online play, deliberately. The
+   request was to be able to "select a character from the screen and play
+   again in the same session", and a separate lobby screen and select screen
+   would mean leaving the room to pick and coming back. Here the grid IS the
+   room: your cursor is yours, everybody sees what everybody locked in, and
+   the host starts when the room is ready.
+
+   It is also where a finished match returns to, which is the whole of the
+   rematch feature.
+   ===================================================================== */
+
+function updateRoom() {
+  const lb = lobby();
+  if (!lb) { scene = 'title'; return; }
+  const snap = lb.snapshot();
+
+  if (snap.phase === 'idle') { scene = 'online'; return; }
+
+  if (menuBack()) { lb.leave(); scene = 'online'; return; }
+
+  // Your own cursor, on your own machine, on the keys everybody uses.
+  const b = BINDS[0];
+  if (tapped(b.left)) moveCursor(0, -1, 0);
+  if (tapped(b.right)) moveCursor(0, 1, 0);
+  if (tapped(b.up)) moveCursor(0, 0, -1);
+  if (tapped(b.down)) moveCursor(0, 0, 1);
+
+  /* Confirming sends the pick; moving does not. The cursor is local and
+     free, and one message goes out when you have decided -- rather than one
+     per keypress, which would put a packet on the wire for every wobble of
+     an undecided cursor. */
+  if (tapped(b.attack) || (b.attack2 && tapped(b.attack2))) {
+    lb.pick(ORDER[select.cursor[0]]);
+  }
+
+  // Only the host can start, and only with somebody to fight.
+  if (snap.canStart && (tapped('Enter') || tapped('NumpadEnter'))) lb.start();
+}
+
+function drawRoom() {
+  const lb = lobby();
+  const snap = lb ? lb.snapshot() : null;
+  sctx.fillStyle = '#0d1020';
+  sctx.fillRect(0, 0, view.width, view.height);
+  if (!snap) return;
+
+  // The code, big, because somebody is reading it out loud.
+  text('ROOM', 10, 16, 7, '#5f6884', 'left', 600);
+  text(snap.code || '----', 10, 30, 14, '#8fe08f', 'left', 800);
+
+  // Who is in it, and what they picked.
+  const seats = snap.seats.filter((s) => s.here);
+  text(seats.length + (seats.length === 1 ? ' player' : ' players'),
+       VW - 10, 16, 7, '#5f6884', 'right', 600);
+  seats.forEach((seat, i) => {
+    const def = ROSTER[seat.char];
+    const label = (seat.you ? 'YOU  ' : 'P' + (seat.slot + 1) + '   ') +
+                  (def ? def.name : '...');
+    text(label, VW - 10, 28 + i * 9, 6.5,
+         seat.you ? '#ffffff' : '#c8cee6', 'right', seat.you ? 800 : 500);
+  });
+
+  // The grid, which is the point: pick from the screen, in the room.
+  /* Tighter than the local select's 52-row grid, because this screen carries
+     three things that one does not: the code, the seat list, and a status
+     line net.js writes into. At 52 the second row of names landed at y 160
+     and sat straight on top of "Room ready." */
+  const cellW = 74, cellH = 44;
+  const originX = VW / 2 - (GRID_COLS * cellW) / 2 + cellW / 2;
+  const originY = 60;
+  ORDER.forEach((k, i) => {
+    const cx = originX + (i % GRID_COLS) * cellW;
+    const cy = originY + Math.floor(i / GRID_COLS) * cellH;
+    if (select.cursor[0] === i) {
+      sctx.strokeStyle = '#ffffff';
+      sctx.lineWidth = Math.max(2, SCALE);
+      sctx.strokeRect(px(cx - 26), px(cy - 5), px(52), px(36));
+      sctx.lineWidth = 1;
+    }
+    // A ring in somebody else's colour for a fighter they have locked in.
+    const taken = snap.seats.find((s) => s.here && !s.you && s.char === k);
+    if (taken) {
+      sctx.strokeStyle = SEAT_COLORS[taken.slot % SEAT_COLORS.length];
+      sctx.lineWidth = Math.max(1, SCALE);
+      sctx.strokeRect(px(cx - 23), px(cy - 2), px(46), px(30));
+      sctx.lineWidth = 1;
+    }
+    drawPortrait(k, cx, cy + 22, 1.3);
+    text(ROSTER[k].name, cx, cy + 29, 5.5, SPRITES[k].accent, 'center', 700);
+  });
+
+  if (snap.status) {
+    text(snap.status, VW / 2, VH - 24, 6,
+         snap.statusKind === 'warn' ? '#ff9f43' : '#8fe08f', 'center', 600);
+  }
+  const line = snap.canStart
+    ? 'ENTER to start the match'
+    : snap.role === 'host'
+      ? 'waiting for somebody to join'
+      : 'waiting for the host to start';
+  text(line, VW / 2, VH - 13, 7, snap.canStart ? '#ffffff' : '#8792b0',
+       'center', snap.canStart ? 800 : 500);
+  text('WASD to move    ' + keyName(BINDS[0].attack) +
+       ' to lock in    ESC to leave the room',
+       VW / 2, VH - 3, 5, '#454c66', 'center', 500);
 }
 
 /* =====================================================================
@@ -8311,21 +8647,18 @@ function menuTap(scheme, action) {
 function updateSelect() {
   if (menuBack()) { scene = 'title'; return; }
 
-  if (twoPlayer) {
-    for (let p = 0; p < 2; p++) {
-      const b = BINDS[p];
-      if (select.locked[p]) {
-        if (tapped(b.shield) || (b.shield2 && tapped(b.shield2))) select.locked[p] = false;
-        continue;
-      }
-      if (tapped(b.left)) moveCursor(p, -1, 0);
-      if (tapped(b.right)) moveCursor(p, 1, 0);
-      if (tapped(b.up)) moveCursor(p, 0, -1);
-      if (tapped(b.down)) moveCursor(p, 0, 1);
-      if (tapped(b.attack) || (b.attack2 && tapped(b.attack2))) select.locked[p] = true;
-    }
-    if (select.locked[0] && select.locked[1]) scene = 'stage';
-  } else {
+  /* One branch now, not two. There used to be a hot-seat branch here that
+     polled BINDS[0] and BINDS[1] and waited for BOTH to lock -- two people
+     picking at once on one keyboard.
+
+     It is gone with local 2-player, and its removal is most of the rematch
+     fix. The flag it tested was raised by `netStart` for every 2-player
+     online match, and the results screen dropped everyone onto this screen
+     afterwards -- so an online rematch landed in a branch waiting for a
+     second keyboard that does not exist on either machine. The second seat
+     could never lock, nothing advanced, and the only way out was Escape.
+     That was the whole of "the rematch feature doesn't work". */
+  {
     // A seat at a time. Each human seat is driven by its own controller, so
     // in a four-way everybody picks their own fighter; CPU seats fall to
     // player one. This is the path solo mode already used -- pick yourself,
@@ -8431,7 +8764,7 @@ function updateBattle() {
       netStop('you left');
       return;
     }
-    scene = onlineOnly ? 'title' : 'select';
+    scene = 'select';
     select.locked = new Array(MAX_PLAYERS).fill(false);
     return;
   }
@@ -8515,12 +8848,30 @@ function updateResults() {
   const autoOnline = netplay.active && resultTimer > RESULT_AUTO_FRAMES;
   if (!backOut && !carryOn && !autoOnline) return;
 
-  if (netplay.active) netStop('match over');
+  /* Where a finished match goes, and the whole of the rematch feature.
+
+     It used to go to the local character select, and online that was a dead
+     end: `netStart` had raised the two-people-on-one-keyboard flag, so the
+     select screen sat waiting for a second keyboard neither machine had,
+     nothing could advance, and Escape was the only way out. The room was
+     still there underneath -- net.js puts everyone back in the lobby the
+     moment the match stops -- but the canvas was showing a screen that
+     could not be left, so nobody ever looked.
+
+     Now it goes back to the room. The connection was never dropped, seats
+     are intact, and everybody picks again and goes. */
+  const wasOnline = netplay.active;
+  if (wasOnline) netStop('match over');
   select.locked = new Array(MAX_PLAYERS).fill(false);
   select.activeSlot = 0;
-  // Escape still means the title and confirm still means the character
-  // select, exactly as before. Only the netStop above is new.
-  scene = (backOut || onlineOnly) ? 'title' : 'select';
+
+  if (wasOnline && lobby()) {
+    // Escape means you are finished with the room, not just the match.
+    if (backOut) { lobby().leave(); scene = 'title'; return; }
+    scene = 'room';
+    return;
+  }
+  scene = backOut ? 'title' : 'select';
 }
 
 /* =====================================================================
@@ -9316,24 +9667,9 @@ function drawTitle() {
      than as another word in it. */
   text('v' + VERSION, VW / 2 + 76, 104, 6, '#5f6884', 'left', 700);
 
-  if (onlineOnly) {
-    text('create or join a room below to play', VW / 2, 138, 8, '#c8cee6', 'center', 600);
-    text('two players, one on each keyboard', VW / 2, 148, 6, '#5f6884', 'center', 500);
-    drawButton('help', VW / 2, 166, 48, () => { scene = 'help'; });
-    return;
-  }
-
   MODES.forEach((m, i) => {
     const on = titleChoice === i;
-    let label = m.label;
-    // Say up front how a four-way will actually be filled, so nobody picks it
-    // expecting three friends and gets two bots without being told why.
-    if (m.humans === null) {
-      const h = Math.max(1, Math.min(m.players, humansAvailable()));
-      label += h >= m.players ? '  (4 people)'
-             : '  (' + h + ' of you + ' + (m.players - h) + ' CPU)';
-    }
-    text((on ? '> ' : '  ') + label, VW / 2, 130 + i * 9, 8,
+    text((on ? '> ' : '  ') + m.label, VW / 2, 130 + i * 9, 8,
          on ? '#ffffff' : '#5f6884', 'center', on ? 800 : 500);
   });
   // The buttons are 325x128 -- two and a half times wider than they are tall
@@ -9341,12 +9677,7 @@ function drawTitle() {
   // At 48 wide each is 18.9 tall, which is what sets everything above them.
   drawButton('start', VW / 2 - 30, 161, 48, enterSelect);
   drawButton('help', VW / 2 + 30, 161, 48, () => { scene = 'help'; });
-  // The bottom line does double duty: normally it says how to change the
-  // selection, but on a four-way that cannot be filled it says why.
-  const short = MODES[titleChoice] && MODES[titleChoice].humans === null &&
-                humansAvailable() < MAX_PLAYERS;
-  text(short ? 'plug in controllers for players 3 and 4' : 'W/S to choose',
-       VW / 2, VH - 3, 5, '#454c66', 'center', 500);
+  text('W/S to choose', VW / 2, VH - 3, 5, '#454c66', 'center', 500);
 }
 
 /* The keyboard half of the game has never been written down anywhere the
@@ -9404,7 +9735,7 @@ function drawSelect() {
   text('CHOOSE YOUR FIGHTER', VW / 2, 18, 11, '#ffffff', 'center', 800);
 
   // Not online: there the lobby owns which scene you are in.
-  if (!onlineOnly) drawButton('back', 30, 18, 44, () => { scene = 'title'; });
+  drawButton('back', 30, 18, 44, () => { scene = 'title'; });
 
   const cellW = 74, cellH = 52;
   const originX = VW / 2 - (GRID_COLS * cellW) / 2 + cellW / 2;
@@ -9436,7 +9767,7 @@ function drawSelect() {
   });
 
   // Detail panel for whichever character the active cursor is on.
-  const focusSlot = twoPlayer ? 0 : select.activeSlot;
+  const focusSlot = select.activeSlot;
   void focusSlot;
   const focus = ROSTER[ORDER[select.cursor[focusSlot]]];
   // Three states, not two. "Not drawn" used to print "placeholder", which
@@ -9468,14 +9799,7 @@ function drawSelect() {
        VW / 2, VH - 5, 5.5, '#5a6280', 'center', 500);
 
   // Player status line.
-  if (twoPlayer) {
-    text((select.locked[0] ? 'P1 READY' : 'P1 choosing') +
-         '  WASD+' + keyName(BINDS[0].attack),
-         10, VH - 33, 6.5, select.locked[0] ? '#8fe08f' : '#59a5ff', 'left', 700);
-    text((select.locked[1] ? 'P2 READY' : 'P2 choosing') +
-         '  arrows+' + keyName(BINDS[1].attack),
-         VW - 10, VH - 33, 6.5, select.locked[1] ? '#8fe08f' : '#ff5f5f', 'right', 700);
-  } else {
+  {
     const slot = select.activeSlot;
     const human = slot < humanCount;
     const who = playerCount === 2
@@ -9510,16 +9834,28 @@ function drawResults() {
   }
   if (resultTimer > 40) {
     sctx.globalAlpha = 0.6 + Math.sin(resultTimer * 0.09) * 0.4;
-    text('press ' + keyName(BINDS[0].attack) + ' / ENTER for a rematch',
+    text(netplay.active
+           ? 'press ' + keyName(BINDS[0].attack) + ' / ENTER for the room'
+           : 'press ' + keyName(BINDS[0].attack) + ' / ENTER for a rematch',
          VW / 2, 140, 8, '#c8cee6', 'center', 600);
     sctx.globalAlpha = 1;
-    drawButton('quit', VW / 2, 164, 58, () => { scene = 'title'; });
+    /* QUIT used to set the scene and nothing else, which left netplay.active
+       true and net.js stuck in its "playing" phase forever: the room never
+       came back and the only fix was reloading the page. A button that ends
+       the match has to say so on the wire. */
+    drawButton('quit', VW / 2, 164, 58, () => {
+      if (netplay.active) netStop('match over');
+      if (lobby()) lobby().leave();
+      scene = 'title';
+    });
   }
 }
 
 function render() {
   uiButtons.length = 0;
   if (scene === 'title') { drawTitle(); return; }
+  if (scene === 'online') { drawOnline(); return; }
+  if (scene === 'room') { drawRoom(); return; }
   if (scene === 'help') { drawHelp(); return; }
   if (scene === 'select') { drawSelect(); return; }
   if (scene === 'stage') { drawStageSelect(); return; }
@@ -9581,7 +9917,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '2c134bb535';
+const BUILD_ID = '5cd6ff686b';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9592,7 +9928,7 @@ const BUILD_ID = '2c134bb535';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.40';
+const VERSION = '2.41';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -10384,7 +10720,6 @@ function netStart(opts) {
   // startBattle loops to playerCount, and it used to be left at four.
   playerCount = slots;
   humanCount = slots;
-  twoPlayer = slots === 2;
 
   netplay.active = true;
   netplay.slots = slots;
@@ -10471,6 +10806,8 @@ let frameCount = 0;
 function step() {
   switch (scene) {
     case 'title': updateTitle(); break;
+    case 'online': updateOnline(); break;
+    case 'room': updateRoom(); break;
     case 'help': updateHelp(); break;
     case 'select': updateSelect(); break;
     case 'stage': updateStageSelect(); break;
@@ -10562,7 +10899,6 @@ window.NerdWars = {
   get stage() { return STAGE.key; },
   get focused() { return hasFocus; },
   get ready() { return assetsReady; },
-  get onlineOnly() { return onlineOnly; },
   // Read-only copies, so a page can build a lobby without duplicating the
   // roster or the stage list and drifting out of sync with the game.
   get roster() {

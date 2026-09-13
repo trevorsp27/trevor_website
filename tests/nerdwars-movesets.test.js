@@ -39,7 +39,28 @@ function seededMath() {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
-const GAME = readFileSync(path.join(JS_DIR, "game.js"), "utf8");
+/* The ENGINE SOURCE, not the shipped bundle -- the same choice
+   nerdwars-platforms.test.js makes, for the same reason.
+
+   The bundle is wrapped in an IIFE, so nothing inside it can be reached: the
+   only handle is window.NerdWars, which hands out rounded read-only copies of
+   the fighters. That was fine while these tests could put a second HUMAN in
+   seat 1 who simply never pressed anything. Local two-player is gone from the
+   title now, so the menu route leaves a CPU there instead -- and a CPU walks
+   over, attacks, and knocks the fighter under test out of the move being
+   measured. Ten tests went red that way, every one of them reporting
+   something like "tapping should send one pawn: 0 !== 1".
+
+   Two human seats is still a real configuration the engine supports; online
+   sets exactly that (humanCount = however many seats the room filled). What
+   went away is the local menu entry that reached it. Booting the source lets
+   these tests ask for it directly, which is what they always actually wanted:
+   a training dummy, not an opponent. */
+const ENGINE_PATH = path.join(HERE, "..", "..", "NerdWars", "src", "nerdwars.js");
+const GAME = 'var SPRITES = window.NERDWARS_ASSETS.SPRITES,\n' +
+             '    TILES = window.NERDWARS_ASSETS.TILES,\n' +
+             '    UI = window.NERDWARS_ASSETS.UI;\n' +
+             readFileSync(ENGINE_PATH, "utf8");
 
 function stubContext() {
   return new Proxy(
@@ -134,6 +155,8 @@ async function bootGame() {
   };
   const g = {
     nw: sandbox.window.NerdWars,
+    // Reaches the engine's own bindings, which the IIFE bundle hides.
+    run: (code) => vm.runInContext(code, sandbox),
     pump(n = 1) {
       for (let i = 0; i < n; i++) {
         const due = rafQueue.splice(0, rafQueue.length);
@@ -164,10 +187,26 @@ async function bootGame() {
 
 /** Two humans, seat 0 as `a`, seat 1 as `b`, on the first stage. */
 function startAs(g, a, b) {
+  /* One seat at a time, on one keyboard, both picked by the same person.
+
+     This used to select "2 PLAYERS (local)" and drive seat 1 on the arrow
+     keys. That mode is gone -- the title offers a CPU match or an online
+     room and nothing else -- so both fighters are now chosen the way the
+     solo mode always chose them: pick yourself, lock, pick the opponent,
+     lock. Same keys for both, because there is only one player here.
+
+     Seat 1 is a CPU now rather than an idle second human. For these tests
+     that is a real difference: it moves and it fights back, so anything
+     measuring a distance had better measure it against the thing it is
+     testing rather than against an opponent that used to stand still. */
   assert.equal(g.nw.scene, "title");
-  g.tap("KeyS");                       // "2 PLAYERS (local)"
-  g.tap("Enter");
+  g.tap("Enter");                      // "1 PLAYER (vs CPU)"
   assert.equal(g.nw.scene, "select");
+  /* Two human seats, asked for directly. The title cannot offer this any
+     more, but the engine still supports it -- it is what every online match
+     runs -- and what these tests need from seat 1 is that it holds still
+     while seat 0 is measured. A CPU there does not hold still. */
+  g.run("humanCount = 2;");
   /* The select screen is a GRID, not a list, and each seat starts on a
      different character -- seat 0 on AutisNick, seat 1 on Reese. Counting
      right-presses linearly walks into the clamp at the end of a row and lands
@@ -201,6 +240,9 @@ function startAs(g, a, b) {
     for (; c0 < c1; c0++) g.tap(R);
     for (; c0 > c1; c0--) g.tap(L);
   };
+  // Seat 0 starts on AutisNick (cursor 0), seat 1 on Reese (cursor 4). With
+  // two human seats each is driven by its own scheme, so seat 1 is back on
+  // the arrow keys.
   step(0, at(a), ["KeyA", "KeyD", "KeyW", "KeyS"]);
   g.tap("KeyG");
   step(4, at(b), ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
@@ -732,7 +774,11 @@ test("the throw goes where it is aimed", async () => {
 async function kelWithFullMeter() {
   const g = await bootGame();
   assert.equal(g.nw.scene, "title");
-  g.tap("KeyS"); g.tap("Enter");
+  g.tap("Enter");
+  // Two human seats, for the same reason startAs asks: filling an ult meter
+  // takes 420 rounds of jabbing a target that stays put. A CPU there fights
+  // back, launches Kel across the stage, and the meter plateaus around 53.
+  g.run("humanCount = 2;");
   g.tap("KeyD"); g.tap("KeyD");            // seat 0 -> kel
   g.tap("KeyG");
   g.tap("Comma");                          // seat 1 defaults to reese

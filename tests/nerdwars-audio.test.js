@@ -24,8 +24,18 @@ import vm from "node:vm";
    different on every run. Math remains the prototype, so everything else on
    it still works. */
 let __seedCounter = 0;
-function seededMath() {
-  let s = (0x9e3779b9 ^ (++__seedCounter * 2654435761)) >>> 0 || 1;
+/* Takes a seed now, the way nerdwars-confuse.test.js's copy already did.
+
+   Without one, each boot draws from the counter and therefore from a
+   different stream -- which is fine for a test that boots one engine, and
+   fatal for the two tests below that boot a PAIR and feed them one script,
+   expecting identical fights. That was survivable while both seats were
+   humans who pressed nothing. The title offers a CPU match now, and a CPU
+   calls Math.random, so an unseeded pair diverges on frame one. */
+function seededMath(seed) {
+  let s = seed === undefined
+    ? (0x9e3779b9 ^ (++__seedCounter * 2654435761)) >>> 0 || 1
+    : (seed >>> 0) || 1;
   const M = Object.create(Math);
   M.random = () => {
     s ^= s << 13; s >>>= 0;
@@ -202,7 +212,7 @@ async function bootGame(opts) {
 
   const sandbox = {
     console,
-    Math: seededMath(),
+    Math: seededMath(opts && opts.seed),
     JSON,
     Date,
     Promise,
@@ -781,28 +791,25 @@ test("scheduling never lands in the past", async () => {
  * nerdwars-fourplayer.test.js, an independent confirmation that this is
  * really how the suite already reaches a two-human local match.
  */
-function enterTwoPlayerBattle(g) {
-  g.pump(2);
-  g.press("KeyS"); // move the title cursor onto "2 PLAYERS (local)"
-  g.pump(2);
-  g.release("KeyS");
-  g.pump(2);
-  g.press("Enter"); // confirm at title -> enterSelect()
-  g.pump(2);
-  g.release("Enter");
-  g.pump(2);
-  g.press("KeyG"); // seat 0's attack key locks seat 0's pick
-  g.pump(2);
-  g.release("KeyG");
-  g.pump(2);
-  g.press("Comma"); // seat 1's attack key locks seat 1's pick -> scene = 'stage'
-  g.pump(2);
-  g.release("Comma");
-  g.pump(2);
-  g.press("Enter"); // confirm at stage select -> startBattle()
-  g.pump(2);
-  g.release("Enter");
-  g.pump(4);
+/* Into a match, on the mode the title still offers.
+
+   This used to pick "2 PLAYERS (local)" and lock two seats on two attack
+   keys. That entry is gone, so it takes the first row -- 1 PLAYER vs CPU --
+   and Enter drives the whole way: one seat at a time at the select, then the
+   stage. Seat 1 is a bot rather than a second human who never moved, which
+   is why the paired tests below now hand both engines the same seed. */
+function enterBattle(g) {
+  const tap = (code, after) => {
+    g.pump(2);
+    g.press(code);
+    g.pump(2);
+    g.release(code);
+    g.pump(after === undefined ? 2 : after);
+  };
+  tap("Enter");   // title  -> enterSelect()
+  tap("Enter");   // select -> lock seat 0, move to seat 1
+  tap("Enter");   // select -> lock seat 1, scene = 'stage'
+  tap("Enter", 4); // stage -> startBattle()
 }
 
 /**
@@ -899,8 +906,10 @@ function tradeBlows(engines, rounds, onRound) {
    directly with `shield = 0` injected into audioVoice, this test still
    passes. */
 test("an engine with audio and one without stay in identical states", async () => {
-  const loud = await bootGame({ audio: true });
-  const mute = await bootGame();
+  // One seed for both: the fight has a bot in it, and two bots drawing from
+  // two streams are two different fights.
+  const loud = await bootGame({ audio: true, seed: 20260913 });
+  const mute = await bootGame({ seed: 20260913 });
   // Unlocking directly, rather than loud.press("KeyZ"), means the two
   // engines are fed strictly identical input throughout the test: a
   // one-sided keypress is inert at the title screen today, but it is a
@@ -909,7 +918,7 @@ test("an engine with audio and one without stay in identical states", async () =
   // to feed unevenly in the first place.
   loud.nw.audio.unlock();
 
-  for (const g of [loud, mute]) enterTwoPlayerBattle(g);
+  for (const g of [loud, mute]) enterBattle(g);
   for (const g of [loud, mute]) {
     assert.equal(
       g.nw.scene,
@@ -1004,13 +1013,13 @@ test("an engine with audio and one without stay in identical states", async () =
        passes through 1 early on) -- see that test's own comment for why
        the two differ on this one field. */
 test("flushing a cue mid-match does not change the simulation", async () => {
-  const wired = await bootGame({ audio: true });
-  const mute = await bootGame();
+  const wired = await bootGame({ audio: true, seed: 20260913 });
+  const mute = await bootGame({ seed: 20260913 });
   // See the comment in the test above: unlock directly so both engines get
   // strictly identical input.
   wired.nw.audio.unlock();
 
-  for (const g of [wired, mute]) enterTwoPlayerBattle(g);
+  for (const g of [wired, mute]) enterBattle(g);
   for (const g of [wired, mute]) {
     assert.equal(
       g.nw.scene,
@@ -1423,7 +1432,7 @@ test("every sample a recipe names is actually in the bundle", async () => {
 test("an ordinary fight makes noise without anybody using an ult", async () => {
   const g = await bootGame({ audio: true });
   g.press("KeyZ");
-  enterTwoPlayerBattle(g);
+  enterBattle(g);
   assert.equal(g.nw.scene, "battle");
 
   const atStart = voiceCount(g.audioLog);
@@ -1461,7 +1470,7 @@ test("an ordinary fight makes noise without anybody using an ult", async () => {
 test("landing and jumping are audible on their own", async () => {
   const g = await bootGame({ audio: true });
   g.press("KeyZ");
-  enterTwoPlayerBattle(g);
+  enterBattle(g);
 
   const before = voiceCount(g.audioLog);
   // Jump, then wait for the landing.
@@ -1537,7 +1546,7 @@ test("music starts on the menu and crosses over into a match", async () => {
   assert.ok(!battle().playing, "the battle track should not be");
 
   // Into a fight: the two swap.
-  enterTwoPlayerBattle(g);
+  enterBattle(g);
   assert.equal(g.nw.scene, "battle");
   g.pump(60);
   assert.ok(battle().playing, "the battle track should take over in a match");

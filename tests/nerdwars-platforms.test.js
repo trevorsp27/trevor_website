@@ -2994,3 +2994,401 @@ test("only the chess move draws a chess piece", async () => {
     "drawCharge painted " + cob.painted + " times while Cobeus was drinking " +
     "-- a chess piece over the head of a man holding a bottle");
 });
+
+
+test("a finished online match goes back to the room, not a dead end", async () => {
+  /* The bug, exactly: after an online match the engine dropped everyone on
+     the LOCAL character select. netStart had raised the two-people-on-one-
+     keyboard flag, so that screen sat waiting for a second keyboard to lock
+     seat 1 -- and online there is one keyboard per machine, so seat 1 could
+     never lock, nothing advanced, and Escape was the only way out.
+
+     The room was there the whole time: net.js puts everybody back in the
+     lobby the moment the match stops. Nobody ever saw it, because the canvas
+     was showing a screen that could not be left.
+
+     Driven against a stub lobby rather than real PeerJS: what is under test
+     is where the ENGINE sends you, and a stub makes that the only thing
+     that can fail. */
+  const run = await bootEngine();
+
+  const stub = () => run(`(function () {
+    window.__left = 0;
+    window.NerdWarsLobby = {
+      host: function () {}, join: function () {}, pick: function () {},
+      start: function () {}, setStage: function () {},
+      leave: function () { window.__left++; },
+      snapshot: function () {
+        return { available: true, phase: 'lobby', role: 'host', code: 'ABCD',
+                 mySlot: 0, myChar: 'kel', stage: 'space', status: '',
+                 statusKind: '', seats: [], here: 2, canStart: true };
+      },
+    };
+    return true;
+  })()`);
+
+  stub();
+  const after = run(`(function () {
+    netplay.active = true;
+    scene = 'results'; resultTimer = 60; winnerKey = 'kel';
+    held.clear(); prevHeld.clear();
+    held.add('Enter');
+    updateResults();
+    var out = scene;
+    held.clear(); prevHeld.clear();
+    netplay.active = false;
+    return out;
+  })()`);
+
+  assert.equal(after, 'room',
+    "an online match that ends should hand everybody back to the room so " +
+    "they can pick again; it went to '" + after + "'");
+
+  /* Escape is different, and should stay different: it means you are done
+     with the room, not just with the match. */
+  const escaped = run(`(function () {
+    netplay.active = true;
+    scene = 'results'; resultTimer = 60; winnerKey = 'kel';
+    held.clear(); prevHeld.clear();
+    held.add('Escape');
+    updateResults();
+    var out = { scene: scene, left: window.__left };
+    held.clear(); prevHeld.clear();
+    netplay.active = false;
+    return out;
+  })()`);
+  assert.equal(escaped.scene, 'title', "Escape should leave entirely");
+  assert.ok(escaped.left > 0, "and should give up the seat on the way out");
+
+  // Offline, nothing changed: confirm still means another local match.
+  const offline = run(`(function () {
+    netplay.active = false;
+    scene = 'results'; resultTimer = 60; winnerKey = 'kel';
+    held.clear(); prevHeld.clear();
+    held.add('Enter');
+    updateResults();
+    var out = scene;
+    held.clear(); prevHeld.clear();
+    return out;
+  })()`);
+  assert.equal(offline, 'select',
+    "a local match should still go back to the character select");
+});
+
+
+/* A lobby that records what the game asked it to do, with no PeerJS behind
+   it. What is under test is the half that moved: the screens, the typing and
+   the wiring. net.js's own half is covered by nerdwars-online-4p. */
+function stubLobby(run, phase) {
+  run(`(function () {
+    window.__lobby = { calls: [], phase: ${JSON.stringify(phase || 'idle')},
+                       code: 'QK7M', canStart: false, seats: [] };
+    window.NerdWarsLobby = {
+      host: function () { __lobby.calls.push('host'); },
+      join: function (c) { __lobby.calls.push('join:' + c); },
+      pick: function (c) { __lobby.calls.push('pick:' + c); },
+      start: function () { __lobby.calls.push('start'); },
+      leave: function () { __lobby.calls.push('leave'); },
+      setStage: function () {},
+      snapshot: function () {
+        return { available: true, phase: __lobby.phase, role: 'host',
+                 code: __lobby.code, mySlot: 0, myChar: 'kel',
+                 stage: 'space', status: '', statusKind: '',
+                 seats: __lobby.seats, here: __lobby.seats.length,
+                 canStart: __lobby.canStart };
+      },
+    };
+    return true;
+  })()`);
+}
+
+const tapKey = (run, code) => run(`(function () {
+  held.clear(); prevHeld.clear(); held.add(${JSON.stringify(code)});
+  step();
+  held.clear(); prevHeld.clear();
+  return scene;
+})()`);
+
+test("the title reaches an online room without leaving the game", async () => {
+  /* The room used to be a panel of HTML underneath the canvas: a host
+     button, a text box for the code, a list of seats. That meant there was
+     no lobby at all in fullscreen, and after every match everybody had to
+     look away from the game to set up another one.
+
+     It is a screen in the game now. net.js still owns every byte of the
+     transport -- this asserts only that the game asks it the right things. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+
+  // Two modes, and the second is the online one.
+  const modes = run("MODES.map(function (m) { return m.label; })");
+  assert.equal(modes.length, 2,
+    "the title should offer exactly two ways to play, got: " + modes.join(" / "));
+  assert.ok(/ONLINE/i.test(modes[1]), "the second should be the online one");
+
+  run("scene = 'title'; titleChoice = 1;");
+  assert.equal(tapKey(run, 'Enter'), 'online',
+    "confirming the online mode should open the online screen in the game");
+
+  // Creating a room is the first option.
+  assert.equal(tapKey(run, 'Enter'), 'online', "still on the online screen");
+  assert.equal(run("__lobby.calls.join(',')"), 'host',
+    "confirming CREATE A ROOM should ask the lobby to host");
+
+  // And once net.js has a room, the room screen takes over on its own.
+  run("__lobby.phase = 'lobby';");
+  assert.equal(tapKey(run, 'KeyZ'), 'room',
+    "once the lobby has a room, the game should be showing it");
+});
+
+test("a room code can be typed on the canvas", async () => {
+  /* The code used to be an <input>. On a canvas there is no such thing, so
+     this reads the raw key codes the engine already collects: letters arrive
+     as KeyA..KeyZ and digits as Digit2..Digit9, which is exactly the
+     alphabet a room code is drawn from (no I, O, 0 or 1 -- the characters
+     people mis-hear when somebody reads a code out across a table). */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  run("scene = 'online'; online.choice = 0; online.code = '';");
+
+  // Down to JOIN, then ENTER to open the field, then type.
+  tapKey(run, 'KeyS');
+  assert.equal(run("online.choice"), 1, "S should move to JOIN A ROOM");
+  assert.equal(run("online.code"), '',
+    "and S must not also type an S -- it is a letter a room code can contain, " +
+    "so moving and typing cannot both be live at once");
+
+  tapKey(run, 'Enter');
+  assert.equal(run("online.typing"), true, "ENTER should open the code field");
+
+  for (const k of ['KeyQ', 'KeyK', 'Digit7', 'KeyM']) tapKey(run, k);
+  assert.equal(run("online.code"), 'QK7M', "typing should fill the code");
+
+  // Backspace, and a fifth character that must not fit.
+  tapKey(run, 'Backspace');
+  assert.equal(run("online.code"), 'QK7', "backspace should take one off");
+  for (const k of ['KeyM', 'KeyB']) tapKey(run, k);
+  assert.equal(run("online.code"), 'QK7M',
+    "a code is four characters and a fifth should not be taken");
+
+  tapKey(run, 'Enter');
+  assert.equal(run("__lobby.calls.join(',')"), 'join:QK7M',
+    "ENTER should hand net.js the code that was typed");
+
+  // A short code is not a code.
+  run("__lobby.calls.length = 0; online.typing = true; online.code = 'QK';");
+  tapKey(run, 'Enter');
+  assert.equal(run("__lobby.calls.length"), 0,
+    "half a code should not be sent anywhere");
+
+  // And every character a code can contain can actually be typed, including
+  // the ones that move the cursor when the field is closed.
+  run("online.typing = true; online.code = '';");
+  for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD']) tapKey(run, k);
+  assert.equal(run("online.code"), 'WSAD',
+    "W, S, A and D are all valid in a room code and must be typable");
+});
+
+test("the room is the character select, and the host starts from it", async () => {
+  /* Deliberately the same screen. The request was to "select a character
+     from the screen and play again in the same session" -- a separate lobby
+     and a separate select would mean leaving the room to pick and coming
+     back to start. Here the grid IS the room. */
+  const run = await bootEngine();
+  stubLobby(run, 'lobby');
+  run(`scene = 'room'; select.cursor[0] = 0;
+       __lobby.seats = [{ slot: 0, char: 'kel', here: true, you: true },
+                        { slot: 1, char: 'trev', here: true, you: false }];`);
+
+  // Your cursor is yours, and moving it says nothing on the wire.
+  tapKey(run, 'KeyD');
+  assert.equal(run("select.cursor[0]"), 1, "D should move the cursor");
+  assert.equal(run("__lobby.calls.length"), 0,
+    "moving should not send a packet for every wobble of an undecided cursor");
+
+  // Confirming does.
+  tapKey(run, 'KeyG');
+  assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]"),
+    "the attack key should lock in whoever the cursor is on");
+
+  // Only the host starts, and only when the room is ready.
+  run("__lobby.calls.length = 0; __lobby.canStart = false;");
+  tapKey(run, 'Enter');
+  assert.equal(run("__lobby.calls.length"), 0,
+    "a room that is not ready should not start on ENTER");
+
+  run("__lobby.canStart = true;");
+  tapKey(run, 'Enter');
+  assert.equal(run("__lobby.calls.join(',')"), 'start',
+    "ENTER should start the match once the room is ready");
+
+  // Leaving gives up the seat rather than silently abandoning it.
+  run("__lobby.calls.length = 0;");
+  assert.equal(tapKey(run, 'Escape'), 'online', "Escape should leave the room");
+  assert.equal(run("__lobby.calls.join(',')"), 'leave',
+    "and should tell the room, so the seat is freed");
+});
+
+test("a build with no netplay says so instead of pretending", async () => {
+  /* The standalone NerdWars.html has no netplay in it at all -- build.py
+     inlines the sprites and the engine, and PeerJS is a script tag on the
+     website. The online entry still appears there, because two builds with
+     two different title screens is worse than one honest dead end. */
+  const run = await bootEngine();
+  run("delete window.NerdWarsLobby; scene = 'online';");
+  const drew = run(`(function () {
+    var lines = [];
+    var realText = text;
+    text = function (str) { lines.push(String(str)); };
+    try { drawOnline(); } finally { text = realText; }
+    return lines.join(' | ');
+  })()`);
+  assert.ok(/website/i.test(drew),
+    "a build without netplay should point at the one that has it; drew: " + drew);
+  assert.equal(tapKey(run, 'Escape'), 'title',
+    "and Escape should still get back to the title");
+});
+
+
+test("a match starts from a clean slate", async () => {
+  /* freezeFrames is in saveSim, which makes it simulation state by this
+     file's own definition, and startBattle used not to clear it.
+
+     Why that is a rematch bug and not a curiosity: a match ended by Escape
+     stops the two machines on DIFFERENT frames, because a `bye` is a
+     wall-clock event rather than a simulated one. Each can be left holding a
+     different leftover, and updateBattle SKIPS A FRAME ENTIRELY while it is
+     positive -- so the second match begins with the two machines disagreeing
+     about how many frames have happened. stateHash does not cover it, so the
+     desync would not even be reported for up to thirty frames.
+
+     Tested directly rather than through a fought rematch, and deliberately:
+     two engines started in lockstep both carry the SAME leftover, so they
+     agree with each other all the way through a second match and the bug
+     hides completely. The asymmetry is the whole hazard, and the invariant
+     is what actually forbids it. */
+  const run = await bootEngine();
+  const left = run(`(function () {
+    select.cursor = [0, 4]; playerCount = 2; humanCount = 0; stagePick = 0;
+    startBattle();
+    freezeFrames = 9;          // as a KO leaves it
+    resultTimer = 77;
+    startBattle();             // the next match
+    return { freeze: freezeFrames, frames: battleFrames,
+             shots: projectiles.length,
+             // "GO!", which startBattle announces on its way out -- a fresh
+             // banner, not a stale one. Compared by text so this says which.
+             banner: banner && banner.text };
+  })()`);
+  assert.equal(left.freeze, 0,
+    "freezeFrames survived into the next match (" + left.freeze + "), and " +
+    "updateBattle skips a frame for every one of them");
+  assert.equal(left.frames, 0, "the frame counter should restart");
+  assert.equal(left.shots, 0, "nothing should still be in the air");
+  assert.equal(left.banner, 'GO!',
+    "the banner should be the new match's own announcement, not the last " +
+    "match's result carried over; it said " + JSON.stringify(left.banner));
+});
+
+
+test("Reese's dash wraps the map instead of leaving it", async () => {
+  /* His dash is his recovery, and in the air it keeps every pixel of its
+     speed on purpose -- which made the move meant to save him the one that
+     killed him most. Now the sides of the map wrap: off one edge, back on
+     the other, near the top, carrying the SAME vx, which from the far side
+     points back onto the stage.
+
+     The window has to outlive the move, and that is the part worth pinning.
+     The dash is nine active frames at 5.4 a frame, so he is still travelling
+     long after it ends and crosses the blast line with the move already
+     over. A first attempt checked for the edge inside the active frames and
+     never fired once. */
+  const run = await bootEngine();
+  run("select.cursor=[4,2]; playerCount=2; humanCount=0; stagePick=0;" +
+      " startBattle(); for (var j=0;j<130;j++) step();");
+  assert.equal(run("fighters[0].def.name"), "REESE");
+
+  const dashOff = (dir) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    var bz = STAGE.blast;
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1;
+    me.grounded=false; me.facing=${dir}; me.stocks=99; me.eliminated=false;
+    me.specialSpawned=false; me.dashWrap=0;
+    me.x = ${dir} > 0 ? main.x + main.w + 20 : main.x - 20;
+    me.y = main.y - 30;
+    foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.eliminated=false;
+    foe.x=main.x+40; foe.y=main.y; foe.grounded=true;
+    var stocks0 = me.stocks, jump = null;
+    netplay.active = true;
+    for (var f = 0; f < 60; f++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(f === 0 ? 2048 : 0), bitsToPad(0)];
+      var was = me.x;
+      step();
+      if (jump === null && Math.abs(me.x - was) > 60) {
+        jump = { from: was, to: me.x, y: me.y, vx: me.vx };
+      }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { jump: jump, lost: stocks0 - me.stocks, endX: me.x, endY: me.y,
+             left: bz.left, right: bz.right, top: bz.top, floor: main.y,
+             onStage: me.x > main.x && me.x < main.x + main.w };
+  })()`);
+
+  for (const dir of [1, -1]) {
+    const r = dashOff(dir);
+    const way = dir > 0 ? "right" : "left";
+    assert.ok(r.jump, "dashing off the " + way + " should wrap, and did not");
+    assert.equal(r.lost, 0,
+      "and must not cost a stock; it cost " + r.lost);
+    // Out one side, in the other.
+    if (dir > 0) {
+      assert.ok(r.jump.from > r.right - 20 && r.jump.to < r.left + 20,
+        "off the right should come back at the left; " +
+        r.jump.from + " -> " + r.jump.to);
+    } else {
+      assert.ok(r.jump.from < r.left + 20 && r.jump.to > r.right - 20,
+        "off the left should come back at the right; " +
+        r.jump.from + " -> " + r.jump.to);
+    }
+    assert.ok(r.jump.y < r.floor - 60,
+      "he should come back in at the TOP, not level with the floor; y " +
+      r.jump.y);
+    assert.ok(Math.sign(r.jump.vx) === dir && Math.abs(r.jump.vx) > 3,
+      "and keep the momentum he left with, which now points at the stage; " +
+      "vx " + r.jump.vx);
+    assert.ok(r.onStage,
+      "a wrap that does not get him home has not saved him; he ended at x " +
+      r.endX);
+  }
+});
+
+test("the wrap forgives the sides only, and only while it is armed", async () => {
+  /* A window that caught every blast line would make Reese unkillable for a
+     hundred frames after every dash. The floor still takes the stock, and so
+     does anything that is not a dash. */
+  const run = await bootEngine();
+  run("select.cursor=[4,2]; playerCount=2; humanCount=0; stagePick=0;" +
+      " startBattle(); for (var j=0;j<130;j++) step();");
+
+  const die = (setup) => run(`(function () {
+    var me = fighters[0];
+    var bz = STAGE.blast;
+    me.setState('fall'); me.hitstun=0; me.hitstop=0; me.invuln=0;
+    me.stocks=99; me.eliminated=false; me.vx=0; me.vy=0;
+    ${setup}
+    var before = me.stocks;
+    me.checkBlastZones();
+    return before - me.stocks;
+  })()`);
+
+  assert.equal(die("me.dashWrap = 60; me.x = bz.left - 5; me.y = bz.bottom + 30;"), 1,
+    "falling out of the bottom should still end the stock, armed or not");
+  assert.equal(die("me.dashWrap = 0; me.x = bz.right + 5; me.y = 60;"), 1,
+    "and walking off the side with no dash armed should still end it");
+  assert.equal(die("me.dashWrap = 60; me.x = bz.right + 5; me.y = 60;"), 0,
+    "while an armed side exit should wrap");
+});

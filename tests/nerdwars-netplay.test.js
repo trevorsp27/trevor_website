@@ -955,3 +955,87 @@ test("one player tabbing out does not freeze everybody else", async () => {
   assert.equal(sa.frame, sb.frame,
     "they should be back in step: " + sa.frame + " vs " + sb.frame);
 });
+
+
+test("the same pair can play a second match without reconnecting", async () => {
+  /* The rematch, end to end: two machines fight, the match ends, and the
+     SAME two machines fight again in the same session with nothing torn
+     down and nothing reloaded.
+
+     This is the half that lives in the engine. The lobby half is already
+     covered next door by nerdwars-online-4p's "the same room can start a
+     second match with different fighters", which passed even while rematch
+     was unusable -- because what was broken was never the handshake. It was
+     that the canvas put everybody on a screen they could not leave, so the
+     second handshake had no way of being reached.
+
+     What makes this a real test rather than a smoke test is the last part:
+     the second match has to stay BIT-IDENTICAL across both machines. A
+     rematch runs on state left behind by the previous match, and anything
+     not reset that belongs in the snapshot -- freezeFrames was exactly
+     this -- desyncs the rematch while looking perfect in the first match. */
+  const a = await bootGame();
+  const b = await bootGame();
+
+  const wire = (chars, stage) => {
+    a.nw.net.start({ localSlot: 0, chars, stage, delay: 4,
+                     send: (m) => b.nw.net.receive(m) });
+    b.nw.net.start({ localSlot: 1, chars, stage, delay: 4,
+                     send: (m) => a.nw.net.receive(m) });
+  };
+
+  const fight = (frames, p1, p2) => {
+    const held = { a: null, b: null };
+    for (let i = 0; i < frames; i++) {
+      if (i % 7 === 0) {
+        if (held.a) a.release(held.a);
+        held.a = p1[(i / 7) % p1.length | 0];
+        a.press(held.a);
+      }
+      if (i % 5 === 0) {
+        if (held.b) b.release(held.b);
+        held.b = p2[(i / 5) % p2.length | 0];
+        b.press(held.b);
+      }
+      a.pump(1);
+      b.pump(1);
+    }
+    if (held.a) a.release(held.a);
+    if (held.b) b.release(held.b);
+  };
+
+  const P1 = ["KeyD", "KeyF", "KeyW", "KeyA", "KeyG", "ShiftLeft", "KeyS"];
+  const P2 = ["KeyA", "KeyC", "KeyW", "KeyD", "KeyR", "KeyG", "KeyQ"];
+
+  // --- match one -------------------------------------------------------
+  wire(["kel", "trev"], "swamp");
+  assert.equal(a.nw.scene, "battle");
+  fight(360, P1, P2);
+  const one = JSON.stringify(a.nw.fighters);
+  assert.equal(one, JSON.stringify(b.nw.fighters),
+    "the two machines disagreed during the FIRST match, so nothing about " +
+    "the second one means anything");
+
+  /* --- and again, on the same connection ------------------------------
+     Different fighters and a different stage on purpose: a rematch that
+     only works when nothing changes is not a rematch, and reusing the same
+     pair would hide a stale select.cursor. */
+  wire(["reese", "ladeane"], "beach");
+  assert.equal(a.nw.scene, "battle", "the second match should just start");
+  assert.equal(b.nw.scene, "battle");
+  assert.equal(JSON.stringify(a.nw.fighters.map((f) => f.key)),
+               JSON.stringify(["reese", "ladeane"]),
+               "the second match should use the fighters it was handed");
+  assert.equal(a.nw.fighters.length, 2);
+
+  fight(360, P2, P1);
+  assert.equal(JSON.stringify(a.nw.fighters),
+               JSON.stringify(b.nw.fighters),
+    "the two machines drifted apart during the SECOND match. Something " +
+    "that belongs in the rollback snapshot is surviving startBattle -- " +
+    "freezeFrames was the one that did.");
+
+  // Both alive, both fighting, neither stalled out.
+  assert.ok(a.nw.fighters.every((f) => Number.isFinite(f.x)),
+    "the rematch should still be a real simulation");
+});

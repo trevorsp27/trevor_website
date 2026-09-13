@@ -167,85 +167,52 @@ function startMatch(g, { mode }) {
   g.tap("Enter");
   assert.equal(g.nw.scene, "select", "Enter on the title should reach select");
 
-  // Two people picking at once is the one screen Enter cannot drive: that
-  // branch reads each player's own attack key so the two of them can lock in
-  // independently. Every other mode picks a seat at a time and takes Enter.
-  if (mode === 1) {
-    g.tap("KeyG");     // player one confirms
-    g.tap("Comma");    // player two confirms
-  } else {
-    for (let i = 0; i < 8 && g.nw.scene === "select"; i++) g.tap("Enter");
-  }
+  // One branch now. The screen that two people drove at once -- each on
+  // their own attack key -- went away with local two-player; every mode the
+  // title still offers picks a seat at a time and takes Enter.
+  for (let i = 0; i < 8 && g.nw.scene === "select"; i++) g.tap("Enter");
   assert.equal(g.nw.scene, "stage", "picking fighters should reach the stage select");
 
   g.tap("Enter");
   assert.equal(g.nw.scene, "battle", "picking a stage should start the match");
 }
 
-test("the title offers a four-player brawl, and it starts", async () => {
-  const g = await bootGame();
-  startMatch(g, { mode: 2 });
+/* Two tests lived here: "the title offers a four-player brawl, and it
+   starts" and "a four-way is a real fight". Both are gone, because the thing
+   they tested is gone -- the title offers a CPU match or an online room, and
+   nothing local reaches four seats any more.
 
-  const f = g.nw.fighters;
-  assert.equal(f.length, 4, "a four-player brawl should have four fighters");
-
-  // Spread left to right along the ground, not stacked on one spawn point.
-  const xs = Array.from(f, (x) => x.x);
-  assert.equal(JSON.stringify([...xs].sort((a, b) => a - b)), JSON.stringify(xs),
-    `spawns should run left to right, got ${xs.join(", ")}`);
-  assert.equal(new Set(xs).size, 4, "four fighters, four different spawn points");
-  assert.equal(new Set(f.map((x) => x.y)).size, 1, "all four should start on the floor");
-});
-
-test("a four-way is a real fight", async () => {
-  /* This used to assert the match ENDED, on the strength of a comment saying
-     "nobody is at the keyboard, so all four are CPUs". That was never true:
-     the brawl fills seats from available controllers, and a keyboard is two,
-     so seats 0 and 1 are humans -- idle ones, in a test. What ended the match
-     was the three-minute clock, not the fight.
-
-     With the clock gone the premise is visible: measured over eight runs,
-     three of them never finished at all, because a CPU cannot reliably take
-     the last stock off an opponent who never moves. That is a real property
-     of a game with no time limit and it belongs in a test of its own, on a
-     harness that can actually make all four CPUs -- see the four-CPU brawl in
-     nerdwars-platforms.test.js.
-
-     What THIS one can honestly check is that a four-way is a fight. */
-  const g = await bootGame();
-  startMatch(g, { mode: 2 });
-
-  let damaged = 0;
-  for (let i = 0; i < 6000 && g.nw.scene === "battle"; i++) {
-    g.pump(1);
-    if (i % 300 === 0) {
-      const n = g.nw.fighters.filter((f) => f.health < 100 || f.stocks < 3).length;
-      if (n > damaged) damaged = n;
-    }
-  }
-
-  assert.ok(damaged >= 3,
-    `a brawl should hurt nearly everyone; only ${damaged} of 4 took anything`);
-
-  const standing = g.nw.fighters.filter((f) => f.state !== "gone");
-  assert.ok(standing.length >= 1 && standing.length <= 4,
-    `nonsense survivor count: ${standing.length}`);
-});
+   The COVERAGE is not gone, which is why deleting them is honest rather than
+   convenient. Four-seat support is still in the engine and still exercised:
+   nerdwars-platforms.test.js runs a four-CPU brawl against the engine
+   directly, and nerdwars-online-4p.test.js runs four real machines through a
+   real room. What went away is only the menu route. */
 
 test("one on one is exactly the match it always was", async () => {
   // The mode that ships, that people play online, and that every balance
   // number was measured against. Nothing about four players may move it.
   const g = await bootGame();
-  startMatch(g, { mode: 1 });
+  startMatch(g, { mode: 0 });          // "1 PLAYER (vs CPU)", the first row
 
   const f = g.nw.fighters;
   assert.equal(f.length, 2);
   /* The hand-placed spawn points for DEEP SPACE, which is the first stage.
      These move when the stage does -- it was widened from 176 to 240 -- and
-     that is fine; what this guards is that a four-player change never quietly
-     relocates the two-player match everybody actually plays. */
-  assert.equal(JSON.stringify(Array.from(f, (x) => x.x)), JSON.stringify([96, 224]),
-    "two players must still spawn where the stages were laid out for them");
+     that is fine; what this guards is that a change elsewhere never quietly
+     relocates the two-player match everybody actually plays.
+
+     Checked with a few pixels of slack rather than exactly, and the slack is
+     the point: seat 1 is a CPU now, and a CPU is walking by the frame after
+     the match starts. Exact equality here would not be testing the spawn
+     layout, it would be testing how far a bot gets in four frames. Eight
+     pixels is far tighter than any real relocation -- widening the stage
+     moved this one by 24 -- and immune to the opponent having legs. */
+  const xs = Array.from(f, (x) => x.x);
+  [[0, 96], [1, 224]].forEach(([i, want]) => {
+    assert.ok(Math.abs(xs[i] - want) <= 8,
+      "seat " + i + " should spawn near " + want + ", got " + xs[i] +
+      " (spawns are " + xs.join(", ") + ")");
+  });
 });
 
 test("hosting online after a four-way does not build four fighters", async () => {
@@ -254,7 +221,19 @@ test("hosting online after a four-way does not build four fighters", async () =>
   // from ORDER[undefined] and died inside the Fighter constructor with
   // "Cannot read properties of undefined (reading 'accent')".
   const g = await bootGame();
-  startMatch(g, { mode: 2 });
+  /* The premise used to be a LOCAL four-way off the title. That route is
+     gone, but the bug it guards is not: netStart still has to set the seat
+     count from the room it was handed rather than from whatever was running
+     before. So the premise becomes an online four-way, which is the only
+     kind there is now -- and is in fact the case that matters, since the
+     second net.start below is exactly what a rematch does. */
+  g.nw.net.start({
+    localSlot: 0,
+    chars: ["kel", "trev", "reese", "ladeane"],
+    stage: "space",
+    delay: 2,
+    send: () => {},
+  });
   assert.equal(g.nw.fighters.length, 4, "precondition: a four-way is running");
 
   g.nw.net.start({
