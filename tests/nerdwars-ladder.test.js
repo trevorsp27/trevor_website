@@ -266,3 +266,95 @@ test("the ladder only reads what it has not already seen", async () => {
     "the second should only ask for what is newer than it already has, asked from " +
     reads[1]);
 });
+
+
+/** The match document as the host writes it. */
+function hostDoc(uids) {
+  return { at: 1, uids, names: uids.map((u) => u.toUpperCase()),
+           chars: uids.map(() => "kel"), stage: "space", winnerSlot: 0,
+           stocks: [1, 0], frames: 900, build: "x", host: uids[0] };
+}
+
+test("a confirm that beats its own match waits for it to turn up", async () => {
+  /* Both machines reach the end of the same match on the same frame and both
+     report it at once, so whose write lands first is a race between two
+     network connections. A confirm on a match that is not in the database yet
+     is not a race that resolves itself -- Firestore refuses an update to a
+     document that does not exist -- so without a retry the confirm is simply
+     lost, and the match sits on "pending" forever.
+
+     Which is indistinguishable, on the leaderboard, from the loser refusing
+     to agree. */
+  const L = kit();
+  const store = L.memoryStore();
+  const waits = [];
+  const ladder = L.createLadder(store, {
+    wait: (ms) => {
+      waits.push(ms);
+      // The host's write lands while the guest is waiting.
+      if (waits.length === 2) return store.writeMatch("m1", hostDoc(["a", "b"]));
+      return Promise.resolve();
+    },
+  });
+
+  const ok = await ladder.report({
+    mid: "m1", me: "b", host: "a", winnerSlot: 0, agree: true,
+  });
+  assert.equal(ok, true, "the confirm should land once the match exists");
+  assert.equal(waits.length, 2,
+    "it should have waited twice and then succeeded, waited " + waits.length);
+  assert.ok(waits[1] > waits[0],
+    "and backed off rather than hammering: " + waits.join(", "));
+
+  const [m] = await store.listMatches();
+  assert.equal(m.confirm.b.agree, true, "and the confirm should be on the match");
+  assert.equal(m.confirm.b.winnerSlot, 0);
+});
+
+test("a confirm gives up rather than retrying forever", async () => {
+  /* A match that never appears is a host that crashed, or lost its
+     connection, or was never signed in. Retrying into that until the tab
+     closes would spend somebody's Firestore quota on a document that is not
+     coming. It ends as a pending match, which is visible and true. */
+  const L = kit();
+  const store = L.memoryStore();
+  let waits = 0;
+  const ladder = L.createLadder(store, {
+    wait: () => { waits++; return Promise.resolve(); },
+  });
+
+  const ok = await ladder.report({
+    mid: "gone", me: "b", host: "a", winnerSlot: 0, agree: true,
+  });
+  assert.equal(ok, false, "it should report that the confirm did not land");
+  assert.ok(waits > 0 && waits < 20,
+    "and should have tried a bounded number of times, waited " + waits);
+  // Length, not deepEqual: an array built inside the vm carries the
+  // sandbox's Array.prototype, and deepEqual compares prototypes.
+  assert.equal((await store.listMatches()).length, 0,
+    "with nothing invented to hang the confirm on");
+});
+
+test("the host does not wait around for its own match", async () => {
+  /* Only the confirm races. The host's write creates the document, so there
+     is nothing for it to wait for -- and a host that retried would be
+     retrying a create-only write that is refused precisely because it already
+     succeeded. */
+  const L = kit();
+  const store = L.memoryStore();
+  let waits = 0;
+  const ladder = L.createLadder(store, {
+    wait: () => { waits++; return Promise.resolve(); },
+  });
+
+  const ok = await ladder.report(Object.assign(
+    { mid: "m1", me: "a" }, hostDoc(["a", "b"])));
+  assert.equal(ok, true);
+  assert.equal(waits, 0, "the host should not have waited for anything");
+
+  // And a second attempt at the same match is refused rather than retried.
+  const again = await ladder.report(Object.assign(
+    { mid: "m1", me: "a" }, hostDoc(["a", "b"])));
+  assert.equal(again, false, "a match that exists cannot be written again");
+  assert.equal(waits, 0);
+});

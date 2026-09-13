@@ -237,9 +237,36 @@
 
   /* ---------------- what the game talks to ---------------- */
 
-  function createLadder(store) {
+  /* A confirm can reach the database before the match it confirms.
+
+     Both machines reach the end of the same match on the same frame and both
+     report it immediately, so whose write lands first is a race between two
+     network connections. The host writes the match; everybody else writes a
+     confirm ON that match -- and a confirm on a document that does not exist
+     yet is not a race that resolves itself, it is refused outright. Nothing
+     retried, so the confirm was simply lost and the match sat on "pending"
+     forever, which is indistinguishable from the loser refusing to agree.
+
+     Six tries over about eight seconds. The host's write is one round trip;
+     anything slower than that is a connection in trouble, and a confirm that
+     never lands still leaves a visible pending match rather than a wrong
+     result. */
+  var CONFIRM_TRIES = 6;
+  var CONFIRM_WAIT = 400;
+
+  function laterBy(ms) {
+    return new Promise(function (done) {
+      if (typeof setTimeout === "function") setTimeout(done, ms);
+      else done();            // a sandbox with no timers retries at once
+    });
+  }
+
+  function createLadder(store, opts) {
     var cache = { loading: false, error: null, at: 0, matches: [],
                   view: fold([]) };
+    // Injectable so a test does not have to wait eight real seconds to prove
+    // that it waits.
+    var wait = (opts && opts.wait) || laterBy;
 
     function refold() { cache.view = fold(cache.matches); return cache.view; }
 
@@ -299,9 +326,17 @@
             frames: match.frames, build: match.build, host: match.host,
           });
         }
-        return store.writeConfirm(match.mid, mine, {
-          agree: match.agree !== false, winnerSlot: match.winnerSlot,
-        });
+        var doc = { agree: match.agree !== false,
+                    winnerSlot: match.winnerSlot };
+        var tries = 0;
+        function attempt() {
+          return store.writeConfirm(match.mid, mine, doc).then(function (ok) {
+            if (ok || tries >= CONFIRM_TRIES) return ok;
+            tries++;
+            return wait(CONFIRM_WAIT * tries).then(attempt);
+          });
+        }
+        return attempt();
       },
 
       profile: function (uid) { return store ? store.getProfile(uid) : Promise.resolve(null); },
