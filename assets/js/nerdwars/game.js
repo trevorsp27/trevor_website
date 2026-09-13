@@ -9153,6 +9153,7 @@ function updateBattle() {
     winnerKey = alive.length === 1 ? alive[0].key : null;
     scene = 'results';
     resultTimer = 0;
+    resultReported = false;
     return;
   }
 
@@ -9170,8 +9171,39 @@ const RESULT_AUTO_FRAMES = 200;   // ~3.3 seconds
 
 let resultTimer = 0;
 
+/* Deliberately NOT in the rollback snapshot, unlike resultTimer beside it.
+
+   It guards an EVENT, not a piece of simulation, and a rollback rewinds
+   resultTimer -- so a snapshotted flag would come back false and report the
+   same match twice. Nothing downstream reads it, so it cannot desync. */
+let resultReported = false;
+
+// Late enough that a mispredicted KO has been rolled back and the result is
+// settled; early enough that nobody can leave first, since carryOn needs 40.
+const RESULT_RECORD_FRAME = 20;
+
 function updateResults() {
   resultTimer++;
+
+  /* Write the result down HERE, on a fixed frame, rather than when somebody
+     leaves this screen.
+
+     Leaving is a keypress, and the winner is the one still mashing attack --
+     so the winner's machine always reported first. That was harmless while
+     the winner was the host, who AUTHORS the record. When the winner was the
+     guest it was confirming a match document the host had not written yet,
+     and a confirm on a document that does not exist is refused outright, not
+     queued. Six real matches, four counted and two stuck on "pending", and
+     the two were exactly the two the guest won.
+
+     Both machines reach this frame on the same simulated frame of the same
+     results screen, so the host's write and the guest's confirm now land
+     milliseconds apart instead of seconds. */
+  if (netplay.active && !netplay.resimulating && !resultReported &&
+      resultTimer >= RESULT_RECORD_FRAME) {
+    resultReported = true;
+    netEmit('over', null);
+  }
 
   /* Leaving the results of an ONLINE match has to tell the page about it.
 
@@ -9190,7 +9222,17 @@ function updateResults() {
      running through a pending rollback even once the scene has left the
      battle. By the time anybody has pressed a key on this screen, the result
      is settled. */
-  const backOut = menuBack();
+  /* Escape used to work from frame 1 of this screen, and leaving is not a
+     private act: it sends `part` and tears the room down, which stops the
+     OTHER machine with the reason "a player left" instead of "match over" --
+     and only "match over" writes anything down. One player reaching for
+     Escape quickly enough could therefore delete everybody else's record of
+     a match they had all just played, and nothing would say so.
+
+     Online it waits until the result has been written. Locally there is
+     nobody else to tell, so it does not. */
+  const backOut = menuBack() &&
+    (!netplay.active || resultTimer > RESULT_RECORD_FRAME);
   const carryOn = resultTimer > 40 && menuConfirm();
   /* Online, nobody presses anything.
 
@@ -10284,7 +10326,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '83a75679dc';
+const BUILD_ID = '7822b5545a';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10295,7 +10337,7 @@ const BUILD_ID = '83a75679dc';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.48';
+const VERSION = '2.49';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

@@ -313,30 +313,50 @@
       between: function (a, b) { return between(cache.view, a, b); },
       refresh: refresh,
 
-      /** The host records the match. Everybody else confirms it. */
+      /**
+       * Whoever gets there first writes the match down. The other one agrees.
+       *
+       * It used to be the room's HOST who wrote and everybody else who
+       * confirmed, and that made the record depend on one particular machine
+       * being awake and in front at the end of the match. It was not: the
+       * winner leaves the results screen first, because the winner is the one
+       * still pressing attack, and leaving is what used to trigger reporting.
+       * So when the guest won, its confirm arrived seconds before the host had
+       * written anything for it to confirm -- and a confirm on a document that
+       * does not exist is refused outright, not queued. Four counted, two
+       * pending, and the two were exactly the two the guest won.
+       *
+       * `host` on the document now means "who wrote this down", which is all
+       * the ladder ever used it for: it is the one confirm that does not count
+       * as corroboration, because agreeing with yourself is not evidence.
+       */
       report: function (match) {
         if (!store || !match || !match.mid) return Promise.resolve(false);
         var mine = match.me;
         if (!mine) return Promise.resolve(false);
-        if (match.host === mine) {
-          return store.writeMatch(match.mid, {
-            at: match.at, uids: match.uids, names: match.names,
-            chars: match.chars, stage: match.stage,
-            winnerSlot: match.winnerSlot, stocks: match.stocks,
-            frames: match.frames, build: match.build, host: match.host,
-          });
-        }
-        var doc = { agree: match.agree !== false,
-                    winnerSlot: match.winnerSlot };
-        var tries = 0;
-        function attempt() {
-          return store.writeConfirm(match.mid, mine, doc).then(function (ok) {
-            if (ok || tries >= CONFIRM_TRIES) return ok;
-            tries++;
-            return wait(CONFIRM_WAIT * tries).then(attempt);
-          });
-        }
-        return attempt();
+
+        return store.writeMatch(match.mid, {
+          at: match.at, uids: match.uids, names: match.names,
+          chars: match.chars, stage: match.stage,
+          winnerSlot: match.winnerSlot, stocks: match.stocks,
+          frames: match.frames, build: match.build, host: mine,
+        }).then(function (authored) {
+          if (authored) return true;
+          /* Somebody else wrote it first -- the write is create-only, so
+             exactly one machine can win that -- which makes this one the
+             corroborator. */
+          var doc = { agree: match.agree !== false,
+                      winnerSlot: match.winnerSlot };
+          var tries = 0;
+          function attempt() {
+            return store.writeConfirm(match.mid, mine, doc).then(function (ok) {
+              if (ok || tries >= CONFIRM_TRIES) return ok;
+              tries++;
+              return wait(CONFIRM_WAIT * tries).then(attempt);
+            });
+          }
+          return attempt();
+        });
       },
 
       profile: function (uid) { return store ? store.getProfile(uid) : Promise.resolve(null); },

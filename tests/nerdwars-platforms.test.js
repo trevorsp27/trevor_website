@@ -4304,3 +4304,24 @@ test("the key a screen names is the key that works, in or out of fullscreen", as
       c.scene + " must not offer ESC in fullscreen: " + lines);
   }
 });
+
+
+test("Escape still leaves a local results screen straight away", async () => {
+  /* Online, Escape on the results screen waits until the match has been
+     written down: leaving sends `part` and tears the room down, which stops
+     the other machine with the wrong reason and loses its record. Offline
+     there is nobody to tell, and a menu that ignores the key for a third of a
+     second for no reason is just a menu that feels broken. */
+  const run = await bootEngine();
+  run("scene = 'results'; resultTimer = 1; netplay.active = false;");
+  assert.equal(tapKey(run, 'Escape'), 'title',
+    "offline, Escape should leave the results screen immediately");
+
+  // Online, the same keypress at the same frame does nothing yet.
+  run("scene = 'results'; resultTimer = 1; netplay.active = true;");
+  assert.equal(tapKey(run, 'Escape'), 'results',
+    "online, it should wait until the result is safely written down");
+  run("resultTimer = 60;");
+  assert.notEqual(tapKey(run, 'Escape'), 'results',
+    "and work once it is");
+});

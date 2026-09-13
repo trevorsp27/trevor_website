@@ -275,31 +275,93 @@ function hostDoc(uids) {
            stocks: [1, 0], frames: 900, build: "x", host: uids[0] };
 }
 
-test("a confirm that beats its own match waits for it to turn up", async () => {
-  /* Both machines reach the end of the same match on the same frame and both
-     report it at once, so whose write lands first is a race between two
-     network connections. A confirm on a match that is not in the database yet
-     is not a race that resolves itself -- Firestore refuses an update to a
-     document that does not exist -- so without a retry the confirm is simply
-     lost, and the match sits on "pending" forever.
+test("two machines reporting the same match write one record between them", async () => {
+  /* The bug this replaced: the room's HOST wrote the match and everybody else
+     confirmed it, so the record depended on one particular machine getting
+     there first. It did not. The winner leaves the results screen first --
+     the winner is the one still pressing attack -- and leaving is what used
+     to trigger reporting, so when the guest won, its confirm arrived seconds
+     before the host had written anything for it to confirm. A confirm on a
+     document that does not exist is refused outright, not queued.
 
-     Which is indistinguishable, on the leaderboard, from the loser refusing
-     to agree. */
+     Now whoever is first writes it down and the other one agrees, so it does
+     not matter which machine that is. */
   const L = kit();
   const store = L.memoryStore();
+  const ladder = L.createLadder(store, { wait: () => Promise.resolve() });
+  const report = (me) => ladder.report({
+    mid: "m1", me, at: 1, uids: ["a", "b"], names: ["A", "B"],
+    chars: ["kel", "trev"], stage: "space", winnerSlot: 1, stocks: [0, 2],
+    frames: 900, build: "x",
+  });
+
+  // b -- the guest, and the winner -- gets there first.
+  assert.equal(await report("b"), true, "the first one to report writes it down");
+  assert.equal(await report("a"), true, "and the second one still records something");
+
+  const all = await store.listMatches();
+  assert.equal(all.length, 1, "exactly one match document, got " + all.length);
+  const m = all[0];
+  assert.equal(m.host, "b", "written down by whoever got there first");
+  assert.equal(Object.keys(m.confirm).join(","), "a",
+    "and corroborated by the other one");
+  assert.equal(m.confirm.a.winnerSlot, 1);
+
+  // Which is what makes it count, with the win credited to b.
+  const v = L.fold([Object.assign({ mid: "m1" }, m)]);
+  assert.equal(v.counted, 1, "the match should count");
+  assert.equal(v.rows.find((r) => r.uid === "b").w, 1,
+    "and the win should belong to b, who won it");
+  assert.equal(v.rows.find((r) => r.uid === "a").l, 1);
+});
+
+test("it counts whichever machine happened to write it down", async () => {
+  /* The same match, reported in the other order, has to fold to the same
+     result -- or the ladder would depend on network luck. */
+  const L = kit();
+  const order = [];
+  for (const first of ["a", "b"]) {
+    const store = L.memoryStore();
+    const ladder = L.createLadder(store, { wait: () => Promise.resolve() });
+    const report = (me) => ladder.report({
+      mid: "m1", me, at: 1, uids: ["a", "b"], names: ["A", "B"],
+      chars: ["kel", "trev"], stage: "space", winnerSlot: 1, stocks: [0, 2],
+      frames: 900, build: "x",
+    });
+    await report(first);
+    await report(first === "a" ? "b" : "a");
+    const [m] = await store.listMatches();
+    const v = L.fold([Object.assign({ mid: "m1" }, m)]);
+    assert.equal(m.host, first, "whoever reported first is the author");
+    order.push(v.counted + ":" + v.rows.map((r) => r.uid + r.w + "-" + r.l).sort().join(","));
+  }
+  assert.equal(order[0], order[1],
+    "the ladder must not depend on which machine got there first: " +
+    order.join("  vs  "));
+});
+
+test("a confirm still waits for a match that has not landed yet", async () => {
+  /* Belt and braces. Writing first and confirming second should mean the
+     document is always there by the time anybody confirms -- but a store that
+     refuses the write for its own reasons would drop this machine straight
+     into confirming something that does not exist. */
+  const L = kit();
+  const store = L.memoryStore();
+  // A store that will not let this machine author, so it has to confirm.
+  const cannotAuthor = Object.assign({}, store, {
+    writeMatch: () => Promise.resolve(false),
+  });
   const waits = [];
-  const ladder = L.createLadder(store, {
+  const ladder = L.createLadder(cannotAuthor, {
     wait: (ms) => {
       waits.push(ms);
-      // The host's write lands while the guest is waiting.
+      // The other machine's write lands while this one is waiting.
       if (waits.length === 2) return store.writeMatch("m1", hostDoc(["a", "b"]));
       return Promise.resolve();
     },
   });
 
-  const ok = await ladder.report({
-    mid: "m1", me: "b", host: "a", winnerSlot: 0, agree: true,
-  });
+  const ok = await ladder.report({ mid: "m1", me: "b", winnerSlot: 0, agree: true });
   assert.equal(ok, true, "the confirm should land once the match exists");
   assert.equal(waits.length, 2,
     "it should have waited twice and then succeeded, waited " + waits.length);
@@ -312,20 +374,17 @@ test("a confirm that beats its own match waits for it to turn up", async () => {
 });
 
 test("a confirm gives up rather than retrying forever", async () => {
-  /* A match that never appears is a host that crashed, or lost its
-     connection, or was never signed in. Retrying into that until the tab
-     closes would spend somebody's Firestore quota on a document that is not
-     coming. It ends as a pending match, which is visible and true. */
+  /* A match that never appears is the other machine crashed, or offline, or
+     never signed in. Retrying into that until the tab closes would spend
+     somebody's Firestore quota on a document that is not coming. */
   const L = kit();
   const store = L.memoryStore();
   let waits = 0;
-  const ladder = L.createLadder(store, {
-    wait: () => { waits++; return Promise.resolve(); },
-  });
+  const ladder = L.createLadder(
+    Object.assign({}, store, { writeMatch: () => Promise.resolve(false) }),
+    { wait: () => { waits++; return Promise.resolve(); } });
 
-  const ok = await ladder.report({
-    mid: "gone", me: "b", host: "a", winnerSlot: 0, agree: true,
-  });
+  const ok = await ladder.report({ mid: "gone", me: "b", winnerSlot: 0, agree: true });
   assert.equal(ok, false, "it should report that the confirm did not land");
   assert.ok(waits > 0 && waits < 20,
     "and should have tried a bounded number of times, waited " + waits);
@@ -335,11 +394,10 @@ test("a confirm gives up rather than retrying forever", async () => {
     "with nothing invented to hang the confirm on");
 });
 
-test("the host does not wait around for its own match", async () => {
-  /* Only the confirm races. The host's write creates the document, so there
-     is nothing for it to wait for -- and a host that retried would be
-     retrying a create-only write that is refused precisely because it already
-     succeeded. */
+test("the machine that wrote it down does not wait around for itself", async () => {
+  /* Only the confirm can race. Writing the match CREATES the document, so
+     there is nothing to wait for -- and retrying a create-only write that was
+     refused precisely because it already succeeded would be pure noise. */
   const L = kit();
   const store = L.memoryStore();
   let waits = 0;
@@ -347,14 +405,21 @@ test("the host does not wait around for its own match", async () => {
     wait: () => { waits++; return Promise.resolve(); },
   });
 
-  const ok = await ladder.report(Object.assign(
-    { mid: "m1", me: "a" }, hostDoc(["a", "b"])));
+  const ok = await ladder.report(Object.assign({ mid: "m1", me: "a" },
+                                               hostDoc(["a", "b"])));
   assert.equal(ok, true);
-  assert.equal(waits, 0, "the host should not have waited for anything");
+  assert.equal(waits, 0, "the author should not have waited for anything");
 
-  // And a second attempt at the same match is refused rather than retried.
-  const again = await ladder.report(Object.assign(
-    { mid: "m1", me: "a" }, hostDoc(["a", "b"])));
-  assert.equal(again, false, "a match that exists cannot be written again");
-  assert.equal(waits, 0);
+  /* Reporting the same match twice from the same machine finds its own
+     document, tries to confirm it, and is refused -- you cannot corroborate
+     yourself. It must not sit there retrying that. */
+  const again = await ladder.report(Object.assign({ mid: "m1", me: "a" },
+                                                  hostDoc(["a", "b"])));
+  assert.equal(again, true,
+    "a second report from the author is harmless, got " + again);
+  const [m] = await store.listMatches();
+  assert.equal(Object.keys(m.confirm).join(","), "a",
+    "even though it leaves a self-confirm, which verdictOf ignores");
+  assert.equal(L.verdictOf(Object.assign({ mid: "m1" }, m)), "pending",
+    "so the match is still waiting on somebody else");
 });

@@ -521,13 +521,29 @@
           state.desyncFrame = detail && detail.frame;
           if (window.NerdWars.net.active) window.NerdWars.net.stop("desync");
           else endMatch(desyncMessage());
+        } else if (kind === "over") {
+          /* The result is decided and settled, and BOTH machines say so on
+             the same frame of the results screen.
+
+             Recording used to hang off "stopped", which fires when somebody
+             leaves that screen -- and the winner leaves first, because the
+             winner is the one still pressing attack. When the winner was the
+             guest, its confirm arrived seconds before the host had written
+             the match for it to confirm, and was simply refused. Every match
+             the guest won sat on "pending" forever. */
+          recordMatch();
         } else if (kind === "stopped" && state.phase === "playing") {
           var reason = detail && detail.reason;
           if (reason === "desync") {
             endMatch(desyncMessage());
           } else if (reason === "match over") {
-            // The normal ending. Everybody is back in the room they were
-            // already in, so this is an invitation rather than a warning.
+            /* The normal ending. Everybody is back in the room they were
+               already in, so this is an invitation rather than a warning.
+
+               recordMatch is still called here as a backstop -- "over" fires
+               at frame 20 of the results screen and Escape can leave before
+               that -- and it is safe to call twice: it clears state.match on
+               its way out, and the second call returns on the first line. */
             recordMatch();
             endMatch("Pick a fighter and go again.", "ok");
           } else {
@@ -944,9 +960,11 @@
      without checking the reason would write last match's result down as
      this one's, confidently, and be believed.
 
-     The host writes the match; everybody else writes a one-line confirm.
-     Nobody reports on anybody else's behalf, so nobody can be recorded as
-     having lost by a machine that is not theirs. */
+     Both machines report the same thing and the ladder sorts out which of
+     them ends up writing it down -- the write is create-only, so exactly one
+     can win that, and the other becomes the corroborator. Nobody reports on
+     anybody else's behalf, so nobody can be recorded as having lost by a
+     machine that is not theirs. */
   function recordMatch() {
     var L = window.NerdWarsLadder;
     var m = state.match;
@@ -958,7 +976,7 @@
     for (var i = 0; i < m.uids.length; i++) if (!m.uids[i]) return;
 
     L.report({
-      mid: m.mid, me: state.me.uid, host: m.host, at: m.at,
+      mid: m.mid, me: state.me.uid, at: m.at,
       uids: m.uids, names: m.names, chars: r.chars, stage: r.stage,
       winnerSlot: r.winnerSlot, stocks: r.stocks, frames: r.frames,
       build: r.build,

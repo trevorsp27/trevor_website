@@ -1160,6 +1160,9 @@ test("a finished match is written down, by both players, for themselves", async 
   }
   for (const m of ms) m.release("KeyA");
   playOut(ms, 400);
+  /* Both machines report, one writes and the other confirms, and that is two
+     promise hops deep. Let the microtasks drain before reading the store. */
+  for (let i = 0; i < 50; i++) await Promise.resolve();
 
   const mids = Object.keys(world.matches);
   assert.equal(mids.length, 1,
@@ -1170,18 +1173,25 @@ test("a finished match is written down, by both players, for themselves", async 
     "the record should name the people, in fighter order");
   assert.deepEqual([...rec.chars], ["kel", "trev"],
     "and the characters they played, in the same order");
-  assert.equal(rec.host, "u-trev", "the host wrote it");
+  assert.ok(rec.host === "u-trev" || rec.host === "u-kel",
+    "one of the two wrote it down, got " + rec.host);
   assert.ok(rec.winnerSlot === null || rec.winnerSlot === 0 || rec.winnerSlot === 1,
     "winnerSlot should be a seat or a draw, got " + rec.winnerSlot);
   assert.ok(rec.frames > 0, "and should carry how long it took");
 
-  /* The guest confirmed it rather than writing a second copy. One document
-     per match is what makes the log orderable: four machines have four
-     clocks, so a per-player record has no canonical time to sort by. */
-  assert.deepEqual(Object.keys(rec.confirm), ["u-kel"],
-    "the guest should have confirmed, not written its own match");
-  assert.equal(rec.confirm["u-kel"].agree, true);
-  assert.equal(rec.confirm["u-kel"].winnerSlot, rec.winnerSlot,
+  /* The other one confirmed it rather than writing a second copy. One
+     document per match is what makes the log orderable: four machines have
+     four clocks, so a per-player record has no canonical time to sort by.
+
+     WHICH machine authored is deliberately not asserted. It used to be the
+     room's host, always, and that is exactly what broke: the author wrote on
+     leaving the results screen, the winner leaves first, and a guest who won
+     was confirming a document nobody had written yet. */
+  const other = rec.host === "u-trev" ? "u-kel" : "u-trev";
+  assert.deepEqual([...Object.keys(rec.confirm)], [other],
+    "the machine that did not write it should have confirmed it");
+  assert.equal(rec.confirm[other].agree, true);
+  assert.equal(rec.confirm[other].winnerSlot, rec.winnerSlot,
     "and should agree about who won -- both machines simulate the same match");
 
   // Which the ladder then counts.
@@ -1249,4 +1259,192 @@ test("a match with anybody unidentified is not recorded", async () => {
 
   assert.deepEqual(Object.keys(world.matches), [],
     "a match with an anonymous player should not be scored");
+});
+
+
+/* --------------------------------------------------------------------- *
+ * REPRO: the guest's win is not counted.
+ *
+ * Reported from real play, and the database agrees: every match won by seat 0
+ * is counted and every match won by seat 1 is pending, four to two.
+ *
+ * The hypothesis this exercises is ORDER, not who won. The results screen can
+ * be left early with the attack key (after 40 frames) or it times out on its
+ * own at 200. The winner is the one still mashing attack, so the winner leaves
+ * first -- and leaving is what triggers the recording. When the HOST leaves
+ * first it writes the match document and the guest confirms it afterwards.
+ * When the GUEST leaves first it tries to confirm a document the host has not
+ * written yet.
+ * --------------------------------------------------------------------- */
+
+/** Two signed-in machines, in a room, mid-match. */
+async function twoInAMatch() {
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+  host.api().setMe({ uid: "u-host", name: "Host" });
+  guest.api().setMe({ uid: "u-guest", name: "Guest" });
+  host.api().host(); flush();
+  guest.api().join(host.api().snapshot().code); flush();
+  host.api().pick("kel", true); guest.api().pick("trev", true);
+  flush();
+  host.api().start(); flush();
+  assert.ok([host, guest].every((m) => m.nw.scene === "battle"),
+    "both machines should be in the battle");
+  return { host, guest };
+}
+
+/** Play until somebody wins, leaving both machines on the results screen. */
+function playToResults(ms) {
+  for (let i = 0; i < 5000 && ms.some((m) => m.nw.scene === "battle"); i++) {
+    for (const m of ms) m.press("KeyA");
+    playOut(ms, 1);
+  }
+  for (const m of ms) m.release("KeyA");
+  return ms.every((m) => m.nw.scene === "results");
+}
+
+/* The same, but stopping ON the frame the match ends rather than ninety
+   frames later. playOut drains the wire and flushes after every call, which
+   carries the results screen well past the point where anything interesting
+   happens on it -- and the interesting window here is the first twenty
+   frames, before the result has been written down. */
+function playToTheKO(ms) {
+  LAG = 0;
+  for (let i = 0; i < 6000 && ms.some((m) => m.nw.scene === "battle"); i++) {
+    for (const m of ms) m.press("KeyA");
+    tick();
+    for (const m of ms) m.pump(1);
+  }
+  for (const m of ms) m.release("KeyA");
+  return ms.every((m) => m.nw.scene === "results");
+}
+
+/** Leave the results screen with the attack key, the way a player does. */
+function leaveResults(m) {
+  m.pump(45);                 // carryOn needs resultTimer > 40
+  m.press("KeyG");
+  m.pump(4);
+  m.release("KeyG");
+  m.pump(4);
+  flush();
+}
+
+const settle = async () => { for (let i = 0; i < 50; i++) await Promise.resolve(); };
+
+test("a match counts whichever seat won it", async () => {
+  /* Reported from real play: "if the player who didnt start the room wins,
+     the win doesnt count". The database agreed -- four matches won by seat 0
+     counted, two won by seat 1 sat on "pending", and nothing else separated
+     them.
+
+     The cause was not who won, it was who moved first. Recording hung off
+     leaving the results screen; the winner leaves first, because the winner
+     is the one still mashing attack; and the room's host was the only machine
+     allowed to AUTHOR the record. So a guest who won reported seconds before
+     the host had written anything to confirm, and the confirm was refused.
+
+     This drives both orders explicitly and asserts the thing that matters:
+     the match counts, and the win lands on whoever won it. */
+  for (const firstOut of ["host", "guest"]) {
+    const { host, guest } = await twoInAMatch();
+    assert.ok(playToResults([host, guest]), "the match should have ended");
+
+    const winner = host.nw.result.winnerSlot;
+    assert.ok(winner === 0 || winner === 1,
+      "somebody should have won, got " + winner);
+    assert.equal(guest.nw.result.winnerSlot, winner,
+      "both machines should agree who won");
+
+    const first = firstOut === "host" ? host : guest;
+    const second = firstOut === "host" ? guest : host;
+    leaveResults(first);
+    await settle();
+    second.pump(260);          // the other one waits for the screen to time out
+    flush();
+    await settle();
+
+    const mids = Object.keys(world.matches);
+    assert.equal(mids.length, 1,
+      firstOut + " left first: one match document, got " + mids.length);
+    const rec = world.matches[mids[0]];
+    const view = host.ladder().__fold([{ ...rec, mid: mids[0] }]);
+
+    assert.equal(view.counted, 1,
+      firstOut + " left first, seat " + winner + " won: the match should count, " +
+      "verdict was " + view.matches[0].verdict + " with confirms from [" +
+      Object.keys(rec.confirm || {}).join(", ") + "], author " + rec.host);
+    assert.equal(view.disputed, 0);
+
+    const winnerUid = ["u-host", "u-guest"][winner];
+    const loserUid = ["u-host", "u-guest"][1 - winner];
+    assert.equal(view.rows.find((r) => r.uid === winnerUid).w, 1,
+      "the win should belong to " + winnerUid);
+    assert.equal(view.rows.find((r) => r.uid === loserUid).l, 1,
+      "and the loss to " + loserUid);
+  }
+});
+
+test("both machines write the match down before anybody can leave the screen", async () => {
+  /* The structural half of the fix. The record used to be triggered by
+     leaving the results screen, which is a keypress, which the winner makes
+     first. Now the engine says the match is over on a fixed frame of that
+     screen -- frame 20, where a rollback has long since settled and the
+     earliest a key can be accepted is 40 -- so both machines report while
+     they are still sitting there together. */
+  const { host, guest } = await twoInAMatch();
+  assert.ok(playToResults([host, guest]), "the match should have ended");
+  // Nobody has pressed anything since the KO -- playToResults releases every
+  // key -- and both machines are still sitting on the results screen.
+  await settle();
+
+  const mids = Object.keys(world.matches);
+  assert.equal(mids.length, 1,
+    "the match should be written down from the results screen itself, " +
+    "without anybody touching a key, got " + mids.length + " documents");
+  const rec = world.matches[mids[0]];
+  assert.equal(Object.keys(rec.confirm || {}).length, 1,
+    "and corroborated in the same breath, confirms: " +
+    Object.keys(rec.confirm || {}).join(", "));
+  assert.ok(host.nw.scene === "results" && guest.nw.scene === "results",
+    "with both machines still on the results screen");
+});
+
+
+test("one player bailing out cannot erase everybody's record of the match", async () => {
+  /* Leaving the results screen is not a private act. Escape there calls
+     lobby().leave(), which sends `part` and tears the room down -- and the
+     peer, still sitting on its own results screen, then stops with the reason
+     "a player left" rather than "match over". Only "match over" records
+     anything, so the quicker player used to be able to delete the slower
+     one's record of a match they had both just played.
+
+     Escape on this screen now waits until the result is written. */
+  const { host, guest } = await twoInAMatch();
+  assert.ok(playToTheKO([host, guest]), "the match should have ended");
+  await settle();
+  assert.equal(Object.keys(world.matches).length, 0,
+    "nothing is written down in the instant the match ends -- a mispredicted " +
+    "KO still has to be able to roll back");
+
+  /* The host reaches for Escape straight away, inside the window. Leaving
+     sends `part` and tears the room down; if it went through now, the guest
+     would stop with the reason "a player left" instead of "match over" and
+     would never write anything. */
+  host.press("Escape");
+  for (let i = 0; i < 40; i++) { host.pump(1); guest.pump(1); tick(); }
+  host.release("Escape");
+  flush();
+  await settle();
+
+  const mids = Object.keys(world.matches);
+  assert.equal(mids.length, 1,
+    "the match should have been written down anyway, got " + mids.length);
+  const rec = world.matches[mids[0]];
+  assert.equal(Object.keys(rec.confirm || {}).length, 1,
+    "and corroborated, confirms: [" +
+    Object.keys(rec.confirm || {}).join(", ") + "] author " + rec.host);
+  const view = host.ladder().__fold([{ ...rec, mid: mids[0] }]);
+  assert.equal(view.counted, 1,
+    "the match still counts, verdict " + view.matches[0].verdict);
 });
