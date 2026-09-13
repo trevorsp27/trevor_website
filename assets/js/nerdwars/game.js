@@ -293,7 +293,7 @@ function nearestFoe(me) {
 /* =====================================================================
    ROSTER
 
-   Six friends, six fighters. Three of these movesets are canon: the art for
+   Six friends, six fighters -- and a seventh who turned up later. Three of these movesets are canon: the art for
    them already existed -- an attack animation and a spinning bone, a complete
    shirtless alternate sprite set, and the pizza slices. Those aren't
    inventions, they're in the art.
@@ -1117,6 +1117,77 @@ function moveCost(m) {
    recomputed, because build.py verifies every one of them against its angle
    to 1e-12 and a hand-typed cosine is exactly the kind of thing that passes
    review and fails the build. */
+/* COBEUS.
+   Drawn now rather than in 2016, off a single sheet instead of eight files.
+
+   Only two of his five moves are real. The bottle is the one that was asked
+   for and the car is the ult; the jab, `down` and `up` are placeholders with
+   honest numbers and no personality, waiting to be replaced. `up` is a
+   deliberate exception to that: it is the recovery slot for every other
+   character, and a fighter who cannot get back to the stage is not a
+   placeholder, he is unplayable. So it is a plain rising hop -- boring, but
+   boring on purpose and functional. */
+ROSTER.cobeus = {
+  name: 'COBEUS',
+  origin: 'fresh',
+  tag: 'A BOTTLE, THE GLASS IT LEAVES, AND A CAR',
+  drawn: true,
+  weight: 100, walk: 1.5, jump: 6.5, doubleJump: 6.0,
+  // PLACEHOLDER. Middle of the roster in every number; nothing distinctive.
+  jab: { startup: 5, active: 4, recovery: 11, damage: 6,
+         base: 2.3, scale: 6.4, angle: 42, kx: 0.74314482547739424, ky: 0.66913060635885824,
+         ox: 2, oy: -9, w: 11, h: 10 },
+  specials: {
+    /* The bottle. Thrown in an arc, spinning the whole way, and the throw is
+       only half of it: where it breaks it leaves broken glass on the floor
+       for four seconds, and anyone who walks through that pays for it.
+
+       So the move is not really the projectile, it is the DENIAL. Missing
+       with it still takes a piece of the stage away from the other player,
+       which is why the bottle itself hits softly. */
+    neutral: {
+      kind: 'bottle', label: 'LAST CALL',
+      startup: 8, active: 1, recovery: 14, maxAlive: 2,
+      speed: 3.4, lift: -1.9, drop: 0.13, life: 200,
+      spin: 3,                        // frames per rotation frame
+      damage: 6, base: 2.4, scale: 5.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+      /* What it leaves behind. `hitEvery` is the re-arm, so standing in it
+         keeps costing rather than costing once -- it is glass, not a trap. */
+      glass: { life: 240, w: 22, h: 5, hitEvery: 26,
+               damage: 5, base: 1.6, scale: 3.2,
+               angle: 78, kx: 0.20791169081775934, ky: 0.97814760073380569 },
+    },
+    // PLACEHOLDER. A short shove, nothing more.
+    down: {
+      kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
+      startup: 7, active: 8, recovery: 16,
+      rise: 0, riseFrames: 0,
+      damage: 7, base: 2.4, scale: 5.6, angle: 60, kx: 0.5, ky: 0.86602540378443865,
+      ox: 2, oy: -12, w: 13, h: 16,
+    },
+    /* PLACEHOLDER, but a working recovery: every other character's `up` is
+       how they get home, and a fighter who cannot is not playable. */
+    up: {
+      kind: 'uppercut', label: 'PLACEHOLDER',
+      startup: 5, active: 14, recovery: 18,
+      rise: 5.4, riseFrames: 12,
+      damage: 6, base: 2.2, scale: 5.2, angle: 76, kx: 0.24192189559966773, ky: 0.97029572627599647,
+      ox: -6, oy: -20, w: 13, h: 24,
+    },
+  },
+  /* He gets in the car and drives. It comes in off the edge behind him and
+     crosses the whole stage in the direction he is facing, hitting whatever
+     it passes through -- the same shape as the vine Tyson swings in on, which
+     is the one ult in the game this most resembles. He does not move: he is
+     in the car, and the car is the move. */
+  ult: {
+    kind: 'car', label: 'DESIGNATED DRIVER',
+    startup: 16, active: 1, recovery: 26,
+    speed: 4.6, hitEvery: 40,
+    damage: 22, base: 4.4, scale: 9.4, angle: 24, kx: 0.91354545764260087, ky: 0.40673664307580021,
+  },
+};
+
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
   startup: 7, active: 3, recovery: 18,
@@ -1146,7 +1217,13 @@ for (const key in ROSTER) {
   }
 }
 
-const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev'];
+/* Appended rather than slotted in alphabetically, and that is deliberate:
+   twenty-two tests address characters as `select.cursor=[i, j]` positions in
+   this array, so inserting anywhere earlier silently repoints every one of
+   them at a different fighter. Netplay is unaffected either way -- it carries
+   picks as key strings, not indices. */
+const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
+               'cobeus'];
 
 /* =====================================================================
    CANVAS
@@ -1275,6 +1352,13 @@ function loadAssets(done) {
   }
   SPRITES.bone.forEach((uri, i) => grab('bone.' + i, uri));
   for (const d in SPRITES.pizza) grab('pizza.' + d, SPRITES.pizza[d]);
+  /* Every non-character sprite has to be named here explicitly -- there is no
+     `for (const k in SPRITES)` -- so art that build.py emits but this misses
+     ships its bytes and is never turned into an Image. The draw path then
+     skips it silently and the projectile is simply invisible. */
+  SPRITES.bottle.forEach((uri, i) => grab('bottle.' + i, uri));
+  grab('glass', SPRITES.glass);
+  grab('car', SPRITES.car);
 
   for (const theme in TILES) {
     for (const role in TILES[theme]) grab('tile.' + theme + '.' + role, TILES[theme][role]);
@@ -1896,7 +1980,7 @@ class Fighter {
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
-          s.kind === 'pawn' ||
+          s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
           s.kind === 'deadlift') return null;
       if (this.attackFrame < s.startup) return null;
@@ -2671,6 +2755,22 @@ class Fighter {
         }
         if (this.attackFrame === s.startup) {
           cue('belch', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'bottle':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Bottle(this, s));
+          cue('shoot', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'car':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Car(this, s));
+          cue('deadlift', { slot: this.slot, x: this.x });
         }
         break;
 
@@ -5858,6 +5958,185 @@ class PieceShard {
   }
 }
 
+/* The bottle, and what it leaves.
+
+   It spins the whole way -- eight frames off the sheet, one every `spin`
+   frames -- and it breaks on the first thing it touches, floor or face. The
+   break is the point: `shatter` drops a pane of Glass where it happened, and
+   that is the half of the move that lasts. */
+class Bottle {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.dir = owner.facing;
+    this.x = owner.x + this.dir * 9;
+    this.y = owner.y - 11;
+    this.vx = this.dir * spec.speed + owner.vx * 0.3;
+    this.vy = spec.lift;
+    this.life = spec.life;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.t++;
+    this.life--;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+
+    // Breaking on the floor is the normal case -- most of these are thrown at
+    // the ground on purpose, for the glass rather than for the hit.
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.y = p.y;
+          this.shatter();
+          return;
+        }
+      }
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  /* Break where it is. Called by update() on the floor and by resolveCombat
+     on a body, which is why it sets `dead` itself rather than leaving that to
+     either caller. */
+  shatter() {
+    if (this.dead) return;
+    this.dead = true;
+    projectiles.push(new Glass(this));
+    addEffect('ring', this.x, this.y - 2, '#c9e7e8');
+    for (let i = 0; i < 5; i++) {
+      addEffect('spark', this.x, this.y - 2, i % 2 ? '#ffffff' : '#c9e7e8');
+    }
+    cue('shield-break', { slot: this.owner.slot, x: this.x });
+  }
+
+  box() {
+    return { x: this.x - 3, y: this.y - 4, w: 6, h: 7 };
+  }
+
+  draw(g) {
+    const n = SPRITES.bottle ? SPRITES.bottle.length : 8;
+    const im = IMG['bottle.' + (Math.floor(this.t / (this.spec.spin || 3)) % n)];
+    if (im) drawArt(g, im, this.x, this.y);
+  }
+}
+
+/* Broken glass on the floor.
+
+   Deliberately built on the same three fields the smoke and the fart use --
+   `pierce`, `hitAt` and `hitEvery` -- so resolveCombat needs no new code and
+   standing in it keeps costing rather than costing once. The box is thin and
+   sits ON the platform, which is what makes it something you STEP in: a
+   fighter's hurtbox reaches from their feet to 14 above, so anyone on the
+   ground in it overlaps and anyone jumping over it does not. */
+class Glass {
+  constructor(bottle) {
+    const gs = bottle.spec.glass;
+    this.owner = bottle.owner;
+    this.spec = gs;
+    this.x = bottle.x;
+    this.y = bottle.y;
+    this.w = gs.w;
+    this.h = gs.h;
+    this.life = gs.life;
+    this.born = gs.life;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+    // A deterministic scatter: the shards have to be in the same place on
+    // every machine, so this is derived from where it broke rather than from
+    // Math.random, which the AI is also drawing from.
+    this.seed = Math.floor(Math.abs(bottle.x) * 7 + Math.abs(bottle.y) * 13) % 97;
+  }
+
+  update() {
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.life--;
+    if (this.life <= 0) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - this.w / 2, y: this.y - this.h, w: this.w, h: this.h };
+  }
+
+  draw(g) {
+    const left = this.life / this.born;
+    // The last second blinks, so nobody is caught out by glass that was
+    // about to expire anyway.
+    if (left < 0.25 && (this.life >> 2) % 2 === 0) return;
+    const im = IMG.glass;
+    if (im) drawArt(g, im, this.x, this.y - 3);
+    g.globalAlpha = Math.min(1, 0.45 + left);
+    g.fillStyle = '#c9e7e8';
+    for (let i = 0; i < 7; i++) {
+      const k = (this.seed + i * 17) % 31;
+      const dx = (k - 15) * (this.w / 34);
+      const dy = -((k * 5) % 4);
+      g.fillRect(Math.round(this.x + dx), Math.round(this.y + dy) - 1, 1, 1);
+    }
+    g.globalAlpha = 1;
+  }
+}
+
+/* The car.
+
+   Comes in off the edge behind him and crosses the whole stage the way he is
+   facing. Same shape as the vine: it pierces, it remembers who it has already
+   hit, and it is the move -- he does not move at all. */
+class Car {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.dir = owner.facing;
+    // Start clear of the edge so it drives ON rather than appearing.
+    this.x = this.dir > 0 ? -40 : VW + 40;
+    this.y = owner.y;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  update() {
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.x += this.dir * this.spec.speed;
+    if (this.dir > 0 && this.x > VW + 44) this.dead = true;
+    if (this.dir < 0 && this.x < -44) this.dead = true;
+  }
+
+  box() {
+    // The drawn car is 54 by 23 and sits on the ground; the box is the body
+    // of it, a little inside the art so the bumper does not hit first.
+    return { x: this.x - 24, y: this.y - 22, w: 48, h: 22 };
+  }
+
+  draw(g) {
+    const im = IMG.car;
+    if (!im) return;
+    const left = this.dir < 0;
+    if (left) {
+      g.save();
+      g.translate(Math.round(this.x) * 2, 0);
+      g.scale(-1, 1);
+      g.drawImage(im, Math.round(-this.x) - (im.width >> 1),
+                  Math.round(this.y - 23));
+      g.restore();
+    } else {
+      g.drawImage(im, Math.round(this.x) - (im.width >> 1),
+                  Math.round(this.y - 23));
+    }
+  }
+}
+
 class KnightPiece {
   constructor(owner, spec) {
     this.owner = owner;
@@ -7110,13 +7389,15 @@ function resolveCombat(fighters) {
           continue;
         }
         applyHit(shot.owner, f, shot.spec, shot.x, bite);
-        /* A pawn that reaches somebody is promoted, and the burst has to
-           happen HERE -- this is the only place that knows it connected, and
-           the shards have to exist on the same frame the pawn stops existing
-           or there is a gap for the victim to step through. burst() sets
-           dead itself, so the assignment below is left to the general case
-           rather than fighting it. */
+        /* A pawn that reaches somebody is promoted, and a bottle that reaches
+           somebody breaks on them -- both have to happen HERE, because this
+           is the only place that knows it connected and whatever they leave
+           behind has to exist on the same frame they stop existing, or there
+           is a gap for the victim to step through. Both set `dead`
+           themselves, so the assignment below is left to the general case
+           rather than fighting them for it. */
         if (shot.burst) shot.burst();
+        else if (shot.shatter) shot.shatter();
         else shot.dead = true;
         break;
       }
@@ -7506,7 +7787,13 @@ function updateHelp() {
    been, then green and amber. Also used by the HUD ordering. */
 const SEAT_COLORS = ['#59a5ff', '#ff5f5f', '#5fd46a', '#ffc14d'];
 
-const GRID_COLS = 3;
+/* Four, not three. At three the seventh character wrapped onto a row whose
+   centre is y 144: its selection ring ran to y 184 on a screen 180 tall, its
+   NAME drew at baseline 184 and was therefore invisible, and its portrait sat
+   underneath all three lines of bottom text. Four columns puts seven back
+   into the two rows the layout was built for, and leaves room for an eighth
+   before any of that has to be thought about again. */
+const GRID_COLS = 4;
 
 function moveCursor(slot, dx, dy) {
   let i = select.cursor[slot];
@@ -7514,8 +7801,13 @@ function moveCursor(slot, dx, dy) {
   let row = Math.floor(i / GRID_COLS);
   col = clamp(col + dx, 0, GRID_COLS - 1);
   row = clamp(row + dy, 0, Math.ceil(ORDER.length / GRID_COLS) - 1);
-  const n = row * GRID_COLS + col;
-  if (n < ORDER.length) select.cursor[slot] = n;
+  /* The last row is ragged whenever the roster is not a multiple of the
+     column count, and a move into the gap used to be a silent no-op -- so at
+     seven characters, Down did nothing at all from the last two tiles of the
+     top row. Clamping lands on the final character instead, which is both
+     reachable and what anyone pressing Down there is asking for. */
+  const n = Math.min(row * GRID_COLS + col, ORDER.length - 1);
+  select.cursor[slot] = n;
 }
 
 /* One menu press, from whichever controller owns a seat. */
@@ -8799,7 +9091,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '9ea95a677d';
+const BUILD_ID = '8199aae36e';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8810,7 +9102,7 @@ const BUILD_ID = '9ea95a677d';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.34';
+const VERSION = '2.35';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -9885,6 +10177,12 @@ window.NerdWars = {
       };
     },
   },
+  /* How wide the character grid is. Read-only, and it exists because the
+     test suite drives the select screen by walking it -- with the count
+     hardcoded on both sides, widening the grid silently walked seven tests
+     onto the wrong fighter and failed them inside assertions about movesets,
+     a long way from the cause. */
+  get selectColumns() { return GRID_COLS; },
   get fighters() {
     return fighters.map((f) => ({
       key: f.key, health: Math.round(f.health), stocks: f.stocks,

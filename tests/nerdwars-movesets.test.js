@@ -170,14 +170,22 @@ function startAs(g, a, b) {
   g.tap("KeyS");                       // "2 PLAYERS (local)"
   g.tap("Enter");
   assert.equal(g.nw.scene, "select");
-  // The select screen is a 3-wide GRID, not a list, and each seat starts on a
-  // different character -- seat 0 on AutisNick, seat 1 on Reese. Counting
-  // right-presses linearly walks into the clamp at the end of a row and lands
-  // somewhere else entirely, so navigate by column and row.
+  /* The select screen is a GRID, not a list, and each seat starts on a
+     different character -- seat 0 on AutisNick, seat 1 on Reese. Counting
+     right-presses linearly walks into the clamp at the end of a row and lands
+     somewhere else entirely, so navigate by column and row.
+
+     The column count is read from the engine rather than written here. It was
+     hardcoded to 3, and when the grid widened to 4 for a seventh character
+     this helper quietly walked seven tests onto the wrong fighter -- they
+     failed inside assertions about movesets, which is a long way from the
+     cause. Rows are walked before columns because a move into the ragged last
+     row clamps to the final character.  */
+  const COLS = g.nw.selectColumns;
   const step = (from, to, keys) => {
     const [L, R, U, D] = keys;
-    let [c0, r0] = [from % 3, Math.floor(from / 3)];
-    const [c1, r1] = [to % 3, Math.floor(to / 3)];
+    let [c0, r0] = [from % COLS, Math.floor(from / COLS)];
+    const [c1, r1] = [to % COLS, Math.floor(to / COLS)];
     for (; r0 < r1; r0++) g.tap(D);
     for (; r0 > r1; r0--) g.tap(U);
     for (; c0 < c1; c0++) g.tap(R);

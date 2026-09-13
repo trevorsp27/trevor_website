@@ -1374,6 +1374,196 @@ test("the shout is red waves that travel, and the box goes as far as they do", a
   }
 });
 
+test("Cobeus is in the game, off a sprite sheet, and the select screen fits him", async () => {
+  /* He is the seventh character and the first whose art arrived as ONE sheet
+     rather than eight files, so this guards the whole chain: build.py slicing
+     the sheet, loadAssets naming every new key by hand, and the select grid
+     having somewhere to put him.
+
+     The grid is the part that needed changing. At three columns his tile
+     wrapped to a third row centred at y 144 -- ring running to y 184 on a
+     180px screen, NAME drawn at baseline 184 and therefore invisible,
+     portrait underneath all three lines of bottom text. Four columns puts
+     seven back into two rows. */
+  const run = await bootEngine();
+  assert.equal(run("ORDER.indexOf('cobeus')"), 6,
+    "appended, not inserted -- every select.cursor=[i,j] in this suite is a " +
+    "position in ORDER");
+  assert.equal(run("ORDER.length"), 7);
+
+  /* Every non-character sprite has to be named in loadAssets by hand; there
+     is no `for (const k in SPRITES)`. Art that build.py emits and loadAssets
+     misses ships its bytes, is never turned into an Image, and the draw path
+     skips it silently -- an invisible projectile with no error anywhere. */
+  for (const key of ["cobeus.base.standR", "cobeus.base.jumpL",
+                     "bottle.0", "bottle.7", "glass", "car"]) {
+    assert.ok(run("!!IMG[" + JSON.stringify(key) + "]"),
+      "sprite '" + key + "' never became an Image -- check loadAssets");
+  }
+
+  // The grid has room, and his name is on the screen.
+  const grid = run(`(function () {
+    var cols = NerdWars.selectColumns;
+    var cellW = 74, cellH = 52, originY = 40;
+    var originX = VW / 2 - (cols * cellW) / 2 + cellW / 2;
+    var last = ORDER.length - 1;
+    var cx = originX + (last % cols) * cellW;
+    var cy = originY + Math.floor(last / cols) * cellH;
+    return { cols: cols, rows: Math.ceil(ORDER.length / cols),
+             left: cx - 32, right: cx + 32, nameY: cy + 40, VW: VW, VH: VH };
+  })()`);
+  assert.ok(grid.nameY < grid.VH,
+    "the last character's name must be on screen; it draws at y " +
+    grid.nameY + " on a " + grid.VH + "px screen");
+  assert.ok(grid.left > 0 && grid.right < grid.VW,
+    "and his tile must fit across; it spans " + grid.left + ".." + grid.right);
+
+  /* Every tile has to be REACHABLE. The last row is ragged at seven, and a
+     move into the gap used to be a silent no-op -- Down did nothing at all
+     from the last two tiles of the top row. */
+  for (let from = 0; from < 7; from++) {
+    const reached = run(`(function () {
+      select.cursor[0] = ${from};
+      moveCursor(0, 0, 1);
+      return select.cursor[0];
+    })()`);
+    assert.ok(reached >= 0 && reached < 7,
+      "Down from " + from + " left the cursor at " + reached);
+  }
+  const downFromTopRight = run(`(function () {
+    select.cursor[0] = 3; moveCursor(0, 0, 1); return select.cursor[0];
+  })()`);
+  assert.equal(downFromTopRight, 6,
+    "Down from the end of the top row should land on the last character, " +
+    "not do nothing; landed on " + downFromTopRight);
+});
+
+test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
+  /* The throw is only half the move. Where it breaks it leaves glass on the
+     floor, and that is the half that lasts: missing still takes a piece of
+     the stage away from the other player.
+
+     The glass is built on `pierce` + `hitAt` + `hitEvery`, the same three
+     fields the smoke and the fart use, so resolveCombat needed no new code
+     and standing in it keeps costing rather than costing once. */
+  const run = await bootEngine();
+  run("select.cursor=[6,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.name"), "COBEUS");
+
+  const SP_N = 512;
+  const setup = `
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = main.x + 40; me.y = main.y; me.specialSpawned = false;`;
+
+  const thrown = run(`(function () {
+    ${setup}
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99;
+    foe.health = 1000; foe.x = main.x + main.w - 6; foe.y = main.y;
+    foe.hasHit = true; foe.grounded = true;
+    var spin = {}, glassLife = 0, sawBottle = false;
+    netplay.active = true;
+    for (var i = 0; i < 60; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
+      step();
+      var b = projectiles.filter(function (q) { return q.constructor.name === 'Bottle'; })[0];
+      var gl = projectiles.filter(function (q) { return q.constructor.name === 'Glass'; })[0];
+      if (b) { sawBottle = true; spin[Math.floor(b.t / (b.spec.spin || 3)) % 8] = 1; }
+      if (gl && !glassLife) glassLife = gl.life;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { sawBottle: sawBottle, frames: Object.keys(spin).length,
+             glassLife: glassLife };
+  })()`);
+
+  assert.ok(thrown.sawBottle, "the bottle should have been thrown");
+  assert.ok(thrown.frames >= 6,
+    "it should visibly spin, not slide; used " + thrown.frames + " of 8 frames");
+  assert.ok(thrown.glassLife >= 200,
+    "breaking should leave glass for about four seconds; got " +
+    thrown.glassLife + " frames");
+
+  /* And it has to bite somebody standing in it MORE THAN ONCE, which is what
+     separates glass from a trap that fires and is spent. */
+  const stood = run(`(function () {
+    ${setup}
+    foe.setState('idle'); foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + 46; foe.y = main.y; foe.hasHit = true; foe.grounded = true;
+    var hits = 0, before = foe.health, lived = 0;
+    netplay.active = true;
+    for (var i = 0; i < 340; i++) {
+      me.hitstop = 0; me.mana = 999;
+      // Pinned in the glass: this is the worst case, not a likely one.
+      foe.hitstop = 0; foe.invuln = 0; foe.hitstun = 0; foe.setState('idle');
+      foe.x = main.x + 46; foe.vx = 0; foe.y = main.y; foe.grounded = true;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
+      var h0 = foe.health;
+      step();
+      if (foe.health < h0) hits++;
+      if (projectiles.some(function (q) { return q.constructor.name === 'Glass'; })) lived++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { hits: hits, lost: before - foe.health, lived: lived };
+  })()`);
+
+  assert.ok(stood.hits > 1,
+    "standing in glass should keep costing, not cost once; bit " +
+    stood.hits + " times");
+  assert.ok(stood.lost > 0, "and take real health; took " + stood.lost);
+  assert.ok(stood.lived >= 200 && stood.lived <= 260,
+    "the glass should last about four seconds; it lived " + stood.lived +
+    " frames");
+});
+
+test("Cobeus's ult drives a car across the whole stage", async () => {
+  /* Same shape as the vine Tyson swings in on: it pierces, it remembers who
+     it has already hit, and it IS the move -- he does not move, he is in it. */
+  const run = await bootEngine();
+  run("select.cursor=[6,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+
+  const ULT = 256;
+  const r = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.ultMeter = 999; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = main.x + 40; me.y = main.y; me.specialSpawned = false;
+    foe.setState('idle'); foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + 120; foe.y = main.y; foe.hasHit = true; foe.grounded = true;
+    var xs = [], before = foe.health;
+    netplay.active = true;
+    for (var i = 0; i < 120; i++) {
+      me.hitstop = 0; me.ultMeter = 999;
+      foe.hitstop = 0; foe.invuln = 0;
+      foe.x = main.x + 120; foe.vx = 0; foe.y = main.y; foe.grounded = true;
+      netplay.framePads = [bitsToPad(i === 0 ? ${ULT} : 0), bitsToPad(0)];
+      step();
+      var c = projectiles.filter(function (q) { return q.constructor.name === 'Car'; })[0];
+      if (c) xs.push(c.x);
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { n: xs.length, from: xs[0], to: xs[xs.length - 1],
+             lost: before - foe.health, VW: VW };
+  })()`);
+
+  assert.ok(r.n > 40, "the car should be on screen for a while; " + r.n + " frames");
+  assert.ok(r.from < 0, "it should drive ON from off the edge; started at " + r.from);
+  assert.ok(r.to > r.VW, "and all the way off the other side; ended at " + r.to);
+  assert.ok(r.lost > 10,
+    "and hit whoever it drove through; took " + r.lost);
+});
+
 test("the fart shoves Reese upward, but only in the air", async () => {
   /* Every action has an equal and opposite one. Mechanically it hands him a
      second way back that is not JITTERS, which is a committed horizontal dash
