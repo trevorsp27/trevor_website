@@ -8708,11 +8708,16 @@ function drawRoom() {
         : 'waiting for the host to start';
   text(line, VW / 2, VH - 13, 7, snap.canStart ? '#ffffff' : '#8792b0',
        'center', snap.canStart ? 800 : 500);
-  /* No button on this one. The room's way out is to LEAVE it, which drops
-     your seat and tells everybody else -- and the only gap on this screen is
-     sixteen pixels tall, between the code and the fighter grid. A destructive
-     action wedged into a gap that tight is a mis-click waiting to happen, so
-     the room gets the honest key instead. */
+  /* No button on this one, and not for want of room: measured, there is a
+     25px band between the code and the fighter grid, and the bottom-left
+     corner is free as well. Either would hold one.
+
+     The reason is what the button would do. Every other BACK in this game
+     returns to a menu; this one drops your seat, tells four other people, and
+     puts them back to waiting. It would also be the only thing on the screen
+     a mouse can click, sitting just above a fighter grid people are looking
+     straight at. That is a mis-click with consequences for everybody else in
+     the room, to save a keypress that now works and now says so. */
   text('WASD to move    SPACE to lock in and out    ' + backKey() +
        ' to leave the room',
        VW / 2, VH - 3, 5, '#454c66', 'center', 500);
@@ -10279,7 +10284,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '9bbdc98584';
+const BUILD_ID = '83a75679dc';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
