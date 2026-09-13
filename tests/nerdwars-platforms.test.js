@@ -2683,29 +2683,22 @@ test("Simon is in the game off one sheet, with a kit that works", async () => {
 });
 
 
-test("the rainbow is an arch that paints, waits, and falls", async () => {
-  /* It used to be a lobbed dot with a flag of color on it -- 15 damage and
-     nothing else -- and it was the weakest move on the weakest character.
+test("the rainbow is a lob again, wearing one colour at a time", async () => {
+  /* This move has been three things. A lobbed dot with a flag of colour on
+     it, which did 15 damage and nothing else. Then an arch: a 144x66 painted
+     span, the stage dimming behind it, seven bars falling. That was a
+     spectacle and it was not what anybody wanted to play.
 
-     Now it is three phases in one object, and the middle one is the move:
-     it paints a 144x66 arch, holds for forty frames while you decide whether
-     you are standing under it, and then comes down in seven colored bars.
-
-     The hold is what this test exists for. `box()` has to be genuinely
-     inert for those forty frames, and the obvious way to write that -- a
-     zero-size box -- is WRONG in a way that is invisible in play. overlap()
-     is `a.x < b.x + b.w && a.x + a.w > b.x`; with a width of zero both
-     comparisons pass for any point strictly inside the other box, so a
-     degenerate box is not empty, it is maximally overlapping. Written that
-     way the arch would have parked a silent, artless, piercing hitbox at the
-     far foot for the whole hold -- exactly where somebody who just walked
-     out from under it is standing. */
+     It is the lob again, with the throw it always had, and the projectile is
+     now ONE colour at a time instead of all six at once. The colour is the
+     move: whichever tint it is wearing when it lands is what it does. */
   const run = await bootEngine();
   run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
   assert.equal(run("fighters[0].def.name"), "AUTISNICK");
-  assert.equal(run("ROSTER.autisnick.specials.up.label"), "DOUBLE RAINBOW");
+  assert.equal(run("ROSTER.autisnick.specials.up.label"), "RAINBOW");
+  assert.equal(run("ROSTER.autisnick.specials.up.kind"), "rainbow");
 
   const SP_U = 2048;
   const r = run(`(function () {
@@ -2715,92 +2708,235 @@ test("the rainbow is an arch that paints, waits, and falls", async () => {
     me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
     me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true;
     me.facing=1; me.stocks=99; me.eliminated=false; me.specialSpawned=false;
-    me.buffTimer=0; me.buffStats=null; me.chargeTimer=0;
-    me.x=main.x+30; me.y=main.y;
+    me.x=main.x+20; me.y=main.y;
     foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
     foe.y=main.y; foe.hasHit=true; foe.grounded=true;
-    foe.x = main.x + 180; foe.invuln = 9999;
-    var live = [], bars = 0, apexY = 999, spanL = 9999, spanR = -9999, held = 0;
+    foe.x = main.x + 250; foe.invuln = 9999;
+    var seen = [], path = [], boxes = 0, same = true, first = null;
     netplay.active = true;
-    for (var i = 0; i < 130; i++) {
+    for (var i = 0; i < 120; i++) {
       me.hitstop = 0; me.mana = 999;
       netplay.framePads = [bitsToPad(i === 0 ? ${SP_U} : 0), bitsToPad(0)];
       step();
-      var a = projectiles.filter(function (p) { return p.constructor.name === 'Arch'; })[0];
-      var d = projectiles.filter(function (p) { return p.constructor.name === 'ArchDrop'; });
-      if (a) {
-        var b = a.box();
-        if (b.x > -5000) {
-          live.push(i);
-          spanL = Math.min(spanL, b.x); spanR = Math.max(spanR, b.x + b.w);
-          apexY = Math.min(apexY, b.y);
-        } else { held++; }
+      var b = projectiles.filter(function (p) {
+        return p.constructor.name === 'Rainbow'; })[0];
+      if (b) {
+        boxes++;
+        path.push([Math.round(b.x), Math.round(b.y)]);
+        var tint = b.spec.tint;
+        if (seen[seen.length - 1] !== tint) seen.push(tint);
+        // The spec it carries must be one of the six built at load, not a
+        // fresh object -- see the note by the pricing loop.
+        var tints = ROSTER.autisnick.specials.up.tints;
+        if (tints.indexOf(b.spec) < 0) same = false;
+        if (first === null) first = b.css();
       }
-      if (d.length > bars) bars = d.length;
     }
     netplay.active = false; netplay.framePads = null;
-    return { live: live.length, held: held, bars: bars, apexY: apexY,
-             width: spanR - spanL, floor: main.y, VH: VH };
+    return { seen: seen.join(','), boxes: boxes, same: same, first: first,
+             path: path.map(function (q) { return q.join(':'); }).join(' '),
+             cycle: ROSTER.autisnick.specials.up.cycle,
+             order: ROSTER.autisnick.specials.up.colors
+                      .map(function (c) { return c.tint; }).join(',') };
   })()`);
 
-  assert.ok(r.live >= 30 && r.live <= 36,
-    "the paint phase should be about 33 frames; it was " + r.live);
-  assert.ok(r.held >= 35,
-    "and it should then HOLD, hitless, for about forty; it held " + r.held);
-  assert.equal(r.bars, 7, "seven bars, one per color of the rainbow");
-  assert.ok(r.width > 120,
-    "the arch should span most of the stage; it spanned " + r.width + "px");
-  assert.ok(r.apexY > 2,
-    "and its top must stay on screen; the apex drew at y " + r.apexY);
-  assert.ok(r.apexY < r.floor - 40,
-    "while still arcing well clear of the floor at " + r.floor);
+  assert.ok(r.boxes > 40, "the shot should stay up a while, got " + r.boxes);
+  assert.equal(r.order, "RED,ORANGE,YELLOW,GREEN,BLUE,PURPLE",
+    "ROYGBP, in that order");
+  assert.ok(r.same, "every spec it carries should be one of the six built at load");
+
+  // It cycles, in order, and gets all the way round.
+  const seen = r.seen.split(",");
+  assert.ok(seen.length >= 6,
+    "it should have worn at least six colours, wore: " + r.seen);
+  assert.equal(seen[0], "RED", "starting on red");
+  const order = r.order.split(",");
+  for (let i = 1; i < seen.length; i++) {
+    const want = order[(order.indexOf(seen[i - 1]) + 1) % order.length];
+    assert.equal(seen[i], want,
+      "the wheel should turn in order, got " + r.seen);
+  }
+
+  // And it is a lob: up first, then down, landing further away than it started.
+  const path = r.path.split(" ").map((q) => q.split(":").map(Number));
+  const top = Math.min(...path.map((q) => q[1]));
+  assert.ok(top < path[0][1] - 20,
+    "it should arc at least 20px above where it was thrown, rose " +
+    (path[0][1] - top));
+  assert.ok(path[path.length - 1][1] > top + 10, "and come back down");
+  assert.ok(path[path.length - 1][0] > path[0][0] + 40,
+    "travelling away from him while it does");
+
+  /* And it is ONE colour on screen, not six. It used to draw the whole
+     spectrum as six one-pixel bands stacked into a 6x6 square, which at that
+     size read as a grey smudge and told you nothing about what was coming.
+     The colour IS the move now, so the square has to be the colour. */
+  const paint = run(`(function () {
+    var b = projectiles.filter(function (p) {
+      return p.constructor.name === 'Rainbow'; })[0];
+    if (!b) {
+      // Throw a fresh one and let it get into the air.
+      var me = fighters[0];
+      me.setState('idle'); me.specialSpawned = false; me.mana = 999;
+      me.hitstop = 0; me.hitstun = 0; me.grounded = true;
+      netplay.active = true;
+      for (var i = 0; i < 30; i++) {
+        me.hitstop = 0; me.mana = 999;
+        netplay.framePads = [bitsToPad(i === 0 ? 2048 : 0), bitsToPad(0)];
+        step();
+      }
+      netplay.active = false; netplay.framePads = null;
+      b = projectiles.filter(function (p) {
+        return p.constructor.name === 'Rainbow'; })[0];
+    }
+    if (!b) return 'no shot';
+    var used = {}, real = sctx.fillStyle;
+    var g = { globalAlpha: 1, fillStyle: '',
+              fillRect: function () { used[this.fillStyle] = 1; } };
+    b.draw(g);
+    /* The SPEC's colour, not css(). Asking the same method the drawing asked
+       would be the picture agreeing with itself: a css() that returned red
+       forever would paint red, report red, and pass. */
+    return Object.keys(used).join(',') + '~' + b.spec.css + '~' + b.spec.tint;
+  })()`);
+  const [usedCsv, carrying, tint] = paint.split("~");
+  const used = usedCsv.split(",").filter((c) => c && c !== "#000000");
+  assert.equal(used.length, 1,
+    "the square should be one colour, painted with: " + usedCsv);
+  assert.equal(used[0], carrying,
+    "and it should be " + tint + ", whose payload it is carrying");
 });
 
-test("the arch's hold phase cannot hurt anybody", async () => {
-  /* Split from the test above because this is the one that would have
-     shipped broken, and it needs the victim pinned exactly where a
-     zero-size box would have sat: the far foot, where the painting head
-     comes to rest. Anywhere else and the bug hides. */
+test("a rainbow is the same colour after a rollback as it was before", async () => {
+  /* The cycle is derived from the projectile's own age, which the snapshot
+     carries -- so replaying frame 40 has to produce the colour frame 40 had
+     the first time. If it drifted, two machines would apply two different
+     payloads from the same hit and the match would quietly diverge. */
   const run = await bootEngine();
   run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
 
   const SP_U = 2048;
-  const hurt = run(`(function () {
-    var me = fighters[0], foe = fighters[1];
+  const r = run(`(function () {
+    var me = fighters[0];
     var main = STAGE.platforms.find(function (p) { return p.main; });
-    projectiles.length = 0; effects.length = 0;
+    projectiles.length = 0;
     me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
-    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.grounded=true;
-    me.facing=1; me.stocks=99; me.eliminated=false; me.specialSpawned=false;
-    me.buffTimer=0; me.buffStats=null; me.chargeTimer=0;
-    me.x=main.x+30; me.y=main.y;
-    foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
-    foe.y=main.y; foe.hasHit=true; foe.grounded=true;
-    var rest = me.x + ARCH_ARC[ARCH_ARC.length - 1][0];
-    var duringHold = 0, duringPaint = 0, h0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grounded=true; me.facing=1;
+    me.specialSpawned=false; me.x=main.x+20; me.y=main.y;
     netplay.active = true;
-    for (var i = 0; i < 130; i++) {
-      me.hitstop = 0; me.mana = 999;
-      // Pinned at the resting point of the head, every frame.
-      foe.hitstop = 0; foe.invuln = 0; foe.hitstun = 0; foe.setState('idle');
-      foe.x = rest; foe.vx = 0; foe.y = main.y; foe.grounded = true;
-      netplay.framePads = [bitsToPad(i === 0 ? ${SP_U} : 0), bitsToPad(0)];
-      h0 = foe.health;
-      step();
-      var a = projectiles.filter(function (p) { return p.constructor.name === 'Arch'; })[0];
-      if (a && foe.health < h0) {
-        if (a.t > a.spec.paintEnd) duringHold++; else duringPaint++;
-      }
+    netplay.framePads = [bitsToPad(${SP_U}), bitsToPad(0)];
+    step();
+    netplay.framePads = [bitsToPad(0), bitsToPad(0)];
+    for (var i = 0; i < 20; i++) { me.hitstop = 0; step(); }
+
+    var snap = saveSim();
+    var live = [];
+    for (var i = 0; i < 25; i++) {
+      me.hitstop = 0; step();
+      var b = projectiles.filter(function (p) {
+        return p.constructor.name === 'Rainbow'; })[0];
+      live.push(b ? b.spec.tint + '@' + Math.round(b.x) : '-');
+    }
+    restoreSim(snap);
+    var again = [];
+    for (var i = 0; i < 25; i++) {
+      me.hitstop = 0; step();
+      var b2 = projectiles.filter(function (p) {
+        return p.constructor.name === 'Rainbow'; })[0];
+      again.push(b2 ? b2.spec.tint + '@' + Math.round(b2.x) : '-');
     }
     netplay.active = false; netplay.framePads = null;
-    return { hold: duringHold, paint: duringPaint };
+    return { live: live.join(' '), again: again.join(' ') };
   })()`);
 
-  assert.equal(hurt.hold, 0,
-    "the hold phase dealt damage on " + hurt.hold + " frames. A zero-size " +
-    "box is INSIDE everything -- park it off the world instead.");
+  assert.ok(/RED|ORANGE|YELLOW|GREEN|BLUE|PURPLE/.test(r.live),
+    "the shot should have been in the air, got " + r.live);
+  assert.equal(r.again, r.live,
+    "replaying the same frames must give the same colours in the same places");
+});
+
+test("what the rainbow does depends on the colour it was", async () => {
+  /* Six colours, six payloads, and five of the six were already things
+     applyHit understood -- burn, knockback, stun, poison and confusion. Only
+     the mana drain is new, and it needed no new state because mana is already
+     a fighter field. */
+  const run = await bootEngine();
+  run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<40;i++) step();");
+
+  const hit = (tint) => {
+    const raw = run(`(function () {
+      var me = fighters[0], foe = fighters[1];
+      var tints = ROSTER.autisnick.specials.up.tints;
+      var spec = tints.filter(function (s) { return s.tint === ${JSON.stringify(tint)}; })[0];
+      if (!spec) return 'no such tint';
+      foe.health = 500; foe.burn = 0; foe.poison = 0; foe.confused = 0;
+      foe.hitstun = 0; foe.mana = 100; foe.shield = 0; foe.shieldBroken = 0;
+      foe.state = 'idle'; foe.hitstop = 0; foe.invuln = 0; foe.eliminated = false;
+      foe.x = me.x + 20; foe.y = me.y; foe.vx = 0; foe.vy = 0;
+      applyHit(me, foe, spec, me.x, 1);
+      return [500 - foe.health, foe.burn, foe.poison, foe.confused,
+              foe.hitstun, 100 - foe.mana,
+              Math.round(Math.abs(foe.vx) * 100) / 100].join('|');
+    })()`);
+    const [dmg, burn, poison, confused, hitstun, drained, kb] =
+      raw.split("|").map(Number);
+    return { dmg, burn, poison, confused, hitstun, drained, kb };
+  };
+
+  const red = hit("RED");
+  assert.ok(red.burn > 0, "red should set them alight, burn " + red.burn);
+  assert.equal(red.poison, 0, "and only that");
+  assert.equal(red.confused, 0);
+
+  const orange = hit("ORANGE");
+  assert.equal(orange.burn, 0);
+  assert.equal(orange.poison, 0);
+  assert.ok(orange.dmg > red.dmg,
+    "orange should hit harder on the way in, " + orange.dmg + " vs " + red.dmg);
+  assert.ok(orange.kb > red.kb * 1.3,
+    "and launch much further: " + orange.kb + " vs " + red.kb);
+
+  const yellow = hit("YELLOW");
+  assert.ok(yellow.hitstun > red.hitstun,
+    "yellow should stun for longer than a plain hit, " +
+    yellow.hitstun + " vs " + red.hitstun);
+  assert.equal(yellow.burn, 0);
+
+  const green = hit("GREEN");
+  assert.ok(green.poison > 0, "green should poison, got " + green.poison);
+  assert.equal(green.burn, 0, "which is not the same thing as burning");
+
+  const blue = hit("BLUE");
+  assert.ok(blue.confused > 0, "blue should confuse, got " + blue.confused);
+
+  const purple = hit("PURPLE");
+  assert.ok(purple.drained > 0, "purple should drain mana, took " + purple.drained);
+  assert.equal(purple.burn + purple.poison + purple.confused, 0,
+    "and do nothing else");
+
+  // Nobody's payload is anybody else's.
+  const all = [red, orange, yellow, green, blue, purple];
+  const fingerprints = all.map((h) =>
+    [h.burn > 0, h.poison > 0, h.confused > 0, h.drained > 0,
+     h.hitstun, Math.round(h.kb)].join(","));
+  assert.equal(new Set(fingerprints).size, 6,
+    "six colours should do six different things, got " + fingerprints.join("  /  "));
+
+  // And a drained bar stops at zero rather than going negative.
+  const floorAt0 = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var spec = ROSTER.autisnick.specials.up.tints
+      .filter(function (s) { return s.tint === 'PURPLE'; })[0];
+    foe.mana = 3; foe.health = 500; foe.shield = 0; foe.state = 'idle';
+    foe.hitstop = 0; foe.invuln = 0;
+    applyHit(me, foe, spec, me.x, 1);
+    return foe.mana;
+  })()`);
+  assert.equal(floorAt0, 0, "a drained bar bottoms out at zero, got " + floorAt0);
 });
 
 test("Cobeus's AK fires three rounds, spaced apart", async () => {
@@ -3303,7 +3439,7 @@ test("a match starts from a clean slate", async () => {
      hides completely. The asymmetry is the whole hazard, and the invariant
      is what actually forbids it. */
   const run = await bootEngine();
-  const left = run(`(function () {
+  let left = run(`(function () {
     select.cursor = [0, 4]; playerCount = 2; humanCount = 0; stagePick = 0;
     startBattle();
     freezeFrames = 9;          // as a KO leaves it
@@ -4533,4 +4669,143 @@ test("the board says what the reset took off it", async () => {
     "an empty board after a reset should say so, got: " + empty.join(" / "));
   assert.ok(!empty.some((s) => /no matches yet/.test(s)),
     "and must not claim nobody has ever played");
+});
+
+
+test("the pizza dives only when he asks it to", async () => {
+  /* It used to go down whenever his feet were off the ground. That meant the
+     flat throw -- the one that covers the stage -- simply did not exist in
+     the air: jumping over somebody's projectile deleted his own. Holding DOWN
+     is the dive now, and everything else flies straight.
+
+     Driven through netplay.framePads rather than the keyboard, because that
+     is the path an online match takes and the one where reading the wrong
+     input goes unnoticed: a move that consulted this machine's keys instead
+     of the recorded pad would look perfect in single player and desync the
+     moment two people played. */
+  const run = await bootEngine();
+  run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.name"), "AUTISNICK");
+  assert.equal(run("ROSTER.autisnick.specials.neutral.kind"), "pizza");
+
+  const SP_N = 512, DOWN = 8;
+  const throwIt = (airborne, holdDown) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.vx=0; me.vy=0; me.grabbing=-1; me.facing=1;
+    me.specialSpawned=false; me.aimDown=false; me.stocks=99; me.eliminated=false;
+    me.x = main.x + 60;
+    if (${airborne}) { me.y = main.y - 40; me.grounded = false; }
+    else { me.y = main.y; me.grounded = true; }
+    foe.setState('idle'); foe.stocks=99; foe.eliminated=false; foe.invuln=9999;
+    foe.x = main.x + 250; foe.y = main.y; foe.hasHit = true;
+    var bits = ${SP_N} | ${holdDown ? DOWN : 0};
+    var hold = ${holdDown ? DOWN : 0};
+    netplay.active = true;
+    var heading = null;
+    for (var i = 0; i < 20; i++) {
+      me.hitstop = 0; me.mana = 999;
+      // Airborne, keep him there: the test is about the throw, not gravity.
+      if (${airborne}) { me.vy = 0; me.grounded = false; }
+      netplay.framePads = [bitsToPad(i === 0 ? bits : hold), bitsToPad(0)];
+      step();
+      var z = projectiles.filter(function (q) {
+        return q.constructor.name === 'Pizza'; })[0];
+      if (z && heading === null) heading = z.heading;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return heading || 'none';
+  })()`);
+
+  assert.equal(throwIt(true, true), "D",
+    "in the air holding DOWN, it should dive");
+  assert.equal(throwIt(true, false), "R",
+    "in the air with nothing held, it should fly straight");
+  assert.equal(throwIt(false, false), "R",
+    "and on the ground it always did");
+
+  /* On the ground it stays flat even holding DOWN. The dive spawns BELOW his
+     feet -- which is under the floor he is standing on -- so it would fall
+     out of the world rather than threaten anybody. */
+  assert.equal(throwIt(false, true), "R",
+    "on the ground DOWN changes nothing, because there is nothing under him");
+
+  // Facing is still what decides which way a flat one goes.
+  let left = run(`(function () {
+    var me = fighters[0];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0;
+    me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+    me.invuln=0; me.mana=999; me.specialSpawned=false; me.aimDown=false;
+    me.facing=-1; me.grounded=true; me.x=main.x+60; me.y=main.y; me.vx=0; me.vy=0;
+    netplay.active = true;
+    // Captured INSIDE the loop: thrown left from here it leaves the stage
+    // and dies before twenty frames are up.
+    var heading = null;
+    /* Forty, not twenty: the cast is eight frames of startup and he has to
+       get through whatever step() left him in first. */
+    for (var i = 0; i < 40; i++) {
+      me.hitstop = 0; me.mana = 999; me.facing = -1;
+      me.grounded = true; me.y = main.y;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
+      step();
+      var z = projectiles.filter(function (q) {
+        return q.constructor.name === 'Pizza'; })[0];
+      if (z && heading === null) heading = z.heading;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return heading || 'none';
+  })()`);
+  assert.equal(left, "L", "facing left throws it left");
+});
+
+test("the CPU throws the pizza it was aiming for", async () => {
+  /* The CPU's dive branch reached for the DOWN special, and the pizza is the
+     NEUTRAL one -- so for AutisNick it was casting the kiss, a melee mark
+     with no throw in it at all. The dive had therefore never once been used
+     by a CPU, through every balance run this project has quoted.
+
+     It also has to hold DOWN now, or the branch would fire the right move and
+     still get a flat throw. */
+  const run = await bootEngine();
+  run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<60;i++) step();");
+
+  const pad = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    // Airborne, directly above the target and close: the dive's own window.
+    me.x = main.x + 80; me.y = main.y - 40; me.grounded = false;
+    me.vx = 0; me.vy = 0; me.mana = 999; me.hitstun = 0; me.hitstop = 0;
+    me.setState('idle'); me.eliminated = false;
+    foe.x = main.x + 84; foe.y = main.y; foe.grounded = true;
+    foe.eliminated = false;
+    // The AI's own state lives on the fighter (Fighter ctor: this.ai).
+    var ai = me.ai;
+    var got = { spN: 0, spD: 0, down: 0, tries: 0 };
+    for (var i = 0; i < 200; i++) {
+      ai.cooldown = 0; ai.starve = 0;
+      var p = aiPad(me, foe);
+      if (p.spNeutral || p.spDown || p.spUp) {
+        got.tries++;
+        if (p.spNeutral) got.spN++;
+        if (p.spDown) got.spD++;
+        if (p.spNeutral && p.down) got.down++;
+      }
+    }
+    return [got.tries, got.spN, got.spD, got.down].join('|');
+  })()`).split("|").map(Number);
+
+  const [tries, spN, spD, withDown] = pad;
+  assert.ok(tries > 0, "the CPU should have reached for a special");
+  assert.ok(spN > 0, "and it should be the neutral one, which is the pizza");
+  assert.equal(spD, 0,
+    "not the down one, which for AutisNick is the kiss and has no throw in it");
+  assert.equal(withDown, spN,
+    "and it should hold DOWN with it, or the slice flies straight past them");
 });

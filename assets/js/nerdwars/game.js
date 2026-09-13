@@ -392,48 +392,63 @@ const ROSTER = {
         ox: 2, oy: -10, w: 11, h: 9,
         poison: { frames: 200, dps: 0.05 },
       },
-      /* It was a lobbed dot with a flag of colour on it: 15 damage, an arc
-         78px long, and nothing else. Three separate times the answer to
-         "what does the rainbow do" was "not much", and he has been last on
-         the roster the whole time.
+      /* SIX RAINBOWS, one at a time.
 
-         Now he paints one. It goes up and over as a 144x66 arch, the stage
-         dims behind it, it stands there for two thirds of a second being the
-         largest thing in the game, and then it comes down on whoever is
-         under it in seven coloured bars.
+         This has been three moves. It started as a lobbed dot with a flag of
+         colour on it -- 15 damage, an arc 78px long, and nothing else -- and
+         three separate times the answer to "what does the rainbow do" was
+         "not much". So it became an arch: a 144x66 painted span, the stage
+         dimming behind it, seven bars coming down. That was a spectacle, and
+         it was not what anybody wanted to play.
 
-         Three phases, one object:
+         It is the lob again, with the same numbers it always had and the same
+         throw. What changed is that the projectile is one colour at a time
+         rather than all seven at once, and the colour it happens to be when
+         it lands decides what it does:
 
-           PAINT     33 frames. The head sweeps the arc and IS the hitbox,
-                     leaving his feet almost straight up -- the only
-                     anti-air he has ever had.
-           HOLD      40 frames. Nothing connects. This is the move: long
-                     enough to look up, work out where the bars will land,
-                     and leave.
-           COLLAPSE  Seven bars, one per colour, pouring outside-in.
+           RED     sets them alight
+           ORANGE  launches -- the only colour that kills
+           YELLOW  stuns, long enough to walk in behind it
+           GREEN   poisons, the same bleed the kiss leaves
+           BLUE    confuses; left and right swap
+           PURPLE  drains a third of their mana
 
-         The bars are 13 wide, not 5. At 5 the gaps between them were 11 to
-         25 pixels and a hurtbox is 9 wide, so the honest answer to the hold
-         was to stand still and hope -- and this file already learned that
-         lesson once, in the comment on THE STROKES. At 13 the answer has to
-         be to move, which is what the telegraph was selling all along.
+         Six colours cycling every seven frames means the whole wheel turns in
+         under a second, so it is a thing you time rather than a thing you
+         wait for. Every one of those effects already existed in applyHit
+         except the drain -- five hooks and a shirt, rather than six new
+         systems.
 
-         Widening them costs no damage: all seven share one spec object, so
-         `count: 7` runs them through applyHit's volley falloff and the full
-         curtain is capped no matter how wide the bars get. */
+         Damage is 11 rather than 15 flat: the colours are the payload now,
+         and ORANGE alone carries knockback that would kill at 15. Tuned
+         against the stage, not by feel -- apex is lift^2/(2*drop) at
+         speed*lift/drop away: ~40px up, ~78px out. The side platforms sit
+         38px above the floor, so the arc still reaches the one place the flat
+         pizza never can. */
       up: {
-        kind: 'arch', label: 'DOUBLE RAINBOW',
-        startup: 9, active: 1, recovery: 13, maxAlive: 1,
-        /* moveCost cannot see a three-phase object, and 38 is deliberately
-           more than a third of his bar. The screen dims for a second and a
-           half per cast; being able to hold it there permanently is how a
-           spectacle turns into a strobe. */
-        manaOverride: 38,
-        paintEnd: 33, hold: 40, dim: 0.40, hitEvery: 30,
-        damage: 8, base: 3.0, scale: 6.0, angle: 70, kx: 0.34202014332566871, ky: 0.93969262078590843,
-        fall: { count: 7, speed: 3.6, life: 90, w: 13, h: 11,
-                damage: 5, base: 2.4, scale: 4.0,
-                angle: 62, kx: 0.46947156278589086, ky: 0.88294759285892688 },
+        kind: 'rainbow', label: 'RAINBOW',
+        startup: 9, active: 1, recovery: 13, maxAlive: 2,
+        speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
+        // Frames per colour. Six of these is 42 frames for the full wheel.
+        cycle: 7,
+        damage: 11, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        /* moveCost prices what a move does on paper and cannot see six
+           payloads reached through an array. 30 is a little over a quarter of
+           the bar: he is the lightest-hitting character on the roster and
+           this is the move that is supposed to give him a reason to be at
+           range, so it has to come back often enough to use. */
+        manaOverride: 30,
+        /* ROYGBP. Each entry is a PATCH over the spec above -- see the tints
+           built after the pricing loop -- so a colour can change damage and
+           knockback as well as add a status. */
+        colors: [
+          { tint: 'RED', css: '#ff2d55', burn: { frames: 110, dps: 0.055 } },
+          { tint: 'ORANGE', css: '#ff9500', damage: 13, base: 5.6, scale: 9.4 },
+          { tint: 'YELLOW', css: '#ffd60a', stun: 26 },
+          { tint: 'GREEN', css: '#34c759', poison: { frames: 150, dps: 0.05 } },
+          { tint: 'BLUE', css: '#0a84ff', confuse: { frames: 140 } },
+          { tint: 'PURPLE', css: '#bf5af2', drain: 34 },
+        ],
       },
     },
     // "mike Tyson flies in from trees, sounds of rainforest". This used to be
@@ -1425,6 +1440,26 @@ for (const key in ROSTER) {
   }
 }
 
+/* One finished spec per colour, built once at load.
+
+   applyHit is handed `shot.spec` and reads the payload straight off it, so
+   the cheapest way to give a projectile six different payloads is to give it
+   six different specs and let it point at one of them. Built here rather than
+   in the class for two reasons: allocating inside the simulation would do it
+   again on every rollback replay, and -- the one that actually bites --
+   snapValue keeps an object by reference only if simFrozen() has walked it.
+   simFrozen walks ROSTER, so hanging these off the spec is what stops every
+   snapshot from cloning one of them per projectile in flight.
+
+   Assigned, not mutated in place: the entries are new objects, and the spec
+   itself is only being extended at load, which is exactly what the mana loop
+   above just did. */
+for (const key in ROSTER) {
+  const up = ROSTER[key].specials.up;
+  if (!up || !up.colors) continue;
+  up.tints = up.colors.map((c) => Object.assign({}, up, c));
+}
+
 /* Appended rather than slotted in alphabetically, and that is deliberate:
    twenty-two tests address characters as `select.cursor=[i, j]` positions in
    this array, so inserting anywhere earlier silently repoints every one of
@@ -2088,6 +2123,14 @@ class Fighter {
        around -- resolving "backward" against his facing at that moment threw
        people the way they were already going. Captured when aimed. */
     this.throwDirX = 1;
+    /* Was DOWN held on the frame this move last looked?
+
+       runSpecial is handed no pad -- the same reason throwAim above is read
+       in updateAttack and remembered -- so the answer has to be carried
+       across. In the constructor like everything else the simulation owns:
+       saveSim sweeps it up reflectively and restoreSim, which deletes any key
+       it does not find in the snapshot, puts it back. */
+    this.aimDown = false;
     this.poison = 0;
     this.poisonDps = 0;
     /* Burning. Its own status rather than poison with a different color,
@@ -2204,7 +2247,7 @@ class Fighter {
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
-          s.kind === 'arch' || s.kind === 'scatter' ||
+          s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
@@ -2720,6 +2763,13 @@ class Fighter {
        per move rather than a second code path through combat. */
     if (m.multi && this.attackFrame % m.multi === 0) this.hasHit = false;
 
+    /* Whether DOWN is held, for anything in runSpecial that wants to know.
+       Read here for the same reason the throw's aim is: that function gets no
+       pad at all. Remembered rather than tested at the spawn frame so it
+       reads the same on a rollback replay -- the pad for the frame being
+       replayed, not this machine's keyboard right now. */
+    if (pad) this.aimDown = !!pad.down;
+
     /* Aim, while the choke is on. runSpecial gets no pad, so the direction
        is read here and remembered -- the throw uses whatever was last held,
        which is what "then you throw them where you pick" means. */
@@ -2856,17 +2906,28 @@ class Fighter {
       case 'pizza':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          // In the air it goes down, which is what PizzaD was drawn for.
-          const heading = this.grounded ? (this.facing > 0 ? 'R' : 'L') : 'D';
+          /* Down is a CHOICE now, not a consequence of being airborne.
+
+             It used to go down whenever his feet were off the ground, which
+             meant the flat throw -- the one that covers the stage -- simply
+             did not exist in the air, and jumping over a projectile deleted
+             his own. Hold DOWN and it dives, which is what the third drawn
+             slice was for; otherwise it flies straight whether he is standing
+             or falling.
+
+             Still only in the air. On the ground the dive spawns BELOW his
+             feet, which is under the floor he is standing on: it would fall
+             out of the world rather than threaten anybody. */
+          const dive = !this.grounded && this.aimDown;
+          const heading = dive ? 'D' : (this.facing > 0 ? 'R' : 'L');
           projectiles.push(new Pizza(this, s, heading));
         }
         break;
 
-      case 'arch':
+      case 'rainbow':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Arch(this, s));
-          cue('promote', { slot: this.slot, x: this.x });
+          projectiles.push(new Rainbow(this, s));
         }
         break;
 
@@ -5286,183 +5347,104 @@ class Pizza {
   }
 }
 
-/* THE ARCH. One object, three phases, and all of it a pure function of its
-   own frame counter -- it reads the fighter once, in the constructor, and
-   never again, so cast in the air it hangs where it was cast instead of
-   dragging along behind him.
+/* =====================================================================
+   RAINBOW - AutisNick's arcing shot, one colour at a time.
 
-   The shape is baked rather than computed. build.py bans the substrings
-   "Math" + ".cos(", ".tan(" and ".atan" anywhere in this file, comments
-   included, because a desync between two machines running slightly
-   different trig is unfixable from inside the game -- and a table of
-   integers cannot disagree with itself. 67 points of a half ellipse 144
-   wide and 66 tall, in steps of 2.8 to 4.1 pixels, which is tight enough
-   that the 13x13 head cannot step over a 9x14 hurtbox. */
-const ARCH_ARC = [
-  [0,0],[0,-3],[0,-6],[1,-9],[1,-12],[2,-16],[3,-19],[4,-22],[5,-25],[7,-27],
-  [8,-30],[10,-33],[11,-36],[13,-38],[15,-41],[18,-43],[20,-46],[22,-48],[25,-50],[27,-52],
-  [30,-54],[33,-56],[36,-57],[39,-59],[42,-60],[45,-61],[48,-62],[52,-63],[55,-64],[58,-65],
-  [62,-65],[65,-66],[69,-66],[72,-66],[75,-66],[79,-66],[82,-65],[86,-65],[89,-64],[92,-63],
-  [96,-62],[99,-61],[102,-60],[105,-59],[108,-57],[111,-56],[114,-54],[117,-52],[119,-50],[122,-48],
-  [124,-46],[126,-43],[129,-41],[131,-38],[133,-36],[134,-33],[136,-30],[137,-27],[139,-25],[140,-22],
-  [141,-19],[142,-16],[143,-12],[143,-9],[144,-6],[144,-3],[144,0]
-];
+   Nobody drew art for this one, so it is drawn in code from the spectrum on
+   his shirt. It used to draw the WHOLE spectrum at once -- six one-pixel
+   bands stacked into a 6x6 square -- which at that size read as a grey smudge
+   with a rainbow trail behind it, and told you nothing.
 
-/* Which points of the arc the seven bars fall from, one per colour, spread
-   so the curtain covers the whole span. */
-const ARCH_BANDS = [8, 17, 25, 34, 42, 50, 59];
+   Now it is one solid colour that cycles, and the colour is the move: the
+   payload it carries is whichever tint it happens to be wearing when it
+   connects. So it is legible at six pixels, and reading it is the skill.
 
-class Arch {
+   The cycle is a pure function of the projectile's own age, so both machines
+   in an online match always agree about what colour it is -- and a rollback
+   that replays frame 40 gets the same colour it got the first time.
+   ===================================================================== */
+
+class Rainbow {
   constructor(owner, spec) {
     this.owner = owner;
-    this.spec = spec;
-    this.dir = owner.facing;
-    this.ax = owner.x;
-    /* Clamped so the top of the arch stays on a 180px screen. Off a double
-       jump he is routinely 60px up, which would put the apex and both
-       shoulders above the ceiling -- and the entire argument for this move
-       is that you can SEE it. It still hangs where it was cast; it just
-       cannot hang higher than there is room for. */
-    this.ay = Math.max(owner.y, 66 + 5);
-    this.t = 0;
-    this.pierce = true;
-    this.hitAt = new Array(MAX_PLAYERS).fill(0);
-    this.dead = false;
-  }
-
-  head() {
-    return Math.min(ARCH_ARC.length - 1, this.t * 2);
-  }
-
-  update() {
-    for (let i = 0; i < this.hitAt.length; i++) {
-      if (this.hitAt[i] > 0) this.hitAt[i]--;
-    }
-    this.t++;
-    if (this.t % 4 === 0 && this.t <= this.spec.paintEnd) {
-      const p = ARCH_ARC[this.head()];
-      addEffect('spark', this.ax + this.dir * p[0], this.ay + p[1],
-                RAINBOW[this.head() % RAINBOW.length]);
-    }
-    if (this.t > this.spec.paintEnd + this.spec.hold) {
-      const f = this.spec.fall;
-      for (let i = 0; i < ARCH_BANDS.length; i++) {
-        projectiles.push(new ArchDrop(this, f, ARCH_BANDS[i], i));
-      }
-      this.dead = true;
-    }
-  }
-
-  box() {
-    /* Parked OFF THE WORLD during the hold, and the phase check is the
-       thing doing the work: without it the 13x13 head box stays live for
-       all 40 hold frames, parked at the far foot, and the move's whole
-       premise -- that the hold is safe and the collapse is not -- is a lie
-       the player cannot see.
-
-       Off the world rather than {w:0,h:0} because a zero-size box is NOT
-       inert in this engine. overlap() is `a.x < b.x + b.w && a.x + a.w >
-       b.x`, and with a.w of 0 both tests pass for any point strictly inside
-       b -- a degenerate box is maximally overlapping, not empty.
-
-       Measured, so as not to overstate it: at THIS resting point a zero box
-       would in fact be harmless, because the arc's last point has dy 0 and
-       so sits exactly at floor level, which is the bottom edge of a grounded
-       hurtbox -- `a.y < b.y + b.h` is `floor < floor`, false. Seven pixels
-       higher it returns true. So the hazard is real but the geometry here
-       happens to dodge it, which is exactly the kind of luck that stops
-       being true the first time somebody edits the arc table.
-
-       Returning null would be worse than either: resolveCombat calls
-       overlap(shot.box(), ...) with no guard and would throw. Nothing in
-       this file has ever needed to say "no hitbox this frame", so there is
-       no idiom to copy. */
-    if (this.t > this.spec.paintEnd) return { x: -9999, y: -9999, w: 0, h: 0 };
-    const p = ARCH_ARC[this.head()];
-    return { x: this.ax + this.dir * p[0] - 6, y: this.ay + p[1] - 6,
-             w: 13, h: 13 };
-  }
-
-  draw(g) {
-    const s = this.spec;
-    const painting = this.t <= s.paintEnd;
-    /* The stage goes dark behind it. Projectiles draw after the stage and
-       before the fighters, so one fillRect dims the whole world and leaves
-       both players lit in front of it -- the only moment in this game where
-       the entire screen changes.
-
-       It ramps in over the paint and back out over the hold rather than
-       snapping on, because he can have one of these up most of the time and
-       a hard cut once a second is a strobe, not a spectacle. */
-    const ramp = painting ? this.t / s.paintEnd
-      : Math.max(0, 1 - (this.t - s.paintEnd) / s.hold);
-    g.globalAlpha = s.dim * ramp;
-    g.fillStyle = '#07040f';
-    g.fillRect(0, 0, VW, VH);
-    g.globalAlpha = 1;
-
-    // Every point up to the head, one colour per seventh of the arc.
-    const upto = this.head();
-    for (let i = 0; i <= upto; i++) {
-      const p = ARCH_ARC[i];
-      g.fillStyle = RAINBOW[((i * RAINBOW.length / ARCH_ARC.length) | 0) %
-                            RAINBOW.length];
-      g.fillRect(Math.round(this.ax + this.dir * p[0]) - 1,
-                 Math.round(this.ay + p[1]) - 1, 3, 3);
-    }
-    if (painting) {
-      const p = ARCH_ARC[upto];
-      g.fillStyle = '#ffffff';
-      g.fillRect(Math.round(this.ax + this.dir * p[0]) - 2,
-                 Math.round(this.ay + p[1]) - 2, 4, 4);
-    }
-  }
-}
-
-/* One band of the arch coming down. Constant speed and no gravity: this is a
-   curtain falling, not seven rocks dropping, and a constant rate is what
-   makes it something a player can read and walk out from under. */
-class ArchDrop {
-  constructor(arch, spec, idx, band) {
-    this.owner = arch.owner;
-    this.spec = spec;
-    const p = ARCH_ARC[idx];
-    this.x = arch.ax + arch.dir * p[0];
-    this.y = arch.ay + p[1];
-    this.band = band;
+    this.base = spec;
+    this.hue = 0;
+    /* The spec applyHit will be handed. It is one of the six built at load,
+       never a fresh object: see the note on the tints by the pricing loop. */
+    this.spec = spec.tints ? spec.tints[0] : spec;
+    this.age = 0;
+    this.x = owner.x + owner.facing * 7;
+    this.y = owner.y - 9;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift;
     this.life = spec.life;
+    this.trail = [];
     this.dead = false;
   }
 
   update() {
     const prevY = this.y;
-    this.y += this.spec.speed;
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > 14) this.trail.shift();
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.base.drop;
     this.life--;
-    for (const p of STAGE.platforms) {
-      if (this.x < p.x || this.x > p.x + p.w) continue;
-      if (prevY <= p.y && this.y >= p.y) {
-        for (let i = 0; i < 3; i++) {
-          addEffect('spark', this.x + rand(-5, 5), p.y,
-                    RAINBOW[this.band % RAINBOW.length]);
+
+    // Its own age, not `life`: life is what kills it, and a move that wanted
+    // to change how long the shot lasts should not also change what colour it
+    // starts on.
+    this.age++;
+    const tints = this.base.tints;
+    if (tints) {
+      const h = Math.floor(this.age / this.base.cycle) % tints.length;
+      if (h !== this.hue) { this.hue = h; this.spec = tints[h]; }
+    }
+
+    if (this.vy > 0) {
+      for (const p of STAGE.platforms) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.dead = true;
+          for (let i = 0; i < 6; i++) addEffect('spark', this.x, p.y, this.css());
+          break;
         }
-        this.dead = true;
-        return;
       }
     }
-    if (this.life <= 0 || this.y > VH + 20) this.dead = true;
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  /* A prototype method, so restoreSim's key-deletion pass never sees it --
+     the same contract Dog.onSurface relies on. */
+  css() {
+    return this.spec.css || RAINBOW[0];
   }
 
   box() {
-    const w = this.spec.w, h = this.spec.h;
-    return { x: this.x - w / 2, y: this.y - h / 2, w: w, h: h };
+    return { x: this.x - 3, y: this.y - 3, w: 6, h: 6 };
   }
 
   draw(g) {
-    g.fillStyle = RAINBOW[this.band % RAINBOW.length];
-    g.globalAlpha = 0.92;
-    g.fillRect(Math.round(this.x - this.spec.w / 2),
-               Math.round(this.y - this.spec.h / 2),
-               this.spec.w, this.spec.h);
+    const css = this.css();
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = this.trail[i];
+      g.globalAlpha = (i / this.trail.length) * 0.7;
+      g.fillStyle = css;
+      g.fillRect(Math.round(t.x) - 1, Math.round(t.y) - 1, 2, 2);
+    }
+    g.globalAlpha = 1;
+    /* Solid, not banded. A one-pixel band per colour is invisible at this
+       size; the whole square being the colour is the only way six pixels can
+       say which of six things is about to happen. */
+    g.fillStyle = css;
+    g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 3, 6, 6);
+    // A darker rim, so it reads as an object rather than a hole in the stage.
+    g.globalAlpha = 0.35;
+    g.fillStyle = '#000000';
+    g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 3, 6, 1);
+    g.fillRect(Math.round(this.x) - 3, Math.round(this.y) + 2, 6, 1);
     g.globalAlpha = 1;
   }
 }
@@ -7866,6 +7848,15 @@ function applyHit(attacker, defender, move, sourceX, scale) {
     defender.confused = move.confuse.frames;
   }
 
+  /* Mana off the top. No new state: mana is already a fighter field, already
+     snapshotted, and already regenerates -- so this is a delay rather than a
+     lockout, which is the right weight for one colour of six. Clamped at zero
+     because a negative bar would take longer to climb out of than the move
+     could ever justify. */
+  if (move.drain) {
+    defender.mana = Math.max(0, defender.mana - move.drain);
+  }
+
   // Pushback, not knockback. It no longer kills anyone, so it no longer
   // scales with how hurt they are -- it exists so a hit visibly lands. A weak
   // move shoves a little, an ult a lot, and heavier characters move less.
@@ -8177,7 +8168,18 @@ function aiDecide(me, foe) {
       // down special used to make the CPU fastfall at the same time.
       let slot = 'neutral';
       if (pizzaDrop) {
-        slot = 'down';
+        /* The pizza is the NEUTRAL special, and this branch reached for the
+           DOWN one -- which for AutisNick is the kiss, a melee mark with no
+           throw in it at all. The dive has therefore never once been used by
+           a CPU, through every balance run this file's comments quote.
+
+           And it needs the direction now: holding DOWN is what makes the
+           slice dive rather than fly straight. That is exactly the coupling
+           the comment above warns about, added back on purpose and for one
+           branch, because here the fastfall and the throw are the same
+           decision -- he is dropping onto somebody below him. */
+        slot = 'neutral';
+        pad.down = true;
       } else if (me.def.specials.up && dy < -14 && Math.random() < 0.7) {
         slot = 'up';                       // they are above
       } else if (me.def.specials.down && dy > 10 && adx < 30 && Math.random() < 0.6) {
@@ -10415,7 +10417,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '297d0be5ed';
+const BUILD_ID = 'a816a24645';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10426,7 +10428,7 @@ const BUILD_ID = '297d0be5ed';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.51';
+const VERSION = '2.52';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
