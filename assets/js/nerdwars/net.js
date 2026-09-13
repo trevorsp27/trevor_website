@@ -91,6 +91,7 @@
     // compacts that seat to.
     lobbySlot: null,
     myChar: "kel",
+    myReady: false,
     // What the host believes is in the room. Guests receive this wholesale
     // rather than tracking it, so there is one source of truth.
     seats: [],         // [{ slot, char, here }]
@@ -176,15 +177,21 @@
     return -1;
   }
 
-  function setSeat(slot, char, here) {
+  /* `char` is where that person's cursor IS, and `ready` is whether they
+     have settled on it. The two are separate because the room shows both:
+     everybody watches everybody else's box move around the grid, and a
+     locked-in pick has to look different from one still wandering. */
+  function setSeat(slot, char, here, ready) {
     var s = seatFor(slot);
     if (!s) {
-      s = { slot: slot, char: char || "kel", here: here !== false };
+      s = { slot: slot, char: char || "kel", here: here !== false,
+            ready: !!ready };
       state.seats.push(s);
       state.seats.sort(function (a, b) { return a.slot - b.slot; });
     } else {
       if (char) s.char = char;
       if (here !== undefined) s.here = here;
+      if (ready !== undefined) s.ready = !!ready;
     }
     return s;
   }
@@ -203,7 +210,7 @@
     sendAll({
       t: "seats",
       seats: state.seats.map(function (s) {
-        return { slot: s.slot, char: s.char, here: s.here };
+        return { slot: s.slot, char: s.char, here: s.here, ready: !!s.ready };
       }),
     });
     renderLobby();
@@ -401,8 +408,11 @@
     }
 
     if (msg.t === "seats") {
+      // `ready` travels with the rest of it. Rebuilding the seat here and
+      // forgetting a field is a silent one-way mirror: the host saw every
+      // guest settle and no guest ever saw the host.
       state.seats = (msg.seats || []).map(function (s) {
-        return { slot: s.slot, char: s.char, here: s.here };
+        return { slot: s.slot, char: s.char, here: s.here, ready: !!s.ready };
       });
       renderLobby();
       return;
@@ -432,7 +442,7 @@
 
     if (msg.t === "pick") {
       if (state.role === "host") {
-        setSeat(fromSlot, msg.char, true);
+        setSeat(fromSlot, msg.char, true, msg.ready);
         broadcastSeats();
       }
       return;
@@ -788,14 +798,26 @@
      calls these, and the DOM panel -- when a page still has one -- is just
      another caller. Nothing about the protocol changed. */
 
-  function pickChar(key) {
+  /* Called as the cursor MOVES, not only when somebody commits, so the rest
+     of the room can watch a box travel across the grid. That is one small
+     message per keypress on a menu nobody is holding a key down on -- the
+     cost of a packet here is nothing next to sitting in a room unable to
+     tell whether anyone else is still deciding.
+
+     Not deduped against the last call on purpose. state.myChar starts as
+     "kel" with myReady false, so a "has anything changed" guard threw away
+     the very first pick of the default fighter and left that player
+     unseated. The engine already only calls this when the cursor actually
+     moved or the key was actually pressed. */
+  function pickChar(key, ready) {
     if (!key) return;
     state.myChar = key;
+    state.myReady = !!ready;
     if (state.role === "host") {
-      setSeat(0, state.myChar, true);
+      setSeat(0, state.myChar, true, state.myReady);
       broadcastSeats();
     } else {
-      send({ t: "pick", char: state.myChar });
+      send({ t: "pick", char: state.myChar, ready: state.myReady });
     }
     renderLobby();
   }
@@ -841,12 +863,13 @@
       code: state.code || "",
       mySlot: mine,
       myChar: state.myChar,
+      myReady: !!state.myReady,
       stage: state.stage,
       status: lastSay.text,
       statusKind: lastSay.kind,
       seats: state.seats.map(function (seat) {
         return { slot: seat.slot, char: seat.char, here: !!seat.here,
-                 you: seat.slot === mine };
+                 ready: !!seat.ready, you: seat.slot === mine };
       }),
       here: occupiedSeats().length,
       canStart: state.role === "host" && occupiedSeats().length >= 2,

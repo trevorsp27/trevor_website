@@ -827,3 +827,181 @@ test("the room can be run through the API the game uses, not the DOM", async () 
   assert.equal(guest.api().snapshot().phase, "idle",
     "leaving should put the guest back to no room at all");
 });
+
+
+test("when a real match ends, everybody lands back in the room", async () => {
+  /* Reported from actual play: "when the game ends it should send the users
+     back to the character select screen, not the title screen. the room
+     should still be active."
+
+     Every other rematch test in this repo drives the ENGINE's results screen
+     or calls net.start twice. This one plays a match all the way to a real
+     KO with net.js in the loop and then looks at where both machines are
+     standing and whether the room is still alive -- which is the thing that
+     was actually reported and the thing nothing was checking. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+
+  host.api().host();
+  flush();
+  const code = host.api().snapshot().code;
+  guest.api().join(code);
+  flush();
+  host.api().pick("kel");
+  guest.api().pick("trev");
+  flush();
+  host.api().start();
+  flush();
+  assert.equal(host.nw.scene, "battle", "precondition: a match is running");
+  assert.equal(guest.nw.scene, "battle");
+
+  // Run it out. Stocks are finite and the CPUs are not driving, so the quick
+  // way to a real ending is to march both of them off the side.
+  const ms = [host, guest];
+  for (let i = 0; i < 4000 && ms.some((m) => m.nw.scene === "battle"); i++) {
+    for (const m of ms) m.press("KeyA");
+    playOut(ms, 1);
+  }
+  for (const m of ms) m.release("KeyA");
+
+  assert.ok(ms.every((m) => m.nw.scene !== "battle"),
+    "the match should have ended; scenes are " +
+    ms.map((m) => m.nw.scene).join(", "));
+
+  // Let the results screen time out the way it does for a real player.
+  playOut(ms, 400);
+
+  for (const [name, m] of [["host", host], ["guest", guest]]) {
+    assert.equal(m.nw.scene, "room",
+      "the " + name + " should be back in the room picking a fighter, not " +
+      "on '" + m.nw.scene + "'");
+    assert.notEqual(m.api().snapshot().phase, "idle",
+      "and the " + name + "'s room should still be alive");
+  }
+
+  // And it is a REAL room: the host can start another match from it.
+  assert.equal(host.api().snapshot().canStart, true,
+    "the host should be able to start again without rebuilding the room");
+  host.api().pick("reese");
+  guest.api().pick("ladeane");
+  flush();
+  assert.equal(host.api().start(), true);
+  flush();
+  assert.equal(host.nw.scene, "battle", "the second match should start");
+  assert.equal(JSON.stringify(host.nw.fighters.map((f) => f.key)),
+               JSON.stringify(["reese", "ladeane"]),
+               "with the fighters they picked the second time");
+});
+
+
+test("a friend quitting mid-match leaves you in the room, not the title", async () => {
+  /* The ending nothing was checking, and the one that was actually reported.
+
+     A match can end four ways -- a KO, somebody pressing Escape, a peer
+     sending `bye`, or a desync -- and only the KO goes through the results
+     screen. The other three all run straight through netStop, which set the
+     scene to 'title' flat. So a clean win put everyone back in the room and
+     a friend quitting dropped you on the title screen with the room you were
+     still sitting in nowhere on the screen.
+
+     Three seats here on purpose: with only two, one leaving empties the room
+     and the title screen is then the right answer, which would let the bug
+     pass. With three, the room plainly survives. */
+  resetWorld();
+  const host = await browser();
+  const a = await browser();
+  const b = await browser();
+
+  host.api().host();
+  flush();
+  const code = host.api().snapshot().code;
+  a.api().join(code); flush();
+  b.api().join(code); flush();
+  host.api().pick("kel"); a.api().pick("trev"); b.api().pick("reese");
+  flush();
+  host.api().start();
+  flush();
+  const ms = [host, a, b];
+  assert.ok(ms.every((m) => m.nw.scene === "battle"),
+    "precondition: a three-player match is running");
+
+  playOut(ms, 60);
+
+  // One of them walks out mid-match, the way a person does.
+  b.press("Escape");
+  playOut(ms, 4);
+  b.release("Escape");
+  playOut(ms, 120);
+
+  for (const [name, m] of [["host", host], ["the other guest", a]]) {
+    assert.equal(m.nw.scene, "room",
+      name + " should be left standing in the room, not on '" +
+      m.nw.scene + "'");
+    assert.notEqual(m.api().snapshot().phase, "idle",
+      "and " + name + "'s room should still be alive");
+  }
+
+  // The room is still usable: the host can run it again with who is left.
+  assert.equal(host.api().snapshot().canStart, true,
+    "two people are still here, so the host should be able to go again");
+});
+
+
+test("everybody can watch everybody else choose", async () => {
+  /* Reported from actual play: "when my friend is choosing a character i
+     cant see when his box moves to other characters."
+
+     The room only sent a pick when somebody COMMITTED, so until then their
+     box sat on whatever they had last locked and the grid looked frozen.
+     You could not tell a player still deciding from one who had wandered
+     off. Now a moving cursor is broadcast as it moves, and `ready` says
+     whether they have settled -- which is what the room draws solid rather
+     than faint. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+  host.api().host(); flush();
+  guest.api().join(host.api().snapshot().code); flush();
+
+  const seatOnHost = (slot) =>
+    host.api().snapshot().seats.find((x) => x.slot === slot);
+  const seatOnGuest = (slot) =>
+    guest.api().snapshot().seats.find((x) => x.slot === slot);
+
+  // The guest moves across the grid without committing to anything.
+  guest.api().pick("reese", false);
+  flush();
+  assert.equal(seatOnHost(1).char, "reese",
+    "the host should see the guest's cursor move before they commit");
+  assert.equal(seatOnHost(1).ready, false,
+    "and should be able to tell they have not settled on it");
+
+  guest.api().pick("ladeane", false);
+  flush();
+  assert.equal(seatOnHost(1).char, "ladeane",
+    "and should see it move again");
+  assert.equal(seatOnHost(1).ready, false);
+
+  // Then settles.
+  guest.api().pick("ladeane", true);
+  flush();
+  assert.equal(seatOnHost(1).ready, true,
+    "committing should show as committed");
+
+  // It travels the other way too: a guest watches the host choose.
+  host.api().pick("cobeus", false);
+  flush();
+  assert.equal(seatOnGuest(0).char, "cobeus",
+    "the guest should see the host's cursor too");
+  assert.equal(seatOnGuest(0).ready, false);
+  host.api().pick("cobeus", true);
+  flush();
+  assert.equal(seatOnGuest(0).ready, true);
+
+  // And the fighters that actually load are the ones they settled on.
+  assert.equal(host.api().start(), true);
+  flush();
+  assert.equal(JSON.stringify(host.nw.fighters.map((f) => f.key)),
+               JSON.stringify(["cobeus", "ladeane"]));
+});

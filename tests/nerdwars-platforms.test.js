@@ -3086,7 +3086,7 @@ function stubLobby(run, phase) {
     window.NerdWarsLobby = {
       host: function () { __lobby.calls.push('host'); },
       join: function (c) { __lobby.calls.push('join:' + c); },
-      pick: function (c) { __lobby.calls.push('pick:' + c); },
+      pick: function (c, r) { __lobby.calls.push('pick:' + c + ':' + (r ? 1 : 0)); },
       start: function () { __lobby.calls.push('start'); },
       leave: function () { __lobby.calls.push('leave'); },
       setStage: function () {},
@@ -3200,16 +3200,31 @@ test("the room is the character select, and the host starts from it", async () =
        __lobby.seats = [{ slot: 0, char: 'kel', here: true, you: true },
                         { slot: 1, char: 'trev', here: true, you: false }];`);
 
-  // Your cursor is yours, and moving it says nothing on the wire.
+  /* Moving says so on the wire, and that is the point.
+
+     It did not, at first: the cursor was local and only a confirm sent
+     anything, to keep a packet off the wire for every wobble of an undecided
+     cursor. Played, that was plainly the wrong trade -- you sat in the room
+     with no idea whether anyone else was still choosing, because their box
+     never moved. Watching the others decide IS the character select. */
   tapKey(run, 'KeyD');
   assert.equal(run("select.cursor[0]"), 1, "D should move the cursor");
-  assert.equal(run("__lobby.calls.length"), 0,
-    "moving should not send a packet for every wobble of an undecided cursor");
+  assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]") + ':0',
+    "moving should tell the room where the cursor went, unsettled");
 
-  // Confirming does.
+  // And the attack key says the same thing, settled.
+  run("__lobby.calls.length = 0;");
   tapKey(run, 'KeyG');
-  assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]"),
+  assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]") + ':1',
     "the attack key should lock in whoever the cursor is on");
+
+  /* Held against the edge of the grid, the cursor does not move and so says
+     nothing -- otherwise leaning on a direction would be a packet a frame. */
+  run("__lobby.calls.length = 0; select.cursor[0] = 0;");
+  tapKey(run, 'KeyA');
+  assert.equal(run("select.cursor[0]"), 0, "already at the left edge");
+  assert.equal(run("__lobby.calls.length"), 0,
+    "a move that does not move should not send anything");
 
   // Only the host starts, and only when the room is ready.
   run("__lobby.calls.length = 0; __lobby.canStart = false;");
@@ -3391,4 +3406,58 @@ test("the wrap forgives the sides only, and only while it is armed", async () =>
     "and walking off the side with no dash armed should still end it");
   assert.equal(die("me.dashWrap = 60; me.x = bz.right + 5; me.y = 60;"), 0,
     "while an armed side exit should wrap");
+});
+
+
+test("a match ending any way at all lands in the room, if there is one", async () => {
+  /* netStop is where EVERY ending converges -- a KO, somebody pressing
+     Escape, a peer sending `bye`, a desync -- and it used to set the scene
+     to 'title' flat. Fixing the results screen alone fixed exactly one of
+     those four, which is why a clean win put everybody back in the room and
+     a friend quitting dropped you on the title with the room you were still
+     sitting in nowhere on screen.
+
+     Tested at netStop rather than through a played-out match on purpose: an
+     end-to-end quit test reaches the room by other routes too, so it passes
+     whatever this line says and proves nothing about it. This drives the
+     line itself, both ways. */
+  const run = await bootEngine();
+
+  const stopWith = (phase) => run(`(function () {
+    window.NerdWarsLobby = {
+      host: function () {}, join: function () {}, pick: function () {},
+      start: function () {}, leave: function () {}, setStage: function () {},
+      snapshot: function () {
+        return { available: true, phase: ${JSON.stringify(phase)},
+                 role: 'host', code: 'ABCD', mySlot: 0, myChar: 'kel',
+                 stage: 'space', status: '', statusKind: '', seats: [],
+                 here: 2, canStart: true };
+      },
+    };
+    netplay.active = true;
+    scene = 'battle';
+    netStop('opponent left');
+    var out = scene;
+    netplay.active = false;
+    return out;
+  })()`);
+
+  assert.equal(stopWith('lobby'), 'room',
+    "a match that ends while the room is still alive should leave everybody " +
+    "standing in the room");
+  assert.equal(stopWith('idle'), 'title',
+    "and only fall back to the title when there is no room left to be in");
+
+  // No lobby at all -- the standalone build -- still has somewhere to go.
+  const noLobby = run(`(function () {
+    delete window.NerdWarsLobby;
+    netplay.active = true; scene = 'battle';
+    netStop('opponent left');
+    var out = scene;
+    netplay.active = false;
+    return out;
+  })()`);
+  assert.equal(noLobby, 'title',
+    "a build with no lobby should go to the title rather than a room that " +
+    "cannot exist");
 });

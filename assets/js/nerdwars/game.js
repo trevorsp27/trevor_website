@@ -8498,17 +8498,28 @@ function updateRoom() {
 
   // Your own cursor, on your own machine, on the keys everybody uses.
   const b = BINDS[0];
+  const was = select.cursor[0];
   if (tapped(b.left)) moveCursor(0, -1, 0);
   if (tapped(b.right)) moveCursor(0, 1, 0);
   if (tapped(b.up)) moveCursor(0, 0, -1);
   if (tapped(b.down)) moveCursor(0, 0, 1);
 
-  /* Confirming sends the pick; moving does not. The cursor is local and
-     free, and one message goes out when you have decided -- rather than one
-     per keypress, which would put a packet on the wire for every wobble of
-     an undecided cursor. */
+  /* MOVING sends it too, and that is the point.
+
+     It used to send only on confirm, to keep a packet off the wire for every
+     wobble of an undecided cursor. Playing it, that was plainly the wrong
+     trade: you sat in the room with no idea whether anyone else was still
+     choosing or had wandered off, because their box never moved. Watching
+     the others decide IS the character select.
+
+     So a move sends where the cursor now is, unsettled; the attack key sends
+     the same character settled. net.js drops a message whose character and
+     state both match the last one, so holding a direction against the edge
+     of the grid says nothing. */
+  if (select.cursor[0] !== was) lb.pick(ORDER[select.cursor[0]], false);
+
   if (tapped(b.attack) || (b.attack2 && tapped(b.attack2))) {
-    lb.pick(ORDER[select.cursor[0]]);
+    lb.pick(ORDER[select.cursor[0]], true);
   }
 
   // Only the host can start, and only with somebody to fight.
@@ -8533,9 +8544,10 @@ function drawRoom() {
   seats.forEach((seat, i) => {
     const def = ROSTER[seat.char];
     const label = (seat.you ? 'YOU  ' : 'P' + (seat.slot + 1) + '   ') +
-                  (def ? def.name : '...');
+                  (def ? def.name : '...') + (seat.ready ? '' : '  ...');
     text(label, VW - 10, 28 + i * 9, 6.5,
-         seat.you ? '#ffffff' : '#c8cee6', 'right', seat.you ? 800 : 500);
+         seat.ready ? (seat.you ? '#ffffff' : '#c8cee6') : '#6b7392',
+         'right', seat.you ? 800 : 500);
   });
 
   // The grid, which is the point: pick from the screen, in the room.
@@ -8555,14 +8567,20 @@ function drawRoom() {
       sctx.strokeRect(px(cx - 26), px(cy - 5), px(52), px(36));
       sctx.lineWidth = 1;
     }
-    // A ring in somebody else's colour for a fighter they have locked in.
-    const taken = snap.seats.find((s) => s.here && !s.you && s.char === k);
-    if (taken) {
-      sctx.strokeStyle = SEAT_COLORS[taken.slot % SEAT_COLORS.length];
+    /* Everybody else's box, in their own colour. Solid once they have
+       settled on it, faint while they are still moving around -- so the room
+       shows you both who has decided and who is still looking. */
+    const theirs = snap.seats.filter((s) => s.here && !s.you && s.char === k);
+    theirs.forEach((seat, n) => {
+      sctx.strokeStyle = SEAT_COLORS[seat.slot % SEAT_COLORS.length];
+      sctx.globalAlpha = seat.ready ? 1 : 0.45;
       sctx.lineWidth = Math.max(1, SCALE);
-      sctx.strokeRect(px(cx - 23), px(cy - 2), px(46), px(30));
+      const pad = n * 3;
+      sctx.strokeRect(px(cx - 23 + pad), px(cy - 2 + pad),
+                      px(46 - pad * 2), px(30 - pad * 2));
       sctx.lineWidth = 1;
-    }
+      sctx.globalAlpha = 1;
+    });
     drawPortrait(k, cx, cy + 22, 1.3);
     text(ROSTER[k].name, cx, cy + 29, 5.5, SPRITES[k].accent, 'center', 700);
   });
@@ -8571,11 +8589,15 @@ function drawRoom() {
     text(snap.status, VW / 2, VH - 24, 6,
          snap.statusKind === 'warn' ? '#ff9f43' : '#8fe08f', 'center', 600);
   }
+  const waiting = snap.seats.filter((x) => x.here && !x.ready).length;
   const line = snap.canStart
     ? 'ENTER to start the match'
-    : snap.role === 'host'
-      ? 'waiting for somebody to join'
-      : 'waiting for the host to start';
+    : waiting
+      ? 'waiting for ' + waiting + (waiting === 1 ? ' player' : ' players') +
+        ' to lock in'
+      : snap.role === 'host'
+        ? 'waiting for somebody to join'
+        : 'waiting for the host to start';
   text(line, VW / 2, VH - 13, 7, snap.canStart ? '#ffffff' : '#8792b0',
        'center', snap.canStart ? 800 : 500);
   text('WASD to move    ' + keyName(BINDS[0].attack) +
@@ -8866,9 +8888,10 @@ function updateResults() {
   select.activeSlot = 0;
 
   if (wasOnline && lobby()) {
-    // Escape means you are finished with the room, not just the match.
-    if (backOut) { lobby().leave(); scene = 'title'; return; }
-    scene = 'room';
+    /* netStop has already put us in the room. The only thing left to decide
+       is the one case where the room is NOT where you want to be: Escape
+       means finished with the room, not just with the match. */
+    if (backOut) { lobby().leave(); scene = 'title'; }
     return;
   }
   scene = backOut ? 'title' : 'select';
@@ -9917,7 +9940,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'ddf5459b53';
+const BUILD_ID = 'eb5f14c4cc';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9928,7 +9951,7 @@ const BUILD_ID = 'ddf5459b53';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.42';
+const VERSION = '2.43';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -10785,12 +10808,32 @@ function netStop(reason) {
   netplay.active = false;
   netplay.ended = reason || 'ended';
   netplay.framePads = null;
-  scene = 'title';
   // Same reasoning as the reset in netStart: leaving keys from this match in
   // place would carry them into whatever starts next, online or off.
   audioBatch.length = 0;
   audioPlayed.clear();
   netEmit('stopped', { reason: netplay.ended });
+
+  /* Back to the ROOM if there is still a room, and only to the title if
+     there is not.
+
+     This used to be a flat `scene = 'title'` above the emit, and fixing the
+     results screen alone was not enough: a match can end four ways and only
+     one of them goes through the results screen. The other three -- somebody
+     pressing Escape, a peer sending `bye`, a desync -- all came through here
+     and every one of them dropped the player on the title screen with the
+     room they were still sitting in nowhere on screen. A clean KO worked and
+     a friend quitting did not, which is a miserable thing to have to
+     discover by playing.
+
+     Read AFTER the emit, deliberately. netEmit is what tells net.js the
+     match is over, and net.js is what decides whether the room survived it
+     -- the seats are only restored and the phase only moves off "playing"
+     inside that call. Asking before it would always see "playing" and
+     always guess wrong. */
+  const lb = lobby();
+  const snap = lb && lb.snapshot();
+  scene = snap && snap.phase && snap.phase !== 'idle' ? 'room' : 'title';
 }
 
 /* =====================================================================
