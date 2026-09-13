@@ -8280,7 +8280,7 @@ let titleChoice = 0;
    untouched. What went away is the title entry that reached it locally. */
 const MODES = [
   { label: '1 PLAYER  (vs CPU)', players: 2, humans: 1 },
-  { label: 'PLAY ONLINE  (with friends)', online: true },
+  { label: 'PLAY ONLINE', online: true },
 ];
 
 // Shared by the keyboard and the START button, so the two can't drift apart.
@@ -9917,7 +9917,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '5cd6ff686b';
+const BUILD_ID = 'ddf5459b53';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9928,7 +9928,7 @@ const BUILD_ID = '5cd6ff686b';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.41';
+const VERSION = '2.42';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
