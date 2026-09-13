@@ -1296,6 +1296,84 @@ test("Kel's bone is three throws, and which one depends on what he was doing", a
     running.far.toFixed(1) + " against " + still.far.toFixed(1));
 });
 
+test("the shout is red waves that travel, and the box goes as far as they do", async () => {
+  /* A fixed green puff at arm's length said "melee" while the box said
+     otherwise. It is a shout: what carries is the noise, so the noise leaves
+     him now -- three red waves on consecutive frames, travelling forward.
+
+     The reach assertion is the one that matters. Art and hitbox have to make
+     the same claim, in BOTH directions: the first cut had the waves living 17
+     frames and outrunning the box by eight pixels, which is the same lie as a
+     box that outruns the art. */
+  const run = await bootEngine();
+  run("select.cursor=[4,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.specials.neutral.kind"), "belch",
+    "player 1 should be the one who shouts");
+
+  const SP_N = 512;
+  const shout = (facing) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.vy = 0;
+    me.grabbing = -1; me.grounded = true; me.facing = ${facing};
+    me.x = 160; me.y = main.y; me.specialSpawned = false;
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    var most = 0, colors = {}, far = 0, back = 0, reach = 0;
+    netplay.active = true;
+    for (var i = 0; i < 34; i++) {
+      me.hitstop = 0; me.mana = 999; me.facing = ${facing};
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
+      step();
+      var w = effects.filter(function (e) { return e.kind === 'wave'; });
+      if (w.length > most) most = w.length;
+      for (var j = 0; j < w.length; j++) {
+        colors[w[j].color] = 1;
+        var d = (w[j].x - me.x) * ${facing};
+        if (d > far) far = d;
+        if (d < back) back = d;
+      }
+      var b = me.hitbox();
+      if (b && !reach) {
+        reach = ${facing} > 0 ? b.box.x + b.box.w - me.x : me.x - b.box.x;
+      }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { most: most, colors: Object.keys(colors), far: far, back: back,
+             reach: reach };
+  })()`);
+
+  for (const facing of [1, -1]) {
+    const r = shout(facing);
+    const which = facing > 0 ? "right" : "left";
+
+    assert.ok(r.most >= 2,
+      "a shout should put several waves in the air facing " + which +
+      "; saw " + r.most);
+    assert.deepEqual(r.colors.length, 1, "one colour, facing " + which);
+    assert.ok(/^#ff/i.test(r.colors[0]),
+      "the waves should be red; got " + r.colors[0]);
+
+    // They go FORWARD, whichever way he is looking.
+    assert.ok(r.far > 20,
+      "waves should travel out in front of him facing " + which +
+      "; furthest " + r.far.toFixed(1));
+    assert.ok(r.back > -2,
+      "and never behind him facing " + which + "; furthest back " +
+      r.back.toFixed(1));
+
+    /* The art must not promise more than the box, nor the box more than the
+       art. Five pixels of slack either way. */
+    assert.ok(Math.abs(r.far - r.reach) < 5,
+      "the waves and the hitbox should agree on the reach facing " + which +
+      "; waves " + r.far.toFixed(1) + ", box " + r.reach.toFixed(1));
+  }
+});
+
 test("the fart shoves Reese upward, but only in the air", async () => {
   /* Every action has an equal and opposite one. Mechanically it hands him a
      second way back that is not JITTERS, which is a committed horizontal dash

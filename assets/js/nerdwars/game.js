@@ -775,7 +775,17 @@ const ROSTER = {
            what it cannot see is that this one is safe, fast and now long, so
            the ceiling on it has to be the meter. */
         manaOverride: 36,
-        ox: -1, oy: -15, w: 30, h: 24,
+        /* 30 before, and 20 before that. It is a shout: the thing that
+           carries is the noise, and the noise now visibly leaves him, so the
+           box has to go as far as the waves do or the art is writing a cheque
+           the hitbox will not honour.
+
+           They are matched deliberately: a wave spawns 9 ahead and travels
+           2.6 a frame for 13 frames, so the furthest one drawn is 42.8 ahead
+           and the box reaches 43. The first cut had the waves living 17
+           frames and outrunning the box by eight pixels, which is the same
+           lie in the other direction. Change either and check the other. */
+        ox: -1, oy: -15, w: 44, h: 24,
       },
       /* The fart. Same class as John's smoke and the same hitEvery pacing --
          the difference is entirely the payload: this one carries `poison`,
@@ -2643,13 +2653,23 @@ class Fighter {
 
       // Melee, so the hitbox comes from relBox and this case exists purely
       // to make it look and sound like something.
+      /* A shout, drawn as sound rather than as gas. Three red waves leave
+         his mouth on consecutive frames and travel forward, which is both
+         what it is and the only honest way to show a move whose whole
+         argument is reach -- a fixed puff at arm's length said "melee" while
+         the box said otherwise.
+
+         Staggered one per frame rather than three at once so it reads as a
+         train leaving him instead of a single object. Effects are
+         presentation: addEffect returns null during a rollback resimulation
+         and nothing here is snapshotted, so none of this can desync. */
       case 'belch':
+        if (this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + 3) {
+          addEffect('wave', this.x + this.facing * 9, this.y - 11,
+                    '#ff3b30', this.facing);
+        }
         if (this.attackFrame === s.startup) {
-          addEffect('ring', this.x + this.facing * 8, this.y - 10, '#b9d97a');
-          for (let i = 0; i < 3; i++) {
-            addEffect('puff', this.x + this.facing * (8 + i * 4),
-                      this.y - 11 + i, '#c3dd86');
-          }
           cue('belch', { slot: this.slot, x: this.x });
         }
         break;
@@ -6602,7 +6622,8 @@ function addEffect(kind, x, y, color, dir, spec) {
   // spawned once per replay and the screen fills with duplicates.
   if (netplay.resimulating) return null;
   const e = { kind, x, y, color, dir: dir || 1, spec, t: 0,
-              life: kind === 'beam' ? 20 : kind === 'ring' ? 18 : 16,
+              life: kind === 'beam' ? 20 : kind === 'ring' ? 18
+                  : kind === 'wave' ? 13 : 16,
               vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) };
   effects.push(e);
   // Returned so a caller can aim it. Null while re-simulating, which is the
@@ -6625,6 +6646,10 @@ function updateEffects() {
     if (e.kind === 'stick') {
       e.x += e.vx; e.y += e.vy; e.vy += 0.16;
     }
+    /* Sound goes forward and only forward: no gravity, no drift, no vy. It
+       covers the length of the hitbox over its life, which is what makes the
+       art and the box the same claim. */
+    if (e.kind === 'wave') e.x += e.dir * 2.6;
     if (e.t >= e.life) effects.splice(i, 1);
   }
   for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -6751,6 +6776,23 @@ function drawEffects(g) {
         g.beginPath();
         g.arc(e.x, e.y, r, 0, Math.PI * 2);
         g.stroke();
+        g.globalAlpha = 1;
+        break;
+      }
+      /* An open arc facing the way it is going -- a bracket, not a circle.
+         It grows and thins as it goes, which is the cheapest thing that reads
+         as sound spreading rather than a solid object flying. */
+      case 'wave': {
+        const r = 4 + (1 - k) * 7;
+        g.strokeStyle = e.color;
+        g.globalAlpha = k * 0.95;
+        g.lineWidth = k > 0.6 ? 2 : 1;
+        g.beginPath();
+        // A third of a turn, centred on the direction of travel.
+        const a = e.dir > 0 ? 0 : Math.PI;
+        g.arc(e.x, e.y, r, a - 1.05, a + 1.05);
+        g.stroke();
+        g.lineWidth = 1;
         g.globalAlpha = 1;
         break;
       }
@@ -8757,7 +8799,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '21e6e66fb6';
+const BUILD_ID = '9ea95a677d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8768,7 +8810,7 @@ const BUILD_ID = '21e6e66fb6';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.33';
+const VERSION = '2.34';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
