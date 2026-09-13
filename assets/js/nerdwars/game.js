@@ -241,11 +241,121 @@ const STAGES = [
     respawn: { x: 160, y: 26 },
     blast: { left: -26, right: VW + 26, top: -70, bottom: VH + 70 },
   },
+
+  /* BATTLEFIELD. From a 500x330 layout drawn as black shapes on a
+     transparent sheet, scaled to the screen (0.64 across, 0.545 down): a
+     floating island as the main platform -- 268 wide, the widest main in
+     the game -- three small platforms above it, and a top platform whose
+     middle third was drawn GRAY. That third is a trapdoor: solid until
+     somebody has stood on it half a second, then it drops open for three
+     seconds and comes back. Not a gap, because a gap would have been drawn
+     as nothing.
+
+     The island's underside is the layout's own jagged silhouette, kept as a
+     polygon and drawn dark, with stars behind. No tiles were drawn for it,
+     so drawStage paints it from `body` rather than from a tileset. */
+  {
+    key: 'battlefield',
+    name: 'BATTLEFIELD',
+    tag: 'a floating island - mind the trapdoor',
+    theme: 'battlefield',
+    bg: 'stars',
+    ceilingY: null,
+    hazard: null,
+    platforms: [
+      { x: 26, y: 136, w: 268, main: true },
+      { x: 40, y: 111, w: 48 },
+      { x: 134, y: 111, w: 52 },
+      { x: 232, y: 111, w: 48 },
+      { x: 88, y: 83, w: 47 },
+      { x: 135, y: 83, w: 47, trap: true },
+      { x: 182, y: 83, w: 51 },
+    ],
+    // Half a second of standing on it, three seconds open.
+    trap: { arm: 30, open: 180 },
+    body: [
+      [26, 136], [294, 136], [290, 146], [275, 154], [271, 158], [253, 163],
+      [243, 166], [235, 167], [226, 169], [202, 170], [196, 171], [190, 172],
+      [188, 174], [180, 175], [171, 174], [167, 171], [162, 170], [153, 171],
+      [152, 172], [141, 172], [138, 171], [126, 171], [112, 172], [111, 176],
+      [106, 176], [102, 174], [97, 172], [94, 171], [91, 170], [63, 169],
+      [61, 167], [54, 166], [53, 163], [49, 158], [40, 154], [33, 146],
+      [26, 146],
+    ],
+    spawns: [{ x: 100, y: 136 }, { x: 220, y: 136 }],
+    respawn: { x: 160, y: 30 },
+    blast: { left: -40, right: VW + 40, top: -80, bottom: VH + 80 },
+  },
 ];
+
+/* A stage with a trapdoor also carries the list of platforms WITHOUT it,
+   built once here so platformsNow() can hand back one of two frozen arrays
+   rather than filtering on every frame of every body in the world. Inside
+   STAGES, so simFrozen walks it and a snapshot keeps it by reference. */
+for (const st of STAGES) {
+  if (st.trap) st.platformsTrapOpen = st.platforms.filter((p) => !p.trap);
+}
 
 // The stage currently being played. Reassigned by the stage select, which is
 // why every reference below reads through it rather than closing over one.
 let STAGE = STAGES[0];
+
+/* THE TRAPDOOR. Two numbers, both simulation state: how long somebody has
+   been standing on it, and how long it has left hanging open. In saveSim and
+   restoreSim beside freezeFrames, for the reason freezeFrames is -- a door
+   one machine thought was open and the other thought was shut is a desync
+   the moment anybody walks across it. Reset by startBattle. */
+let trapArm = 0;
+let trapOpen = 0;
+
+/* The platforms a body can land on THIS frame. Nearly always the stage's own
+   list; on a stage with a trapdoor it is the list without the door while the
+   door hangs open. Every landing check in the file asks this rather than
+   STAGE.platforms -- fighters, every projectile, the dog, the CPU's footing
+   probes -- so a thing that falls through an open door does so everywhere,
+   not just for fighters. drawStage still walks STAGE.platforms, because an
+   open door is drawn open, not drawn absent. */
+function platformsNow() {
+  return (STAGE.trap && trapOpen > 0) ? STAGE.platformsTrapOpen : STAGE.platforms;
+}
+
+/* Once a frame, after the fighters have moved. Standing on the door arms it;
+   stepping off lets it relax; armed all the way, it opens and drops whoever
+   is on it. Nothing here reads a pad or a clock. */
+function tickTrap() {
+  if (!STAGE.trap) return;
+  if (trapOpen > 0) {
+    trapOpen--;
+    if (trapOpen === 0) {
+      const door = STAGE.platforms.find((p) => p.trap);
+      for (let i = 0; i < 4; i++) addEffect('dust', door.x + (door.w / 3) * i, door.y, '#9aa0b4');
+    }
+    return;
+  }
+  const door = STAGE.platforms.find((p) => p.trap);
+  let weight = false;
+  for (const f of fighters) {
+    if (f.eliminated || !f.grounded) continue;
+    if (f.x < door.x - 3 || f.x > door.x + door.w + 3) continue;
+    if (Math.abs(f.y - door.y) < 1) weight = true;
+  }
+  if (weight) trapArm++;
+  else if (trapArm > 0) trapArm--;
+  if (trapArm >= STAGE.trap.arm) {
+    trapArm = 0;
+    trapOpen = STAGE.trap.open;
+    for (const f of fighters) {
+      if (f.eliminated || !f.grounded) continue;
+      if (f.x < door.x - 3 || f.x > door.x + door.w + 3) continue;
+      if (Math.abs(f.y - door.y) < 1) {
+        f.grounded = false;
+        f.vy = Math.max(f.vy, 0.5);
+      }
+    }
+    for (let i = 0; i < 6; i++) addEffect('dust', door.x + (door.w / 5) * i, door.y + 2, '#62605d');
+    cue('land', { slot: 0, x: door.x + door.w / 2 });
+  }
+}
 
 /* How many fighters a match can hold. Four is the ceiling because of the
    screen, not the simulation: at 320x180 the HUD gets 62px per player across
@@ -675,10 +785,17 @@ const ROSTER = {
     ult: {
       kind: 'deadlift', label: 'LEG DAY',
       startup: 20, active: 3, recovery: 30,
-      // Two seconds. Three was asked for first and played too long: with a
-      // jab recovering in nine frames, 180 is not a pin, it is a turn.
-      freeze: 10, stun: 120,
+      /* 1.4 seconds. It was two, and before that three, and each cut was for
+         the same reason: with a jab recovering in nine frames a long pin is
+         not a pin, it is a turn. It comes down again here because the pin
+         is no longer the whole ult -- what follows it is. */
+      freeze: 10, stun: 84,
       damage: 19, base: 0.5, scale: 0.9, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
+      /* Then he is buff Kel for ten seconds: double damage, drawn from the
+         sheet he redrew for exactly this. Speed and knockback are untouched
+         on purpose -- the ask was damage, and a faster Kel who also hits
+         twice as hard would be a different character, not a buffed one. */
+      buff: { duration: 600, damageMul: 2 },
     },
   },
 
@@ -1305,51 +1422,129 @@ ROSTER.cobeus = {
 ROSTER.simon = {
   name: 'SIMON',
   origin: 'fresh',
-  tag: 'PLACEHOLDER MOVES, AWAITING A REAL KIT',
+  tag: 'HOTDOGS, SLOTS, JIU JITSU',
   drawn: true,
-  // Dead centre of the roster: weight 96-106, walk 1.24-1.58, jump 6.1-6.9.
-  // Nothing here should be interesting until somebody decides it should be.
-  weight: 100, walk: 1.5, jump: 6.5, doubleJump: 6.0,
+  /* A grappler with a gambling problem. Heavier than the middle of the
+     roster and a touch slower for it: two of his four moves root him in
+     place, and a character who commits should feel like he has some mass to
+     commit with. */
+  weight: 104, walk: 1.42, jump: 6.4, doubleJump: 5.9,
   jab: { startup: 5, active: 4, recovery: 11, damage: 6,
          base: 2.3, scale: 6.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
          ox: 2, oy: -9, w: 11, h: 10 },
   specials: {
-    // A flat lunge: barely leaves the floor, carries him forward.
+    /* HOTDOG. A projectile with a decision in it.
+
+       Thrown whole in a flat arc, and it bounces once. Press the button
+       again while it is in the air and it SPLITS: the top -- bun and sausage
+       -- keeps going, faster and flatter, and hits harder; the bottom bun
+       drops straight down and hits whoever is under it. One throw covers two
+       lanes, and WHEN you split is the skill: early is a long low shot and a
+       close drop, late is the reverse. The split costs nothing and is read
+       in updateFree, ahead of the cast, the way the pawn's detonation is.
+
+       A boomerang was considered and turned down: Kel's bone already comes
+       back. `top` and `bottom` are PATCHES over this spec -- see `parts`,
+       built after the pricing loop -- so each half is a complete spec that
+       applyHit can be handed. */
     neutral: {
-      kind: 'uppercut', label: 'PLACEHOLDER',
-      startup: 6, active: 6, recovery: 14,
-      rise: -1.6, drift: 1.6,
-      damage: 7, base: 2.3, scale: 5.2, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
-      ox: 1, oy: -10, w: 14, h: 13,
+      kind: 'hotdog', label: 'HOTDOG',
+      startup: 7, active: 1, recovery: 12, maxAlive: 2,
+      speed: 3.4, lift: -1.2, drop: 0.09, life: 220, bounce: 0.35,
+      damage: 9, base: 3.0, scale: 6.0, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+      // moveCost cannot see two halves reached through an array.
+      manaOverride: 22,
+      top: { damage: 12, base: 3.3, scale: 6.4, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
+             speedMul: 1.35, lift: -0.9, life: 120 },
+      bottom: { damage: 7, base: 2.6, scale: 5.0, angle: 75, kx: 0.25881904510252074, ky: 0.96592582628906831,
+                fall: 3.2, life: 60 },
     },
-    // A hop and a shove.
+    /* SLOTS. He pulls the lever and three reels spin above his head; each
+       press after the first stops the next reel, and a reel nobody stops
+       lands on its own. He is rooted the whole time -- the kind is not
+       `mobile` -- because a gamble is a commitment.
+
+       The reels are a pure function of the match: battleFrames and his seat
+       seed them, so both machines in an online game see the same spin, and a
+       rollback replays the same spin. Nothing in here is Math.random. Which
+       also means the sequence CAN be learned, and a player who learns the
+       rhythm can hit the sevens. That is not a bug. That is the move.
+
+       Cheap on purpose. A gamble you cannot afford to take is not a gamble,
+       it is a save button. */
     down: {
-      kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
-      startup: 7, active: 8, recovery: 16,
-      rise: -3.0, drift: 1.2,
-      damage: 7, base: 2.4, scale: 5.6, angle: 62, kx: 0.46947156278589086, ky: 0.88294759285892688,
-      ox: 2, oy: -12, w: 13, h: 16,
+      kind: 'slots', label: 'SLOTS',
+      startup: 8, active: 1, recovery: 10,
+      manaOverride: 14,
+      // Frames per symbol while a reel spins, and the frame each reel lands
+      // on if nobody stops it.
+      reelEvery: 4, autoStop: [30, 48, 66],
+      /* The payouts, by symbol: 7 blue green spade. Three of a kind pays in
+         full and a pair pays half; anything else is a bust. */
+      jackpot: { damage: 22, radius: 44, mana: 100,
+                 base: 4.4, scale: 8.0, angle: 60, kx: 0.50000000000000011, ky: 0.8660254037844386 },
+      chips: { mana: 100 },
+      heal: { health: 24 },
+      house: { ult: 40 },
+      bust: { damage: 3 },
+      damage: 0, base: 0, scale: 0,
     },
-    /* The recovery, and the one move here that has to work: every character's
-       `up` is how they get home, and one who cannot is not playable. -6.2
-       matches HIGH NOTE, the shortest of the real recoveries. */
+    /* GUILLOTINE. The choke, drawn as the device, which is the joke.
+
+       On the ground it is a GRAB: a short lunge that goes through a shield --
+       every grab in this game does -- and on connect the frame comes down
+       over them while he holds the choke. Damage ticks for the whole hold,
+       the blade lands, and the finish throws them forward and DOWN. On the
+       stage that is a slam. At an edge it is a kill.
+
+       In the air it is his RECOVERY. Every character's `up` has to get them
+       home, and a choke cannot, so airborne he drops the device instead and
+       gets the hop off it: -6.2 is HIGH NOTE, the shortest real recovery on
+       the roster. Decided on the startup frame and remembered as airCast, so
+       the grab's hitbox stays off even if he lands mid-move.
+
+       `damage: 0` here is never read for knockback -- applyHit returns at the
+       grab branch long before it computes any. The force is in `finish`. */
     up: {
-      kind: 'uppercut', label: 'PLACEHOLDER',
-      startup: 5, active: 14, recovery: 18,
-      rise: -6.2, drift: 0.9,
-      damage: 6, base: 2.2, scale: 5.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-      ox: -6, oy: -20, w: 13, h: 24,
+      kind: 'guillotine', label: 'GUILLOTINE',
+      startup: 6, active: 6, recovery: 16,
+      manaOverride: 26,
+      ox: 2, oy: -12, w: 13, h: 14,
+      lunge: 2.4,
+      /* `damage` here is what the CATCH takes, the frame it bites -- applyHit
+         subtracts it directly, so leaving it off subtracts undefined and the
+         victim's health is NaN for the rest of the match. The choke below is
+         where the real damage is. */
+      grab: { hold: 84, damage: 2 },
+      choke: { every: 12, damage: 1.5 },
+      finish: { damage: 14, base: 3.6, scale: 6.4, angle: 300, kx: 0.50000000000000011, ky: -0.8660254037844386 },
+      damage: 0, base: 0, scale: 0,
+      air: { rise: -6.2, drift: 0.6,
+             drop: { speed: 4.2, life: 70, w: 12, h: 14,
+                     damage: 10, base: 3.0, scale: 5.8, angle: 280, kx: 0.17364817766692997, ky: -0.98480775301220813 } },
     },
   },
-  /* Slower to start, bigger everywhere. Not a spectacle -- the real ults in
-     this game are a car, a barbell, and a laser sword -- but it commits, it
-     hurts, and it is obvious it is standing in for something. */
+  /* SIMON SLOUCH. He falls asleep at every party, for hours, and everyone
+     calls it the slouch. So: he falls asleep on the spot.
+
+     The startup is him nodding off -- the four drawn stages, eyes drooping to
+     slumped -- and the active phase is the sleep: five seconds in which he
+     cannot move or act and CANNOT BE WOKEN. Fully invulnerable, healing a
+     quarter of his bar and refilling his mana, Zzz drifting up while the
+     party carries on around him. Anyone who comes near gets sleepy: slowed
+     inside the aura, and after a second and a half in it they drop off too,
+     stunned until he wakes. Only on the ground -- you can jump over him.
+     When he wakes he stretches, a small ring of knockback to clear space.
+
+     The cost is the five seconds. That is a long time to hand somebody the
+     whole stage. */
   ult: {
-    kind: 'uppercut', label: 'PLACEHOLDER ULT',
-    startup: 10, active: 16, recovery: 24,
-    rise: -5.0, drift: 1.4,
-    damage: 18, base: 4.0, scale: 9.0, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
-    ox: -8, oy: -22, w: 22, h: 28,
+    kind: 'slouch', label: 'SIMON SLOUCH',
+    startup: 24, active: 300, recovery: 18,
+    heal: 25, mana: 100,
+    aura: { radius: 40, doze: 90 },
+    wake: { damage: 6, radius: 26, base: 3.0, scale: 4.0, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832 },
+    damage: 0, base: 0, scale: 0,
   },
 };
 
@@ -1458,6 +1653,16 @@ for (const key in ROSTER) {
   const up = ROSTER[key].specials.up;
   if (!up || !up.colors) continue;
   up.tints = up.colors.map((c) => Object.assign({}, up, c));
+}
+
+/* The hotdog's two halves, for the same reason and in the same place as the
+   rainbow's tints above: applyHit is handed `shot.spec`, so a shot that can
+   turn into two different things wants two finished specs to point at. */
+for (const key in ROSTER) {
+  const n = ROSTER[key].specials.neutral;
+  if (!n || n.kind !== 'hotdog') continue;
+  n.parts = { top: Object.assign({}, n, n.top),
+              bottom: Object.assign({}, n, n.bottom) };
 }
 
 /* Appended rather than slotted in alphabetically, and that is deliberate:
@@ -1586,7 +1791,8 @@ function loadAssets(done) {
 
   for (const name of ORDER) {
     const entry = SPRITES[name];
-    for (const set of ['base', 'attack', 'shirtless']) {
+    // buff / buffAttack: Kel after LEG DAY, from his 2026 sheet.
+    for (const set of ['base', 'attack', 'shirtless', 'buff', 'buffAttack']) {
       if (!entry[set]) continue;
       for (const frame in entry[set]) {
         grab(name + '.' + set + '.' + frame, entry[set][frame]);
@@ -1603,6 +1809,13 @@ function loadAssets(done) {
   grab('glass', SPRITES.glass);
   grab('car', SPRITES.car);
   grab('ak', SPRITES.ak);
+  // Simon's four moves. Named here for the reason in the comment above.
+  for (const k in SPRITES.hotdog) grab('hotdog.' + k, SPRITES.hotdog[k]);
+  SPRITES.slots.symbols.forEach((uri, i) => grab('slots.sym.' + i, uri));
+  SPRITES.slots.blanks.forEach((uri, i) => grab('slots.blank.' + i, uri));
+  SPRITES.guillotine.forEach((uri, i) => grab('guillotine.' + i, uri));
+  SPRITES.slouch.R.forEach((uri, i) => grab('slouch.R.' + i, uri));
+  SPRITES.slouch.L.forEach((uri, i) => grab('slouch.L.' + i, uri));
 
   for (const theme in TILES) {
     for (const role in TILES[theme]) grab('tile.' + theme + '.' + role, TILES[theme][role]);
@@ -2109,6 +2322,20 @@ class Fighter {
     this.throwFast = false;
     // Which special slot opened the running charge: 'neutral', 'down', 'up'.
     this.chargeKey = 'neutral';
+    /* SIMON. The slot reels: three symbol indices, -1 while a reel is still
+       spinning; the frame count the spin is derived from; the seed for this
+       pull; and how many stops have been asked for. An array is fine here --
+       snapValue slices it -- and the seed is an integer for the reason
+       chargePiece is: snapValue copies own values, and an integer is one. */
+    this.reels = [-1, -1, -1];
+    this.reelT = 0;
+    this.reelSeed = 0;
+    this.reelStops = 0;
+    // The guillotine cast from the air is a drop, not a grab. Decided on the
+    // startup frame and remembered, so the hitbox stays off if he lands.
+    this.airCast = false;
+    // Frames spent in somebody's slouch. Grows inside the aura, decays out.
+    this.drowsy = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
        than Fighter references, for the reason poisonBy is: snapValue keeps a
        Fighter by pointer inside a snapshot, and a stale pointer survives a
@@ -2224,6 +2451,10 @@ class Fighter {
          is wherever the lure has got to. Same poleHook the drawing uses, so
          what is painted and what can catch you are the same object by
          construction rather than two sets of numbers kept in step by hand. */
+      /* Cast from the air the guillotine is a falling object, not a grab, and
+         a grab box on a man mid-hop would catch people the drop was meant
+         for. Decided at the startup frame; see runSpecial. */
+      if (s && s.kind === 'guillotine' && this.airCast) return null;
       if (s && s.kind === 'pole') {
         /* One box, eight pixels square, wherever the lure is -- for the whole
            flight out AND the whole reel back. It used to be six frames at
@@ -2248,6 +2479,7 @@ class Fighter {
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
+          s.kind === 'hotdog' || s.kind === 'slots' || s.kind === 'slouch' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
@@ -2298,6 +2530,7 @@ class Fighter {
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
     if (this.buffTimer > 0) this.buffTimer--;
+    if (this.drowsy > 0) this.drowsy--;
     // Landing means he got home on his own; the window is spent either way.
     if (this.dashWrap > 0) { if (this.grounded) this.dashWrap = 0; else this.dashWrap--; }
     /* The choke, ticked wherever the grabber happens to be.
@@ -2451,7 +2684,12 @@ class Fighter {
 
   updateFree(pad) {
     const d = this.def;
-    const speed = d.walk * this.speedMul;
+    /* Sleepy legs. Not a buff: the buff slots are a fighter's own -- Kel
+       walking into a slouch with LEG DAY running must not lose his double
+       damage to it -- so drowsiness is its own number and does its own
+       arithmetic. Nearly half speed at the point they drop off. */
+    const sleepy = this.drowsy > 0 ? 1 - 0.45 * Math.min(1, this.drowsy / 60) : 1;
+    const speed = d.walk * this.speedMul * sleepy;
 
     /* Grab. Ahead of shield and movement because it is the answer TO a
        shield, and behind nothing: a button that only sometimes comes out is
@@ -2591,6 +2829,20 @@ class Fighter {
         }
         if (told) return;
       }
+      /* The hotdog splits on the second press. Same shape as the pawn above
+         and for the same reason: while a whole one is in the air the button
+         talks to IT, so there is no path that spends mana on a second while
+         the first is still deciding what to be. Two halves in the air are
+         not "a whole one", so the button casts again over them. */
+      if (intent && intent.kind === 'hotdog') {
+        let split = false;
+        for (const b of projectiles) {
+          if (b instanceof Hotdog && b.owner === this && !b.dead && b.piece === 'whole') {
+            if (b.split()) split = true;
+          }
+        }
+        if (split) return;
+      }
       if (this.canSpecial(pad)) {
         this.mana -= this.def.specials[this.slotFor(pad)].mana;
         this.startAttack('special', pad);
@@ -2719,6 +2971,53 @@ class Fighter {
          : this.def.specials[this.specialSlot || 'neutral'];
   }
 
+  /* What the reels paid. Called once, on the frame the third one lands.
+     Three of a kind pays in full, a pair pays half, and anything else is a
+     bust -- which costs him the mana he already spent and three points of
+     embarrassment that cannot take a stock. */
+  payout(s) {
+    const count = [0, 0, 0, 0];
+    for (const v of this.reels) count[v]++;
+    let best = 0;
+    for (let i = 1; i < 4; i++) if (count[i] > count[best]) best = i;
+    const n = count[best];
+    if (n < 2) {
+      this.health = Math.max(1, this.health - s.bust.damage);
+      addEffect('puff', this.x, this.y - 22, '#8792b0');
+      return;
+    }
+    const k = n === 3 ? 1 : 0.5;
+    switch (best) {
+      case 0: {   // sevens
+        const r2 = s.jackpot.radius * s.jackpot.radius;
+        for (const other of fighters) {
+          if (other === this || other.eliminated) continue;
+          const dx = other.x - this.x, dy = other.y - this.y;
+          if (dx * dx + dy * dy <= r2) applyHit(this, other, s.jackpot, this.x, k);
+        }
+        this.mana = Math.min(COMBAT.manaMax, this.mana + s.jackpot.mana * k);
+        for (let i = 0; i < 16; i++) {
+          addEffect('spark', this.x + rand(-20, 20), this.y - rand(6, 30), '#ffd60a');
+        }
+        addEffect('ring', this.x, this.y - 8, '#ffd60a');
+        if (n === 3) announce('JACKPOT', '#ffd60a');
+        break;
+      }
+      case 1:     // blue: chips
+        this.mana = Math.min(COMBAT.manaMax, this.mana + s.chips.mana * k);
+        for (let i = 0; i < 6; i++) addEffect('spark', this.x, this.y - 22, '#0a84ff');
+        break;
+      case 2:     // green: health
+        this.health = Math.min(COMBAT.maxHealth, this.health + s.heal.health * k);
+        for (let i = 0; i < 6; i++) addEffect('spark', this.x, this.y - 22, '#34c759');
+        break;
+      case 3:     // spades: the house
+        this.ultMeter = Math.min(COMBAT.ultMax, this.ultMeter + s.house.ult * k);
+        for (let i = 0; i < 6; i++) addEffect('spark', this.x, this.y - 22, '#c8cee6');
+        break;
+    }
+  }
+
   /* Hold, then throw wherever they aimed. Runs from update() every frame the
      grab is live, in whatever state the grabber is in. */
   tickGrab() {
@@ -2729,14 +3028,47 @@ class Fighter {
       releaseGrab(this);
       return;
     }
-    const s = this.grabKind === 0 ? BASIC_GRAB : this.def.specials.down;
+    const s = this.grabKind === 0 ? BASIC_GRAB
+            : this.grabKind === 2 ? this.def.specials.up
+            : this.def.specials.down;
     this.vx = 0;
     if (!this.grounded) this.vy = Math.min(this.vy, 0.6);
     if (this.grabTimer % 7 === 0) {
       addEffect('spark', this.x + this.facing * 10, this.y - 12, '#d24b4b');
     }
+    /* The squeeze. A choke takes health on a slow tick for the whole hold,
+       straight off the bar rather than through applyHit -- a hit would put
+       the victim in hitstun and out of the hold. Credited to the meter the
+       way a hit is, and a bar it empties still takes the stock. */
+    if (s.choke && this.grabTimer % s.choke.every === 0) {
+      const victim = fighters[this.grabbing];
+      const dmg = s.choke.damage * this.damageMul;
+      victim.health -= dmg;
+      this.ultMeter = Math.min(COMBAT.ultMax, this.ultMeter + dmg * COMBAT.ultPerDamageDealt);
+      if (victim.health <= 0) {
+        releaseGrab(this);
+        victim.knockOut();
+        return;
+      }
+    }
     this.grabTimer--;
     if (this.grabTimer > 0) return;
+
+    /* The blade lands. A choke does not throw where they aimed -- it finishes
+       one way, forward and down, and lets the edge decide what that means. */
+    if (s.choke) {
+      const victim = fighters[this.grabbing];
+      const from = victim.x - this.facing * 40;
+      victim.grabbedBy = -1;
+      victim.setState('air');
+      victim.grounded = false;
+      releaseGrab(this);
+      applyHit(this, victim, s.finish, from);
+      for (let i = 0; i < 8; i++) addEffect('dust', victim.x + rand(-8, 8), victim.y, '#c8cee6');
+      addEffect('ring', victim.x, victim.y - 9, '#c8cee6');
+      cue('throw', { slot: this.slot, x: this.x });
+      return;
+    }
 
     const spec = this.throwAim === 1 ? s.throwUp
                : this.throwAim === 2 ? s.throwDown : s.throwFwd;
@@ -2769,6 +3101,25 @@ class Fighter {
        reads the same on a rollback replay -- the pad for the frame being
        replayed, not this machine's keyboard right now. */
     if (pad) this.aimDown = !!pad.down;
+
+    /* Stopping a reel. runSpecial gets no pad, so the presses are counted
+       here and spent there. Only presses AFTER the one that pulled the lever:
+       that one was an edge on the cast frame, which is before this state. */
+    if (pad && pad.spDown && m.kind === 'slots' && this.specialSpawned &&
+        this.reels.indexOf(-1) >= 0) {
+      this.reelStops++;
+    }
+
+    /* Splitting the hotdog during the throw's own recovery. The intercept in
+       updateFree only runs once he is free again, and the throw recovers in
+       twenty frames -- so without this a second press inside that window
+       was simply eaten, and "press again while it is in the air" was only
+       true for the second half of the flight. */
+    if (pad && pad.spNeutral && m.kind === 'hotdog' && this.specialSpawned) {
+      for (const b of projectiles) {
+        if (b instanceof Hotdog && b.owner === this && !b.dead && b.piece === 'whole') b.split();
+      }
+    }
 
     /* Aim, while the choke is on. runSpecial gets no pad, so the direction
        is read here and remembered -- the throw uses whatever was last held,
@@ -2930,6 +3281,110 @@ class Fighter {
           projectiles.push(new Rainbow(this, s));
         }
         break;
+
+      /* ---- SIMON ---- */
+
+      case 'hotdog':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Hotdog(this, s));
+        }
+        break;
+
+      case 'slots':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          this.reels = [-1, -1, -1];
+          this.reelT = 0;
+          this.reelStops = 0;
+          /* Seeded from the simulation -- the frame and the seat -- so every
+             machine spins the same reels, and a rollback that replays this
+             frame pulls the same lever. */
+          this.reelSeed = ((battleFrames * 2654435761) ^ (this.slot * 40503) ^ 0x9e3779b9) >>> 0;
+          cue('swap', { slot: this.slot, x: this.x });
+        }
+        if (this.specialSpawned && this.reels.indexOf(-1) >= 0) {
+          /* Still spinning. The move is held on its startup frame, the way a
+             charge is, so the recovery does not begin until the last reel
+             lands -- however long the player takes over it. */
+          this.attackFrame = s.startup;
+          this.reelT++;
+          for (let i = 0; i < 3; i++) {
+            if (this.reels[i] >= 0) continue;
+            // Reels stop in order: the first press is the first reel.
+            if (this.reelStops > i || this.reelT >= s.autoStop[i]) {
+              this.reels[i] = reelSymbol(this.reelSeed, i, this.reelT, s);
+              cue('swap', { slot: this.slot, x: this.x });
+              if (this.reels.indexOf(-1) < 0) this.payout(s);
+            }
+            break;   // one reel per frame at most, and only the next one
+          }
+        }
+        break;
+
+      case 'guillotine':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          this.airCast = !this.grounded;
+          if (this.airCast) {
+            // The recovery: drop the device, take the hop off it.
+            this.vy = s.air.rise;
+            this.vx = this.facing * s.air.drift;
+            projectiles.push(new GuillotineDrop(this, s.air.drop));
+          }
+        }
+        // The lunge. Only on the ground, only through the active frames.
+        if (!this.airCast && this.grounded && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active) {
+          this.vx = this.facing * s.lunge;
+        }
+        break;
+
+      case 'slouch': {
+        const asleep = this.attackFrame >= s.startup &&
+                       this.attackFrame < s.startup + s.active;
+        if (asleep) {
+          // You cannot wake him. Re-armed every frame so nothing can run it out.
+          this.invuln = Math.max(this.invuln, 2);
+          this.vx = 0;
+          this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);
+          this.mana = Math.min(COMBAT.manaMax, this.mana + s.mana / s.active);
+
+          /* Everybody at the party gets sleepy. +2 in the aura against the -1
+             every fighter loses per frame in update(), so it climbs inside
+             and drains outside. At `doze` they drop off: written into
+             hitstun, which stateHash covers, for the reason LEG DAY's pin is.
+             Grounded only -- you can jump over a sleeping man. */
+          const r2 = s.aura.radius * s.aura.radius;
+          const left = s.startup + s.active - this.attackFrame;
+          for (const other of fighters) {
+            if (other === this || other.eliminated) continue;
+            const dx = other.x - this.x, dy = other.y - this.y;
+            if (dx * dx + dy * dy > r2) continue;
+            other.drowsy = Math.min(s.aura.doze, other.drowsy + 2);
+            if (other.drowsy >= s.aura.doze && other.grounded &&
+                other.grabbedBy < 0 && other.state !== 'ko' &&
+                other.state !== 'hitstun') {
+              other.setState('hitstun');
+              other.hitstun = Math.max(other.hitstun, left);
+              other.vx = 0;
+            }
+          }
+        } else if (this.attackFrame === s.startup + s.active) {
+          // Up with a stretch. A small ring, to clear some room.
+          const r2 = s.wake.radius * s.wake.radius;
+          for (const other of fighters) {
+            if (other === this || other.eliminated) continue;
+            const dx = other.x - this.x, dy = other.y - this.y;
+            if (dx * dx + dy * dy <= r2) applyHit(this, other, s.wake, this.x);
+          }
+          addEffect('ring', this.x, this.y - 8, this.accent);
+          for (let i = 0; i < 6; i++) {
+            addEffect('spark', this.x + rand(-10, 10), this.y - rand(4, 16), '#ffffff');
+          }
+        }
+        break;
+      }
 
       // A handful of something thrown in a fan.
       case 'scatter':
@@ -3494,6 +3949,21 @@ class Fighter {
           }
           addEffect('ring', this.x, this.y - 8, '#9aa0b4');
           cue('deadlift', { slot: this.slot, x: this.x });
+          /* The transformation. Same fields Reese's buff sets, read from the
+             move that granted it, so the getters that scale damage and speed
+             need no second path. sprite() swaps him to the buff sheet for as
+             long as buffTimer runs. */
+          if (s.buff) {
+            this.buffTimer = s.buff.duration;
+            this.buffStats = {
+              damageMul: s.buff.damageMul || 1,
+              speedMul: s.buff.speedMul || 1,
+              knockbackTakenMul: s.buff.knockbackTakenMul || 1,
+            };
+            for (let i = 0; i < 12; i++) {
+              addEffect('spark', this.x + rand(-8, 8), this.y - rand(4, 18), '#ffffff');
+            }
+          }
         }
         break;
 
@@ -3573,7 +4043,7 @@ class Fighter {
 
   groundAhead(lookahead) {
     const probe = this.x + this.facing * (lookahead || 9);
-    return STAGE.platforms.some(
+    return platformsNow().some(
       (p) => probe >= p.x && probe <= p.x + p.w && Math.abs(this.y - p.y) < 2
     );
   }
@@ -3632,7 +4102,7 @@ class Fighter {
      snaps y exactly to the surface on landing, so a tight match is enough and
      a miss is safe: every caller treats null as "not on a thin platform". */
   standingOn() {
-    for (const p of STAGE.platforms) {
+    for (const p of platformsNow()) {
       if (this.x < p.x - 3 || this.x > p.x + p.w + 3) continue;
       if (Math.abs(this.y - p.y) < 1) return p;
     }
@@ -3647,7 +4117,7 @@ class Fighter {
     }
     const wasGrounded = this.grounded;
     this.grounded = false;
-    for (const p of STAGE.platforms) {
+    for (const p of platformsNow()) {
       if (this.x < p.x - 3 || this.x > p.x + p.w + 3) continue;
       // One-way: only catch a fighter crossing the surface downward.
       if (this.prevY <= p.y + 0.6 && this.y >= p.y) {
@@ -3777,6 +4247,17 @@ class Fighter {
 
   /* ---- which frame to draw ---- */
   sprite() {
+    /* The slouch is its own art: four stages of nodding off, drawn for it.
+       The startup walks through the first three and the sleep holds the
+       fourth; waking comes back up through the second. */
+    if (this.state === 'ult' && this.def.ult && this.def.ult.kind === 'slouch') {
+      const u = this.def.ult;
+      const stage = this.attackFrame < u.startup
+        ? Math.min(2, Math.floor(this.attackFrame / (u.startup / 3)))
+        : this.attackFrame < u.startup + u.active ? 3 : 1;
+      const im = IMG['slouch.' + (this.facing > 0 ? 'R' : 'L') + '.' + stage];
+      if (im) return im;
+    }
     const entry = SPRITES[this.key];
     let set = 'base';
     // There is a real attack animation for him -- use it when he swings.
@@ -3786,6 +4267,12 @@ class Fighter {
     }
     // Reese's shirtless set is his buff state, exactly as drawn.
     if (entry.shirtless && this.buffTimer > 0) set = 'shirtless';
+    /* Kel's buff state is a whole second sheet -- standing, walking, jumping
+       AND swinging -- so the swing keeps its own art while he is big. Any
+       other character with a `buff` set would pick it up the same way. */
+    if (entry.buff && this.buffTimer > 0) {
+      set = set === 'attack' && entry.buffAttack ? 'buffAttack' : 'buff';
+    }
 
     const d = this.facing > 0 ? 'R' : 'L';
     let frame;
@@ -4785,7 +5272,7 @@ function poleFlight(f, s, n) {
        is trivially true of every platform above the line; a crossing test
        cannot have that problem, and it lets the rising half of the arc pass
        over a ledge it will land on later. */
-    for (const pl of STAGE.platforms) {
+    for (const pl of platformsNow()) {
       if (nx < pl.x || nx > pl.x + pl.w) continue;
       if (y <= pl.y && ny >= pl.y) {
         return { x: nx, y: pl.y, landed: true, at: i + 1 };
@@ -5217,7 +5704,7 @@ class Bone {
 
     // Clatter off the stage rather than sinking through it.
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           // A thrown thing that vanishes on contact with the floor threatens
@@ -5305,7 +5792,7 @@ class Pizza {
     this.life--;
 
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           // A thrown thing that vanishes on contact with the floor threatens
@@ -5402,7 +5889,7 @@ class Rainbow {
     }
 
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           this.dead = true;
@@ -5450,6 +5937,256 @@ class Rainbow {
 }
 
 /* =====================================================================
+   SIMON'S THINGS.
+
+   A hotdog that can be two hotdogs, a guillotine that falls, and the reels
+   and the Zzz drawn over the man himself. All of the projectiles keep the
+   contract the others do: fields are own values or frozen spec references,
+   methods live on the prototype, and nothing here calls Math.random.
+   ===================================================================== */
+
+/* Which symbol a reel shows at a given moment of its spin. A pure function of
+   the seed, the reel and the time -- integer mixing, no Math.random -- so
+   the drawing can ask the same question the simulation does and get the same
+   answer, and two machines cannot disagree about what came up. */
+function reelSymbol(seed, reel, t, s) {
+  let h = (seed + reel * 7919 + Math.floor(t / s.reelEvery) * 104729) >>> 0;
+  h ^= h << 13; h >>>= 0;
+  h ^= h >>> 17;
+  h ^= h << 5; h >>>= 0;
+  return h % 4;
+}
+
+class Hotdog {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.base = spec;
+    this.spec = spec;
+    this.piece = 'whole';
+    this.x = owner.x + owner.facing * 8;
+    this.y = owner.y - 10;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift;
+    this.life = spec.life;
+    this.bounces = 0;
+    this.dead = false;
+  }
+
+  /* The second press. The top keeps going, faster and flatter and harder;
+     the bottom bun drops from wherever the split happened. Both halves are
+     specs built at load, so applyHit reads each one straight off `spec`. */
+  split() {
+    if (this.piece !== 'whole' || this.dead) return false;
+    const parts = this.base.parts;
+    this.piece = 'top';
+    this.spec = parts.top;
+    this.vx *= parts.top.speedMul;
+    this.vy = parts.top.lift;
+    this.life = parts.top.life;
+    projectiles.push(new HotdogHalf(this.owner, parts.bottom, this.x, this.y));
+    addEffect('puff', this.x, this.y, '#ffd66e');
+    return true;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.base.drop;
+    this.life--;
+    if (this.vy > 0) {
+      for (const p of platformsNow()) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          // Whole, it bounces once; anything else that lands is finished.
+          if (this.piece === 'whole' && this.bounces < 1) {
+            this.bounces++;
+            this.y = p.y;
+            this.vy = -Math.abs(this.vy) * this.base.bounce;
+            this.vx *= 0.8;
+            addEffect('dust', this.x, p.y, '#ffd66e');
+          } else {
+            this.dead = true;
+            for (let i = 0; i < 4; i++) addEffect('spark', this.x, p.y, '#e0a040');
+          }
+          break;
+        }
+      }
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return this.piece === 'whole'
+      ? { x: this.x - 4, y: this.y - 4, w: 8, h: 8 }
+      : { x: this.x - 5, y: this.y - 3, w: 10, h: 6 };
+  }
+
+  draw(g) {
+    const im = IMG['hotdog.' + this.piece];
+    if (!im) return;
+    // The art faces right; thrown left it is mirrored.
+    if (this.vx < 0) {
+      g.save();
+      g.translate(Math.round(this.x), Math.round(this.y));
+      g.scale(-1, 1);
+      g.drawImage(im, -Math.round(im.width / 2), -Math.round(im.height / 2));
+      g.restore();
+    } else {
+      g.drawImage(im, Math.round(this.x - im.width / 2), Math.round(this.y - im.height / 2));
+    }
+  }
+}
+
+/* The bottom bun, dropping straight down from the split. Constant speed, no
+   gravity: it is a thing let go of, not a thing thrown. */
+class HotdogHalf {
+  constructor(owner, spec, x, y) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = x;
+    this.y = y;
+    this.vx = 0;
+    this.vy = spec.fall;
+    this.life = spec.life;
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.y += this.vy;
+    this.life--;
+    for (const p of platformsNow()) {
+      if (this.x < p.x || this.x > p.x + p.w) continue;
+      if (prevY <= p.y && this.y >= p.y) {
+        this.dead = true;
+        addEffect('dust', this.x, p.y, '#ffd66e');
+        break;
+      }
+    }
+    if (this.life <= 0 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 5, y: this.y - 2, w: 10, h: 4 };
+  }
+
+  draw(g) {
+    const im = IMG['hotdog.bottom'];
+    if (im) g.drawImage(im, Math.round(this.x - im.width / 2), Math.round(this.y - im.height / 2));
+  }
+}
+
+/* The guillotine, dropped from the air. Falls at one speed, hits once, and
+   plays the eleven frames of the blade coming down as it goes. */
+class GuillotineDrop {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x;
+    this.y = owner.y + 2;
+    this.vx = 0;
+    this.vy = spec.speed;
+    this.life = spec.life;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.y += this.vy;
+    this.t++;
+    this.life--;
+    for (const p of platformsNow()) {
+      if (this.x < p.x || this.x > p.x + p.w) continue;
+      if (prevY <= p.y && this.y >= p.y) {
+        this.dead = true;
+        for (let i = 0; i < 6; i++) addEffect('dust', this.x + rand(-6, 6), p.y, '#c8cee6');
+        addEffect('spark', this.x, p.y - 4, '#ffffff');
+        break;
+      }
+    }
+    if (this.life <= 0 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    const w = this.spec.w, h = this.spec.h;
+    return { x: this.x - w / 2, y: this.y - h / 2, w: w, h: h };
+  }
+
+  draw(g) {
+    const im = IMG['guillotine.' + Math.min(10, Math.floor(this.t / 3))];
+    if (im) g.drawImage(im, Math.round(this.x) - 8, Math.round(this.y) - 8);
+  }
+}
+
+/* The three reels over his head while SLOTS runs. Reads reels, reelT and the
+   move and writes nothing, like every draw in this file. A reel still
+   spinning shows the blur frames; a stopped one shows what it landed on. */
+function drawSlots(g, f) {
+  if (f.state !== 'special' || !f.specialSpawned) return;
+  const m = f.moveFor('special');
+  if (!m || m.kind !== 'slots') return;
+  const x0 = Math.round(f.x) - 9, y0 = Math.round(f.y) - 30;
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillRect(x0 - 2, y0 - 1, 21, 8);
+  for (let i = 0; i < 3; i++) {
+    const v = f.reels[i];
+    const im = v >= 0 ? IMG['slots.sym.' + v]
+                      : IMG['slots.blank.' + (Math.floor(f.reelT / 2) % 3)];
+    if (im) g.drawImage(im, x0 + i * 6, y0);
+  }
+}
+
+/* The device, over whoever is in it. Drawn on the VICTIM, because that is
+   where it is. The frame follows the hold: the blade is at the top when the
+   choke starts and all the way down when the finish lands. */
+function drawGuillotine(g, f) {
+  if (f.grabbedBy < 0) return;
+  const by = fighters[f.grabbedBy];
+  if (!by || by.grabKind !== 2) return;
+  const s = by.def.specials.up;
+  if (!s || !s.grab) return;
+  const frame = Math.min(10, Math.floor((1 - by.grabTimer / s.grab.hold) * 11));
+  const im = IMG['guillotine.' + Math.max(0, frame)];
+  if (im) g.drawImage(im, Math.round(f.x) - 8, Math.round(f.y) - 18);
+}
+
+/* Zzz, over anybody asleep: Simon in his slouch, or somebody who stood in it
+   too long. Three little z's rising and fading, drawn in pixels because
+   text() paints the screen and this is the world. */
+function drawSleep(g, f) {
+  const slouching = f.state === 'ult' && f.def.ult && f.def.ult.kind === 'slouch' &&
+                    f.attackFrame >= f.def.ult.startup &&
+                    f.attackFrame < f.def.ult.startup + f.def.ult.active;
+  const dozed = f.state === 'hitstun' && f.drowsy >= 60;
+  if (!slouching && !dozed) return;
+  if (slouching) {
+    // The aura, so the radius that puts people to sleep is a thing you can see.
+    const r = f.def.ult.aura.radius;
+    g.globalAlpha = 0.08 + 0.03 * ((Math.floor(f.attackFrame / 12) % 2));
+    g.fillStyle = f.accent;
+    g.beginPath();
+    g.arc(f.x, f.y - 6, r, 0, Math.PI * 2);
+    g.fill();
+    g.globalAlpha = 1;
+  }
+  const t = slouching ? f.attackFrame : f.hitstun;
+  for (let i = 0; i < 3; i++) {
+    const k = (Math.floor(t / 6) + i * 5) % 15;
+    g.globalAlpha = 1 - k / 15;
+    g.fillStyle = '#ffffff';
+    const zx = Math.round(f.x) + 5 + i * 3, zy = Math.round(f.y) - 20 - k;
+    // a 3x3 z
+    g.fillRect(zx, zy, 3, 1);
+    g.fillRect(zx + 1, zy + 1, 1, 1);
+    g.fillRect(zx, zy + 2, 3, 1);
+  }
+  g.globalAlpha = 1;
+}
+
+/* =====================================================================
    PELLET - a small thrown thing with no sprite of its own.
 
    Used for Trev's cereal. Drawn in code as a couple of coloured pixels,
@@ -5492,7 +6229,7 @@ class Pellet {
     // were safe depended entirely on where that stage happened to put its
     // platforms -- different on all five, and invisible to the player.
     if (this.vy > 0 && !this.spec.ghost) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           if (this.spec.bounce && Math.abs(this.vy) > 0.6) {
@@ -5630,7 +6367,7 @@ class Weight {
     this.life--;
 
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) { this.land(p.y); return; }
       }
@@ -5764,7 +6501,7 @@ class HamDrop {
     // it drops straight through them.
     this.groundY = 0;
     let found = false;
-    for (const p of STAGE.platforms) {
+    for (const p of platformsNow()) {
       if (this.x < p.x || this.x > p.x + p.w) continue;
       if (p.y < ty - 2) continue;
       if (!found || p.y < this.groundY) { this.groundY = p.y; found = true; }
@@ -5944,7 +6681,7 @@ class Ball {
     this.life--;
 
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           this.y = p.y - 1;
@@ -6137,7 +6874,7 @@ class Dog {
     const prevY = this.y;
     this.vy += 0.4;
     this.y += this.vy;
-    for (const p of STAGE.platforms) {
+    for (const p of platformsNow()) {
       if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
       if (prevY <= p.y + 1 && this.y >= p.y) {
         this.y = p.y;
@@ -6180,7 +6917,7 @@ class Dog {
      and its key-deletion pass never sees them. Reads the stage and the dog,
      writes neither. */
   onSurface() {
-    for (const p of STAGE.platforms) {
+    for (const p of platformsNow()) {
       if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
       if (this.y === p.y) return true;
     }
@@ -6320,7 +7057,7 @@ class Pawn {
     const prevY = this.y;
     this.vy += 0.4;
     this.y += this.vy;
-    for (const p of STAGE.platforms) {
+    for (const p of platformsNow()) {
       if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
       if (prevY <= p.y + 1 && this.y >= p.y) {
         this.y = p.y;
@@ -6529,7 +7266,7 @@ class Bottle {
     // Breaking on the floor is the normal case -- most of these are thrown at
     // the ground on purpose, for the glass rather than for the hit.
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           this.y = p.y;
@@ -6705,7 +7442,7 @@ class KnightPiece {
     this.life--;
 
     if (this.vy > 0) {
-      for (const p of STAGE.platforms) {
+      for (const p of platformsNow()) {
         if (this.x < p.x || this.x > p.x + p.w) continue;
         if (prevY <= p.y && this.y >= p.y) {
           this.dead = true;
@@ -7776,7 +8513,9 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   if (move.grab) {
     if (defender.eliminated || defender.grabbedBy >= 0 || attacker.grabbing >= 0) return;
     attacker.grabbing = defender.slot;
-    attacker.grabKind = move.basic ? 0 : 1;
+    // 0 the universal grab, 1 a special in the down slot, 2 one in the up
+    // slot -- which is Simon's guillotine, and the only choke.
+    attacker.grabKind = move.basic ? 0 : move.choke ? 2 : 1;
     attacker.grabTimer = move.grab.hold;
     /* Both of these, not just the aim. throwDirX survived from whatever was
        last held BEFORE the catch, so walking left into a cast threw them left
@@ -8097,7 +8836,7 @@ function aiDecide(me, foe) {
 
   // Close the gap.
   const s = me.def.specials.neutral;
-  const ranged = s.kind === 'projectile' || s.kind === 'pizza';
+  const ranged = s.kind === 'projectile' || s.kind === 'pizza' || s.kind === 'hotdog';
   const idealRange = ranged ? AI_TUNE.rangedIdeal : s.kind === 'beam' ? 45 : 13;
 
   const crowded = ranged || s.kind === 'beam' ? AI_TUNE.rangedCrowd : 0;
@@ -8207,7 +8946,7 @@ function aiDecide(me, foe) {
 // the stage below, which is exactly how the retreating characters were dying.
 function walkIsSafe(me, dir) {
   const probe = me.x + dir * 10;
-  const floorAhead = STAGE.platforms.some(
+  const floorAhead = platformsNow().some(
     (p) => probe >= p.x && probe <= p.x + p.w && Math.abs(me.y - p.y) < 2
   );
   if (floorAhead) return true;
@@ -8315,6 +9054,8 @@ function startBattle() {
   banner = null;
   battleFrames = 0;
   winnerKey = null;
+  trapArm = 0;
+  trapOpen = 0;
   // Never build a seat there is no character for. Somebody has to have got
   // this wrong for the constructor to see ORDER[undefined], but failing to a
   // playable match beats failing inside `new Fighter`.
@@ -9227,6 +9968,7 @@ function updateBattle() {
   for (let i = 0; i < fighters.length; i++) {
     fighters[i].update(pads[i]);
   }
+  tickTrap();
   for (const b of projectiles) b.update();
   resolveCombat(fighters);
   updateEffects();
@@ -9550,8 +10292,59 @@ function platformTiles(p) {
   return { body: body, capL: null, capR: null, mirrorL: false };
 }
 
+/* A stage drawn from its own shape rather than from tiles. The island body
+   is the layout's silhouette; the platforms are slabs with a lit edge; the
+   trapdoor is drawn in the gray it was drawn in, shut, armed or open. */
+function drawIsland(g) {
+  if (STAGE.body) {
+    g.fillStyle = '#1c2030';
+    g.beginPath();
+    g.moveTo(STAGE.body[0][0], STAGE.body[0][1]);
+    for (let i = 1; i < STAGE.body.length; i++) g.lineTo(STAGE.body[i][0], STAGE.body[i][1]);
+    g.closePath();
+    g.fill();
+    // A faint inner shade so the underside reads as rock and not a hole.
+    g.fillStyle = 'rgba(255,255,255,0.04)';
+    g.beginPath();
+    g.moveTo(STAGE.body[0][0], STAGE.body[0][1]);
+    for (let i = 1; i < STAGE.body.length; i++) g.lineTo(STAGE.body[i][0], STAGE.body[i][1] + 3);
+    g.closePath();
+    g.fill();
+  }
+  for (const p of STAGE.platforms) {
+    if (p.trap) {
+      const door = p;
+      if (trapOpen > 0) {
+        // Open: the two leaves hang from the hinges at either end.
+        g.fillStyle = '#62605d';
+        g.fillRect(door.x, door.y, 3, 14);
+        g.fillRect(door.x + door.w - 3, door.y, 3, 14);
+        g.fillStyle = 'rgba(0,0,0,0.42)';
+        g.fillRect(door.x, door.y, door.w, 1);
+      } else {
+        // Shut. Armed, it shakes: one pixel either way, faster as it goes.
+        const shake = trapArm > 0 ? ((Math.floor(trapArm / 3) % 2) ? 1 : -1) : 0;
+        g.fillStyle = trapArm > 0 && (Math.floor(trapArm / 4) % 2) ? '#7a7773' : '#62605d';
+        g.fillRect(door.x + shake, door.y, door.w, 6);
+        g.fillStyle = 'rgba(255,255,255,0.18)';
+        g.fillRect(door.x + shake, door.y, door.w, 1);
+        g.fillStyle = 'rgba(0,0,0,0.42)';
+        g.fillRect(door.x, door.y + 6, door.w, 2);
+      }
+      continue;
+    }
+    g.fillStyle = p.main ? '#262b3d' : '#2a3044';
+    g.fillRect(p.x, p.y, p.w, p.main ? 10 : 6);
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.fillRect(p.x, p.y, p.w, 1);
+    g.fillStyle = 'rgba(0,0,0,0.42)';
+    g.fillRect(p.x, p.y + (p.main ? 10 : 6), p.w, 2);
+  }
+}
+
 function drawStage(g) {
   const t = TILES[STAGE.theme] || {};
+  if (STAGE.body) { drawIsland(g); return; }
 
   if (STAGE.ceilingY !== null && t.ceiling) {
     const im = tileImg('ceiling');
@@ -9922,6 +10715,9 @@ function drawFighter(g, f) {
   drawPole(g, f);
   drawCharge(g, f);
   drawDrink(g, f);
+  drawSlots(g, f);
+  drawGuillotine(g, f);
+  drawSleep(g, f);
 
   /* Confused had no tell at all. The only way to find out your controls were
      inverted was to walk the wrong way off a ledge, which is a lesson that
@@ -10417,7 +11213,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'a816a24645';
+const BUILD_ID = '72e2ba8bff';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10428,7 +11224,7 @@ const BUILD_ID = 'a816a24645';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.52';
+const VERSION = '2.53';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -10595,6 +11391,8 @@ function saveSim() {
     // not, leaving one machine on a screen the other never reached.
     scene: scene,
     resultTimer: resultTimer,
+    trapArm: trapArm,
+    trapOpen: trapOpen,
   };
 }
 
@@ -10624,6 +11422,8 @@ function restoreSim(snap) {
   banner = snap.banner ? Object.assign({}, snap.banner) : null;
   scene = snap.scene;
   resultTimer = snap.resultTimer;
+  trapArm = snap.trapArm || 0;
+  trapOpen = snap.trapOpen || 0;
 }
 
 /** One input map per seat, however many seats there turn out to be. */

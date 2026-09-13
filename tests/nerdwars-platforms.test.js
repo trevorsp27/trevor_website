@@ -2590,13 +2590,12 @@ test("the status and burp sounds sit under the sounds that matter", async () => 
    is a workaround, not a fix: the real problem is that the suite's seeds are
    positional. See the note on this in the commit. */
 test("Simon is in the game off one sheet, with a kit that works", async () => {
-  /* Eight cells of art and nothing else, so his whole kit is placeholders.
-     That is fine; what is not fine is a placeholder that breaks, which is
-     exactly what happened last time. The two generic guards above already
-     drive every one of his moves -- this pins the things specific to him.
-
-     Note what is NOT asserted: damage numbers, or how he feels. Those are
-     meant to change the moment somebody decides what Simon actually does. */
+  /* Eight cells of base art off one sheet, and -- since 2.53 -- a kit of his
+     own: a hotdog, the slots, the guillotine, the slouch. Those are tested
+     for what they DO in nerdwars-simon.test.js. This pins the plumbing they
+     all sit on: he is where the select expects him, every frame exists,
+     every slot is filled and priced, and every button produces a move that
+     ends with him still on the stage. */
   const run = await bootEngine();
   assert.equal(run("ORDER.indexOf('simon')"), 7, "appended, not inserted");
 
@@ -2643,14 +2642,15 @@ test("Simon is in the game off one sheet, with a kit that works", async () => {
       k + " is " + kit[k] + ", outside the range the rest of the roster uses");
   }
 
-  // And he actually fights: pick him, throw everything, stay on the stage.
+  // And he actually fights: every button starts a move, every move ends,
+  // nobody's numbers go bad, and he is still standing on the stage after.
   const fought = run(`(function () {
     select.cursor=[7,4]; twoPlayer=true; playerCount=2; humanCount=0;
     stagePick=0; startBattle();
     for (var i=0;i<130;i++) step();
     var me = fighters[0], foe = fighters[1];
     var main = STAGE.platforms.find(function (p) { return p.main; });
-    var name = me.def.name, took = 0, bad = 0;
+    var name = me.def.name, started = 0, ended = 0, bad = 0;
     netplay.active = true;
     var BITS = [32, 512, 1024, 2048, 256];
     for (var b = 0; b < BITS.length; b++) {
@@ -2658,30 +2658,33 @@ test("Simon is in the game off one sheet, with a kit that works", async () => {
       me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0;
       me.landLag=0; me.invuln=0; me.grabbing=-1; me.grounded=true;
       me.facing=1; me.stocks=99; me.eliminated=false; me.vx=0; me.vy=0;
-      me.x=main.x+40; me.y=main.y; me.specialSpawned=false;
+      me.x=main.x+40; me.y=main.y; me.specialSpawned=false; me.ultMeter=999;
       foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
-      foe.hasHit=true;
-      var h0 = foe.health;
-      for (var i = 0; i < 60; i++) {
-        me.hitstop=0; me.mana=999; me.ultMeter=999;
-        foe.hitstop=0; foe.invuln=0; foe.hitstun=0; foe.setState('idle');
-        foe.x=main.x+52; foe.vx=0; foe.y=main.y; foe.grounded=true;
+      foe.hasHit=true; foe.grabbedBy=-1; foe.x = main.x + 120; foe.y = main.y;
+      var sawMove = false, wasDone = false;
+      for (var i = 0; i < 420; i++) {
+        me.hitstop=0; me.mana=999;
         netplay.framePads = [bitsToPad(i === 0 ? BITS[b] : 0), bitsToPad(0)];
         step();
-        if (!isFinite(me.x) || !isFinite(me.y)) bad++;
+        if (me.state === 'attack' || me.state === 'special' || me.state === 'ult') sawMove = true;
+        if (sawMove && me.state !== 'attack' && me.state !== 'special' && me.state !== 'ult') { wasDone = true; break; }
+        if (me.health !== me.health || foe.health !== foe.health) bad++;
       }
-      if (foe.health < h0) took++;
+      if (sawMove) started++;
+      if (wasDone) ended++;
     }
     netplay.active = false; netplay.framePads = null;
-    return { name: name, took: took, bad: bad };
+    return { name: name, started: started, ended: ended, bad: bad,
+             onStage: me.stocks === 99 && !me.eliminated && me.y <= main.y + 1 };
   })()`);
-  assert.equal(fought.name, "SIMON", "cursor 7 should select Simon");
-  assert.equal(fought.bad, 0, "and he must never leave the number line");
-  assert.equal(fought.took, 5,
-    "all five moves -- jab, three specials, ult -- should connect with " +
-    "somebody standing right next to him; only " + fought.took + " did");
+  assert.equal(fought.name, "SIMON");
+  assert.equal(fought.started, 5,
+    "all five buttons -- jab, three specials, ult -- should start a move; " + fought.started + " did");
+  assert.equal(fought.ended, 5,
+    "and every one should finish and hand him back; " + fought.ended + " did");
+  assert.equal(fought.bad, 0, "and nobody's health may ever be NaN");
+  assert.ok(fought.onStage, "and he should still be standing on the stage");
 });
-
 
 test("the rainbow is a lob again, wearing one colour at a time", async () => {
   /* This move has been three things. A lobbed dot with a flag of colour on

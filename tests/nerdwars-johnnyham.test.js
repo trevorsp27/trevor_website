@@ -257,7 +257,7 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
     JSON.stringify([
       "OUT OF THE TREES", "HONEY BAKED", "LEG DAY", "THE STROKES",
       "SHIRTS OPTIONAL", "LASER SWORD", "DESIGNATED DRIVER",
-      "PLACEHOLDER ULT", "PLACEHOLDER ULT",
+      "SIMON SLOUCH", "PLACEHOLDER ULT",
     ])
   );
 });
