@@ -50,6 +50,7 @@ function seededMath() {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
+const LADDER_SRC = readFileSync(path.join(JS_DIR, "ladder.js"), "utf8");
 const ENGINE_PATH = path.join(HERE, "..", "..", "NerdWars", "src", "nerdwars.js");
 
 /* Stores what is written to it, unlike a discard-everything stub: the engine
@@ -3090,6 +3091,8 @@ function stubLobby(run, phase) {
       start: function () { __lobby.calls.push('start'); },
       leave: function () { __lobby.calls.push('leave'); },
       setStage: function () {},
+      me: function () { return __lobby.me || null; },
+      setMe: function (m) { __lobby.me = m; },
       snapshot: function () {
         return { available: true, phase: __lobby.phase, role: 'host',
                  code: __lobby.code, mySlot: 0, myChar: 'kel',
@@ -3121,11 +3124,12 @@ test("the title reaches an online room without leaving the game", async () => {
   const run = await bootEngine();
   stubLobby(run, 'idle');
 
-  // Two modes, and the second is the online one.
+  // Three entries, and the middle one is the online one.
   const modes = run("MODES.map(function (m) { return m.label; })");
-  assert.equal(modes.length, 2,
-    "the title should offer exactly two ways to play, got: " + modes.join(" / "));
+  assert.equal(modes.length, 3,
+    "the title should offer exactly three entries, got: " + modes.join(" / "));
   assert.ok(/ONLINE/i.test(modes[1]), "the second should be the online one");
+  assert.ok(/LEADERBOARD/i.test(modes[2]), "the third should be the leaderboard");
 
   run("scene = 'title'; titleChoice = 1;");
   assert.equal(tapKey(run, 'Enter'), 'online',
@@ -3593,4 +3597,381 @@ test("nine fighters still fit on every screen that lists them", async () => {
     "the title's crew line should fit across; it spans " +
     geo.crewLeft.toFixed(1) + ".." + geo.crewRight.toFixed(1) +
     " on a " + geo.VW + "px screen");
+});
+
+
+/* A ladder with a real log behind it: ladder.js itself, folded over matches
+   written the way net.js writes them. Stubbing `view()` would make the
+   leaderboard tests agree with whatever the screen felt like drawing -- the
+   only interesting question is whether the numbers on the canvas are the
+   ladder's numbers. */
+function stubLadder(run, me) {
+  run(LADDER_SRC);
+  run(`(function () {
+    var K = window.NerdWarsLadderKit;
+    var db = { matches: {}, profiles: {} };
+    var n = 0;
+    var NAME = { 'u-trev': 'TREV', 'u-kel': 'KEL', 'u-nick': 'NICK',
+                 'u-reese': 'REESE', 'u-simon': 'SIMON', 'u-squalls': 'SQUALLS',
+                 'u-ladeane': 'LADEANE', 'u-johnny': 'JOHNNY', 'u-cobeus': 'COBEUS' };
+    function put(a, b, winner, mode) {
+      n++;
+      var confirm = {};
+      if (mode === 'ok') confirm[b] = { agree: true, winnerSlot: winner };
+      else if (mode === 'no') confirm[b] = { agree: false };
+      // 'quiet' leaves the confirm empty, which is pending.
+      db.matches['m' + (1000 + n)] = {
+        at: n, uids: [a, b], names: [NAME[a], NAME[b]],
+        chars: ['kel', 'trev'], stage: 'space', winnerSlot: winner,
+        stocks: [1, 0], frames: 900, build: 'test', host: a, confirm: confirm,
+      };
+    }
+
+    /* Four settled players, strictly ordered by strength, so the rating
+       column has an unambiguous right answer. Stronger always wins, so a
+       round robin four deep gives everybody twelve matches -- past the
+       provisional line -- and a strict 12/8/4/0 spread of wins. */
+    var vets = ['u-trev', 'u-kel', 'u-nick', 'u-reese'];
+    for (var round = 0; round < 4; round++) {
+      for (var i = 0; i < vets.length; i++) {
+        for (var j = i + 1; j < vets.length; j++) {
+          put(vets[i], vets[j], 0, 'ok');       // the stronger one hosts and wins
+        }
+      }
+    }
+    // Five newcomers, two matches each, so the table is nine deep and has to
+    // scroll -- and so the provisional marker has somebody to mark.
+    ['u-simon', 'u-squalls', 'u-ladeane', 'u-johnny', 'u-cobeus']
+      .forEach(function (u, i) {
+        put(vets[i % vets.length], u, 0, 'ok');
+        put(u, vets[(i + 1) % vets.length], 1, 'ok');
+      });
+    // One nobody confirmed and one somebody argued with. Neither moves a
+    // rating, and both have to be visible anyway.
+    put('u-nick', 'u-reese', 0, 'quiet');
+    put('u-reese', 'u-nick', 0, 'no');
+
+    var store = K.memoryStore(db);
+    window.__ladderDb = db;
+    /* Counted, because the one thing a leaderboard has to do that a pure
+       fold cannot is go and look. A screen that only ever draws its cache is
+       permanently showing whatever was true when the page loaded. */
+    window.__ladderReads = 0;
+    var real = store.listMatches;
+    store.listMatches = function (since) { window.__ladderReads++; return real(since); };
+    window.NerdWarsLadder = K.createLadder(store);
+    return window.NerdWarsLadder.refresh();
+  })()`);
+  if (me !== undefined) {
+    run("__lobby.me = " + JSON.stringify(me) + ";");
+  }
+}
+
+/* What drawLadder actually put on the screen, in draw order. Measured rather
+   than recomputed, for the same reason the crew line is: a test that works
+   out for itself where row four ought to be will keep passing when row four
+   stops being drawn at all. */
+const drawnLadder = (run) => run(`(function () {
+  var lines = [], realText = text;
+  text = function (str, x, y, size, color) {
+    lines.push({ s: String(str), x: x, y: y, color: color });
+  };
+  try { drawLadder(); } finally { text = realText; }
+  var v = (window.NerdWarsLadder && window.NerdWarsLadder.view()) ||
+          { rows: [], pending: 0, disputed: 0 };
+  return {
+    lines: lines.map(function (l) {
+      return l.s + '|' + l.x + '|' + l.y + '|' + l.color;
+    }),
+    rows: v.rows.map(function (r) {
+      return [r.uid, r.name, r.rating, r.w, r.l, r.d, r.played,
+              r.provisional ? 1 : 0].join('|');
+    }),
+    pending: v.pending, disputed: v.disputed, cursor: ladderView.row,
+  };
+})()`);
+
+const parseLines = (got) => got.lines.map((l) => {
+  const bits = l.split('|');
+  return { s: bits.slice(0, bits.length - 3).join('|'),
+           x: Number(bits[bits.length - 3]),
+           y: Number(bits[bits.length - 2]),
+           color: bits[bits.length - 1] };
+});
+const parseRows = (got) => got.rows.map((r) => {
+  const b = r.split('|');
+  return { uid: b[0], name: b[1], rating: Number(b[2]), w: Number(b[3]),
+           l: Number(b[4]), d: Number(b[5]), played: Number(b[6]),
+           provisional: b[7] === '1' };
+});
+
+test("the leaderboard puts the ladder's own numbers on the screen", async () => {
+  /* The Elo maths has been right and invisible for a while: ladder.js folds
+     a log into ratings and nothing drew them. This is the half that makes it
+     a feature -- and the assertions all compare the canvas against
+     NerdWarsLadder.view(), never against arithmetic redone in the test, so
+     the screen cannot quietly disagree with the ladder. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+
+  run("scene = 'title'; titleChoice = 2;");
+  const readsBefore = run("__ladderReads");
+  assert.equal(tapKey(run, 'Enter'), 'ladder',
+    "confirming LEADERBOARD should open it in the game");
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.ok(run("__ladderReads") > readsBefore,
+    "opening it should go and look for matches played since last time, " +
+    "or the board is frozen at whatever was true when the page loaded");
+
+  const got = drawnLadder(run);
+  const rows = parseRows(got);
+  const lines = parseLines(got);
+  assert.equal(rows.length, 9,
+    "nine people played, so nine should be on the board, got " + rows.length);
+
+  // The name column, top to bottom, is the ladder's order.
+  const names = lines.filter((l) => l.x === 26)
+    .sort((a, b) => a.y - b.y).map((l) => l.s.replace(/\s+\(you\)$/, ''));
+  assert.equal(names.length, 8,
+    "eight rows fit on a 180px screen; got " + names.length);
+  assert.equal(names.join(','), rows.slice(0, 8).map((r) => r.name).join(','),
+    "the screen should list them in the ladder's order");
+
+  // And the rating column is the ladder's ratings, not some other number.
+  const byY = {};
+  lines.forEach((l) => { (byY[l.y] = byY[l.y] || {})[l.x] = l.s; });
+  rows.slice(0, 8).forEach((r, i) => {
+    const y = 34 + i * 13;
+    assert.ok(byY[y], "row " + i + " should have been drawn");
+    assert.equal(byY[y][26].replace(/\s+\(you\)$/, ''), r.name);
+    assert.equal(byY[y][320 - 74],
+      r.provisional ? '(' + r.rating + ')' : String(r.rating),
+      r.name + "'s rating should be the ladder's " + r.rating);
+    assert.equal(byY[y][320 - 34], r.w + '-' + r.l + (r.d ? '-' + r.d : ''),
+      r.name + "'s record should be " + r.w + '-' + r.l);
+  });
+
+  /* Somebody with twelve matches and somebody with two must not read the
+     same. A rating off two games is three wins and a number, not a position
+     on a ladder, and the brackets are what says so. */
+  const settled = rows.filter((r) => !r.provisional);
+  const fresh = rows.filter((r) => r.provisional);
+  assert.ok(settled.length >= 4 && fresh.length >= 4,
+    "the fixture should have both kinds, got " + settled.length + " settled and " +
+    fresh.length + " provisional");
+  assert.ok(rows.slice(0, settled.length).every((r) => !r.provisional),
+    "settled players should be above provisional ones");
+
+  // Unconfirmed and disputed matches are said out loud rather than dropped.
+  assert.equal(got.pending, 1);
+  assert.equal(got.disputed, 1);
+  const notes = lines.filter((l) => /confirmed|disputed/.test(l.s)).map((l) => l.s);
+  assert.equal(notes.length, 1, "one line should carry both counts");
+  assert.ok(notes[0].includes('1 waiting to be confirmed'),
+    "the pending count should be on screen, got: " + notes[0]);
+  assert.ok(notes[0].includes('1 disputed'),
+    "and so should the disputed count, got: " + notes[0]);
+});
+
+test("a leaderboard taller than the screen scrolls instead of stopping at eight", async () => {
+  /* Nine players is already more than fits, and the roster is nine -- so the
+     ninth person on the board is invisible the moment anybody plays. The
+     cursor has to carry the window with it. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("scene = 'ladder'; ladderView.row = 0;");
+
+  const rows = parseRows(drawnLadder(run));
+  const last = rows[rows.length - 1].name;
+  const first = rows[0].name;
+  const onScreen = (g) => parseLines(g).filter((l) => l.x === 26)
+    .map((l) => l.s.replace(/\s+\(you\)$/, ''));
+
+  assert.ok(!onScreen(drawnLadder(run)).includes(last),
+    "the ninth player should be off the bottom to begin with");
+
+  for (let i = 0; i < rows.length - 1; i++) tapKey(run, 'KeyS');
+  const bottom = drawnLadder(run);
+  assert.equal(bottom.cursor, rows.length - 1,
+    "S should walk the cursor to the end");
+  assert.ok(onScreen(bottom).includes(last),
+    "and the table should have scrolled to show " + last);
+  assert.ok(!onScreen(bottom).includes(first),
+    "with the top of the table now off the screen");
+
+  // And it wraps, rather than sticking at the end.
+  tapKey(run, 'KeyS');
+  assert.equal(drawnLadder(run).cursor, 0, "past the last row goes back to the top");
+  tapKey(run, 'KeyW');
+  assert.equal(drawnLadder(run).cursor, rows.length - 1, "and W goes the other way");
+});
+
+test("the leaderboard says what you have done against the person you are looking at", async () => {
+  /* The half of the screen with no model behind it. A rating is a claim; a
+     head-to-head is a fact, and it is the one nine friends actually argue
+     about. It reads from NerdWarsLadder.between() so the line cannot drift
+     from the log it came out of. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  run("scene = 'ladder'; ladderView.row = 0;");
+
+  const rows = parseRows(drawnLadder(run));
+  const mineAt = rows.findIndex((r) => r.uid === 'u-trev');
+  assert.ok(mineAt >= 0, "the signed-in player should be on their own board");
+
+  // On yourself, there is no head-to-head to show.
+  run("ladderView.row = " + mineAt + ";");
+  const onSelf = parseLines(drawnLadder(run));
+  assert.ok(onSelf.some((l) => l.s === 'this is you'),
+    "pointing at yourself should say so, not play you against yourself");
+  assert.ok(onSelf.some((l) => /\(you\)/.test(l.s)),
+    "and your row should be marked in the table");
+
+  // On somebody else, the record against THEM.
+  const other = rows.find((r) => r.uid !== 'u-trev' && !r.provisional);
+  const at = rows.indexOf(other);
+  run("ladderView.row = " + at + ";");
+  const h = run("(function () { var h = NerdWarsLadder.between('u-trev', " +
+    JSON.stringify(other.uid) + "); return [h.w, h.l, h.d].join('|'); })()")
+    .split('|').map(Number);
+  assert.ok(h[0] + h[1] + h[2] > 0, "the fixture should have them meeting");
+  const line = parseLines(drawnLadder(run)).find((l) => /^you vs /.test(l.s));
+  assert.ok(line, "a head-to-head line should be drawn");
+  assert.ok(line.s.includes(other.name),
+    "it should name who you are looking at, got: " + line.s);
+  assert.ok(line.s.includes(h[0] + ' - ' + h[1]),
+    "and carry the ladder's own record " + h[0] + ' - ' + h[1] +
+    ", got: " + line.s);
+
+  /* Two people who have never met show nothing rather than 0 - 0, which
+     reads as a scoreline somebody lost. */
+  const stranger = rows.find((r) => {
+    const q = run("(function () { var h = NerdWarsLadder.between('u-trev', " +
+      JSON.stringify(r.uid) + "); return h.w + h.l + h.d; })()");
+    return r.uid !== 'u-trev' && q === 0;
+  });
+  if (stranger) {
+    run("ladderView.row = " + rows.indexOf(stranger) + ";");
+    const never = parseLines(drawnLadder(run));
+    assert.ok(never.some((l) => l.s === 'you have never played ' + stranger.name),
+      "never having played should say so rather than showing 0 - 0");
+  }
+
+  /* Signed out, there is no "you" to compare anybody to -- and showing an
+     empty record instead would be claiming you lost to everybody. */
+  run("__lobby.me = null; ladderView.row = " + at + ";");
+  const anon = parseLines(drawnLadder(run));
+  assert.ok(!anon.some((l) => /^you vs /.test(l.s)),
+    "signed out, there is nobody to be the 'you' in a head-to-head");
+  assert.ok(anon.some((l) => /sign in/i.test(l.s)),
+    "it should say what is missing");
+  assert.ok(!anon.some((l) => /\(you\)/.test(l.s)),
+    "and no row should be marked as yours");
+});
+
+test("a build with no ladder says so instead of showing an empty board", async () => {
+  /* Same shape as the online screen. The standalone NerdWars.html has no
+     Firebase and no netplay, so it has nothing to rate -- and an empty table
+     there would read as "nobody has ever won a game". */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  run("delete window.NerdWarsLadder; scene = 'ladder';");
+
+  const lines = parseLines(drawnLadder(run)).map((l) => l.s).join(' ');
+  assert.ok(/website copy/.test(lines),
+    "it should point at the copy that does have one, got: " + lines);
+  assert.ok(/trevorspinosa\.com/.test(lines), "with somewhere to go");
+  assert.ok(!/RATING/.test(lines), "and no empty table, got: " + lines);
+
+  // And it must not fall over when somebody presses the keys anyway.
+  for (const k of ['KeyS', 'KeyW', 'KeyR']) {
+    assert.equal(tapKey(run, k), 'ladder', k + " should be harmless here");
+  }
+  assert.equal(tapKey(run, 'Escape'), 'title', "and ESC still goes back");
+});
+
+
+test("a leaderboard row stays inside the screen whatever a name is", async () => {
+  /* Nobody picks these names in this game -- they come off a Google account,
+     and "Trevor Spinosa (Work)" is a perfectly ordinary one. A name column
+     with no limit runs straight through the rating beside it and off the
+     right-hand edge of a 320px screen, and the rating is the one thing the
+     screen exists to show. */
+  const run = await bootEngine();
+  stubLobby(run, 'idle');
+  stubLadder(run, { uid: 'u-trev', name: 'TREV' });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+
+  // Rename everybody to something absurd, and fold a fresh ladder over it --
+  // refresh() is incremental and will not re-read what it already folded.
+  run(`(function () {
+    for (var mid in __ladderDb.matches) {
+      __ladderDb.matches[mid].names = [
+        'Bartholomew Spinosa-Wentworth III (Work Account, Do Not Use)',
+        'Kelvin Maximilian Vandersomething Jr. (personal, old)'];
+    }
+    var K = window.NerdWarsLadderKit;
+    window.NerdWarsLadder = K.createLadder(K.memoryStore(__ladderDb));
+    return window.NerdWarsLadder.refresh();
+  })()`);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  /* Row 1 rather than row 0, so the head-to-head line underneath has a long
+     name in it too -- on your own row it only ever says "this is you". */
+  run("scene = 'ladder'; ladderView.row = 1;");
+
+  /* There is no font engine in a vm, so the advance width comes from the one
+     fact about Consolas that matters here: it is monospaced at 0.55 em per
+     glyph. Everything else -- which strings, at what size, aligned which
+     way, at what x -- is read off the engine as it draws. */
+  const measure = () => run(`(function () {
+    var out = [], realText = text;
+    text = function (str, x, y, size, color, align, weight) {
+      var w = String(str).length * size * 0.55;
+      var left = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+      out.push([String(str), left, left + w, y].join('~~'));
+    };
+    try { drawLadder(); } finally { text = realText; }
+    return out;
+  })()`).map((r) => {
+    const b = r.split('~~');
+    return { s: b[0], left: Number(b[1]), right: Number(b[2]), y: Number(b[3]) };
+  });
+  const extents = measure();
+  assert.ok(extents.some((e) => /^you vs /.test(e.s)),
+    "row 1 should be somebody else, so the head-to-head line is drawn too");
+
+  assert.ok(extents.length > 8, "the board should still have drawn");
+  assert.ok(extents.some((e) => /^Bartholomew|^Kelvin/.test(e.s)),
+    "the long names should be on screen somewhere, got: " +
+    extents.map((e) => e.s).join(" / "));
+
+  for (const e of extents) {
+    assert.ok(e.left >= 0 && e.right <= 320,
+      JSON.stringify(e.s) + " spans " + e.left.toFixed(1) + ".." +
+      e.right.toFixed(1) + " on a 320px screen");
+    assert.ok(e.y > 0 && e.y < 180,
+      JSON.stringify(e.s) + " draws at y " + e.y + " on a 180px screen");
+  }
+
+  /* And specifically: a name must not reach the rating beside it. */
+  const byRow = {};
+  extents.forEach((e) => { (byRow[e.y] = byRow[e.y] || []).push(e); });
+  let checked = 0;
+  for (const y of Object.keys(byRow)) {
+    const row = byRow[y];
+    const name = row.find((e) => e.left === 26);
+    const rating = row.find((e) => /^\(?\d+\)?$/.test(e.s) && e.right > 200);
+    if (!name || !rating) continue;
+    checked++;
+    assert.ok(name.right <= rating.left,
+      JSON.stringify(name.s) + " ends at " + name.right.toFixed(1) +
+      " and the rating beside it starts at " + rating.left.toFixed(1));
+  }
+  assert.ok(checked >= 8, "every visible row should have been checked, did " + checked);
 });

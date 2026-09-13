@@ -8339,12 +8339,14 @@ let titleChoice = 0;
 const MODES = [
   { label: '1 PLAYER  (vs CPU)', players: 2, humans: 1 },
   { label: 'PLAY ONLINE', online: true },
+  { label: 'LEADERBOARD', ladder: true },
 ];
 
 // Shared by the keyboard and the START button, so the two can't drift apart.
 function enterSelect() {
   const m = MODES[titleChoice] || MODES[0];
   if (m.online) { enterOnline(); return; }
+  if (m.ladder) { enterLadder(); return; }
   playerCount = m.players;
   humanCount = m.humans;
   select.locked = new Array(MAX_PLAYERS).fill(false);
@@ -8676,6 +8678,166 @@ function drawRoom() {
        'center', snap.canStart ? 800 : 500);
   text('WASD to move    SPACE to lock in and out    ESC to leave the room',
        VW / 2, VH - 3, 5, '#454c66', 'center', 500);
+}
+
+/* =====================================================================
+   SCENE: LEADERBOARD
+
+   Drawn from a snapshot, exactly like the room: ladder().view() is read once
+   a frame and nothing on this path ever awaits. The refresh is kicked on the
+   way IN and by an explicit keypress, never from the frame loop -- a fetch
+   per frame would spend a day's Firestore quota in about a minute.
+
+   Ratings and head-to-head share one screen on purpose. Elo over nine
+   friends is noisy for weeks -- a high K has to be, or it never finds
+   anybody's level -- and a bare number invites more confidence than it has
+   earned. The record beside it is the part that is simply true, and pointing
+   the cursor at somebody shows what you have done against THEM, which is the
+   thing nine friends actually argue about.
+   ===================================================================== */
+
+function ladderApi() {
+  return (typeof window !== 'undefined' && window.NerdWarsLadder) || null;
+}
+
+/* Who the ladder thinks you are is the same answer the room uses: there is
+   one sign-in, held by net.js, and asking it twice is how two screens end up
+   disagreeing about whether you are logged in. */
+function ladderMe() {
+  const lb = lobby();
+  const me = lb && lb.me && lb.me();
+  return me && me.uid ? me : null;
+}
+
+const ladderView = { row: 0 };
+const NAME_COL = 24;      // characters of name the rating column leaves room for
+
+function enterLadder() {
+  ladderView.row = 0;
+  const L = ladderApi();
+  if (L && L.refresh) L.refresh();
+  scene = 'ladder';
+}
+
+function updateLadder() {
+  if (menuBack()) { scene = 'title'; return; }
+  const L = ladderApi();
+  if (!L) return;
+  const rows = L.view().rows;
+  if (tapped('KeyR')) L.refresh();
+  if (!rows.length) return;
+  if (tapped('KeyW') || tapped('ArrowUp')) {
+    ladderView.row = (ladderView.row + rows.length - 1) % rows.length;
+  }
+  if (tapped('KeyS') || tapped('ArrowDown')) {
+    ladderView.row = (ladderView.row + 1) % rows.length;
+  }
+  // A refresh can shrink the table under the cursor.
+  ladderView.row = clamp(ladderView.row, 0, rows.length - 1);
+}
+
+function drawLadder() {
+  sctx.fillStyle = '#0d1020';
+  sctx.fillRect(0, 0, view.width, view.height);
+  text('LEADERBOARD', VW / 2, 18, 11, '#ffffff', 'center', 800);
+
+  const L = ladderApi();
+  if (!L) {
+    /* The standalone build has no ladder in it for the same reason it has no
+       netplay: nobody to play and nothing to record. Same shape as the
+       online screen -- the entry is on both title screens and this says why
+       one of them cannot do anything. */
+    text('the ladder lives on the website copy', VW / 2, 70, 8,
+         '#c8cee6', 'center', 600);
+    text('trevorspinosa.com/pages/nerdwars.html', VW / 2, 84, 7,
+         '#8fe08f', 'center', 600);
+    text('ESC to go back', VW / 2, VH - 8, 6, '#454c66', 'center', 500);
+    return;
+  }
+
+  const v = L.view();
+  const me = ladderMe();
+
+  if (v.error) {
+    text('could not reach the ladder', VW / 2, 64, 8, '#ff9f43', 'center', 600);
+    text(String(v.error).slice(0, 54), VW / 2, 78, 5.5, '#8792b0', 'center', 500);
+  } else if (!v.rows.length) {
+    text(v.loading ? 'loading...' : 'no matches yet', VW / 2, 70, 8,
+         '#8792b0', 'center', 600);
+    text('play somebody online and it turns up here', VW / 2, 84, 6,
+         '#5f6884', 'center', 500);
+  }
+
+  // Rank, name, rating, record. Eight rows fit; the cursor scrolls the rest.
+  const top = 34, lineH = 13, PAGE = 8;
+  const shown = Math.min(v.rows.length, PAGE);
+  const first = clamp(ladderView.row - 3, 0, Math.max(0, v.rows.length - PAGE));
+  if (v.rows.length) {
+    text('RATING', VW - 74, top - 11, 5, '#454c66', 'right', 500);
+    text('W-L', VW - 34, top - 11, 5, '#454c66', 'right', 500);
+    text('PL', VW - 12, top - 11, 5, '#454c66', 'right', 500);
+  }
+  for (let i = 0; i < shown; i++) {
+    const r = v.rows[first + i];
+    if (!r) break;
+    const y = top + i * lineH;
+    const on = first + i === ladderView.row;
+    const mine = !!me && r.uid === me.uid;
+    if (on) {
+      sctx.fillStyle = '#1b2138';
+      sctx.fillRect(px(10), px(y - 8), px(VW - 20), px(12));
+    }
+    text(String(first + i + 1), 18, y, 6.5,
+         r.provisional ? '#5f6884' : '#8792b0', 'right', 600);
+    /* Names arrive from a Google account, not from this game, so nothing
+       here chose their length. The column runs from x=26 to the rating's
+       left edge around x=221 -- so a long one is cut rather than allowed to
+       run through the rating and off the side of a 320px screen. */
+    const shownName = r.name.length > NAME_COL
+      ? r.name.slice(0, NAME_COL - 1) + '.' : r.name;
+    text(shownName + (mine ? '  (you)' : ''), 26, y, 7.5,
+         on ? '#ffffff' : mine ? '#8fe08f' : '#c8cee6', 'left', on ? 800 : 600);
+    /* A provisional rating is bracketed rather than hidden. Hiding it makes
+       a new player invisible on their own leaderboard; the brackets say the
+       number is not load-bearing yet without taking their name off it. */
+    text(r.provisional ? '(' + r.rating + ')' : String(r.rating),
+         VW - 74, y, 7.5, r.provisional ? '#6b7392' : '#ffd60a', 'right', 700);
+    text(r.w + '-' + r.l + (r.d ? '-' + r.d : ''), VW - 34, y, 6.5,
+         '#8792b0', 'right', 600);
+    text(String(r.played), VW - 12, y, 6, '#5f6884', 'right', 500);
+  }
+
+  /* Head to head against whoever the cursor is on -- the half of the screen
+     with no model behind it, just what happened. */
+  const pick = v.rows[ladderView.row];
+  if (pick && me && pick.uid !== me.uid) {
+    const h = L.between(me.uid, pick.uid);
+    const played = h.w + h.l + h.d;
+    text(played
+           ? 'you vs ' + pick.name + '   ' + h.w + ' - ' + h.l +
+             (h.d ? ' - ' + h.d : '')
+           : 'you have never played ' + pick.name,
+         VW / 2, VH - 26, 7, played ? '#ffffff' : '#5f6884', 'center', 700);
+  } else if (pick && me) {
+    text('this is you', VW / 2, VH - 26, 7, '#8fe08f', 'center', 700);
+  } else if (pick) {
+    text('sign in to see your own record', VW / 2, VH - 26, 6.5,
+         '#5f6884', 'center', 600);
+  }
+
+  /* Matches nobody has confirmed, and matches somebody argued with. Said out
+     loud because the alternative -- dropping them quietly -- is how a ladder
+     stops matching what people remember happening. */
+  const notes = [];
+  if (v.pending) notes.push(v.pending + ' waiting to be confirmed');
+  if (v.disputed) notes.push(v.disputed + ' disputed');
+  if (notes.length) {
+    text(notes.join('    '), VW / 2, VH - 14, 6,
+         v.disputed ? '#ff9f43' : '#6b7392', 'center', 600);
+  }
+
+  text('W/S to look    R to refresh    ESC to go back',
+       VW / 2, VH - 4, 5.5, '#454c66', 'center', 500);
 }
 
 /* =====================================================================
@@ -9780,7 +9942,7 @@ function drawTitle() {
 
   MODES.forEach((m, i) => {
     const on = titleChoice === i;
-    text((on ? '> ' : '  ') + m.label, VW / 2, 130 + i * 9, 8,
+    text((on ? '> ' : '  ') + m.label, VW / 2, 127 + i * 9, 8,
          on ? '#ffffff' : '#5f6884', 'center', on ? 800 : 500);
   });
   // The buttons are 325x128 -- two and a half times wider than they are tall
@@ -9968,6 +10130,7 @@ function render() {
   uiButtons.length = 0;
   if (scene === 'title') { drawTitle(); return; }
   if (scene === 'online') { drawOnline(); return; }
+  if (scene === 'ladder') { drawLadder(); return; }
   if (scene === 'room') { drawRoom(); return; }
   if (scene === 'help') { drawHelp(); return; }
   if (scene === 'select') { drawSelect(); return; }
@@ -10030,7 +10193,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '20ad6341e1';
+const BUILD_ID = 'ad6d74006e';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -10041,7 +10204,7 @@ const BUILD_ID = '20ad6341e1';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.46';
+const VERSION = '2.47';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -10940,6 +11103,7 @@ function step() {
   switch (scene) {
     case 'title': updateTitle(); break;
     case 'online': updateOnline(); break;
+    case 'ladder': updateLadder(); break;
     case 'room': updateRoom(); break;
     case 'help': updateHelp(); break;
     case 'select': updateSelect(); break;
