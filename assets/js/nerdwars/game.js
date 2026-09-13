@@ -579,7 +579,9 @@ const ROSTER = {
            landed", it is a second projectile in the ceiling. 0.62 puts the
            apex around 40, which is the height of the side platforms. */
         spikeSpeed: 1.6, spikeDrop: 3.4, spikeBounce: 0.62,
-        damage: 15, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+        // 15 before. It is three throws now, one of which threatens the same
+        // lane twice, so each individual connection is worth a little less.
+        damage: 12, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       },
       // He lived in the gym, so the other two slots came out of it rather than
       // being two more bones with the numbers changed.
@@ -721,7 +723,12 @@ const ROSTER = {
          So each note hits two and a half times harder, which is the trade
          the change was always supposed to be: fewer, and worth dodging.
          Back to 45.3%, within noise of where he started. */
-      damage: 22, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+      /* 22, not the 20 it was remembered as, and 15 now. The note count and
+         the per-note damage have been traded against each other twice in this
+         move's life -- see the two comments above -- so it is worth saying
+         which way this one went: fewer, harder notes stays, they are just
+         less hard. */
+      damage: 15, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -959,10 +966,13 @@ const ROSTER = {
            business and how it decays is the move's look. `turnAfter` is the
            knight's corner: it has to land two thirds of the way along the
            ray, not two thirds of the way through the FRAMES, and those are
-           different once the thing is decelerating. Measured, 22 gave 2.69:1;
-           19 gives the 2:1 a knight actually moves. */
+           different once the thing is decelerating. It also moves when the
+           ray gets longer: 19 was the 2:1 answer at SHARD_LIFE 46 and drifted
+           to 1.76 at 56, because the same 19 frames is a smaller fraction of
+           a longer flight. Retune this whenever the reaches or the life
+           change. */
         shard: {
-          turnAfter: 19,
+          turnAfter: 20,
           damage: 4, base: 2.0, scale: 5.2,
           angle: 44, kx: 0.71933980033865119, ky: 0.69465837045899725,
         },
@@ -3442,13 +3452,13 @@ const KNIGHT_DIRS = [
    burst of it looks like. */
 const CHESS_PIECES = [
   { key: 'knight', label: 'KNIGHT', art: KNIGHT_ART, ink: '#efe7d2',
-    dirs: KNIGHT_DIRS, damage: 3, reach: 24 },
+    dirs: KNIGHT_DIRS, damage: 3, reach: 32 },
   { key: 'bishop', label: 'BISHOP', art: BISHOP_ART, ink: '#9fd4ff',
-    dirs: DIAGONALS, damage: 4, reach: 36 },
+    dirs: DIAGONALS, damage: 4, reach: 48 },
   { key: 'rook', label: 'ROOK', art: ROOK_ART, ink: '#c9c2b4',
-    dirs: ORTHOGONALS, damage: 5, reach: 48 },
+    dirs: ORTHOGONALS, damage: 5, reach: 64 },
   { key: 'queen', label: 'QUEEN', art: QUEEN_ART, ink: '#ffd75e',
-    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6, reach: 62 },
+    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6, reach: 82 },
 ];
 
 /* The burst is a firework, not a volley.
@@ -3468,8 +3478,13 @@ const CHESS_PIECES = [
 
        SHARD_SPREAD = (1 - SHARD_DRAG ^ SHARD_LIFE) / (1 - SHARD_DRAG) */
 const SHARD_DRAG = 0.95;
-const SHARD_LIFE = 46;
-const SHARD_SPREAD = 18.1124;
+/* Reaches went up by a third and the life with them, rather than the reach
+   alone. Distance is speed times SHARD_SPREAD, so bumping only the reach buys
+   range by making every ray faster -- which walks straight back toward the
+   tracer rounds this was built to stop being. Ten more frames of flight pays
+   for most of the extra distance and the burst still coasts to a stop. */
+const SHARD_LIFE = 56;
+const SHARD_SPREAD = 18.8688;
 
 /* John's dog in the air. The trot stays a dozen fillRects; these are row
    strings because a lunge is a mouth, and a mouth drawn in the dog's own
@@ -8723,7 +8738,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'f501727f7a';
+const BUILD_ID = '8f2c6d1446';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -8734,7 +8749,7 @@ const BUILD_ID = 'f501727f7a';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.31';
+const VERSION = '2.32';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
