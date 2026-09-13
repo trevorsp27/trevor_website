@@ -1338,6 +1338,64 @@ ROSTER.simon = {
   },
 };
 
+/* SQUALLS.
+
+   A placeholder kit, the same shape as Simon's and for the same reason: the
+   art arrived and the moveset has not been decided yet. All four moves are
+   `uppercut`, which is the best-understood mover in the file, varying only
+   the two numbers that kind actually reads -- rise (NEGATIVE is up) and
+   drift. A little heavier and slower than Simon so the two placeholders are
+   not the same character twice.
+
+   He is the second fighter in the game with a drawn ATTACK SET, after Kel:
+   his sheet carried eight more frames with the punching arm out, and
+   sprite() swaps to them for the whole of any attack, special or ult. That
+   is free here -- no engine change, just art that exists. */
+ROSTER.squalls = {
+  name: 'SQUALLS',
+  origin: 'fresh',
+  tag: 'PLACEHOLDER MOVES, AWAITING A REAL KIT',
+  drawn: true,
+  weight: 104, walk: 1.38, jump: 6.3, doubleJump: 5.8,
+  jab: { startup: 6, active: 4, recovery: 12, damage: 7,
+         base: 2.4, scale: 6.6, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+         ox: 2, oy: -9, w: 12, h: 10 },
+  specials: {
+    // A shoulder barge: almost no lift, a lot of forward.
+    neutral: {
+      kind: 'uppercut', label: 'PLACEHOLDER',
+      startup: 7, active: 6, recovery: 15,
+      rise: -1.2, drift: 1.9,
+      damage: 8, base: 2.5, scale: 5.4, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
+      ox: 1, oy: -10, w: 15, h: 13,
+    },
+    // A stamp: up a little, down hard.
+    down: {
+      kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
+      startup: 8, active: 8, recovery: 17,
+      rise: -2.4, drift: 0.9,
+      damage: 8, base: 2.6, scale: 5.8, angle: 68, kx: 0.37460659341591201, ky: 0.92718385456678742,
+      ox: 2, oy: -12, w: 13, h: 16,
+    },
+    /* The recovery, and the one move here that has to work. -6.0 is a shade
+       under Kel's CLEAN & JERK, which suits the heavier of the two. */
+    up: {
+      kind: 'uppercut', label: 'PLACEHOLDER',
+      startup: 5, active: 14, recovery: 19,
+      rise: -6.0, drift: 0.8,
+      damage: 6, base: 2.2, scale: 5.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+      ox: -6, oy: -20, w: 13, h: 24,
+    },
+  },
+  ult: {
+    kind: 'uppercut', label: 'PLACEHOLDER ULT',
+    startup: 12, active: 16, recovery: 26,
+    rise: -4.6, drift: 1.6,
+    damage: 19, base: 4.2, scale: 9.2, angle: 48, kx: 0.66913060635885824, ky: 0.74314482547739424,
+    ox: -8, oy: -22, w: 22, h: 28,
+  },
+};
+
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
   startup: 7, active: 3, recovery: 18,
@@ -1373,7 +1431,7 @@ for (const key in ROSTER) {
    them at a different fighter. Netplay is unaffected either way -- it carries
    picks as key strings, not indices. */
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
-               'cobeus', 'simon'];
+               'cobeus', 'simon', 'squalls'];
 
 /* =====================================================================
    CANVAS
@@ -8562,7 +8620,7 @@ function drawRoom() {
      three things that one does not: the code, the seat list, and a status
      line net.js writes into. At 52 the second row of names landed at y 160
      and sat straight on top of "Room ready." */
-  const cellW = 74, cellH = 44;
+  const cellW = CELL_W, cellH = 44;
   const originX = VW / 2 - (GRID_COLS * cellW) / 2 + cellW / 2;
   const originY = 60;
   ORDER.forEach((k, i) => {
@@ -8571,7 +8629,7 @@ function drawRoom() {
     if (select.cursor[0] === i) {
       sctx.strokeStyle = '#ffffff';
       sctx.lineWidth = Math.max(2, SCALE);
-      sctx.strokeRect(px(cx - 26), px(cy - 5), px(52), px(36));
+      sctx.strokeRect(px(cx - 27), px(cy - 5), px(54), px(36));
       sctx.lineWidth = 1;
     }
     /* Everybody else's box, in their own colour. Solid once they have
@@ -8592,8 +8650,8 @@ function drawRoom() {
       sctx.globalAlpha = seat.ready ? 1 : 0.45;
       sctx.lineWidth = Math.max(2, SCALE);
       const pad = (n + mineHere) * 3;
-      sctx.strokeRect(px(cx - 26 + pad), px(cy - 5 + pad),
-                      px(52 - pad * 2), px(36 - pad * 2));
+      sctx.strokeRect(px(cx - 27 + pad), px(cy - 5 + pad),
+                      px(54 - pad * 2), px(36 - pad * 2));
       sctx.lineWidth = 1;
       sctx.globalAlpha = 1;
     });
@@ -8655,7 +8713,17 @@ const SEAT_COLORS = ['#59a5ff', '#ff5f5f', '#5fd46a', '#ffc14d'];
    underneath all three lines of bottom text. Four columns puts seven back
    into the two rows the layout was built for, and leaves room for an eighth
    before any of that has to be thought about again. */
-const GRID_COLS = 4;
+/* Five, because nine characters is three ragged rows at four and two clean
+   ones at five. Three rows does not fit: the local select puts row 2 at
+   y 144 with its name at 184, on a screen 180 tall, so the ninth character's
+   name is simply off the bottom -- and the room screen, which carries a code
+   and a status line as well, is worse.
+
+   The cells narrow from 74 to 60 to pay for it: 5 x 60 is 300 across a 320px
+   screen, where 5 x 74 would be 370. Ten characters still fit in two rows.
+   The eleventh is somebody else's problem, and it will be a real one. */
+const GRID_COLS = 5;
+const CELL_W = 60;
 
 function moveCursor(slot, dx, dy) {
   let i = select.cursor[slot];
@@ -9693,7 +9761,12 @@ function drawTitle() {
 
   // A line of the whole crew across the top.
   ORDER.forEach((k, i) => {
-    const cx = VW / 2 + (i - (ORDER.length - 1) / 2) * 40;
+    /* Spacing derived from how many there are, not a flat 40. At 40 the
+       line fitted seven with room to spare, eight with 4.8px of margin, and
+       ran off both edges at nine -- a number that arrived one character
+       later. Deriving it means the line closes up instead of falling off. */
+    const step = Math.min(40, (VW - 34) / ORDER.length);
+    const cx = VW / 2 + (i - (ORDER.length - 1) / 2) * step;
     drawPortrait(k, cx, 74, 1.9);
   });
 
@@ -9775,7 +9848,7 @@ function drawSelect() {
   // Not online: there the lobby owns which scene you are in.
   drawButton('back', 30, 18, 44, () => { scene = 'title'; });
 
-  const cellW = 74, cellH = 52;
+  const cellW = CELL_W, cellH = 52;
   const originX = VW / 2 - (GRID_COLS * cellW) / 2 + cellW / 2;
   const originY = 40;
 
@@ -9796,7 +9869,9 @@ function drawSelect() {
     if (on.length) {
       sctx.strokeStyle = on.length > 1 ? '#ffffff' : SEAT_COLORS[on[0]];
       sctx.lineWidth = Math.max(2, SCALE);
-      sctx.strokeRect(px(cx - 32), px(cy - 6), px(64), px(46));
+      // 56 wide inside a 60-wide cell. At the old 64 the rings of two
+      // neighbours overlapped, which read as one wide box around both.
+      sctx.strokeRect(px(cx - 28), px(cy - 6), px(56), px(46));
       sctx.lineWidth = 1;
     }
 
@@ -9955,7 +10030,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '563800f7e3';
+const BUILD_ID = 'def2e9e144';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9966,7 +10041,7 @@ const BUILD_ID = '563800f7e3';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.44';
+const VERSION = '2.45';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

@@ -3470,3 +3470,127 @@ test("a match ending any way at all lands in the room, if there is one", async (
     "a build with no lobby should go to the title rather than a room that " +
     "cannot exist");
 });
+
+
+test("Squalls is in the game, with the attack set his sheet came with", async () => {
+  /* The ninth fighter, and the first whose sheet was 4 cells wide instead of
+     2. The extra columns are not padding: they are the same eight poses with
+     the punching arm out -- an ATTACK SET, which only Kel has had since 2016.
+
+     That is the part worth pinning, because losing it would have been
+     silent. The old loader sliced a fixed 2x4, and the eight cells it read
+     are all non-blank, so it would have produced a perfectly good character
+     and thrown half the art away without a word. */
+  const run = await bootEngine();
+  assert.equal(run("ORDER.indexOf('squalls')"), 8, "appended, not inserted");
+
+  const FRAMES = ["standR", "standL", "walkR1", "walkL1",
+                  "walkR2", "walkL2", "jumpR", "jumpL"];
+  for (const f of FRAMES) {
+    assert.ok(run("!!IMG['squalls.base." + f + "']"),
+      "missing base frame " + f);
+    assert.ok(run("!!IMG['squalls.attack." + f + "']"),
+      "missing ATTACK frame " + f + " -- his sheet carries one and a " +
+      "two-column slice would drop it without complaining");
+  }
+
+  // The two sets are genuinely different art, not the same frames twice.
+  const differs = run(`(function () {
+    var a = SPRITES.squalls.base.standR, b = SPRITES.squalls.attack.standR;
+    return a !== b && a.length > 100 && b.length > 100;
+  })()`);
+  assert.ok(differs, "the attack set should be different art from the base");
+
+  /* And the engine reaches for it. sprite() swaps sets for the whole of any
+     attack, special or ult -- that is existing machinery, so what this
+     checks is that Squalls now qualifies for it. */
+  const swaps = run(`(function () {
+    select.cursor = [8, 2]; playerCount = 2; humanCount = 0; stagePick = 0;
+    startBattle();
+    for (var i = 0; i < 130; i++) step();
+    var me = fighters[0];
+    /* Both states pinned, and grounded pinned with them. Read as-found, the
+       fighter is 130 frames into a CPU match and may already be mid-swing --
+       in which case "idle" is the attack art too and the comparison quietly
+       says the sets are the same. */
+    me.setState('idle'); me.grounded = true; me.facing = 1;
+    var idle = me.sprite();
+    me.setState('attack'); me.attackFrame = 2; me.grounded = true;
+    var hitting = me.sprite();
+    me.setState('idle');
+    return { name: me.def.name, same: idle === hitting,
+             gotBoth: !!idle && !!hitting };
+  })()`);
+  assert.equal(swaps.name, "SQUALLS");
+  assert.ok(swaps.gotBoth, "both states should resolve to a real image");
+  assert.equal(swaps.same, false,
+    "swinging should draw the attack art, not the standing art");
+});
+
+test("nine fighters still fit on every screen that lists them", async () => {
+  /* Nine is where four columns stopped working: it wraps to a third row, and
+     the local select puts that row's names at y 184 on a 180px screen. The
+     grid is five wide now, and the title's crew line derives its spacing
+     from how many there are rather than using a flat 40 -- which fitted
+     eight with 4.8px to spare and ran off both edges at nine.
+
+     Written against ORDER.length rather than the number 9, so it keeps
+     being true, or keeps being the thing that tells you it is not. */
+  const run = await bootEngine();
+  const geo = run(`(function () {
+    var n = ORDER.length, cols = NerdWars.selectColumns;
+    var rows = Math.ceil(n / cols);
+    var last = n - 1;
+
+    // The character select.
+    var cellW = 60, cellH = 52, originY = 40;
+    var originX = VW / 2 - (cols * cellW) / 2 + cellW / 2;
+    var sx = originX + (last % cols) * cellW;
+    var sy = originY + Math.floor(last / cols) * cellH;
+
+    // The room.
+    var rOriginY = 60, rCellH = 44;
+    var ry = rOriginY + Math.floor(last / cols) * rCellH;
+
+    /* The crew line MEASURED, not recomputed. Copying the spacing formula in
+       here would make this test agree with itself no matter what the title
+       screen does -- which is exactly what it did at first: reverting the
+       engine to a flat 40px left the test perfectly happy. So intercept
+       drawPortrait and record where the portraits are actually asked to go. */
+    var xs = [], realPortrait = drawPortrait;
+    drawPortrait = function (key, x, y, scale) { xs.push({ x: x, s: scale }); };
+    var realText = text, realButton = drawButton;
+    text = function () {}; drawButton = function () {};
+    try { drawTitle(); } finally {
+      drawPortrait = realPortrait; text = realText; drawButton = realButton;
+    }
+    var crew = xs.slice(0, n);
+    var half = 16 * (crew.length ? crew[0].s : 1.9) / 2;
+    var leftMost = Math.min.apply(null, crew.map(function (q) { return q.x; })) - half;
+    var rightMost = Math.max.apply(null, crew.map(function (q) { return q.x; })) + half;
+
+    return { n: n, cols: cols, rows: rows, VW: VW, VH: VH, drew: crew.length,
+             selLeft: sx - 28, selRight: sx + 28, selName: sy + 40,
+             roomName: ry + 29,
+             crewLeft: leftMost, crewRight: rightMost,
+             firstX: originX - 28, lastX: sx + 28 };
+  })()`);
+
+  assert.ok(geo.rows <= 2,
+    geo.n + " fighters at " + geo.cols + " columns is " + geo.rows +
+    " rows; the screens are laid out for two");
+  assert.ok(geo.selName < geo.VH - 8,
+    "the last fighter's name on the select screen draws at y " + geo.selName +
+    " on a " + geo.VH + "px screen");
+  assert.ok(geo.roomName < geo.VH - 20,
+    "and in the room at y " + geo.roomName + ", which has to clear the " +
+    "status and start lines below it");
+  assert.ok(geo.firstX > 0 && geo.lastX < geo.VW,
+    "the grid should fit across; it spans " + geo.firstX + ".." + geo.lastX);
+  assert.equal(geo.drew, geo.n,
+    "the title should draw every fighter in the crew line");
+  assert.ok(geo.crewLeft > 0 && geo.crewRight < geo.VW,
+    "the title's crew line should fit across; it spans " +
+    geo.crewLeft.toFixed(1) + ".." + geo.crewRight.toFixed(1) +
+    " on a " + geo.VW + "px screen");
+});
