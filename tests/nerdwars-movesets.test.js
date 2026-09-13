@@ -162,8 +162,6 @@ async function bootGame() {
   return g;
 }
 
-const ORDER = ["autisnick", "johnnyham", "kel", "ladeane", "reese", "trev"];
-
 /** Two humans, seat 0 as `a`, seat 1 as `b`, on the first stage. */
 function startAs(g, a, b) {
   assert.equal(g.nw.scene, "title");
@@ -181,6 +179,18 @@ function startAs(g, a, b) {
      failed inside assertions about movesets, which is a long way from the
      cause. Rows are walked before columns because a move into the ragged last
      row clamps to the final character.  */
+  /* Read the running order out of the engine. This used to be a hardcoded
+     copy at the top of the file, and it had already gone stale -- six names
+     when the roster was seven. It kept working purely because those six sat
+     at the same indices, so nothing failed and nothing warned; the first
+     character appended past the copy would have walked the cursor to -1 and
+     landed on whoever tile 0 happened to be. */
+  const order = g.nw.roster.map((c) => c.key);
+  const at = (k) => {
+    const i = order.indexOf(k);
+    assert.ok(i >= 0, "no character named '" + k + "' -- roster is " + order.join(", "));
+    return i;
+  };
   const COLS = g.nw.selectColumns;
   const step = (from, to, keys) => {
     const [L, R, U, D] = keys;
@@ -191,9 +201,9 @@ function startAs(g, a, b) {
     for (; c0 < c1; c0++) g.tap(R);
     for (; c0 > c1; c0--) g.tap(L);
   };
-  step(0, ORDER.indexOf(a), ["KeyA", "KeyD", "KeyW", "KeyS"]);
+  step(0, at(a), ["KeyA", "KeyD", "KeyW", "KeyS"]);
   g.tap("KeyG");
-  step(4, ORDER.indexOf(b), ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
+  step(4, at(b), ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
   g.tap("Comma");
   assert.equal(g.nw.scene, "stage", "both locked in should reach stage select");
   g.tap("Enter");
@@ -1027,4 +1037,24 @@ test("a move still caps itself", async () => {
     g.press("KeyJ"); g.pump(2); g.release("KeyJ"); g.pump(8);
     assert.equal(dogsOut(g), 1, "still exactly one dog after press " + (i + 2));
   }
+});
+
+/* Appended, not inserted -- bootGame() seeds each context from a module-level
+   counter, so a test added in the middle re-seeds every test after it. */
+test("the select screen can actually walk to the last tile", async () => {
+  /* startAs() navigates the select GRID by column and row, and it used to
+     do that against a hardcoded roster list that had already gone stale.
+     Nothing failed, because the names it did list were still at the right
+     indices -- the bug was invisible until somebody asked for a character
+     past the end of the copy, which would resolve to -1 and quietly start
+     the match as whoever sat on tile 0.
+
+     Simon is the last tile (7 of 8, bottom-right), so he is the one that
+     proves the walk reaches the whole grid rather than just the first row. */
+  const g = await bootGame();
+  startAs(g, "simon", "kel");
+  const f = g.nw.fighters;
+  assert.equal(f[0].key, "simon");
+  assert.equal(f[1].key, "kel");
+  assert.ok(finite(f[0]), "and he should start the match at a real position");
 });

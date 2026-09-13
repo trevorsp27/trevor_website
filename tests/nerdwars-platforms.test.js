@@ -1554,7 +1554,17 @@ test("Cobeus is in the game, off a sprite sheet, and the select screen fits him"
   assert.equal(run("ORDER.indexOf('cobeus')"), 6,
     "appended, not inserted -- every select.cursor=[i,j] in this suite is a " +
     "position in ORDER");
-  assert.equal(run("ORDER.length"), 7);
+  /* Not a hardcoded count -- that is what broke this test when Simon was
+     added, and it would break again on the ninth. The invariant that
+     actually matters is that ORDER and ROSTER agree, and NOTHING in the
+     engine checks it: a key in ORDER with no ROSTER entry crashes in
+     drawSelect on `def.name`, and a ROSTER entry missing from ORDER is
+     priced for mana, never loaded, and simply unreachable with no warning. */
+  const inOrder = run("ORDER.slice()");
+  const inRoster = run("Object.keys(ROSTER)");
+  assert.deepEqual([...inOrder].sort(), [...inRoster].sort(),
+    "every character must be in both ORDER and ROSTER");
+  const n = inOrder.length;
 
   /* Every non-character sprite has to be named in loadAssets by hand; there
      is no `for (const k in SPRITES)`. Art that build.py emits and loadAssets
@@ -1586,21 +1596,22 @@ test("Cobeus is in the game, off a sprite sheet, and the select screen fits him"
   /* Every tile has to be REACHABLE. The last row is ragged at seven, and a
      move into the gap used to be a silent no-op -- Down did nothing at all
      from the last two tiles of the top row. */
-  for (let from = 0; from < 7; from++) {
+  for (let from = 0; from < n; from++) {
     const reached = run(`(function () {
       select.cursor[0] = ${from};
       moveCursor(0, 0, 1);
       return select.cursor[0];
     })()`);
-    assert.ok(reached >= 0 && reached < 7,
+    assert.ok(reached >= 0 && reached < n,
       "Down from " + from + " left the cursor at " + reached);
   }
+  const cols = run("NerdWars.selectColumns");
   const downFromTopRight = run(`(function () {
-    select.cursor[0] = 3; moveCursor(0, 0, 1); return select.cursor[0];
+    select.cursor[0] = ${cols - 1}; moveCursor(0, 0, 1); return select.cursor[0];
   })()`);
-  assert.equal(downFromTopRight, 6,
-    "Down from the end of the top row should land on the last character, " +
-    "not do nothing; landed on " + downFromTopRight);
+  assert.equal(downFromTopRight, Math.min(2 * cols - 1, n - 1),
+    "Down from the end of the top row should land on the tile below it, or " +
+    "the last character if the row is ragged; landed on " + downFromTopRight);
 });
 
 test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
@@ -1633,6 +1644,7 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
     foe.health = 1000; foe.x = main.x + main.w - 6; foe.y = main.y;
     foe.hasHit = true; foe.grounded = true;
     var spin = {}, glassLife = 0, sawBottle = false;
+    var x0 = null, y0 = null, land = null, peak = 0;
     netplay.active = true;
     for (var i = 0; i < 60; i++) {
       me.hitstop = 0; me.mana = 999;
@@ -1640,12 +1652,18 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
       step();
       var b = projectiles.filter(function (q) { return q.constructor.name === 'Bottle'; })[0];
       var gl = projectiles.filter(function (q) { return q.constructor.name === 'Glass'; })[0];
-      if (b) { sawBottle = true; spin[Math.floor(b.t / (b.spec.spin || 3)) % 8] = 1; }
-      if (gl && !glassLife) glassLife = gl.life;
+      if (b) {
+        sawBottle = true; spin[Math.floor(b.t / (b.spec.spin || 3)) % 8] = 1;
+        if (x0 === null) { x0 = b.x; y0 = b.y; }
+        if (y0 - b.y > peak) peak = y0 - b.y;
+      }
+      if (gl && !glassLife) { glassLife = gl.life; if (land === null) land = gl.x; }
     }
     netplay.active = false; netplay.framePads = null;
     return { sawBottle: sawBottle, frames: Object.keys(spin).length,
-             glassLife: glassLife };
+             glassLife: glassLife,
+             reach: land === null ? -1 : +(land - x0).toFixed(1),
+             peak: +peak.toFixed(1) };
   })()`);
 
   assert.ok(thrown.sawBottle, "the bottle should have been thrown");
@@ -1654,6 +1672,23 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
   assert.ok(thrown.glassLife >= 200,
     "breaking should leave glass for about four seconds; got " +
     thrown.glassLife + " frames");
+
+  /* And it has to land NEAR HIM. It used to carry 119px on a 320px stage --
+     over a third of the floor, 35 frames in the air -- which made a move
+     about denying the ground in front of him into a cross-stage lob you
+     could watch coming and walk around.
+
+     Measured from the bottle's own spawn, never from Cobeus: he can move
+     between the throw and the break, and measuring from him would credit
+     his walking to the bottle. The window is wide because this is an arc
+     over discrete frames -- it lands on whichever frame crosses the floor,
+     not at an exact x. */
+  assert.ok(thrown.reach > 45 && thrown.reach < 90,
+    "the bottle should land about 70px away -- near enough that the glass " +
+    "is his floor, not theirs; it reached " + thrown.reach + "px");
+  assert.ok(thrown.peak > 4,
+    "and it should still ARC. Shortening it by slowing the throw flattens " +
+    "it into a straight line; it rose " + thrown.peak + "px");
 
   /* And it has to bite somebody standing in it MORE THAN ONCE, which is what
      separates glass from a trap that fires and is spent. */
@@ -2532,4 +2567,109 @@ test("the status and burp sounds sit under the sounds that matter", async () => 
     (a, k) => (gains[k] > gains[a] ? k : a), "hit");
   assert.notEqual(loudest, "belch",
     "a spammable neutral special must not be the loudest sound in the game");
+});
+
+/* Appended, not inserted, and that is load-bearing.
+
+   bootEngine() seeds each vm context from a module-level counter
+   (__seedCounter, top of this file), so a test's random stream is a function
+   of HOW MANY TESTS RAN BEFORE IT. Adding this test in the middle of the file
+   re-seeded every test after it, and "a status ticks damage every frame but
+   only speaks every twentieth" started failing -- 16 cues over 185 ticks
+   instead of about 9 -- with nothing about poison having changed.
+
+   Putting new tests at the end keeps every existing slot where it was. That
+   is a workaround, not a fix: the real problem is that the suite's seeds are
+   positional. See the note on this in the commit. */
+test("Simon is in the game off one sheet, with a kit that works", async () => {
+  /* Eight cells of art and nothing else, so his whole kit is placeholders.
+     That is fine; what is not fine is a placeholder that breaks, which is
+     exactly what happened last time. The two generic guards above already
+     drive every one of his moves -- this pins the things specific to him.
+
+     Note what is NOT asserted: damage numbers, or how he feels. Those are
+     meant to change the moment somebody decides what Simon actually does. */
+  const run = await bootEngine();
+  assert.equal(run("ORDER.indexOf('simon')"), 7, "appended, not inserted");
+
+  // Eight frames off one sheet, through build.py's 2x4 slicer.
+  for (const f of ["standR", "standL", "walkR1", "walkL1",
+                   "walkR2", "walkL2", "jumpR", "jumpL"]) {
+    assert.ok(run("!!IMG['simon.base.' + " + JSON.stringify(f) + "]"),
+      "simon is missing the '" + f + "' frame. There is no per-frame " +
+      "fallback in sprite(): a missing frame returns undefined and " +
+      "drawFighter's `if (!im) return` skips the whole fighter, so he " +
+      "would flicker out of existence on that animation frame alone.");
+  }
+
+  // A kit is only a kit if every slot is filled and priced.
+  const kit = run(`(function () {
+    var d = ROSTER.simon, out = { slots: [], unpriced: [], noKind: [] };
+    for (var k in d.specials) {
+      out.slots.push(k);
+      var sp = d.specials[k];
+      if (!(sp.mana > 0)) out.unpriced.push(k);
+      if (!sp.kind) out.noKind.push(k);
+    }
+    return { slots: out.slots.sort(), unpriced: out.unpriced,
+             noKind: out.noKind, ult: !!d.ult && d.ult.kind,
+             jab: !!d.jab && d.jab.damage > 0,
+             weight: d.weight, walk: d.walk, jump: d.jump };
+  })()`);
+  /* Compared as strings, not with deepEqual. These arrays were built inside
+     the vm context, which has its OWN Array constructor, so deepEqual fails
+     on two arrays whose contents are identical. */
+  assert.equal(kit.slots.join(","), "down,neutral,up",
+    "all three special slots must exist");
+  assert.equal(kit.unpriced.join(","), "",
+    "every special is priced by the loop at load; a ROSTER entry declared " +
+    "AFTER that loop silently gets mana === undefined, and nothing warns");
+  assert.equal(kit.noKind.join(","), "",
+    "a move with no kind hits no case in runSpecial's switch -- there is no " +
+    "default -- so it animates, costs mana, and does nothing");
+  assert.ok(kit.ult, "he needs an ult");
+  assert.ok(kit.jab, "and a jab that does damage");
+  for (const [k, lo, hi] of [["weight", 90, 115], ["walk", 1.1, 1.7],
+                             ["jump", 5.8, 7.2]]) {
+    assert.ok(kit[k] >= lo && kit[k] <= hi,
+      k + " is " + kit[k] + ", outside the range the rest of the roster uses");
+  }
+
+  // And he actually fights: pick him, throw everything, stay on the stage.
+  const fought = run(`(function () {
+    select.cursor=[7,4]; twoPlayer=true; playerCount=2; humanCount=0;
+    stagePick=0; startBattle();
+    for (var i=0;i<130;i++) step();
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    var name = me.def.name, took = 0, bad = 0;
+    netplay.active = true;
+    var BITS = [32, 512, 1024, 2048, 256];
+    for (var b = 0; b < BITS.length; b++) {
+      projectiles.length = 0; effects.length = 0;
+      me.setState('idle'); me.timer=0; me.hitstun=0; me.hitstop=0;
+      me.landLag=0; me.invuln=0; me.grabbing=-1; me.grounded=true;
+      me.facing=1; me.stocks=99; me.eliminated=false; me.vx=0; me.vy=0;
+      me.x=main.x+40; me.y=main.y; me.specialSpawned=false;
+      foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
+      foe.hasHit=true;
+      var h0 = foe.health;
+      for (var i = 0; i < 60; i++) {
+        me.hitstop=0; me.mana=999; me.ultMeter=999;
+        foe.hitstop=0; foe.invuln=0; foe.hitstun=0; foe.setState('idle');
+        foe.x=main.x+52; foe.vx=0; foe.y=main.y; foe.grounded=true;
+        netplay.framePads = [bitsToPad(i === 0 ? BITS[b] : 0), bitsToPad(0)];
+        step();
+        if (!isFinite(me.x) || !isFinite(me.y)) bad++;
+      }
+      if (foe.health < h0) took++;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { name: name, took: took, bad: bad };
+  })()`);
+  assert.equal(fought.name, "SIMON", "cursor 7 should select Simon");
+  assert.equal(fought.bad, 0, "and he must never leave the number line");
+  assert.equal(fought.took, 5,
+    "all five moves -- jab, three specials, ult -- should connect with " +
+    "somebody standing right next to him; only " + fought.took + " did");
 });

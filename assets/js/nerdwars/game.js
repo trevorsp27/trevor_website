@@ -1148,7 +1148,17 @@ ROSTER.cobeus = {
     neutral: {
       kind: 'bottle', label: 'LAST CALL',
       startup: 8, active: 1, recovery: 14, maxAlive: 2,
-      speed: 3.4, lift: -1.9, drop: 0.13, life: 200,
+      /* 119px of reach was more than a third of a 320px stage, and 35
+         frames in the air to cover it -- long enough to throw, watch, and
+         still walk to where it was going to land. 72px in 24 frames.
+
+         The cut is in `drop`, not in `speed`: a slower bottle would have
+         read as a lob, and dropping speed alone flattens the arc to nearly
+         a straight line. A heavier one leaves his hand just as fast and
+         comes down sooner, which keeps both the arc (8px of lift, was 13)
+         and the point of the move, which is putting glass on the floor in
+         front of him rather than across the stage. */
+      speed: 3.0, lift: -1.9, drop: 0.20, life: 200,
       spin: 3,                        // frames per rotation frame
       damage: 6, base: 2.4, scale: 5.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       /* What it leaves behind. `hitEvery` is the re-arm, so standing in it
@@ -1193,6 +1203,78 @@ ROSTER.cobeus = {
   },
 };
 
+/* SIMON.
+
+   Eight cells of art arrived and nothing else, so every move below is a
+   default, and says so. They are all one kind -- `uppercut` -- because that
+   is the best-understood mover in the file and the only one whose failure
+   modes have been written down; a placeholder should be boring, not a new
+   source of bugs. What varies between them is the two numbers that kind
+   actually reads:
+
+     rise   how hard he leaves the ground.  NEGATIVE IS UP.
+     drift  how far forward it carries him.
+
+   So: neutral is a flat lunge, down is a hop and a shove, up is the
+   recovery, and the ult is all of it at once. Four moves that feel
+   different to use without pretending to be a kit.
+
+   He has no projectile on purpose. The CPU only treats 'projectile' and
+   'pizza' as ranged (see aiPad), so a placeholder thrown object would make
+   his CPU-vs-CPU win rate read low for a reason that has nothing to do with
+   how he plays -- and that win rate is how this game gets balanced. All
+   melee keeps the measurement honest until the real kit exists. */
+ROSTER.simon = {
+  name: 'SIMON',
+  origin: 'fresh',
+  tag: 'PLACEHOLDER MOVES, AWAITING A REAL KIT',
+  drawn: true,
+  // Dead centre of the roster: weight 96-106, walk 1.24-1.58, jump 6.1-6.9.
+  // Nothing here should be interesting until somebody decides it should be.
+  weight: 100, walk: 1.5, jump: 6.5, doubleJump: 6.0,
+  jab: { startup: 5, active: 4, recovery: 11, damage: 6,
+         base: 2.3, scale: 6.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+         ox: 2, oy: -9, w: 11, h: 10 },
+  specials: {
+    // A flat lunge: barely leaves the floor, carries him forward.
+    neutral: {
+      kind: 'uppercut', label: 'PLACEHOLDER',
+      startup: 6, active: 6, recovery: 14,
+      rise: -1.6, drift: 1.6,
+      damage: 7, base: 2.3, scale: 5.2, angle: 36, kx: 0.80901699437494745, ky: 0.58778525229247314,
+      ox: 1, oy: -10, w: 14, h: 13,
+    },
+    // A hop and a shove.
+    down: {
+      kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
+      startup: 7, active: 8, recovery: 16,
+      rise: -3.0, drift: 1.2,
+      damage: 7, base: 2.4, scale: 5.6, angle: 62, kx: 0.46947156278589086, ky: 0.88294759285892688,
+      ox: 2, oy: -12, w: 13, h: 16,
+    },
+    /* The recovery, and the one move here that has to work: every character's
+       `up` is how they get home, and one who cannot is not playable. -6.2
+       matches HIGH NOTE, the shortest of the real recoveries. */
+    up: {
+      kind: 'uppercut', label: 'PLACEHOLDER',
+      startup: 5, active: 14, recovery: 18,
+      rise: -6.2, drift: 0.9,
+      damage: 6, base: 2.2, scale: 5.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
+      ox: -6, oy: -20, w: 13, h: 24,
+    },
+  },
+  /* Slower to start, bigger everywhere. Not a spectacle -- the real ults in
+     this game are a car, a barbell, and a laser sword -- but it commits, it
+     hurts, and it is obvious it is standing in for something. */
+  ult: {
+    kind: 'uppercut', label: 'PLACEHOLDER ULT',
+    startup: 10, active: 16, recovery: 24,
+    rise: -5.0, drift: 1.4,
+    damage: 18, base: 4.0, scale: 9.0, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+    ox: -8, oy: -22, w: 22, h: 28,
+  },
+};
+
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
   startup: 7, active: 3, recovery: 18,
@@ -1228,7 +1310,7 @@ for (const key in ROSTER) {
    them at a different fighter. Netplay is unaffected either way -- it carries
    picks as key strings, not indices. */
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
-               'cobeus'];
+               'cobeus', 'simon'];
 
 /* =====================================================================
    CANVAS
@@ -9108,7 +9190,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '37ad90717d';
+const BUILD_ID = '3088f7e866';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9119,7 +9201,7 @@ const BUILD_ID = '37ad90717d';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.36';
+const VERSION = '2.37';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
