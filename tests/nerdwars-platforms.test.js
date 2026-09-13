@@ -3093,6 +3093,7 @@ function stubLobby(run, phase) {
       snapshot: function () {
         return { available: true, phase: __lobby.phase, role: 'host',
                  code: __lobby.code, mySlot: 0, myChar: 'kel',
+                 myReady: !!__lobby.myReady,
                  stage: 'space', status: '', statusKind: '',
                  seats: __lobby.seats, here: __lobby.seats.length,
                  canStart: __lobby.canStart };
@@ -3212,11 +3213,19 @@ test("the room is the character select, and the host starts from it", async () =
   assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]") + ':0',
     "moving should tell the room where the cursor went, unsettled");
 
-  // And the attack key says the same thing, settled.
-  run("__lobby.calls.length = 0;");
-  tapKey(run, 'KeyG');
+  // And SPACE says the same thing, settled.
+  run("__lobby.calls.length = 0; __lobby.myReady = false;");
+  tapKey(run, 'Space');
   assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]") + ':1',
-    "the attack key should lock in whoever the cursor is on");
+    "SPACE should lock in whoever the cursor is on");
+
+  /* And SPACE again changes your mind. Locking in is a toggle because the
+     match cannot start until everybody has settled -- a one-way commit would
+     let one person hold the whole room up by mistake. */
+  run("__lobby.calls.length = 0; __lobby.myReady = true;");
+  tapKey(run, 'Space');
+  assert.equal(run("__lobby.calls.join(',')"), 'pick:' + run("ORDER[1]") + ':0',
+    "SPACE again should unlock, not lock in a second time");
 
   /* Held against the edge of the grid, the cursor does not move and so says
      nothing -- otherwise leaning on a direction would be a packet a frame. */

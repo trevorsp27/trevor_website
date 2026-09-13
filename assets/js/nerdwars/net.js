@@ -434,7 +434,7 @@
         renderLobby();
         return;
       }
-      setSeat(fromSlot, msg.char, true);
+      setSeat(fromSlot, msg.char, true, msg.ready);
       say(charName(msg.char) + " joined.", "good");
       broadcastSeats();
       return;
@@ -495,7 +495,7 @@
           } else if (reason === "match over") {
             // The normal ending. Everybody is back in the room they were
             // already in, so this is an invitation rather than a warning.
-            endMatch("Good game. Pick a fighter and go again.", "ok");
+            endMatch("Pick a fighter and go again.", "ok");
           } else {
             endMatch(reason ? "Match ended: " + reason + "." : "");
           }
@@ -549,7 +549,12 @@
         post(conn, { t: "seat", slot: slot, build: MY_BUILD });
         broadcastSeats();
       } else {
-        send({ t: "hello", char: state.myChar, build: MY_BUILD });
+        /* `ready` rides along with the introduction. Somebody can settle on
+           a fighter BEFORE they join -- the old panel picked a portrait and
+           then typed a code -- and a hello that carried only the character
+           seated them as still-choosing, so a full room could never start. */
+        send({ t: "hello", char: state.myChar, ready: state.myReady,
+               build: MY_BUILD });
         say("Connected.", "good");
       }
       // A channel that finishes opening DURING a match must not drag the panel
@@ -598,7 +603,9 @@
     state.mySlot = 0;
     state.code = randomCode();
     state.seats = [];
-    setSeat(0, state.myChar, true);
+    // Carrying whatever they had already settled on: hosting a room does
+    // not un-choose the fighter they picked before opening it.
+    setSeat(0, state.myChar, true, state.myReady);
     setPhase("hosting");
     say("Creating a room…");
     renderLobby();
@@ -754,7 +761,10 @@
     if (els.chars) {
       els.chars.addEventListener("click", function (e) {
         var btn = e.target.closest("[data-char]");
-        if (btn) pickChar(btn.dataset.char);
+        /* Settled, not hovered. A cursor on a grid can be somewhere without
+           meaning it; clicking a portrait is a decision, and there is no
+           second gesture in this UI to make it with. */
+        if (btn) pickChar(btn.dataset.char, true);
       });
     }
 
@@ -826,6 +836,15 @@
     if (state.role !== "host") return false;
     var here = occupiedSeats();
     if (here.length < 2) return false;
+    /* The same rule canStart reports, enforced where it actually matters.
+
+       Having it only in canStart meant the button was correctly greyed out
+       and the underlying call would still run -- a guard on the drawing
+       rather than on the doing. Starting a match while somebody is still
+       scrolling the grid picks a fighter for them. */
+    for (var r = 0; r < here.length; r++) {
+      if (!here[r].ready) return false;
+    }
     // Seats are renumbered to be contiguous from zero, because the engine
     // seats fighters by array position: if player 2 left, the person in
     // seat 3 has to become fighter 2 rather than leaving a hole.
@@ -872,7 +891,15 @@
                  ready: !!seat.ready, you: seat.slot === mine };
       }),
       here: occupiedSeats().length,
-      canStart: state.role === "host" && occupiedSeats().length >= 2,
+      /* Everybody in the room has to have settled on a fighter first.
+
+         This was tried, reverted, and is back because it was asked for. The
+         worry was a host unable to start because somebody forgot to press
+         the key -- which is a real way to be stuck, and is why locking in is
+         a TOGGLE now rather than a one-way commit, and why the room says out
+         loud how many people it is still waiting on. */
+      canStart: state.role === "host" && occupiedSeats().length >= 2 &&
+                occupiedSeats().every(function (x) { return x.ready; }),
     };
   }
 

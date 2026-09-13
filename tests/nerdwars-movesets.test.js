@@ -914,9 +914,9 @@ test("every character can grab, and it beats a raised shield", async () => {
   g.pump(6);
   assert.equal(V().state, "shield", "precondition: the victim is shielding");
 
-  g.press("KeyY");
+  g.press("KeyU");
   g.pump(2);
-  g.release("KeyY");
+  g.release("KeyU");
   let grabbed = false;
   for (let i = 0; i < 40 && !grabbed; i++) {
     g.pump(1);
@@ -964,7 +964,7 @@ test("the fishing pole reaches further than a bare grab, and throws harder", asy
     return best;
   };
   const poleReach = await reach("KeyJ");
-  const bareReach = await reach("KeyY");
+  const bareReach = await reach("KeyU");
   assert.ok(bareReach > 0, "the bare grab should connect at SOME range");
   assert.ok(
     poleReach > bareReach,
@@ -973,7 +973,7 @@ test("the fishing pole reaches further than a bare grab, and throws harder", asy
   );
 
   const poleThrow = (await attempt("KeyJ", 16)).thrown;
-  const bareThrow = (await attempt("KeyY", 16)).thrown;
+  const bareThrow = (await attempt("KeyU", 16)).thrown;
   assert.ok(poleThrow !== null && bareThrow !== null, "both should land and let go");
   assert.ok(
     poleThrow > bareThrow + 3,

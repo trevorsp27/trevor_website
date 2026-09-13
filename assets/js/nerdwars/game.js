@@ -1544,7 +1544,7 @@ const BINDS = [
     // Space jumps too. It is the button every platformer has trained people
     // to reach for, and W is easy to miss while your hand is on A or D.
     jump2: 'Space',
-    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyL', grab: 'KeyY',
+    attack: 'KeyG', shield: 'ShiftLeft', ult: 'KeyL', grab: 'KeyU',
     spNeutral: 'KeyH', spDown: 'KeyJ', spUp: 'KeyK' },
   { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
     // Comma, not L: L is player 1's ult now.
@@ -8518,8 +8518,15 @@ function updateRoom() {
      of the grid says nothing. */
   if (select.cursor[0] !== was) lb.pick(ORDER[select.cursor[0]], false);
 
-  if (tapped(b.attack) || (b.attack2 && tapped(b.attack2))) {
-    lb.pick(ORDER[select.cursor[0]], true);
+  /* SPACE settles on whoever the cursor is on, and SPACE again changes your
+     mind. A toggle rather than a one-way commit, because the match cannot
+     start until everybody has settled -- so locking in with no way back
+     would let one person hold the room hostage by mistake.
+
+     Moving already unsettles you, which is the same rule stated the other
+     way: you cannot be locked in on a fighter your cursor has left. */
+  if (tapped('Space')) {
+    lb.pick(ORDER[select.cursor[0]], !snap.myReady);
   }
 
   // Only the host can start, and only with somebody to fight.
@@ -8571,13 +8578,22 @@ function drawRoom() {
        settled on it, faint while they are still moving around -- so the room
        shows you both who has decided and who is still looking. */
     const theirs = snap.seats.filter((s) => s.here && !s.you && s.char === k);
+    /* The same box you get, not a smaller one. It used to be inset by three
+       pixels on every side, which made everybody else's pick look like a
+       lesser thing than your own -- and on a screen whose whole job is
+       showing you what the others are doing, that is backwards.
+
+       The inset survives only for a genuine overlap: a second person on the
+       same fighter, or somebody sitting where your own cursor already is.
+       Two boxes at identical coordinates are one box. */
+    const mineHere = select.cursor[0] === i ? 1 : 0;
     theirs.forEach((seat, n) => {
       sctx.strokeStyle = SEAT_COLORS[seat.slot % SEAT_COLORS.length];
       sctx.globalAlpha = seat.ready ? 1 : 0.45;
-      sctx.lineWidth = Math.max(1, SCALE);
-      const pad = n * 3;
-      sctx.strokeRect(px(cx - 23 + pad), px(cy - 2 + pad),
-                      px(46 - pad * 2), px(30 - pad * 2));
+      sctx.lineWidth = Math.max(2, SCALE);
+      const pad = (n + mineHere) * 3;
+      sctx.strokeRect(px(cx - 26 + pad), px(cy - 5 + pad),
+                      px(52 - pad * 2), px(36 - pad * 2));
       sctx.lineWidth = 1;
       sctx.globalAlpha = 1;
     });
@@ -8595,13 +8611,12 @@ function drawRoom() {
     : waiting
       ? 'waiting for ' + waiting + (waiting === 1 ? ' player' : ' players') +
         ' to lock in'
-      : snap.role === 'host'
+      : snap.here < 2
         ? 'waiting for somebody to join'
         : 'waiting for the host to start';
   text(line, VW / 2, VH - 13, 7, snap.canStart ? '#ffffff' : '#8792b0',
        'center', snap.canStart ? 800 : 500);
-  text('WASD to move    ' + keyName(BINDS[0].attack) +
-       ' to lock in    ESC to leave the room',
+  text('WASD to move    SPACE to lock in and out    ESC to leave the room',
        VW / 2, VH - 3, 5, '#454c66', 'center', 500);
 }
 
@@ -9711,7 +9726,7 @@ const HELP_ROWS = [
   ['JUMP', 'W / SPACE', 'again in the air for a second jump'],
   ['DROP', 'S', 'with jump, drops through a side platform'],
   ['SHIELD', 'SHIFT', 'stops you; then tap a direction to roll'],
-  ['GRAB', 'Y', 'beats a shield -- aim, and it throws them there'],
+  ['GRAB', 'U', 'beats a shield -- aim, and it throws them there'],
   ['SPECIALS', 'H J K', 'right hand attacks; each costs mana'],
   ['ULT', 'L', 'only once the ult bar is full'],
   ['JAB', 'G', 'free -- it still works at zero mana'],
@@ -9940,7 +9955,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'eb5f14c4cc';
+const BUILD_ID = '563800f7e3';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -9951,7 +9966,7 @@ const BUILD_ID = 'eb5f14c4cc';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.43';
+const VERSION = '2.44';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

@@ -247,9 +247,13 @@ async function browser(opts) {
   vm.runInContext("var SPRITES=window.NERDWARS_ASSETS.SPRITES,TILES=window.NERDWARS_ASSETS.TILES,UI=window.NERDWARS_ASSETS.UI;", sb);
   var netSrc = NET;
   if (opts && opts.legacyHello) {
-    const withBuild = '{ t: "hello", char: state.myChar, build: MY_BUILD }';
-    assert.ok(NET.includes(withBuild), "net.js should send its build on hello");
-    netSrc = NET.replace(withBuild, '{ t: "hello", char: state.myChar }');
+    /* Matched loosely rather than as one exact string. This used to pin the
+       whole literal, so adding a field to the handshake broke a test about
+       version checking -- which is a long way from the change. */
+    const helloRe = /send\(\{ t: "hello",[\s\S]*?build: MY_BUILD \}\);/;
+    assert.ok(helloRe.test(NET), "net.js should send its build on hello");
+    netSrc = NET.replace(helloRe,
+      'send({ t: "hello", char: state.myChar, ready: state.myReady });');
   }
   var gameSrc = GAME;
   if (opts && opts.build) {
@@ -798,8 +802,10 @@ test("the room can be run through the API the game uses, not the DOM", async () 
   assert.equal(guest.api().snapshot().role, "guest");
 
   // Picking through the API is what the grid on the canvas does.
-  host.api().pick("kel");
-  guest.api().pick("trev");
+  // Settled, not merely hovered: the host cannot start until everybody
+  // in the room has locked a fighter in.
+  host.api().pick("kel", true);
+  guest.api().pick("trev", true);
   flush();
   const charAt = (m, slot) => {
     const seat = m.api().snapshot().seats.find((x) => x.slot === slot);
@@ -848,8 +854,10 @@ test("when a real match ends, everybody lands back in the room", async () => {
   const code = host.api().snapshot().code;
   guest.api().join(code);
   flush();
-  host.api().pick("kel");
-  guest.api().pick("trev");
+  // Settled, not merely hovered: the host cannot start until everybody
+  // in the room has locked a fighter in.
+  host.api().pick("kel", true);
+  guest.api().pick("trev", true);
   flush();
   host.api().start();
   flush();
@@ -880,12 +888,19 @@ test("when a real match ends, everybody lands back in the room", async () => {
       "and the " + name + "'s room should still be alive");
   }
 
-  // And it is a REAL room: the host can start another match from it.
-  assert.equal(host.api().snapshot().canStart, true,
-    "the host should be able to start again without rebuilding the room");
-  host.api().pick("reese");
-  guest.api().pick("ladeane");
+  /* Nobody is locked in yet, so nothing can start. A match ending clears
+     everybody's pick, which is the whole point of being handed back to the
+     character select rather than straight into another fight. */
+  assert.equal(host.api().snapshot().canStart, false,
+    "a rematch should wait for everybody to pick again");
+
+  // And it is a REAL room: pick again and the host can go.
+  host.api().pick("reese", true);
+  guest.api().pick("ladeane", true);
   flush();
+  assert.equal(host.api().snapshot().canStart, true,
+    "once everybody has locked in, the host should be able to start again " +
+    "without rebuilding the room");
   assert.equal(host.api().start(), true);
   flush();
   assert.equal(host.nw.scene, "battle", "the second match should start");
@@ -918,7 +933,8 @@ test("a friend quitting mid-match leaves you in the room, not the title", async 
   const code = host.api().snapshot().code;
   a.api().join(code); flush();
   b.api().join(code); flush();
-  host.api().pick("kel"); a.api().pick("trev"); b.api().pick("reese");
+  host.api().pick("kel", true); a.api().pick("trev", true);
+  b.api().pick("reese", true);
   flush();
   host.api().start();
   flush();
@@ -942,9 +958,25 @@ test("a friend quitting mid-match leaves you in the room, not the title", async 
       "and " + name + "'s room should still be alive");
   }
 
-  // The room is still usable: the host can run it again with who is left.
+  /* Escape in a match leaves the MATCH, not the room -- so all three are
+     still seated, and the one who walked out is simply not locked in. The
+     room correctly waits for them, which is the gate doing its job rather
+     than a bug. */
+  assert.equal(host.api().snapshot().here, 3,
+    "quitting a match should not give up the seat");
+  host.api().pick("kel", true);
+  a.api().pick("trev", true);
+  flush();
+  assert.equal(host.api().snapshot().canStart, false,
+    "the third player is still in the room and has not picked, so the room " +
+    "should wait for them");
+
+  // Now they actually leave the room, and the two who are left can go.
+  b.api().leave();
+  flush();
+  assert.equal(host.api().snapshot().here, 2, "the seat should be freed");
   assert.equal(host.api().snapshot().canStart, true,
-    "two people are still here, so the host should be able to go again");
+    "two people, both locked in, should be able to go again");
 });
 
 
@@ -1004,4 +1036,68 @@ test("everybody can watch everybody else choose", async () => {
   flush();
   assert.equal(JSON.stringify(host.nw.fighters.map((f) => f.key)),
                JSON.stringify(["cobeus", "ladeane"]));
+});
+
+
+test("nothing starts until everybody in the room has locked in", async () => {
+  /* Asked for directly: "make it so you cant start the game until everyone
+     has selected a character."
+
+     This was built once before and reverted, on the grounds that it gives a
+     host no way to start when somebody forgets to press the key. That worry
+     is answered rather than ignored: locking in is a TOGGLE on SPACE, the
+     room says out loud how many people it is still waiting on, and leaving
+     frees the seat. The gate is the point -- starting a match while somebody
+     is still scrolling the grid picks a fighter for them. */
+  resetWorld();
+  const host = await browser();
+  const guest = await browser();
+  host.api().host(); flush();
+  guest.api().join(host.api().snapshot().code); flush();
+
+  // Both in the room, neither settled.
+  host.api().pick("kel", false);
+  guest.api().pick("trev", false);
+  flush();
+  assert.equal(host.api().snapshot().here, 2, "two people are in the room");
+  assert.equal(host.api().snapshot().canStart, false,
+    "nobody has locked in, so the host must not be told they can start");
+  assert.equal(host.api().start(), false, "and must not be able to");
+  // Driven through the API rather than the screens, so the engine was never
+  // walked into the room scene; what matters is that no match began.
+  assert.notEqual(host.nw.scene, "battle", "so nothing should have started");
+
+  // One of them settles. Still not enough.
+  host.api().pick("kel", true);
+  flush();
+  assert.equal(host.api().snapshot().canStart, false,
+    "one of two is not everybody");
+  assert.equal(host.api().start(), false);
+
+  // Both settled: now it goes.
+  guest.api().pick("trev", true);
+  flush();
+  assert.equal(host.api().snapshot().canStart, true,
+    "with everybody locked in the host should be able to start");
+  assert.equal(host.api().start(), true);
+  flush();
+  assert.equal(host.nw.scene, "battle");
+
+  /* And unlocking takes it away again, which is what makes the toggle safe
+     rather than a trap: a player who changes their mind can, and the host
+     simply waits. */
+  host.api().leave(); guest.api().leave();
+  flush();
+  resetWorld();
+  const h2 = await browser();
+  const g2 = await browser();
+  h2.api().host(); flush();
+  g2.api().join(h2.api().snapshot().code); flush();
+  h2.api().pick("kel", true); g2.api().pick("trev", true);
+  flush();
+  assert.equal(h2.api().snapshot().canStart, true);
+  g2.api().pick("trev", false);          // changed their mind
+  flush();
+  assert.equal(h2.api().snapshot().canStart, false,
+    "somebody unlocking should take the start away again");
 });
