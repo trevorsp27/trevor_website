@@ -1574,7 +1574,9 @@ ROSTER.simon = {
          subtracts it directly, so leaving it off subtracts undefined and the
          victim's health is NaN for the rest of the match. The choke below is
          where the real damage is. */
-      grab: { hold: 84, damage: 2 },
+      // `drop` is the tail of the hold the blade actually falls through --
+      // see drawGuillotine, which holds it up for the other sixty-four.
+      grab: { hold: 84, damage: 2, drop: 20 },
       choke: { every: 12, damage: 1.5 },
       finish: { damage: 14, base: 3.6, scale: 6.4, angle: 300, kx: 0.50000000000000011, ky: -0.8660254037844386 },
       damage: 0, base: 0, scale: 0,
@@ -1641,6 +1643,8 @@ ROSTER.simon = {
          that just came out of him, rather than a ghost that blinked into
          existence nearby. */
       emerge: 28,
+      // How far above the body it settles. See Soul's constructor.
+      float: 30,
       accel: 0.62, drag: 0.84, maxSpeed: 2.8,
       punchEvery: 7, punchActive: 4,
       reach: 7, w: 10, h: 9,
@@ -3741,8 +3745,22 @@ class Fighter {
       victim.grounded = false;
       releaseGrab(this);
       applyHit(this, victim, s.finish, from);
+      /* The landing, and it is the loudest thing this move does. Eight frames
+         of everything stopping -- the same pause a KO gets -- because the
+         eighty-four before it were a slow squeeze and the whole shape of the
+         move is that it ends all at once.
+
+         freezeFrames is simulation state and is in saveSim, so a rollback
+         replays the identical pause rather than inventing a second one. */
+      freezeFrames = Math.max(freezeFrames, 8);
       for (let i = 0; i < 8; i++) addEffect('dust', victim.x + rand(-8, 8), victim.y, '#c8cee6');
+      // A spray along the blade's line, not a puff at their feet.
+      for (let i = 0; i < 10; i++) {
+        addEffect('spark', victim.x + rand(-9, 9), victim.y - 10 + rand(-3, 3), '#ffffff');
+      }
+      addEffect('ring', victim.x, victim.y - 9, '#ffffff');
       addEffect('ring', victim.x, victim.y - 9, '#c8cee6');
+      cue('hit-big', { slot: this.slot, x: this.x });
       cue('throw', { slot: this.slot, x: this.x });
       return;
     }
@@ -7081,15 +7099,43 @@ function drawSlots(g, f) {
 /* The device, over whoever is in it. Drawn on the VICTIM, because that is
    where it is. The frame follows the hold: the blade is at the top when the
    choke starts and all the way down when the finish lands. */
+/* The device, over whoever is in it.
+
+   Eleven drawn frames of a blade coming down, and how they are SPREAD is the
+   whole move. They used to run evenly across the eighty-four frames of the
+   hold -- one frame every seven and a half -- which is a blade that creeps,
+   imperceptibly, and has already finished descending several frames before
+   the thing it was descending toward happens. Nobody watching a fight ever
+   saw it move.
+
+   Held up instead, and then dropped. For everything but the last `s.drop`
+   frames the blade sits at the top ratcheting between the first two frames,
+   which is a rope being taken in and a thing about to happen. Then it falls
+   through the remaining nine in twenty frames, which is fast enough to read
+   as a drop, and lands on the frame the finish does. */
 function drawGuillotine(g, f) {
   if (f.grabbedBy < 0) return;
   const by = fighters[f.grabbedBy];
   if (!by || by.grabKind !== 2) return;
   const s = by.def.specials.up;
   if (!s || !s.grab) return;
-  const frame = Math.min(10, Math.floor((1 - by.grabTimer / s.grab.hold) * 11));
-  const im = IMG['guillotine.' + Math.max(0, frame)];
-  if (im) g.drawImage(im, Math.round(f.x) - 8, Math.round(f.y) - 18);
+  const drop = s.grab.drop || 20;
+  const left = by.grabTimer;
+  let frame;
+  if (left > drop) {
+    // Up, and creaking. Two frames on a slow alternation.
+    frame = (Math.floor(by.grabTimer / 9) % 2);
+  } else {
+    // Down, through the other nine, arriving as the blade lands.
+    frame = 2 + Math.round((1 - left / drop) * 8);
+  }
+  const im = IMG['guillotine.' + Math.max(0, Math.min(10, frame))];
+  if (!im) return;
+  /* A shudder on the way down, one pixel, the way drawFighter shakes a
+     pinned man: an object with that much mass does not travel smoothly. */
+  const shake = left <= drop && left > 0 && (left % 4 < 2) ? 1 : 0;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(im, Math.round(f.x) - 8 + shake, Math.round(f.y) - 18);
 }
 
 /* The axe, over Christian, for the frames he is swinging it.
@@ -7134,6 +7180,17 @@ function drawAxe(g, f) {
   }
 }
 
+/* Eight points evenly round a circle, as unit offsets. Written out rather
+   than computed for the reason the knockback triples are: the build refuses
+   a file containing Math.cos or Math.tan at all, so that angles can never
+   drift between what a comment claims and what the code does. */
+const SHELL_ORBIT = [
+  [1, 0], [0.70710678118654757, 0.70710678118654746], [0, 1],
+  [-0.70710678118654746, 0.70710678118654757], [-1, 0],
+  [-0.70710678118654768, -0.70710678118654735], [0, -1],
+  [0.70710678118654735, -0.70710678118654768],
+];
+
 /* Zzz, over anybody asleep: Simon in his slouch, or somebody who stood in it
    too long. Three little z's rising and fading, drawn in pixels because
    text() paints the screen and this is the world. */
@@ -7152,6 +7209,52 @@ function drawSleep(g, f) {
     g.arc(f.x, f.y - 6, r, 0, Math.PI * 2);
     g.fill();
     g.globalAlpha = 1;
+
+    /* And a shell on the body itself, which is a different statement from
+       the aura and needs to be: the aura is a RADIUS, information about who
+       is about to fall asleep, and it is deliberately almost invisible. This
+       is about the man lying inside it, who for five seconds cannot be
+       touched, and who without something drawn on him reads as the most
+       helpless thing on the screen rather than the safest.
+
+       Two rings breathing out of phase, tight to the body, plus four motes
+       going round him. Everything here is driven off attackFrame -- which is
+       snapshotted and hashed -- rather than a wall clock, so a rollback
+       replays the identical shell instead of a shimmer that jumps. */
+    const t = f.attackFrame - f.def.ult.startup;
+    /* A pool of light he is lying in, under everything else. Flat and low --
+       it is a body on the floor, not a lamp -- and it is what stops the
+       slumped dark sprite disappearing into a dark stage. */
+    g.globalAlpha = 0.16 + 0.05 * ((Math.floor(t / 14) % 2));
+    g.fillStyle = '#9fd4ff';
+    g.beginPath();
+    g.ellipse(f.x, f.y - 4, 15, 7, 0, 0, Math.PI * 2);
+    g.fill();
+
+    for (let k = 0; k < 2; k++) {
+      const phase = ((t + k * 26) % 52) / 52;
+      // Bright enough to be a statement. The aura above is deliberately
+      // almost invisible because it is information; this is the opposite.
+      g.globalAlpha = 0.75 * (1 - phase);
+      g.strokeStyle = '#dff0ff';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(f.x, f.y - 7, 8 + phase * 11, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.globalAlpha = 0.9;
+    g.fillStyle = '#eaf4ff';
+    for (let i = 0; i < 4; i++) {
+      /* Positions from a fixed table rather than from a trig call: this file
+         bans cos and tan outright (the build greps for them) because the
+         angle literals are checked, and four points on a circle are four
+         points whether they are computed or written down. */
+      const step = (Math.floor(t / 6) + i * 2) % 8;
+      const ox = SHELL_ORBIT[step][0], oy = SHELL_ORBIT[step][1];
+      g.fillRect(Math.round(f.x + ox * 13) - 1, Math.round(f.y - 8 + oy * 9) - 1, 2, 2);
+    }
+    g.globalAlpha = 1;
+    g.lineWidth = 1;
   }
   // A sleeper's hitstun is re-pinned at 2 every frame, so it is no clock.
   const t = slouching ? f.attackFrame : battleFrames;
@@ -7556,7 +7659,12 @@ class Soul {
        him. See update(). */
     this.rise = cfg.emerge || 0;
     this.fromY = owner.y - 4;
-    this.toY = owner.y - 16;
+    /* Well clear of him, not one body-height up. At -16 the ghost's feet sat
+       exactly on the sleeping man's head and the two read on screen as a
+       single tall blob -- which defeats the whole image, because the thing
+       the ult has to say is that there are now TWO of him and one of them is
+       lying down. */
+    this.toY = owner.y - (cfg.float || 30);
     this.punchT = 0;      // frames the glove is still out
     this.punchCd = 0;     // frames until it can go out again
     this.arm = 0;         // which glove, so a flurry alternates
@@ -7617,7 +7725,8 @@ class Soul {
       const k = 1 - this.rise / (c.emerge || 1);
       const ease = 1 - (1 - k) * (1 - k);
       this.x = this.owner.x;
-      this.y = (this.owner.y - 4) + ((this.owner.y - 16) - (this.owner.y - 4)) * ease;
+      this.y = (this.owner.y - 4) +
+               ((this.owner.y - (c.float || 30)) - (this.owner.y - 4)) * ease;
       this.vx = 0;
       this.vy = 0;
       if (this.t % 4 === 0) {
@@ -13006,7 +13115,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '7232e8d2b9';
+const BUILD_ID = '0ae189e726';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13017,7 +13126,7 @@ const BUILD_ID = '7232e8d2b9';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.58';
+const VERSION = '2.59';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
