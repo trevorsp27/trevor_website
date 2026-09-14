@@ -396,12 +396,14 @@ const castFromAir = (run, bits) => run(`(function () {
    only ever read inside the `if (s.rise && ...)` branch in runSpecial, so on
    a move with no rise it is dead weight and on one with a rise it is part of
    the same three lines. Everything else has to match, field for field. */
+/* Every field, in a stable order. It used to skip `rise` and `drift`, which
+   were the one allowed difference between the two copies while Squalls's
+   doubled as a recovery. That lift is gone -- played, it read as a mistimed
+   jump and was the first thing anybody noticed about the move -- so the two
+   specs are now identical with nothing excused, and this compares all of it. */
 const POLE_JSON = (path) => `(function () {
   var s = ROSTER.${path}, out = {};
-  Object.keys(s).sort().forEach(function (k) {
-    if (k === 'rise' || k === 'drift') return;
-    out[k] = s[k];
-  });
+  Object.keys(s).sort().forEach(function (k) { out[k] = s[k]; });
   return JSON.stringify(out);
 })()`;
 
@@ -418,68 +420,69 @@ function checkPole(sq, tv, squalls, trev) {
   assert.equal(t.label, "FISHING POLE",
     "precondition: Trev's down special is the pole he lent him");
 
-  /* The same move, field for field, and this is the half most likely to rot:
-     the comment in the engine says it is Trev's borrowed whole, and a
-     placeholder that has been quietly retuned is a placeholder nobody can
-     compare to the thing it is standing in for. */
+  /* The same move, field for field, with nothing excused. The engine comment
+     says it is Trev's borrowed whole, and a placeholder that has been quietly
+     retuned is a placeholder nobody can compare to the thing it stands in
+     for. */
   assert.equal(sq(POLE_JSON("squalls.specials.up")),
     tv(POLE_JSON("trev.specials.down")),
-    "the two poles should be identical apart from the lift; they are not");
+    "the two poles should be identical; they are not");
 
   /* The stage before the table, on purpose. What a spec says about a rise is
      one edit away from what a rise does, and a control that moved both would
      otherwise be caught by the half that agrees with it. */
   assert.ok(squalls.cast, "precondition: Squalls should have cast the pole");
   assert.ok(trev.cast, "precondition: Trev should have cast his");
-  assert.ok(squalls.lift > 8,
-    "an up special has to get him home: cast out of a fall, Squalls should " +
-    "climb out of it, and he gained " + squalls.lift + "px");
+  assert.equal(squalls.lift, 0,
+    "casting the pole must not jolt him upward -- it briefly did, and that " +
+    "jolt is the thing that was taken back out; he gained " + squalls.lift + "px");
   assert.equal(trev.lift, 0,
-    "and Trev's identical cast must not lift him a pixel, or his down " +
-    "special has quietly become a second recovery; he gained " + trev.lift +
-    "px");
+    "and Trev's identical cast must not lift him either, or his down " +
+    "special has quietly become a recovery; he gained " + trev.lift + "px");
 
-  // And then the one field that is allowed to differ, in the table.
-  assert.ok(s.rise < 0,
-    "Squalls's copy carries a `rise`, and up the screen is negative; it is " +
-    s.rise);
+  // And neither table carries the field that used to do it.
+  assert.equal(s.rise, undefined,
+    "Squalls's copy must not carry a `rise` any more; it is " + s.rise);
   assert.equal(t.rise, undefined,
-    "Trev's must not -- his pole is a down special and his recovery is " +
-    "elsewhere; his `rise` is " + t.rise);
+    "and Trev's never did; his `rise` is " + t.rise);
 }
 
-test("the pole lifts Squalls and not Trev, which is the only difference between them", async () => {
+test("the pole is Trev's, whole, and it lifts neither of them", async () => {
   const squalls = await arena(SQUALLS, REESE);
   const trev = await arena(TREV, REESE);
   checkPole(squalls, trev, castFromAir(squalls, SP_UP), castFromAir(trev, SP_DOWN));
 });
 
-test("negative control: a Squalls pole that never lifts him fails the pole test", async () => {
-  /* Taken out of runSpecial rather than out of the ROSTER, so the table still
-     promises -5.2 and the cast simply ignores it. That is the version the
-     stage half exists to catch; a rise zeroed in the spec would have been
-     caught by the spec half instead and proved nothing about the move. */
+test("negative control: giving Squalls his lift back fails the pole test", async () => {
+  /* The likely regression, because it was real code a version ago: somebody
+     decides an up special ought to get him home and puts the rise back. It
+     has to fail on the STAGE half -- he visibly climbs out of a fall -- and
+     on the table half, which is why the spec is compared with nothing
+     excused now. Squalls's copy is the six-space indent; Trev's sits two
+     columns out, and that is the only thing telling the identical lines
+     apart. */
   const squalls = await arena(SQUALLS, REESE, { engine: sabotage(
-    "        if (s.rise && this.attackFrame === s.startup) {",
-    "        if (false && this.attackFrame === s.startup) {") });
+    "      ox: 4, oy: -12, w: 46, h: 10,\n      grab: { hold: 32, damage: 0 },",
+    "      ox: 4, oy: -12, w: 46, h: 10,\n      rise: -5.2, drift: 0.6,\n      grab: { hold: 32, damage: 0 },") });
   const trev = await arena(TREV, REESE);
   expectToFail(() => checkPole(squalls, trev, castFromAir(squalls, SP_UP),
                                castFromAir(trev, SP_DOWN)),
-    "with the lift never applied the pole test should fail; it passed");
+    "with the lift back in Squalls's table the pole test should fail; it passed");
 });
 
-test("negative control: a Trev pole that lifts him too fails the pole test", async () => {
-  /* The other direction, and the likelier one: somebody notices the two specs
-     differ, decides that is untidy, and gives Trev the rise as well. The
-     eight-space indent is Trev's copy; Squalls's sits two columns in, which
-     is the only thing telling the two identical lines apart. */
-  const squalls = await arena(SQUALLS, REESE);
-  const trev = await arena(TREV, REESE, { engine: sabotage(
-    "        ox: 4, oy: -12, w: 46, h: 10,",
-    "        ox: 4, oy: -12, w: 46, h: 10,\n        rise: -5.2, drift: 0.6,") });
+test("negative control: retuning one copy of the pole fails the pole test", async () => {
+  /* The other way it rots, and the quieter one: the move is a stand-in, so
+     somebody adjusts it on the character who is using it as a stand-in and
+     not on the man it was borrowed from. Nothing about that is visible in a
+     match -- both poles still cast, still catch, still throw -- which is
+     exactly why it is asserted field for field. */
+  const squalls = await arena(SQUALLS, REESE, { engine: sabotage(
+    "      grab: { hold: 32, damage: 0 },\n      damage: 0, base: 0, scale: 0,",
+    "      grab: { hold: 44, damage: 0 },\n      damage: 0, base: 0, scale: 0,") });
+  const trev = await arena(TREV, REESE);
   expectToFail(() => checkPole(squalls, trev, castFromAir(squalls, SP_UP),
                                castFromAir(trev, SP_DOWN)),
-    "with Trev's pole lifting him too the pole test should fail; it passed");
+    "with one copy retuned the pole test should fail; it passed");
 });
 
 /* =====================================================================

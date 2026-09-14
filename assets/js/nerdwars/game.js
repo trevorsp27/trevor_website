@@ -1783,17 +1783,24 @@ ROSTER.squalls = {
        Every number below is his -- the same startup, the same hold, the same
        three throws at the same angles -- because a placeholder that has been
        quietly retuned is a placeholder nobody can compare to the thing it is
-       standing in for. The ONE difference is `rise`, and it is not a tweak:
-       Trev casts this downward and recovers with something else, while for
-       Squalls it sits in the up slot, and an up special that cannot get him
-       home would cost him a stock every time he was knocked off. -5.2 is
-       under every real recovery on the roster, which is the right place for
-       a move that is also a forty-six pixel grab. */
+       standing in for.
+
+       It briefly had a `rise` on it so that an up-special could double as a
+       way home. Played, that jolt was the first thing anybody noticed about
+       the move and it was taken back out: it made every cast feel like a
+       mistimed jump, and a stand-in that draws attention to itself is worse
+       than one that is simply somebody else's move.
+
+       So he has no recovery special. That is a real cost and it is not
+       unprecedented -- Trev has not had one since the pawn replaced KNIGHT,
+       and lives on his double jump -- but it is worth writing down rather
+       than discovering. If it turns out to matter the fix is a `rise` here
+       and four lines in runSpecial's `pole` case, which is how it was done
+       the first time. */
     up: {
       kind: 'pole', label: 'FISHING POLE',
       startup: 9, active: 30, recovery: 16,
       ox: 4, oy: -12, w: 46, h: 10,
-      rise: -5.2, drift: 0.6,
       grab: { hold: 32, damage: 0 },
       damage: 0, base: 0, scale: 0,
       throwFwd: { damage: 12, base: 4.6, scale: 9.6, angle: 32,
@@ -4752,17 +4759,6 @@ class Fighter {
            meant holding back to set up a back-throw spun the line away from
            whoever he was aiming at, and it caught nobody. */
         if (this.attackFrame === 1) this.poleDir = this.facing;
-        /* A cast that also lifts. Trev's does not and must not -- his pole is
-           a down special and his recovery is elsewhere -- but Squalls carries
-           the same move in his UP slot, and a character whose up special
-           cannot get him back to the ledge is not a character, he is a stock
-           waiting to be spent. Guarded on `rise` so the move is Trev's exactly
-           as it was for Trev. */
-        if (s.rise && this.attackFrame === s.startup) {
-          this.vy = s.rise;
-          this.vx += this.facing * (s.drift || 0);
-          this.grounded = false;
-        }
         if (this.attackFrame === s.startup) {
           // Where the rod actually is now, though -- he may have walked.
           this.poleX0 = this.x + this.poleDir * s.ox;
@@ -13312,7 +13308,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '4f132ee4ee';
+const BUILD_ID = '24109d980f';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13323,7 +13319,7 @@ const BUILD_ID = '4f132ee4ee';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.61';
+const VERSION = '2.62';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
