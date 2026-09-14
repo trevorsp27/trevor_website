@@ -102,9 +102,15 @@
     // rather than tracking it, so there is one source of truth.
     seats: [],         // [{ slot, char, here }]
     stage: "space",
+    /* The host's ANSWER about rating, which is not the same thing as whether
+       the room can honor it. A room with somebody signed out in it reports
+       itself unrated whatever is stored here, and this field is deliberately
+       left alone while that is true, so the answer survives that person
+       leaving again. Read it through ratedNow(), never directly. */
+    rated: true,
     phase: "idle",     // idle | hosting | joining | lobby | playing
     // The match now being played, as agreed at the moment it started.
-    match: null,       // { mid, uids[], names[], chars[], stage, host }
+    match: null,       // { mid, uids[], names[], chars[], stage, rated, host }
   };
 
   var lastSay = { text: "", kind: "" };
@@ -189,6 +195,34 @@
   /** Reserved but not yet answering: connecting, or a channel still opening. */
   function pendingSeats() {
     return state.seats.filter(function (s) { return !s.here; });
+  }
+
+  /* Could a match out of this room go on the ladder at all? Only if every
+     person who would actually be in it can be named, because the record is a
+     list of uids and a null in that list is a ghost: there is nobody to credit
+     the win to and nobody to take the loss. Asked of the seats, because seat
+     identity is the only thing this file knows about signing in -- it arrives
+     with a guest's `hello` and rides the seat broadcast -- and inventing a
+     second answer here would be a second source of truth to disagree with it.
+     Reserved seats are not asked: somebody halfway through connecting will not
+     be in the match either. */
+  function ratable() {
+    return occupiedSeats().every(function (s) { return !!s.uid; });
+  }
+
+  /* Rated is the host's wish masked by what the room can do, rather than a
+     stored flag something has to remember to clear. That one line is both
+     rules at once. It falls to false the instant a signed-out player sits
+     down, with no hook on any of the paths that seat, unseat or re-identify
+     somebody -- `hello`, the drop handler, the join timeout, setMe -- and a
+     hook missing from one of those would be exactly the silent bug where the
+     room still calls itself rated with a stranger in seat 3. And when that
+     person leaves, it comes back to the host's own answer rather than to
+     true, because state.rated never stopped being that answer: clearing it
+     for real would lose the difference between a host who turned rating off
+     and a host who was overruled. */
+  function ratedNow() {
+    return state.rated && ratable();
   }
 
   /** The lowest seat nobody is in. Host is always 0. */
@@ -490,7 +524,16 @@
       // truth rather than each assembling their own idea of the match.
       state.match = { mid: msg.mid || null, uids: msg.uids || [],
                       names: msg.names || [], chars: msg.chars || [],
-                      stage: msg.stage, host: (msg.uids || [])[0] || null,
+                      stage: msg.stage,
+                      /* Off the message, exactly like the stage, and for the
+                         same reason: whether this is rated is the host's
+                         decision, and a machine that answered from its own
+                         state.rated would file a report disagreeing with the
+                         one the host files about the same match. Absent reads
+                         as rated, which is the meaning ladder.js gives a
+                         record with no field on it. */
+                      rated: msg.rated !== false,
+                      host: (msg.uids || [])[0] || null,
                       at: msg.at || Date.now() };
       beginMatch(msg.chars, msg.stage, msg.delay, state.mySlot);
       return;
@@ -849,6 +892,18 @@
       start: startMatch,
       leave: leaveRoom,
       setStage: function (key) { if (key) state.stage = key; },
+      /* The host's switch, and only the host's, the same as the stage above.
+         Turning rating ON while the room is not ratable is REFUSED rather
+         than accepted and quietly ignored: a match nobody in it can be
+         identified in cannot be rated, so this is not a switch that merely
+         defaults off, it is one the room will not let you move. Refusing also
+         keeps the stored answer honest -- what is in state.rated is something
+         the host actually asked for and could actually have. */
+      setRated: function (on) {
+        if (state.role !== "host") return;
+        if (on && !ratable()) return;
+        state.rated = !!on;
+      },
       /* Who this machine is. The page calls this once somebody has signed
          in; net.js neither knows nor cares how that happened. */
       setMe: function (me) {
@@ -926,16 +981,23 @@
        cannot be derived: the room code is reused by every rematch, and there
        is no shared clock and no seed in the simulation to borrow from. */
     var mid = newMatchId();
+    /* Asked once, here, and then carried rather than asked again. The room
+       can change while a match is running -- somebody's sign-in landing a
+       moment later would make ratedNow() answer differently at the end than
+       it did at the start -- and the two machines writing the report have to
+       agree on the match they actually played. */
+    var rated = ratedNow();
     for (var i = 0; i < here.length; i++) {
       var conn = state.conns[here[i].slot];
       if (conn) post(conn, { t: "seat", slot: i, match: true, build: MY_BUILD });
     }
     state.mySlot = 0;
-    sendAll({ t: "go", chars: chars, stage: state.stage,
+    sendAll({ t: "go", chars: chars, stage: state.stage, rated: rated,
              delay: DEFAULT_DELAY, build: MY_BUILD,
              mid: mid, uids: uids, names: names, at: Date.now() });
     state.match = { mid: mid, uids: uids, names: names, chars: chars,
-                    stage: state.stage, host: uids[0], at: Date.now() };
+                    stage: state.stage, rated: rated, host: uids[0],
+                    at: Date.now() };
     beginMatch(chars, state.stage, DEFAULT_DELAY, 0);
     return true;
   }
@@ -978,6 +1040,14 @@
     L.report({
       mid: m.mid, me: state.me.uid, at: m.at,
       uids: m.uids, names: m.names, chars: r.chars, stage: r.stage,
+      /* Written every time, true as well as false. A false here is only ever
+         the host's own decision: the loop above already refuses to report a
+         match with an unnamed player in it, so the room that could not be
+         rated never reaches this call at all. ladder.js reads a record with
+         no field on it as rated, which is why writing it costs nothing --
+         every record already written means what it always meant, and the new
+         ones stop being a guess. */
+      rated: m.rated,
       winnerSlot: r.winnerSlot, stocks: r.stocks, frames: r.frames,
       build: r.build,
     });
@@ -999,6 +1069,13 @@
       myChar: state.myChar,
       myReady: !!state.myReady,
       stage: state.stage,
+      /* Both of these, not one. The room draws the switch from `rated` and
+         has to grey it out from `ratable`, and a snapshot carrying only the
+         first leaves a switch that refuses to move with nothing on screen
+         saying why -- which is the same silent-mirror bug the seats below
+         had, one level up. */
+      rated: ratedNow(),
+      ratable: ratable(),
       status: lastSay.text,
       statusKind: lastSay.kind,
       seats: state.seats.map(function (seat) {

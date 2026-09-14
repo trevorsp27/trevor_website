@@ -75,9 +75,15 @@
     return others > 0 ? "counted" : "pending";
   }
 
-  /** Only two-player matches are rated. See the note in fold(). */
+  /** Rated unless the host turned it off, or unless somebody played alone. */
   function isRateable(m) {
-    return (m.uids || []).filter(Boolean).length === 2;
+    /* `rated: false` is the host's unrated switch, for the matches people
+       play to try a character out. Only an EXPLICIT false turns rating off:
+       every match written before the switch existed has no `rated` field at
+       all, and every one of those was rated, so treating a missing field as
+       false would silently un-rate the entire back catalogue the first time
+       anybody refolded it. */
+    return m.rated !== false && (m.uids || []).filter(Boolean).length >= 2;
   }
 
   function expected(a, b) {
@@ -154,12 +160,8 @@
       }
       counted++;
 
-      /* Rated only for two players. Elo has no agreed meaning for a
-         free-for-all, and this game does not record the ORDER people were
-         eliminated in anyway -- at the end every loser simply has no stocks
-         -- so a four-way carries no information to rate with beyond who
-         survived. They are logged, they count for head-to-head nothing, and
-         they wait for somebody to decide what a four-way is worth. */
+      /* A match the host flagged unrated, or one nobody else turned up for,
+         still happened and is still shown -- it simply moves nothing. */
       if (!isRateable(m)) {
         unrated++;
         return { mid: m.mid, at: m.at, verdict: verdict, uids: uids,
@@ -167,19 +169,103 @@
                  winnerSlot: m.winnerSlot, rated: false };
       }
 
-      var a = seat(uids[0]), b = seat(uids[1]);
+      /* RATED, FOR HOWEVER MANY PEOPLE SAT DOWN.
+       *
+       * A free-for-all used to be counted and left unrated, on the grounds
+       * that Elo has no agreed meaning for four people at once. It has one
+       * now, because the owner decided what a four-way is worth: the winner
+       * takes rating off the losers. The match is scored as though every pair
+       * in the room played each other at the same moment -- against each
+       * opponent the survivor scored a point and everybody else scored none,
+       * and two people who both went out scored half a point off each other.
+       *
+       * That half point is not a claim that the two of them were evenly
+       * matched. It is the honest statement that this match said nothing
+       * about that pair: the game records who was left standing, not the
+       * order people went out in, so between two losers there is genuinely no
+       * evidence either way and half a point is what "no evidence" is worth.
+       *
+       * Dividing by n - 1 is the part worth defending. Without it a four-way
+       * win collects three whole pairwise payouts and moves a rating three
+       * times as far as beating one person does, and then within a week the
+       * only thing worth playing is a four-way and the 1v1 ladder is
+       * decoration. Normalized, one win is worth about one win however many
+       * people were in the room -- a four-way is simply better evidence for
+       * the same size of claim, not a bigger claim.
+       *
+       * Two seats reduce to exactly what this file did before: n - 1 is 1,
+       * there is one pair, and it is the same arithmetic in the same order
+       * down to the last bit, so every rating already on the board folds to
+       * the number it folded to yesterday.
+       *
+       * With equal K it is zero-sum. S_ij + S_ji is 1 and E_ij + E_ji is 1,
+       * so the deltas cancel and the points genuinely come out of the losers
+       * instead of being minted. A provisional player carries K_NEW, and then
+       * it is only approximately zero-sum -- which was already true of the
+       * two-player code, and is the price of letting a new rating move fast.
+       */
+      var ps = uids.filter(Boolean).map(function (u) { return seat(u); });
+      var n = ps.length;
       // null is a genuine result: both last stocks can go on the same frame.
-      var sa = m.winnerSlot === 0 ? 1 : m.winnerSlot === 1 ? 0 : 0.5;
-      var ea = expected(a.rating, b.rating);
-      var ka = a.played < PROVISIONAL ? K_NEW : K;
-      var kb = b.played < PROVISIONAL ? K_NEW : K;
+      var champ = m.winnerSlot == null ? null : (uids[m.winnerSlot] || null);
 
-      a.rating += ka * (sa - ea);
-      b.rating += kb * ((1 - sa) - (1 - ea));
-      a.played++; b.played++;
-      if (sa === 1) { a.w++; b.l++; pair(a.uid, b.uid).w++; pair(b.uid, a.uid).l++; }
-      else if (sa === 0) { a.l++; b.w++; pair(a.uid, b.uid).l++; pair(b.uid, a.uid).w++; }
-      else { a.d++; b.d++; pair(a.uid, b.uid).d++; pair(b.uid, a.uid).d++; }
+      /* Every rating is read BEFORE any of them is written. Folding seat by
+         seat and letting the second result see what the first one did would
+         make a four-way depend on the order the uids happen to sit in the
+         document, which is the same class of bug the id tiebreak in inOrder()
+         exists to prevent: one log, two clients, two different ladders. */
+      var was = ps.map(function (p) { return p.rating; });
+      var ks = ps.map(function (p) { return p.played < PROVISIONAL ? K_NEW : K; });
+
+      /* One expectation per PAIR, with the mirror taken as 1 minus it rather
+         than computed a second time. Algebraically those are the same number;
+         in doubles they can disagree in the last bit, and that bit is the
+         difference between a match that is exactly zero-sum and one that
+         quietly mints or burns a fraction of a point every time it is played.
+         It is also what makes two seats identical to the old code rather than
+         merely indistinguishable from it. */
+      var ex = ps.map(function () { return []; });
+      var i, j;
+      for (i = 0; i < n; i++) {
+        for (j = i + 1; j < n; j++) {
+          ex[i][j] = expected(was[i], was[j]);
+          ex[j][i] = 1 - ex[i][j];
+        }
+      }
+
+      function scored(mine, theirs) {
+        return mine.uid === champ ? 1 : theirs.uid === champ ? 0 : 0.5;
+      }
+
+      var deltas = ps.map(function (p, k) {
+        var sum = 0;
+        for (var q = 0; q < n; q++) {
+          if (q === k) continue;
+          sum += scored(p, ps[q]) - ex[k][q];
+        }
+        return ks[k] * sum / (n - 1);
+      });
+
+      ps.forEach(function (p, k) {
+        p.rating += deltas[k];
+        p.played++;
+        if (champ === null) p.d++;
+        else if (p.uid === champ) p.w++;
+        else p.l++;
+      });
+
+      /* Head to head records each pair the way the rating read it, which is
+         why a loser-vs-loser meeting goes down as a draw rather than being
+         left out: it is a match they were both in, and the only true thing to
+         say about it is that it did not separate them. */
+      for (i = 0; i < n; i++) {
+        for (j = i + 1; j < n; j++) {
+          var x = ps[i].uid, y = ps[j].uid;
+          if (x === champ) { pair(x, y).w++; pair(y, x).l++; }
+          else if (y === champ) { pair(x, y).l++; pair(y, x).w++; }
+          else { pair(x, y).d++; pair(y, x).d++; }
+        }
+      }
 
       return { mid: m.mid, at: m.at, verdict: verdict, uids: uids,
                names: names, chars: m.chars || [], stage: m.stage,

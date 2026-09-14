@@ -1556,8 +1556,9 @@ test("Cobeus is in the game, off a sprite sheet, and the select screen fits him"
      The grid is the part that needed changing. At three columns his tile
      wrapped to a third row centred at y 144 -- ring running to y 184 on a
      180px screen, NAME drawn at baseline 184 and therefore invisible,
-     portrait underneath all three lines of bottom text. Four columns puts
-     seven back into two rows. */
+     portrait underneath all three lines of bottom text. Widening the grid put
+     seven back into two rows, and at five columns ten fills both of them
+     exactly. */
   const run = await bootEngine();
   assert.equal(run("ORDER.indexOf('cobeus')"), 6,
     "appended, not inserted -- every select.cursor=[i,j] in this suite is a " +
@@ -1567,11 +1568,31 @@ test("Cobeus is in the game, off a sprite sheet, and the select screen fits him"
      actually matters is that ORDER and ROSTER agree, and NOTHING in the
      engine checks it: a key in ORDER with no ROSTER entry crashes in
      drawSelect on `def.name`, and a ROSTER entry missing from ORDER is
-     priced for mana, never loaded, and simply unreachable with no warning. */
+     priced for mana, never loaded, and simply unreachable with no warning.
+
+     The two halves are no longer the same set, and that is on purpose. 2.55
+     added the SANDBAG, a ROSTER entry deliberately left out of ORDER so it
+     cannot be picked -- startBattle seats it by name for practice mode. So
+     the rule is asymmetric now: everything in ORDER must have a ROSTER entry,
+     and anything in ROSTER that ORDER does not list has to SAY it is a dummy.
+     An ordinary character that fell out of ORDER still trips this, which is
+     the failure the old equality was there to catch. */
   const inOrder = run("ORDER.slice()");
   const inRoster = run("Object.keys(ROSTER)");
-  assert.deepEqual([...inOrder].sort(), [...inRoster].sort(),
-    "every character must be in both ORDER and ROSTER");
+  const missing = [...inOrder].filter((k) => !inRoster.includes(k));
+  assert.deepEqual(missing, [],
+    "every character in ORDER needs a ROSTER entry; missing: " +
+    missing.join(", "));
+  const unpickable = [...inRoster].filter((k) => !inOrder.includes(k));
+  const undeclared = unpickable.filter((k) => !run("!!ROSTER." + k + ".dummy"));
+  assert.deepEqual(undeclared, [],
+    "a ROSTER entry outside ORDER is unreachable, so it has to be a training " +
+    "dummy and say so with `dummy: true`; these do not: " +
+    undeclared.join(", "));
+  assert.ok(unpickable.includes("sandbag"),
+    "the sandbag must stay out of ORDER -- in it, practice mode's dummy " +
+    "becomes a pickable fighter with no moves; ROSTER-only keys were: " +
+    (unpickable.join(", ") || "none"));
   const n = inOrder.length;
 
   /* Every non-character sprite has to be named in loadAssets by hand; there
@@ -1587,7 +1608,9 @@ test("Cobeus is in the game, off a sprite sheet, and the select screen fits him"
   // The grid has room, and his name is on the screen.
   const grid = run(`(function () {
     var cols = NerdWars.selectColumns;
-    var cellW = 74, cellH = 52, originY = 40;
+    // CELL_W rather than a copy of it: drawSelect reads the same constant, so
+    // a narrower grid cannot pass here and overflow on the screen.
+    var cellW = CELL_W, cellH = 52, originY = 40;
     var originX = VW / 2 - (cols * cellW) / 2 + cellW / 2;
     var last = ORDER.length - 1;
     var cx = originX + (last % cols) * cellW;
@@ -2291,10 +2314,25 @@ test("the cast is a thrown lure: it travels, it arcs, and the way home is live",
   assert.ok(Math.abs(home.hx - home.mx) < Math.abs(r[landedAt].hx - r[landedAt].mx),
     "and the lure should be coming back toward him while it is");
 
-  // 5. Shorter than it was: 46 on the flat and 82 from a jump, before.
+  /* 5. Shorter than it was: the old near-straight line reached 82 from a
+        jump, and that is the number this has always been about.
+
+        The bound moved in 2.55 because POLE_V0 did -- 5.6 -> 6.72, a fifth
+        more, deliberately, to make the lure go a fifth further and a fifth
+        faster. Nothing else about the cast changed: same launch, same
+        gravity, same frame count, so the whole fifth is spent on ground
+        covered. Measured on the flat, the same cast through the same
+        harness: 42.9 with POLE_V0 at 5.6, 50.6 at 6.72 -- the fifth arriving
+        exactly where it was aimed. Pinned at 56, which is the handful of
+        pixels of slack the old 46 left over 42.9, and still nowhere near
+        82. */
   const reach = Math.max.apply(null, live.map((f) => Math.abs(f.hx - f.mx)));
-  assert.ok(reach < 46,
+  assert.ok(reach < 56,
     "the cast should not reach as far as the old one; got " + reach.toFixed(1));
+  assert.ok(reach > 46,
+    "and POLE_V0 is 6.72 now, so it should reach further than the 42.9 it " +
+    "did at 5.6 -- past the old bound, not merely up to it; got " +
+    reach.toFixed(1));
 });
 
 test("the lure carries his momentum, so a moving cast does not stall", async () => {
@@ -2328,7 +2366,7 @@ test("the lure carries his momentum, so a moving cast does not stall", async () 
     me.grounded = false; me.facing = 1;
     foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
     foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
-    var lead = 0, box = null;
+    var lead = 0, box = null, out = [];
     netplay.active = true;
     for (var i = 0; i < 40; i++) {
       me.hitstop = 0; me.mana = 999;
@@ -2340,11 +2378,20 @@ test("the lure carries his momentum, so a moving cast does not stall", async () 
       var h = (me.state === 'special') ? poleHook(me, s) : null;
       if (!h) continue;
       if (h.x - me.x > lead) lead = h.x - me.x;
+      /* The OUTBOUND flight, frame by frame, and only that: 'landed' goes
+         true on the frame it touches down, and after the flight ENDS the
+         reel takes over and interpolates the lure back toward his hand --
+         which poleHook reports with no 'landed' flag at all, so the flag
+         alone would quietly let reel frames into this. */
+      var t = me.attackFrame - s.startup;
+      if (!h.landed && t <= poleFlight(me, s, s.active).at) {
+        out.push(h.x - me.x);
+      }
       var b = me.hitbox();
       if (b && !box) box = { w: b.box.w, h: b.box.h };
     }
     netplay.active = false; netplay.framePads = null;
-    return { lead: lead, box: box };
+    return { lead: lead, box: box, out: out };
   })()`);
 
   // Standing still, the carry changes nothing -- there is nothing to carry.
@@ -2353,14 +2400,45 @@ test("the lure carries his momentum, so a moving cast does not stall", async () 
     "with no drift the carry must be a no-op; " + still.lead.toFixed(1) +
     " against " + stillOld.lead.toFixed(1));
 
-  /* Drifting, it is the whole difference. Measured: at 1.0 the lure leads by
-     50.8 with the carry and 28.1 without; at 1.9, 34.9 against 15.9. */
+  /* Drifting, it is the whole difference -- measured along the flight rather
+     than at its furthest point, and that is 2.55's doing.
+
+     The old version compared the two casts' best reach and wanted half as
+     much again. That worked while both casts flew the same length of time.
+     POLE_V0 6.72 broke the comparison rather than the behavior: on Deep
+     Space the faster lure now clips the top platform at y 54 and LANDS on
+     frame 10 of its flight, where the stalled one sails under it and flies
+     for 28. Two casts with wildly different flight times cannot be compared
+     by where they ended up -- the carry is worth his speed per frame, so a
+     cast cut short collects less of it, and the ratio measures the stage
+     furniture instead of the carry. Measured: at 1.0, 42.4 against 36.4; at
+     1.9, 41.5 against 22.7.
+
+     So compare them frame for frame over the flight they share. poleVX is
+     added every frame and is NOT dragged, which makes the prediction exact
+     rather than approximate: after k frames in the air the carried lure is
+     ahead by k times his speed, to the pixel. Zeroing poleVX, or decaying it
+     with the drag, misses by more than the tolerance below on the first
+     frame. */
   for (const drift of [1.0, 1.9]) {
     const now = cast(drift, false), before = cast(drift, true);
-    assert.ok(now.lead > before.lead * 1.5,
-      "drifting at " + drift + ", the lure should keep a real lead: " +
-      now.lead.toFixed(1) + " with the carry against " +
-      before.lead.toFixed(1) + " without");
+    const n = Math.min(now.out.length, before.out.length);
+    assert.ok(n >= 8,
+      "expected a shared outbound flight to compare, got " + n + " frames");
+    for (let k = 0; k < n; k++) {
+      const gap = now.out[k] - before.out[k];
+      assert.ok(Math.abs(gap - drift * k) < 0.01,
+        "drifting at " + drift + ", frame " + k + " of the flight should be " +
+        (drift * k).toFixed(1) + "px further out with the carry than without; " +
+        "it is " + gap.toFixed(2) + " (" + now.out[k].toFixed(1) + " against " +
+        before.out[k].toFixed(1) + ")");
+    }
+    // And it is a real distance by the end of it, not a rounding difference.
+    const gained = now.out[n - 1] - before.out[n - 1];
+    assert.ok(gained > 5,
+      "drifting at " + drift + ", the carry should be worth real pixels by " +
+      "the end of the shared flight; gained " + gained.toFixed(1) + " over " +
+      n + " frames");
   }
 
   // And the hook is a little more forgiving than it was.
@@ -3236,7 +3314,10 @@ function stubLobby(run, phase) {
       pick: function (c, r) { __lobby.calls.push('pick:' + c + ':' + (r ? 1 : 0)); },
       start: function () { __lobby.calls.push('start'); },
       leave: function () { __lobby.calls.push('leave'); },
-      setStage: function () {},
+      // Recorded, not swallowed: since 2.55 the room reaches the match through
+      // the stage select, and "told the room which stage" is half of what
+      // starting one now means.
+      setStage: function (k) { __lobby.calls.push('setStage:' + k); },
       me: function () { return __lobby.me || null; },
       setMe: function (m) { __lobby.me = m; },
       snapshot: function () {
@@ -3259,6 +3340,21 @@ const tapKey = (run, code) => run(`(function () {
   return scene;
 })()`);
 
+/* Where a title entry actually IS, by what it says.
+
+   Written down once because hard-coded positions are exactly what broke here:
+   2.55 put PRACTICE in at index 1 and every test that had memorised "the
+   leaderboard is the third one" opened the online screen instead -- and did
+   it silently, because a wrong scene is still a scene. Looked up, the next
+   mode anybody adds moves nothing. */
+function modeIndex(run, pattern) {
+  const labels = run("MODES.map(function (m) { return m.label; })");
+  const i = labels.findIndex((l) => pattern.test(l));
+  assert.ok(i >= 0, "no title entry matching " + pattern + "; the title " +
+    "offers: " + labels.join(" / "));
+  return i;
+}
+
 test("the title reaches an online room without leaving the game", async () => {
   /* The room used to be a panel of HTML underneath the canvas: a host
      button, a text box for the code, a list of seats. That meant there was
@@ -3270,14 +3366,25 @@ test("the title reaches an online room without leaving the game", async () => {
   const run = await bootEngine();
   stubLobby(run, 'idle');
 
-  // Three entries, and the middle one is the online one.
+  /* The title has to OFFER the online room -- not have it in any particular
+     slot. Counting entries is what broke this test when 2.55 slid PRACTICE in
+     at index 1 and pushed ONLINE and LEADERBOARD down one each, and counting
+     would break it again on the next mode. So: find it by its label and
+     select it by the index the label is actually at. */
   const modes = run("MODES.map(function (m) { return m.label; })");
-  assert.equal(modes.length, 3,
-    "the title should offer exactly three entries, got: " + modes.join(" / "));
-  assert.ok(/ONLINE/i.test(modes[1]), "the second should be the online one");
-  assert.ok(/LEADERBOARD/i.test(modes[2]), "the third should be the leaderboard");
+  const online = modes.findIndex((m) => /ONLINE/i.test(m));
+  assert.ok(online >= 0,
+    "the title should offer an online entry, got: " + modes.join(" / "));
+  assert.ok(modes.some((m) => /LEADERBOARD/i.test(m)),
+    "and a leaderboard one, got: " + modes.join(" / "));
 
-  run("scene = 'title'; titleChoice = 1;");
+  // And the entry that says ONLINE is the one flagged as online: a label in
+  // the right place over a mode that starts a local match reads fine and
+  // plays wrong.
+  assert.ok(run("!!MODES[" + online + "].online"),
+    "the entry labeled '" + modes[online] + "' should be the online mode");
+
+  run("scene = 'title'; titleChoice = " + online + ";");
   assert.equal(tapKey(run, 'Enter'), 'online',
     "confirming the online mode should open the online screen in the game");
 
@@ -3391,13 +3498,39 @@ test("the room is the character select, and the host starts from it", async () =
   assert.equal(run("__lobby.calls.length"), 0,
     "a room that is not ready should not start on ENTER");
 
+  /* Ready, ENTER goes to the STAGE SELECT rather than straight into a match.
+     That is 2.55's fix for the rematch replaying the first match's stage: the
+     room used to call start() itself, which meant the stage was whatever
+     net.js was last told, so every rematch was on the same one. Now the
+     choice is made on the way in, every time. */
   run("__lobby.canStart = true;");
+  assert.equal(tapKey(run, 'Enter'), 'stage',
+    "ENTER in a ready room should open the stage select");
+  assert.equal(run("__lobby.calls.length"), 0,
+    "and must not start anything before a stage has been picked");
+  assert.equal(run("stageFor"), 'room',
+    "the stage select has to know it was opened from the room -- that is " +
+    "what decides whether confirming starts a local match or the room's");
+
+  /* Backing out returns to the ROOM. Falling through to the local character
+     select would leave the room behind with the seat still taken, on a screen
+     whose ENTER starts a match nobody else is in. */
+  assert.equal(tapKey(run, 'Escape'), 'room',
+    "Escape from the room's stage select should go back to the room");
+  assert.equal(run("__lobby.calls.length"), 0,
+    "and changing your mind about a stage is not a reason to leave the room");
+
+  // In again, and this time confirm: the room is told BOTH things, in order.
   tapKey(run, 'Enter');
-  assert.equal(run("__lobby.calls.join(',')"), 'start',
-    "ENTER should start the match once the room is ready");
+  run("stagePick = 1;");
+  tapKey(run, 'Enter');
+  assert.equal(run("__lobby.calls.join(',')"),
+    'setStage:' + run("STAGES[1].key") + ',start',
+    "confirming a stage should tell the room which one and then start it -- " +
+    "starting without setting it is how a rematch replays the old stage");
 
   // Leaving gives up the seat rather than silently abandoning it.
-  run("__lobby.calls.length = 0;");
+  run("__lobby.calls.length = 0; scene = 'room';");
   assert.equal(tapKey(run, 'Escape'), 'online', "Escape should leave the room");
   assert.equal(run("__lobby.calls.join(',')"), 'leave',
     "and should tell the room, so the seat is freed");
@@ -3863,7 +3996,8 @@ test("the leaderboard puts the ladder's own numbers on the screen", async () => 
   stubLadder(run, { uid: 'u-trev', name: 'TREV' });
   for (let i = 0; i < 5; i++) await Promise.resolve();
 
-  run("scene = 'title'; titleChoice = 2;");
+  // Looked up rather than counted -- see modeIndex.
+  run("scene = 'title'; titleChoice = " + modeIndex(run, /LEADERBOARD/i) + ";");
   const readsBefore = run("__ladderReads");
   assert.equal(tapKey(run, 'Enter'), 'ladder',
     "confirming LEADERBOARD should open it in the game");
@@ -4586,7 +4720,7 @@ test("changing your mind about a name changes nothing", async () => {
   assert.equal(run("ladderView.editing"), true, "the field should be open again");
   assert.equal(clickButton(run, 0), 'title',
     "the BACK button should leave even with the field open");
-  run("scene = 'title'; titleChoice = 2;");
+  run("scene = 'title'; titleChoice = " + modeIndex(run, /LEADERBOARD/i) + ";");
   tapKey(run, 'Enter');
   assert.equal(run("ladderView.editing"), false,
     "the field should not still be open on the way back in");

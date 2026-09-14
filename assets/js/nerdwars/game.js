@@ -244,9 +244,10 @@ const STAGES = [
 
   /* BATTLEFIELD. From a 500x330 layout drawn as black shapes on a
      transparent sheet, scaled to the screen (0.64 across, 0.545 down): a
-     floating island as the main platform -- 268 wide, the widest main in
-     the game -- three small platforms above it, and a top platform whose
-     middle third was drawn GRAY. That third is a trapdoor: solid until
+     floating island as the main platform -- 268 wide, the widest floating main
+     in the game (the swamp, matrix and beach floors run wall to wall) --
+     three small platforms above it, and a top platform whose middle third
+     was drawn GRAY. That third is a trapdoor: solid until
      somebody has stood on it half a second, then it drops open for three
      seconds and comes back. Not a gap, because a gap would have been drawn
      as nothing.
@@ -262,28 +263,53 @@ const STAGES = [
     bg: 'stars',
     ceilingY: null,
     hazard: null,
+    /* Everything below is the layout scaled by a fifth about the island's
+       own center, and then slid up so the platforms sit in the middle of the
+       screen instead of in the bottom half of it.
+
+       It was drawn low. The top platform was at 83 with eighty pixels of
+       nothing above it and four below the island, which is why the stage
+       read as small: not because the island was, but because half the screen
+       was sky nobody could use. Deep Space -- the other floating stage --
+       runs 54 / 94 / 134, and this now runs 58 / 92 / 122, which is the same
+       stage proportions rather than the same numbers.
+
+       One number is not the honest fifth: a fifth of 268 is 322 and the
+       screen is 320, so a true scaling runs the floor off both edges and the
+       stage stops being an island -- no ledge, no edge-guard, and the one
+       part of it that is not the trapdoor gone. The main is trimmed back to
+       308 instead, six pixels clear at each end. Everything else is the full
+       fifth. Four percent off the widest thing on screen is not visible;
+       having somewhere to fall off is. */
     platforms: [
-      { x: 26, y: 136, w: 268, main: true },
-      { x: 40, y: 111, w: 48 },
-      { x: 134, y: 111, w: 52 },
-      { x: 232, y: 111, w: 48 },
-      { x: 88, y: 83, w: 47 },
-      { x: 135, y: 83, w: 47, trap: true },
-      { x: 182, y: 83, w: 51 },
+      { x: 6, y: 122, w: 308, main: true },
+      { x: 16, y: 92, w: 58 },
+      { x: 129, y: 92, w: 62 },
+      { x: 246, y: 92, w: 58 },
+      { x: 74, y: 58, w: 56 },
+      { x: 130, y: 58, w: 56, trap: true },
+      { x: 186, y: 58, w: 61 },
     ],
     // Half a second of standing on it, three seconds open.
     trap: { arm: 30, open: 180 },
+    // The same silhouette, through the same scale: x' = 160 + (x - 160) * 1.2
+    // and y' = 122 + (y - 136) * 1.2. Rounded to whole pixels, because the
+    // island is drawn at one virtual pixel per pixel and a polygon on half
+    // coordinates puts a soft edge on artwork that has none anywhere else.
+    // Clamped at the ends to the trimmed floor above, so the silhouette
+    // finishes where the platform does rather than a pixel past it.
     body: [
-      [26, 136], [294, 136], [290, 146], [275, 154], [271, 158], [253, 163],
-      [243, 166], [235, 167], [226, 169], [202, 170], [196, 171], [190, 172],
-      [188, 174], [180, 175], [171, 174], [167, 171], [162, 170], [153, 171],
-      [152, 172], [141, 172], [138, 171], [126, 171], [112, 172], [111, 176],
-      [106, 176], [102, 174], [97, 172], [94, 171], [91, 170], [63, 169],
-      [61, 167], [54, 166], [53, 163], [49, 158], [40, 154], [33, 146],
-      [26, 146],
+      [6, 122], [314, 122], [314, 134], [298, 144], [293, 148], [272, 154],
+      [260, 158], [250, 159], [239, 162], [210, 163], [203, 164], [196, 165],
+      [194, 168], [184, 169], [173, 168], [168, 164], [162, 163], [152, 164],
+      [150, 165], [137, 165], [134, 164], [119, 164], [102, 165], [101, 170],
+      [95, 170], [90, 168], [84, 165], [81, 164], [77, 163], [44, 162],
+      [41, 159], [33, 158], [32, 154], [27, 148], [16, 144], [8, 134],
+      [6, 134],
     ],
-    spawns: [{ x: 100, y: 136 }, { x: 220, y: 136 }],
-    respawn: { x: 160, y: 30 },
+    spawns: [{ x: 88, y: 122 }, { x: 232, y: 122 }],
+    // Above the top platform, which is at 58 now rather than 83.
+    respawn: { x: 160, y: 18 },
     blast: { left: -40, right: VW + 40, top: -80, bottom: VH + 80 },
   },
 ];
@@ -548,6 +574,30 @@ const ROSTER = {
            this is the move that is supposed to give him a reason to be at
            range, so it has to come back often enough to use. */
         manaOverride: 30,
+        /* Press the button again while one is in the air and it goes off
+           where it is: a 34-pixel ball of whatever colour it had reached,
+           with that colour's status on everyone inside it.
+
+           The shot is small, slow and on a fixed arc, so against anybody
+           paying attention it is a thing you walk around. This is the answer
+           to that -- it makes the shot a question instead. Stand clear of
+           where it is going and you are standing next to where it can be.
+
+           `damageMul` rather than a flat number, so ORANGE still hits harder
+           than the rest inside the ball exactly as it does outside it. The
+           knockback is the ball's own, not the colour's: an explosion throws
+           you off it, whichever colour it was.
+
+           It costs nothing, like the pawn's detonation and the hotdog's
+           split. What it costs is the second rainbow: `maxAlive` is 2, but
+           the press that would have thrown the second one now bursts the
+           first, so in practice he has one at a time and a decision about
+           when it ends. */
+        burst: {
+          radius: 34, damageMul: 1.2,
+          base: 4.2, scale: 7.6, angle: 68,
+          kx: 0.37460659341591196, ky: 0.9271838545667874,
+        },
         /* ROYGBP. Each entry is a PATCH over the spec above -- see the tints
            built after the pricing loop -- so a colour can change damage and
            knockback as well as add a status. */
@@ -737,9 +787,12 @@ const ROSTER = {
            landed", it is a second projectile in the ceiling. 0.62 puts the
            apex around 40, which is the height of the side platforms. */
         spikeSpeed: 1.6, spikeDrop: 3.4, spikeBounce: 0.62,
-        // 15 before. It is three throws now, one of which threatens the same
-        // lane twice, so each individual connection is worth a little less.
-        damage: 12, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
+        /* 15, then 12, now 6. The first two cuts were for the shape of the
+           move -- three throws, one of them threatening the same lane twice.
+           This one is not: it is simply half, because a projectile that
+           comes back to him and skitters along the floor afterwards was
+           landing more often than any number set for a single throw. */
+        damage: 6, base: 3.6, scale: 6.8, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       },
       // He lived in the gym, so the other two slots came out of it rather than
       // being two more bones with the numbers changed.
@@ -1351,9 +1404,15 @@ ROSTER.cobeus = {
       manaOverride: 34,
       damage: 6, base: 2.4, scale: 5.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       /* What it leaves behind. `hitEvery` is the re-arm, so standing in it
-         keeps costing rather than costing once -- it is glass, not a trap. */
+         keeps costing rather than costing once -- it is glass, not a trap.
+
+         2.5, halved from 5. Nothing about the mechanic moved: it lasts the
+         same four seconds, covers the same 22 pixels and re-arms on the
+         same clock. What was wrong was the price of one careless step. The
+         move is denial -- it is supposed to make you go around, not to take
+         a fifth of a stock off you for walking. */
       glass: { life: 240, w: 22, h: 5, hitEvery: 26,
-               damage: 5, base: 1.6, scale: 3.2,
+               damage: 2.5, base: 1.6, scale: 3.2,
                angle: 78, kx: 0.20791169081775934, ky: 0.97814760073380569 },
     },
     /* Three rounds, five frames apart. Not a shotgun and not a machine gun:
@@ -1541,8 +1600,47 @@ ROSTER.simon = {
   ult: {
     kind: 'slouch', label: 'SIMON SLOUCH',
     startup: 24, active: 300, recovery: 18,
-    heal: 25, mana: 100,
+    // Cast in the air it was a five-second invulnerable glide that ended
+    // in the blast zone with the meter spent.
+    groundOnly: true,
+    heal: 25,
+    /* TEN seconds of specials that cost nothing, started the moment he nods
+       off -- so the first five are spent asleep and the second five are his
+       again when he wakes up. That split is the whole point of the number.
+       The sleep used to be five seconds of handing somebody the stage; now
+       the five seconds buy five more in which every button is free, and the
+       ult is a thing you set up rather than a thing you survive.
+
+       It is not a mana refill, it is a suspension: see update(), where the
+       bar is simply pinned full while this runs. Nothing else had to learn
+       about it -- canSpecial reads a full bar and the subtraction that
+       follows is undone on the next frame before anyone can see it. */
+    manaFree: 600,
     aura: { radius: 40, doze: 90 },
+    /* And he gets up anyway. The body stays where it fell -- asleep,
+       untouchable, still making everyone near it drowsy -- and the part of
+       him that never sleeps at a party climbs out and starts throwing
+       hands.
+
+       Deliberately feeble per punch. Two damage is less than any jab in the
+       game, and `hitEvery` means one person can only be taken for two of it
+       every sixteen frames however fast the gloves move -- about seven and a
+       half a second, and only while you stay glued to somebody who is free
+       to run. The fantasy is being in two places; it is not a damage race.
+
+       `punchEvery` is the animation and `hitEvery` is the damage, and they
+       are different numbers on purpose: the gloves go twice as fast as they
+       can possibly hurt, because "punches really fast" is a thing you watch,
+       not a thing you read off a health bar. */
+    soul: {
+      accel: 0.62, drag: 0.84, maxSpeed: 2.8,
+      punchEvery: 7, punchActive: 4,
+      reach: 7, w: 10, h: 9,
+      punch: {
+        damage: 2, base: 1.1, scale: 1.5, hitEvery: 16,
+        angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476,
+      },
+    },
     wake: { damage: 6, radius: 26, base: 3.0, scale: 4.0, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832 },
     damage: 0, base: 0, scale: 0,
   },
@@ -1606,6 +1704,164 @@ ROSTER.squalls = {
   },
 };
 
+
+/* CHRISTIAN.
+
+   Three pieces of art arrived together -- an axe mid-swing, a cookie, and
+   twelve frogs -- and the kit is built out of what those three things are
+   rather than out of a slot chart. An axe is slow and enormous. A cookie is
+   small and round and, given a floor, will roll. Frogs do not travel in ones.
+
+   What he is FOR is the floor. Every other projectile in this game occupies
+   a line through the air and is gone in a second or two; his occupy the
+   ground and stay there. The cookie rolls the length of a platform, the
+   frogs hop after you for four seconds, and neither of them can be jumped
+   over for long. Against that, the axe is the thing that punishes you for
+   standing still to deal with them.
+
+   Slow and heavy to pay for it: the second-heaviest on the roster and a step
+   behind everyone at walking, because a character who controls the floor
+   should not also be the one who crosses it quickest. */
+ROSTER.christian = {
+  name: 'CHRISTIAN',
+  origin: 'fresh',
+  tag: 'AN AXE, A COOKIE, AND A LOT OF FROGS',
+  drawn: true,
+  weight: 106, walk: 1.38, jump: 6.3, doubleJump: 5.8,
+  jab: { startup: 5, active: 3, recovery: 10, damage: 6,
+         base: 2.3, scale: 6.2, angle: 40, kx: 0.766044443118978, ky: 0.6427876096865393,
+         ox: 2, oy: -9, w: 11, h: 10 },
+  specials: {
+    /* COOKIE. Lobbed, and then it ROLLS.
+
+       The only projectile in the game that hugs the floor. It comes down in
+       a short arc, lands on whatever platform is under it, and runs along
+       that platform spinning at a steady three pixels a frame until it hits
+       somebody or runs out of platform -- and at the edge it does not stop,
+       it falls off and keeps going down, which is how it threatens two
+       levels of a stage in one throw.
+
+       That is the whole of why it is worth having. Anything travelling
+       through the air can be ducked, jumped or simply walked under; a thing
+       rolling along the floor you are standing on has to be jumped at the
+       moment it arrives, and it arrives late, long after the animation that
+       produced it has stopped being a reason to pay attention.
+
+       Cheap, because most of them miss. */
+    neutral: {
+      kind: 'cookie', label: 'COOKIE',
+      startup: 8, active: 1, recovery: 13, maxAlive: 2,
+      speed: 2.6, lift: -1.7, drop: 0.17, life: 280,
+      roll: 3.0, spin: 3,
+      manaOverride: 20,
+      damage: 7, base: 2.6, scale: 5.6, angle: 34,
+      kx: 0.8290375725550417, ky: 0.5591929034707469,
+    },
+    /* THE AXE. One enormous overhead chop.
+
+       Thirteen frames of wind-up is the longest startup on any special in
+       the game and it is the point of the move, not a cost bolted onto it:
+       the swing is drawn as a full arc from over his shoulder to the floor,
+       and a fast version of that reads as nothing at all. You are supposed
+       to see it coming and be somewhere else.
+
+       What it buys is a box twenty by twenty-two -- head height to the
+       ground, a body's width out in front -- and knockback pointed DOWN and
+       forward at 300 degrees. On the stage that is a slam. Caught in the air
+       it is a spike, and a spike off the side of the Battlefield is the end
+       of a stock. */
+    down: {
+      kind: 'axe', label: 'SPLIT IT',
+      startup: 13, active: 4, recovery: 21,
+      ox: 3, oy: -17, w: 20, h: 23,
+      step: 1.15,
+      manaOverride: 30,
+      damage: 17, base: 3.4, scale: 7.6, angle: 300,
+      kx: 0.5000000000000001, ky: -0.8660254037844386,
+    },
+    /* FROG ARMY. His recovery, and it is frogs.
+
+       Every character's `up` has to get them home. His does it by throwing
+       three frogs at the floor and going up off them, which is exactly as
+       sound as it sounds and is the reason the lift is modest: -5.9 is
+       shorter than anybody else's recovery, because unlike anybody else's
+       his leaves three things on the stage that are still working for him
+       twenty seconds later.
+
+       Where the frogs land they hop after the nearest opponent, and they do
+       not stop for a shield or a ledge. Four damage each and they die on
+       contact, so they are not a kill; they are a reason you cannot stand
+       still and think. */
+    up: {
+      kind: 'frogs', label: 'FROG ARMY',
+      startup: 7, active: 1, recovery: 18,
+      rise: -5.9, drift: 0.7,
+      count: 3, spread: 1.25, toss: -2.1,
+      manaOverride: 28,
+      frog: {
+        hopEvery: 26, hop: -2.5, speed: 1.45, drop: 0.26, life: 280,
+        damage: 4, base: 2.3, scale: 4.8, angle: 62,
+        kx: 0.46947156278589086, ky: 0.8829475928589269,
+      },
+      damage: 0, base: 0, scale: 0,
+    },
+  },
+  /* THE PLAGUE. The army, but it is raining.
+
+     Frogs come down off the top of the screen for a second and a half,
+     across the whole width of it, and then hop after whoever is nearest for
+     as long as they last. It is the same frog and the same hop as the
+     recovery -- deliberately, because the ult should read as more of him
+     rather than as a different character arriving -- and the only things
+     that change are how many and where they come from.
+
+     It does not hit hard. Fourteen frogs at five apiece is a big number that
+     nobody will ever collect, and that is fine: what it actually does is
+     take the floor away from everybody for ten seconds while he stands in
+     the middle of it with an axe. */
+  ult: {
+    kind: 'plague', label: 'THE PLAGUE',
+    startup: 18, active: 90, recovery: 20,
+    every: 6, lanes: 7,
+    frog: {
+      hopEvery: 22, hop: -2.6, speed: 1.6, drop: 0.26, life: 320,
+      damage: 5, base: 2.6, scale: 5.2, angle: 62,
+      kx: 0.46947156278589086, ky: 0.8829475928589269,
+    },
+    damage: 0, base: 0, scale: 0,
+  },
+};
+
+/* THE SANDBAG.
+
+   A Fighter, which is the entire trick. Everything that makes a training
+   dummy worth having -- a hurtbox in the right place, knockback that scales
+   with damage, hitstun, being grabbable, poison and burn ticking on it,
+   reading its percentage off the HUD -- already exists and only exists for
+   fighters, so the cheapest correct dummy is a fighter with nobody driving
+   it. Two behaviours are overridden and no more: aiDecide hands it an empty
+   pad, and a KO puts it back in the middle instead of taking a stock.
+
+   NOT in ORDER, so it cannot be picked; startBattle seats it by name when
+   the mode asks for one.
+
+   Light on purpose. 78 is under everybody, so it travels -- and watching how
+   far a thing goes is most of what a practice mode is for. */
+ROSTER.sandbag = {
+  name: 'SANDBAG',
+  origin: 'fresh',
+  tag: 'it is not going to hit back',
+  dummy: true,
+  accent: '#e8e4d8',
+  weight: 78, walk: 0, jump: 0, doubleJump: 0,
+  // Never thrown -- nothing gives it a pad -- but moveCost walks every entry
+  // in ROSTER and startAttack reads def.jab without asking who it belongs to.
+  jab: { startup: 6, active: 2, recovery: 12, damage: 0,
+         base: 0, scale: 0, angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476,
+         ox: 2, oy: -9, w: 1, h: 1 },
+  specials: {},
+};
+
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
   startup: 7, active: 3, recovery: 18,
@@ -1653,6 +1909,17 @@ for (const key in ROSTER) {
   const up = ROSTER[key].specials.up;
   if (!up || !up.colors) continue;
   up.tints = up.colors.map((c) => Object.assign({}, up, c));
+  /* And the six again as explosions. Built here for the same reason the
+     tints are: applyHit is handed a finished spec, and six of them made once
+     at load is six objects simFrozen can see, rather than a fresh one per
+     detonation that a snapshot would have to deep-copy. The tint goes in
+     first so its status survives; the burst's knockback goes in after so it
+     wins; the damage is the tint's, scaled. */
+  if (up.burst) {
+    up.burstTints = up.tints.map((t) => Object.assign({}, t, up.burst, {
+      damage: t.damage * up.burst.damageMul,
+    }));
+  }
 }
 
 /* The hotdog's two halves, for the same reason and in the same place as the
@@ -1670,8 +1937,11 @@ for (const key in ROSTER) {
    this array, so inserting anywhere earlier silently repoints every one of
    them at a different fighter. Netplay is unaffected either way -- it carries
    picks as key strings, not indices. */
+/* Ten fills the 5-wide grid exactly, which is the first time it has: nine
+   left a hole in the second row that every screen drawing the roster had to
+   not mind. */
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
-               'cobeus', 'simon', 'squalls'];
+               'cobeus', 'simon', 'squalls', 'christian'];
 
 /* =====================================================================
    CANVAS
@@ -1816,6 +2086,17 @@ function loadAssets(done) {
   SPRITES.guillotine.forEach((uri, i) => grab('guillotine.' + i, uri));
   SPRITES.slouch.R.forEach((uri, i) => grab('slouch.R.' + i, uri));
   SPRITES.slouch.L.forEach((uri, i) => grab('slouch.L.' + i, uri));
+  sandbagFrames().forEach((uri, i) => grab('sandbag.' + i, uri));
+  if (SPRITES.cookie) SPRITES.cookie.forEach((uri, i) => grab('cookie.' + i, uri));
+  if (SPRITES.frog) SPRITES.frog.forEach((uri, i) => grab('frog.' + i, uri));
+  if (SPRITES.axe) {
+    SPRITES.axe.R.forEach((uri, i) => grab('axe.R.' + i, uri));
+    SPRITES.axe.L.forEach((uri, i) => grab('axe.L.' + i, uri));
+  }
+  if (SPRITES.soul) {
+    SPRITES.soul.R.forEach((uri, i) => grab('soul.R.' + i, uri));
+    SPRITES.soul.L.forEach((uri, i) => grab('soul.L.' + i, uri));
+  }
 
   for (const theme in TILES) {
     for (const role in TILES[theme]) grab('tile.' + theme + '.' + role, TILES[theme][role]);
@@ -2164,6 +2445,48 @@ function drawButton(key, cxVirtual, cyVirtual, widthVirtual, action) {
   uiButtons.push({ x: x, y: y, w: w, h: h, action: action });
 }
 
+/* The same button, for labels nobody drew.
+
+   The four drawn buttons are 325x128 plates that say BACK, QUIT, HELP and
+   START, and between them they own fifteen letters of a bespoke pixel
+   alphabet. SIGN IN needs a G and an N, which that alphabet does not have,
+   and inventing two glyphs to sit beside thirteen hand-drawn ones is a
+   worse-looking answer than not using them at all.
+
+   So the PLATE is reproduced instead of the lettering: the gradient sampled
+   straight off startButton.png -- #00b3ff on the left to #004dff on the
+   right, and the duller #119bd4 to #0040d0 that every one of them shifts to
+   under the cursor -- with the label in the game's own font in the same
+   near-black the drawn letters use. Same clothes, different words.
+
+   Registers with uiButtons exactly as drawButton does, so the one mouse
+   handler at the top of the file keeps being the only one. */
+function drawTextButton(label, cxVirtual, cyVirtual, wVirtual, hVirtual, action, opts) {
+  const o = opts || {};
+  const x = px(cxVirtual - wVirtual / 2), y = px(cyVirtual - hVirtual / 2);
+  const w = px(wVirtual), h = px(hVirtual);
+  const hot = !o.disabled &&
+              mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
+  const grad = sctx.createLinearGradient(x, 0, x + w, 0);
+  if (o.disabled) {
+    grad.addColorStop(0, '#3c4256');
+    grad.addColorStop(1, '#2b3044');
+  } else if (hot) {
+    grad.addColorStop(0, '#119bd4');
+    grad.addColorStop(1, '#0040d0');
+  } else {
+    grad.addColorStop(0, '#00b3ff');
+    grad.addColorStop(1, '#004dff');
+  }
+  sctx.fillStyle = '#000000';
+  sctx.fillRect(x - SCALE, y - SCALE, w + SCALE * 2, h + SCALE * 2);
+  sctx.fillStyle = grad;
+  sctx.fillRect(x, y, w, h);
+  text(label, cxVirtual, cyVirtual + hVirtual / 2 - hVirtual * 0.28,
+       hVirtual * 0.56, o.disabled ? '#767d94' : '#06132b', 'center', 800);
+  if (!o.disabled) uiButtons.push({ x: x, y: y, w: w, h: h, action: action });
+}
+
 /* Menu keys are derived from the gameplay bindings rather than repeated, so
    remapping a button cannot leave the menus answering to a key that no longer
    exists -- which is exactly what happened when attack moved from F to G. */
@@ -2241,7 +2564,8 @@ class Fighter {
     // Which control scheme drives this fighter: an index into BINDS for a
     // keyboard player, 'pad0'..'pad3' for a gamepad, or null for a CPU.
     this.scheme = scheme === undefined ? (cpu ? null : slot) : scheme;
-    this.accent = SPRITES[key].accent;
+    // The sandbag has no sprite sheet, so it carries its own colour.
+    this.accent = (SPRITES[key] && SPRITES[key].accent) || this.def.accent || '#cfd6ea';
 
     const sp = spawnFor(slot, this.count);
     this.x = sp.x;
@@ -2334,6 +2658,12 @@ class Fighter {
     // The guillotine cast from the air is a drop, not a grab. Decided on the
     // startup frame and remembered, so the hitbox stays off if he lands.
     this.airCast = false;
+    // Whether this frame's press split a hotdog -- see splitHotdogs().
+    this.hotdogSplit = false;
+    // ...and the same for a rainbow going off. See burstRainbows().
+    this.rainbowBurst = false;
+    // Frames of specials that cost nothing. See the slouch.
+    this.manaFree = 0;
     // Frames spent in somebody's slouch. Grows inside the aura, decays out.
     this.drowsy = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
@@ -2480,6 +2810,7 @@ class Fighter {
           s.kind === 'hamdrop' || s.kind === 'pizza' || s.kind === 'barrage' ||
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'hotdog' || s.kind === 'slots' || s.kind === 'slouch' ||
+          s.kind === 'cookie' || s.kind === 'frogs' || s.kind === 'plague' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
@@ -2510,6 +2841,37 @@ class Fighter {
   // No opponent argument: it used to be handed `fighters[1 - i]` and passed
   // straight to updateFree(pad), which never declared it. Anything that
   // genuinely needs a target -- the CPU, the ham -- calls nearestFoe().
+  /* The hotdog's second press, heard in EVERY state. A whole one flies for
+     220 frames and Simon spends most of that doing something else -- a jab,
+     a shield, the reels, the three frames of landLag after every landing --
+     and the press is a command to a thing already in the air, not a cast,
+     so no state of his should eat it. Only a corpse cannot give it.
+     Remembered on the fighter so updateFree's cast branch does not read the
+     same press as a second throw. */
+  /* The rainbow's second press, heard wherever he is, for the reason
+     splitHotdogs below is: it talks to a thing already in the air, so no
+     state of his has any business eating it. Remembered on the fighter so
+     the cast branch in updateFree can tell that this press was spent. */
+  burstRainbows(pad) {
+    this.rainbowBurst = false;
+    if (!pad || !pad.spUp || this.state === 'ko') return;
+    for (const b of projectiles) {
+      if (b instanceof Rainbow && b.owner === this && !b.dead) {
+        if (b.detonate()) this.rainbowBurst = true;
+      }
+    }
+  }
+
+  splitHotdogs(pad) {
+    this.hotdogSplit = false;
+    if (!pad || !pad.spNeutral || this.state === 'ko') return;
+    for (const b of projectiles) {
+      if (b instanceof Hotdog && b.owner === this && !b.dead && b.piece === 'whole') {
+        if (b.split()) this.hotdogSplit = true;
+      }
+    }
+  }
+
   update(pad) {
     // Raising a shield has no setState edge to hook -- updateFree just
     // re-assigns this.state every frame the button is held -- so the cue
@@ -2527,6 +2889,13 @@ class Fighter {
       return;
     }
 
+    this.splitHotdogs(pad);
+    this.burstRainbows(pad);
+    /* Free specials, from the slouch. Pinning the bar rather than teaching
+       canSpecial and the three places that spend about a second rule: the
+       cast still subtracts what it always did, and the next frame puts it
+       back before the HUD or anything else can observe the dip. */
+    if (this.manaFree > 0) { this.manaFree--; this.mana = COMBAT.manaMax; }
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
     if (this.buffTimer > 0) this.buffTimer--;
@@ -2778,7 +3147,9 @@ class Fighter {
         this.startAttack('ult', pad);
         return;
       }
-      if (this.ultMeter >= COMBAT.ultMax) {
+      // An ult marked groundOnly drops the press in the air. Not queued.
+      if (this.ultMeter >= COMBAT.ultMax &&
+          (this.grounded || !this.def.ult.groundOnly)) {
         this.ultMeter = 0;
         this.swordSwing = false;
         this.startAttack('ult', pad);
@@ -2829,20 +3200,16 @@ class Fighter {
         }
         if (told) return;
       }
-      /* The hotdog splits on the second press. Same shape as the pawn above
-         and for the same reason: while a whole one is in the air the button
-         talks to IT, so there is no path that spends mana on a second while
-         the first is still deciding what to be. Two halves in the air are
-         not "a whole one", so the button casts again over them. */
-      if (intent && intent.kind === 'hotdog') {
-        let split = false;
-        for (const b of projectiles) {
-          if (b instanceof Hotdog && b.owner === this && !b.dead && b.piece === 'whole') {
-            if (b.split()) split = true;
-          }
-        }
-        if (split) return;
-      }
+      /* The hotdog splits on the second press -- but that press is heard at
+         the top of update(), in every state, by splitHotdogs(). What is left
+         here is the pawn's rule: while a whole one was in the air the button
+         talked to IT, so the same press must not also spend mana on a
+         second. Two halves in the air are not "a whole one", so the button
+         casts again over them. */
+      if (intent && intent.kind === 'hotdog' && this.hotdogSplit) return;
+      // And the same rule for the rainbow: the press that burst one is not
+      // also the press that throws the next.
+      if (intent && intent.kind === 'rainbow' && this.rainbowBurst) return;
       if (this.canSpecial(pad)) {
         this.mana -= this.def.specials[this.slotFor(pad)].mana;
         this.startAttack('special', pad);
@@ -2992,6 +3359,11 @@ class Fighter {
         const r2 = s.jackpot.radius * s.jackpot.radius;
         for (const other of fighters) {
           if (other === this || other.eliminated) continue;
+          /* The same two skips resolveCombat makes for every other hit. A
+             fighter in KO flight has already paid the stock; applyHit on him
+             overwrites 'ko' with 'hitstun', and knockOut, no longer seeing
+             'ko', takes a second one. */
+          if (other.state === 'ko' || other.invulnerable) continue;
           const dx = other.x - this.x, dy = other.y - this.y;
           if (dx * dx + dy * dy <= r2) applyHit(this, other, s.jackpot, this.x, k);
         }
@@ -3110,14 +3482,14 @@ class Fighter {
       this.reelStops++;
     }
 
-    /* Splitting the hotdog during the throw's own recovery. The intercept in
-       updateFree only runs once he is free again, and the throw recovers in
-       twenty frames -- so without this a second press inside that window
-       was simply eaten, and "press again while it is in the air" was only
-       true for the second half of the flight. */
-    if (pad && pad.spNeutral && m.kind === 'hotdog' && this.specialSpawned) {
+    /* The soul's controls. runSpecial gets no pad -- that is the rule this
+       file keeps so a special can never read an input the netcode did not
+       hand it -- so the pad is delivered here, where updateAttack already
+       has it, and the soul is found by walking the projectiles rather than
+       held in a field that a rollback would have to carry. */
+    if (m.kind === 'slouch' && pad) {
       for (const b of projectiles) {
-        if (b instanceof Hotdog && b.owner === this && !b.dead && b.piece === 'whole') b.split();
+        if (b instanceof Soul && b.owner === this) b.drive(pad);
       }
     }
 
@@ -3209,7 +3581,7 @@ class Fighter {
 
     const rooted = !m.mobile && (this.state === 'special' || this.state === 'ult') &&
       ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut' ||
-       m.kind === 'knightmove');
+       m.kind === 'knightmove' || m.kind === 'slouch');
     if (!rooted && !m.mobile) {
       if (this.grounded) this.vx *= PHYS.groundFriction;
       else if (pad && (pad.left || pad.right)) {
@@ -3341,33 +3713,51 @@ class Fighter {
         break;
 
       case 'slouch': {
+        // Rooted from the first nod: no sliding off to sleep, no steering
+        // in it. `rooted` in updateAttack names this kind for the same
+        // reason, so the air-drift branch never touches him either.
+        this.vx = 0;
+        /* The free-mana clock starts on the frame he commits, not on the
+           frame he actually drops off, so the twenty-four frames of nodding
+           are part of what you paid for rather than a tax on top of it. */
+        if (this.attackFrame === 1 && s.manaFree) this.manaFree = s.manaFree;
         const asleep = this.attackFrame >= s.startup &&
                        this.attackFrame < s.startup + s.active;
+        // Out it comes, on the frame the eyes close.
+        if (s.soul && this.attackFrame === s.startup) {
+          projectiles.push(new Soul(this, s.soul));
+        }
         if (asleep) {
           // You cannot wake him. Re-armed every frame so nothing can run it out.
           this.invuln = Math.max(this.invuln, 2);
-          this.vx = 0;
           this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);
-          this.mana = Math.min(COMBAT.manaMax, this.mana + s.mana / s.active);
 
           /* Everybody at the party gets sleepy. +2 in the aura against the -1
              every fighter loses per frame in update(), so it climbs inside
              and drains outside. At `doze` they drop off: written into
              hitstun, which stateHash covers, for the reason LEG DAY's pin is.
-             Grounded only -- you can jump over a sleeping man. */
+             Grounded only -- you can jump over a sleeping man.
+
+             Re-pinned EVERY FRAME, two frames at a time, rather than written
+             once for the rest of the sleep. A pin written once outlives the
+             sleep if the sleep ends early -- a poison tick or the blast zone
+             takes him out of the ult, runSpecial stops, and everyone he put
+             down would stand there for the rest of the five seconds with no
+             aura around them. Two: one to survive this frame's countdown,
+             one to still be under on the wake frame. */
           const r2 = s.aura.radius * s.aura.radius;
-          const left = s.startup + s.active - this.attackFrame;
           for (const other of fighters) {
             if (other === this || other.eliminated) continue;
             const dx = other.x - this.x, dy = other.y - this.y;
             if (dx * dx + dy * dy > r2) continue;
             other.drowsy = Math.min(s.aura.doze, other.drowsy + 2);
             if (other.drowsy >= s.aura.doze && other.grounded &&
-                other.grabbedBy < 0 && other.state !== 'ko' &&
-                other.state !== 'hitstun') {
-              other.setState('hitstun');
-              other.hitstun = Math.max(other.hitstun, left);
-              other.vx = 0;
+                other.grabbedBy < 0 && other.state !== 'ko') {
+              if (other.state !== 'hitstun') {
+                other.setState('hitstun');
+                other.vx = 0;
+              }
+              other.hitstun = Math.max(other.hitstun, 2);
             }
           }
         } else if (this.attackFrame === s.startup + s.active) {
@@ -3375,6 +3765,9 @@ class Fighter {
           const r2 = s.wake.radius * s.wake.radius;
           for (const other of fighters) {
             if (other === this || other.eliminated) continue;
+            // As the jackpot ring: no second stock off a corpse, no hit
+            // through i-frames.
+            if (other.state === 'ko' || other.invulnerable) continue;
             const dx = other.x - this.x, dy = other.y - this.y;
             if (dx * dx + dy * dy <= r2) applyHit(this, other, s.wake, this.x);
           }
@@ -3999,6 +4392,69 @@ class Fighter {
         }
         break;
 
+      case 'cookie':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Cookie(this, s));
+          cue('throw', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'axe':
+        /* A step into it. He is not mobile during the swing -- the wind-up
+           has to be a commitment or the length of it means nothing -- but a
+           chop that lands exactly where he was standing thirteen frames ago
+           misses everybody who simply walked backwards, so the swing itself
+           carries him forward about a body's width. */
+        if (this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active && this.grounded) {
+          this.vx = this.facing * s.step;
+        }
+        if (this.attackFrame === s.startup) {
+          addEffect('dust', this.x + this.facing * 16, this.y, '#cfd6ea');
+          cue('throw', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'frogs':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          this.vy = s.rise;
+          this.vx = this.facing * (s.drift || 0);
+          this.grounded = false;
+          /* Spread derived from the index rather than drawn at random: this
+             runs inside the rollback, so two machines have to produce the
+             same three frogs from the same frame. */
+          for (let i = 0; i < s.count; i++) {
+            const k = i - (s.count - 1) / 2;
+            projectiles.push(new Frog(this, s.frog,
+                                      this.x + k * 4, this.y - 6,
+                                      k * s.spread + this.facing * 0.4,
+                                      s.toss, i));
+          }
+          cue('airjump', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'plague':
+        /* One lane at a time, marching across the screen and wrapping, so
+           the fall is even and reproducible without anybody rolling dice.
+           `battleFrames` is snapshot state, so a rollback rains the same
+           frogs into the same columns. */
+        if (this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active &&
+            (this.attackFrame - s.startup) % s.every === 0) {
+          const n = Math.floor((this.attackFrame - s.startup) / s.every);
+          const lane = (n * 3) % s.lanes;
+          const x = 18 + (VW - 36) * (lane / (s.lanes - 1));
+          projectiles.push(new Frog(this, s.frog, x, -8, 0, 0, n));
+          if (n === 0) {
+            addEffect('ring', this.x, this.y - 8, this.accent);
+            cue('throw', { slot: this.slot, x: this.x });
+          }
+        }
+        break;
+
       case 'shockwave':
         if (this.attackFrame === s.startup) {
           addEffect('ring', this.x, this.y, this.accent);
@@ -4186,6 +4642,16 @@ class Fighter {
     // holding somebody, or been the one held.
     releaseGrab(this);
     if (this.grabbedBy >= 0) releaseGrab(fighters[this.grabbedBy]);
+    /* The dummy pays nothing for going off the edge. It still flies, and the
+       flight is worth watching -- that is the read you came to practice --
+       but it is not out of anything and the match cannot end because of it.
+       respawn() drops it back in the middle a moment later. */
+    if (this.def.dummy) {
+      this.setState('ko');
+      this.timer = 0;
+      cue('ko', { slot: this.slot, x: this.x });
+      return;
+    }
     this.stocks--;
     this.setState('ko');
     this.timer = 0;
@@ -4216,6 +4682,15 @@ class Fighter {
     const step = this.count === 2 ? 44 : 30;
     this.x = STAGE.respawn.x + (this.slot - (this.count - 1) / 2) * step;
     this.y = STAGE.respawn.y;
+    /* The middle of the floor, not the respawn point and not where it was
+       standing. Knocked off the left edge forty times running, a dummy that
+       came back where it went would live on the left edge, and the thing you
+       were trying to practise would be the walk back over to it. */
+    if (this.def.dummy) {
+      const main = STAGE.platforms.find((p) => p.main) || STAGE.platforms[0];
+      this.x = main.x + main.w / 2;
+      this.y = main.y;
+    }
     this.prevY = this.y;
     this.vx = 0;
     this.vy = 0;
@@ -5232,7 +5707,14 @@ function poleStroke(g, x0, y0, x1, y1, bow, fat) {
 
    Plain adds and multiplies on doubles, bit-identical everywhere, so the
    simulation and the drawing can both run it and a rollback agrees. */
-const POLE_V0 = 5.6;        // pixels forward on the first FRAME
+/* 4.8, then 5.6, now 6.72 -- a fifth more than it was.
+
+   This one number is both halves of "further and faster", and that is not a
+   coincidence. The lure's flight ENDS when it falls onto a platform, and
+   nothing here touches the vertical half -- same launch, same gravity, same
+   frame count. So a fifth more speed is spent entirely on ground covered:
+   it moves a fifth quicker and gets a fifth further in the same time. */
+const POLE_V0 = 6.72;       // pixels forward on the first FRAME
 const POLE_DRAG = 0.90;     // ...and this much of it on each frame after
 const POLE_VY0 = -1.34;     // thrown upward, which is what makes it an arc
 const POLE_GRAV = 0.30;     // pulling it back down again
@@ -5909,6 +6391,56 @@ class Rainbow {
     return this.spec.css || RAINBOW[0];
   }
 
+  /* Detonated where it is. Returns whether it actually went off, so the
+     press that burst something can be told apart from one that found
+     nothing to burst and should cast instead.
+
+     The two skips -- a corpse and an invulnerable fighter -- are the ones
+     resolveCombat makes for every other hit, and they are here rather than
+     in applyHit because a radial hit never goes through resolveCombat at
+     all. Without them the ball takes a second stock off somebody already in
+     KO flight, which is a bug this file has had twice.
+
+     Measured against the whole HURTBOX, not against a point on it. A
+     fighter is sixteen pixels of body and the ball goes off wherever the
+     shot had got to, which on the way up is well above head height -- and
+     against a single point at mid-body a ball whose bottom edge was clearly
+     covering somebody's head came up four pixels short and did nothing.
+     Nearest point of the rectangle to the centre of the circle, which is the
+     question anybody watching thinks is being asked.
+
+     NOT called `burst`. resolveCombat calls `shot.burst()` on any projectile
+     that has one the moment it CONNECTS -- that is how a pawn promotes -- so
+     a rainbow with a method by that name would explode on contact on top of
+     the direct hit it had just landed, and take the victim twice. */
+  detonate() {
+    if (this.dead) return false;
+    const s = this.base.burst;
+    if (!s) return false;
+    const spec = this.base.burstTints ? this.base.burstTints[this.hue] : this.spec;
+    const css = this.css();
+    this.dead = true;
+    const r2 = s.radius * s.radius;
+    for (const f of fighters) {
+      if (f === this.owner || f.eliminated) continue;
+      if (f.state === 'ko' || f.invulnerable) continue;
+      const b = f.hurtbox();
+      const nx = clamp(this.x, b.x, b.x + b.w);
+      const ny = clamp(this.y, b.y, b.y + b.h);
+      const dx = nx - this.x, dy = ny - this.y;
+      if (dx * dx + dy * dy <= r2) applyHit(this.owner, f, spec, this.x);
+    }
+    addEffect('ring', this.x, this.y, css);
+    for (let i = 0; i < 14; i++) {
+      addEffect('spark', this.x + rand(-s.radius, s.radius),
+                this.y + rand(-s.radius, s.radius), css);
+    }
+    // No recipe of its own: 'hit-big' is the loudest impact the mixer
+    // owns and an explosion is what it was written for.
+    cue('hit-big', { slot: this.owner.slot, x: this.x });
+    return true;
+  }
+
   box() {
     return { x: this.x - 3, y: this.y - 3, w: 6, h: 6 };
   }
@@ -6153,6 +6685,39 @@ function drawGuillotine(g, f) {
   if (im) g.drawImage(im, Math.round(f.x) - 8, Math.round(f.y) - 18);
 }
 
+/* The axe, over Christian, for the frames he is swinging it.
+
+   An overlay rather than a pose in his sheet, for the reason the guillotine
+   is one: the swing is drawn on a 16x16 cell with the arc reaching well past
+   his own outline, and folding that into the character sheet would make
+   every other frame of him carry the space the arc needs. The wind-up holds
+   the first frame for the whole of the startup and the swing plays across
+   the active frames, which is the read the move depends on -- thirteen
+   frames of axe held over his head is the warning. */
+function drawAxe(g, f) {
+  if (f.state !== 'special') return;
+  const s = f.def.specials && f.def.specials.down;
+  if (!s || s.kind !== 'axe') return;
+  const set = f.facing < 0 ? 'L' : 'R';
+  const list = SPRITES.axe && SPRITES.axe[set];
+  const n = (list && list.length) || 0;
+  if (!n) return;
+  /* Eight frames a side, laid out pose-major and phase-minor: four poses --
+     stand, walk1, walk2, jump -- times wind-up and swing. The legs keep
+     animating through a chop, which is why the poses are in here at all
+     rather than the swing being two frames pasted over whatever he was
+     doing. Grounded he is standing, because the swing roots him; in the air
+     he is in the jump pose. */
+  const pose = f.grounded ? 0 : 3;
+  const phase = f.attackFrame >= s.startup ? 1 : 0;
+  const im = IMG['axe.' + set + '.' + Math.min(n - 1, pose * 2 + phase)];
+  if (im) {
+    g.imageSmoothingEnabled = false;
+    g.drawImage(im, Math.round(f.x) - im.width / 2,
+                Math.round(f.y) - im.height);
+  }
+}
+
 /* Zzz, over anybody asleep: Simon in his slouch, or somebody who stood in it
    too long. Three little z's rising and fading, drawn in pixels because
    text() paints the screen and this is the world. */
@@ -6172,7 +6737,8 @@ function drawSleep(g, f) {
     g.fill();
     g.globalAlpha = 1;
   }
-  const t = slouching ? f.attackFrame : f.hitstun;
+  // A sleeper's hitstun is re-pinned at 2 every frame, so it is no clock.
+  const t = slouching ? f.attackFrame : battleFrames;
   for (let i = 0; i < 3; i++) {
     const k = (Math.floor(t / 6) + i * 5) % 15;
     g.globalAlpha = 1 - k / 15;
@@ -6184,6 +6750,341 @@ function drawSleep(g, f) {
     g.fillRect(zx, zy + 2, 3, 1);
   }
   g.globalAlpha = 1;
+}
+
+/* =====================================================================
+   COOKIE - thrown through the air, and then it is a floor hazard.
+
+   Two lives in one object, and the switch between them is the move. In the
+   air it is an ordinary short arc. The moment it crosses a platform going
+   down it stops falling, sits on that surface, and rolls the way it was
+   already going at a flat three pixels a frame -- spinning, because a cookie
+   that slid would read as a coin.
+
+   Running out of platform does not stop it. It goes over the edge and picks
+   the arc back up, which is what lets one throw off a high platform end up
+   rolling along the floor underneath it. `life` is long for the same reason:
+   most of it is spent rolling, and a rolling cookie that expired on the old
+   projectile clock would vanish halfway across a stage for no reason anybody
+   watching could see.
+   ===================================================================== */
+
+class Cookie {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 8;
+    this.y = owner.y - 10;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift;
+    this.dir = owner.facing;
+    this.rolling = false;
+    this.spin = 0;
+    this.life = spec.life;
+    this.dead = false;
+  }
+
+  update() {
+    const s = this.spec;
+    const prevY = this.y;
+    this.spin++;
+    this.life--;
+
+    if (this.rolling) {
+      this.x += this.dir * s.roll;
+      // Still ground under it? Asked every frame rather than remembered,
+      // because the floor can be taken away -- the Battlefield's door opens
+      // under things.
+      let on = false;
+      for (const p of platformsNow()) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (Math.abs(this.y - p.y) < 2) { on = true; this.y = p.y; break; }
+      }
+      if (!on) { this.rolling = false; this.vx = this.dir * s.roll * 0.6; this.vy = 0; }
+    } else {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.vy += s.drop;
+      if (this.vy > 0) {
+        for (const p of platformsNow()) {
+          if (this.x < p.x || this.x > p.x + p.w) continue;
+          if (prevY <= p.y && this.y >= p.y) {
+            this.y = p.y;
+            this.rolling = true;
+            this.vy = 0;
+            this.dir = this.vx >= 0 ? 1 : -1;
+            addEffect('dust', this.x, p.y, '#c8a06a');
+            break;
+          }
+        }
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -16 || this.x > VW + 16 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 3, y: this.y - (this.rolling ? 5 : 3), w: 6, h: 6 };
+  }
+
+  draw(g) {
+    const n = (SPRITES.cookie && SPRITES.cookie.length) || 0;
+    const im = n ? IMG['cookie.' + (Math.floor(this.spin / this.spec.spin) % n)] : null;
+    const y = Math.round(this.y) - (this.rolling ? 5 : 3);
+    if (im) {
+      g.imageSmoothingEnabled = false;
+      g.drawImage(im, Math.round(this.x) - im.width / 2, y);
+    } else {
+      g.fillStyle = '#c08a46';
+      g.fillRect(Math.round(this.x) - 2, y, 4, 4);
+    }
+  }
+}
+
+/* =====================================================================
+   FROG - one of however many.
+
+   Falls where it is put, and from then on it hops: a short pause on the
+   floor, then a jump toward whoever is nearest, over and over until it
+   touches somebody or its clock runs out. It does not aim, it does not lead,
+   and it will hop straight off a ledge after you, which is most of the charm.
+
+   The same class serves the recovery's three and the ult's rain. The only
+   difference between them is the spec they are handed and where they start,
+   which is the point: the ult should look like more of what he already does.
+   ===================================================================== */
+
+class Frog {
+  constructor(owner, spec, x, y, vx, vy, variant) {
+    this.owner = owner;
+    this.spec = spec;
+    /* Which of the three colours this one is. Taken from the caller's own
+       index rather than drawn, because this runs inside the rollback and two
+       machines have to produce the same green. */
+    this.variant = ((variant || 0) % 3 + 3) % 3;
+    this.x = x;
+    this.y = y;
+    this.vx = vx || 0;
+    this.vy = vy || 0;
+    this.grounded = false;
+    this.t = 0;
+    this.rest = 0;        // frames until the next hop
+    this.life = spec.life;
+    this.dead = false;
+  }
+
+  update() {
+    const s = this.spec;
+    const prevY = this.y;
+    this.t++;
+    this.life--;
+
+    if (this.grounded) {
+      this.vx *= 0.82;
+      if (this.rest > 0) this.rest--;
+      else {
+        const foe = nearestFoe(this.owner);
+        const dir = foe ? (foe.x >= this.x ? 1 : -1) : 1;
+        this.vy = s.hop;
+        this.vx = dir * s.speed;
+        this.grounded = false;
+        this.rest = s.hopEvery;
+      }
+    } else {
+      this.vy += s.drop;
+    }
+    this.x += this.vx;
+    this.y += this.vy;
+
+    if (this.vy > 0) {
+      for (const p of platformsNow()) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.y = p.y;
+          this.vy = 0;
+          if (!this.grounded) {
+            this.grounded = true;
+            this.rest = Math.floor(s.hopEvery / 2);
+          }
+          break;
+        }
+      }
+    }
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -16 || this.x > VW + 16 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 5, y: this.y - 6, w: 10, h: 6 };
+  }
+
+  draw(g) {
+    const n = (SPRITES.frog && SPRITES.frog.length) || 0;
+    /* Twelve cells: three colours down, and across them sit-right,
+       leap-right, leap-left, sit-left. The artist drew both facings, so
+       nothing here mirrors anything -- a frog flipped in code would have its
+       eye on the wrong side of a head that is not symmetrical.
+
+       Sitting on the floor, leaping in the air. That IS the animation: the
+       hop is the whole of what a frog does. */
+    const right = this.vx >= 0;
+    const col = this.grounded ? (right ? 0 : 3) : (right ? 1 : 2);
+    const im = n ? IMG['frog.' + Math.min(n - 1, this.variant * 4 + col)] : null;
+    if (im) {
+      g.imageSmoothingEnabled = false;
+      g.drawImage(im, Math.round(this.x) - im.width / 2,
+                  Math.round(this.y) - im.height);
+    } else {
+      g.fillStyle = '#4c9a3f';
+      g.fillRect(Math.round(this.x) - 4, Math.round(this.y) - 5, 8, 5);
+    }
+  }
+}
+
+/* =====================================================================
+   SOUL - the part of Simon that does not fall asleep at the party.
+
+   A projectile in the sense that matters here -- it lives in `projectiles`,
+   so saveSim clones it and restoreSim rebuilds it through its prototype
+   without either of them being taught what a soul is -- and nothing like one
+   in any other sense: it flies where it is told, it has no arc, and it only
+   exists while the body it came out of is asleep.
+
+   Driven by the same pad as the body would have been. There is no second
+   controller and no mode flag anywhere else in the file: updateAttack hands
+   it the pad it already had, and everything the player presses for five
+   seconds goes here instead, because the body is busy.
+
+   It cannot be hit. It is not a fighter, so nothing looks for it, which is
+   the whole reason the ult reads as safe: for as long as it is out, the only
+   thing of Simon's that anybody can reach is lying on the floor invulnerable.
+   ===================================================================== */
+
+class Soul {
+  constructor(owner, cfg) {
+    this.owner = owner;
+    // Both are ROSTER objects, so simFrozen keeps them by reference and a
+    // snapshot never copies a spec.
+    this.cfg = cfg;
+    this.spec = cfg.punch;
+    this.x = owner.x;
+    this.y = owner.y - 16;
+    this.vx = 0;
+    this.vy = 0;
+    this.facing = owner.facing;
+    this.t = 0;
+    this.punchT = 0;      // frames the glove is still out
+    this.punchCd = 0;     // frames until it can go out again
+    this.arm = 0;         // which glove, so a flurry alternates
+    // What it was told to do this frame, written by drive() from the pad.
+    this.goX = 0;
+    this.goY = 0;
+    this.swing = false;
+    /* Hits the same person again and again rather than dying on the first
+       one, on the clock in `hitEvery` -- which is what makes it a flurry
+       instead of one very small projectile. */
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  /* The pad, handed over by updateAttack. Kept apart from update() because
+     the two run at different moments in the frame and only this half is
+     allowed to see an input. */
+  drive(pad) {
+    this.goX = (pad.left ? -1 : 0) + (pad.right ? 1 : 0);
+    this.goY = (pad.up ? -1 : 0) + (pad.down ? 1 : 0);
+    // Every attack button, because at this point he has no others: the jab,
+    // the three specials and the ult are all just "hit them".
+    this.swing = !!(pad.attack || pad.spNeutral || pad.spDown || pad.spUp);
+  }
+
+  update() {
+    const o = this.owner;
+    /* Gone the moment the sleep is, however it ended -- the recovery frames,
+       a KO, the match stopping. Asked about the body rather than counted
+       down here, so there is exactly one clock and no way for the two to
+       disagree about whether he is still asleep. */
+    const u = o && o.def.ult;
+    const asleep = o && !o.eliminated && o.state === 'ult' && u &&
+                   u.kind === 'slouch' &&
+                   o.attackFrame >= u.startup &&
+                   o.attackFrame < u.startup + u.active;
+    if (!asleep) { this.dead = true; return; }
+
+    const c = this.cfg;
+    this.t++;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+
+    // Flight. No gravity and no floor: it goes through the stage, because it
+    // is not really there.
+    this.vx = clamp((this.vx + this.goX * c.accel) * c.drag, -c.maxSpeed, c.maxSpeed);
+    this.vy = clamp((this.vy + this.goY * c.accel) * c.drag, -c.maxSpeed, c.maxSpeed);
+    this.x = clamp(this.x + this.vx, 6, VW - 6);
+    this.y = clamp(this.y + this.vy, 10, VH - 6);
+    if (this.goX) this.facing = this.goX;
+
+    if (this.punchT > 0) this.punchT--;
+    if (this.punchCd > 0) this.punchCd--;
+    if (this.swing && this.punchCd <= 0) {
+      this.punchT = c.punchActive;
+      this.punchCd = c.punchEvery;
+      this.arm ^= 1;
+      addEffect('spark', this.x + this.facing * c.reach, this.y, '#e04a4a');
+    }
+  }
+
+  /* Present but harmless between punches. resolveCombat asks this before it
+     asks for a box at all. */
+  live() {
+    return this.punchT > 0;
+  }
+
+  box() {
+    const c = this.cfg;
+    return { x: this.x + (this.facing > 0 ? c.reach : -c.reach - c.w),
+             y: this.y - c.h / 2, w: c.w, h: c.h };
+  }
+
+  draw(g) {
+    const set = this.facing < 0 ? 'L' : 'R';
+    /* Two frames of float and two of punch, and which punch frame is which
+       glove -- so a flurry visibly alternates instead of flickering on one
+       arm. Falls through to a drawn blob if the art is missing, because a
+       soul nobody can see is an ult nobody can aim. */
+    const i = this.punchT > 0 ? 2 + this.arm : Math.floor(this.t / 9) % 2;
+    const im = IMG['soul.' + set + '.' + i];
+    if (im) {
+      g.imageSmoothingEnabled = false;
+      g.drawImage(im, Math.round(this.x) - im.width / 2,
+                  Math.round(this.y) - im.height / 2);
+    } else {
+      g.fillStyle = '#2a2636';
+      g.fillRect(Math.round(this.x) - 5, Math.round(this.y) - 7, 10, 14);
+      g.fillStyle = '#ffd60a';
+      g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 4, 2, 2);
+      g.fillRect(Math.round(this.x) + 1, Math.round(this.y) - 4, 2, 2);
+    }
+    /* A thread back to the body. Without it the two halves of him read as
+       two unrelated things on screen, and which sleeping man the ghost
+       belongs to is the one thing a four-player game has to make obvious. */
+    const o = this.owner;
+    if (o) {
+      g.globalAlpha = 0.22;
+      g.fillStyle = '#8fd6ff';
+      const steps = 7;
+      for (let k = 1; k < steps; k++) {
+        const t = k / steps;
+        g.fillRect(Math.round(o.x + (this.x - o.x) * t),
+                   Math.round((o.y - 10) + (this.y - (o.y - 10)) * t), 1, 1);
+      }
+      g.globalAlpha = 1;
+    }
+  }
 }
 
 /* =====================================================================
@@ -6492,24 +7393,32 @@ class HamDrop {
     this.y = spec.fallFrom;
     this.vy = spec.fall;
     this.t = 0;
-    // The surface it is coming down on, decided here rather than by whatever
-    // platform it happens to cross first. Aiming at an x and landing on the
+    // The surface it is coming down on, decided by groundUnder() rather than
+    // by whatever platform it happens to cross first. Aiming at an x and landing on the
     // first thing under it put the ham on the balcony over the target's head:
     // on the second stage that balcony starts exactly on the spawn point, so
     // the crater, both shockwaves and every chunk went off a storey up and
     // the whole ult did nothing. Platforms above their feet are ignored and
     // it drops straight through them.
-    this.groundY = 0;
-    let found = false;
-    for (const p of platformsNow()) {
-      if (this.x < p.x || this.x > p.x + p.w) continue;
-      if (p.y < ty - 2) continue;
-      if (!found || p.y < this.groundY) { this.groundY = p.y; found = true; }
-    }
-    if (!found) this.groundY = VH;
+    this.ty = ty;
+    this.groundY = this.groundUnder();
     this.pierce = true;
     this.hitAt = new Array(MAX_PLAYERS).fill(0);
     this.dead = false;
+  }
+
+  /* Asked again every frame, not decided once: on a stage with a trapdoor
+     the floor it picked at cast time can open under it on the way down, and
+     a ham that goes off over a hole is exactly the whiff platformsNow() is
+     there to prevent. Platforms above the target's feet are still ignored. */
+  groundUnder() {
+    let groundY = 0, found = false;
+    for (const p of platformsNow()) {
+      if (this.x < p.x || this.x > p.x + p.w) continue;
+      if (p.y < this.ty - 2) continue;
+      if (!found || p.y < groundY) { groundY = p.y; found = true; }
+    }
+    return found ? groundY : VH;
   }
 
   update() {
@@ -6523,6 +7432,7 @@ class HamDrop {
     if (this.t % 3 === 0) {
       addEffect('spark', this.x + rand(-16, 16), this.y + rand(-10, 22), '#f7cd4a');
     }
+    this.groundY = this.groundUnder();
     if (this.y + HAM_FOOT >= this.groundY) { this.land(this.groundY); return; }
     if (this.y > VH + 80) this.dead = true;
   }
@@ -8707,6 +9617,11 @@ function resolveCombat(fighters) {
   for (let n = projectiles.length, i = 0; i < n; i++) {
     const shot = projectiles[i];
     if (shot.dead) continue;
+    /* On screen, but not a hitbox this frame. Simon's soul is out for five
+       seconds and is only dangerous for the four frames of each punch; the
+       alternative was having box() lie about where it is for the other
+       hundred and fifty, which works right up until somebody reads it. */
+    if (shot.live && !shot.live()) continue;
     for (const f of fighters) {
       if (f === shot.owner || f.eliminated) continue;
       if (f.invulnerable || f.state === 'ko') continue;
@@ -8752,6 +9667,9 @@ function aiDecide(me, foe) {
   if (!foe) return Object.assign({}, NEUTRAL);
   const pad = Object.assign({}, NEUTRAL);
   if (me.eliminated || foe.eliminated) return pad;
+
+  // A dummy stands there. Everything else about it is a fighter.
+  if (me.def.dummy) return pad;
 
   const a = me.ai;
   a.timer--;
@@ -8836,7 +9754,8 @@ function aiDecide(me, foe) {
 
   // Close the gap.
   const s = me.def.specials.neutral;
-  const ranged = s.kind === 'projectile' || s.kind === 'pizza' || s.kind === 'hotdog';
+  const ranged = s.kind === 'projectile' || s.kind === 'pizza' ||
+                 s.kind === 'hotdog' || s.kind === 'cookie';
   const idealRange = ranged ? AI_TUNE.rangedIdeal : s.kind === 'beam' ? 45 : 13;
 
   const crowded = ranged || s.kind === 'beam' ? AI_TUNE.rangedCrowd : 0;
@@ -8875,7 +9794,10 @@ function aiDecide(me, foe) {
       k === 'barrage' ? adx < 150 :
       k === 'buff' ? true :
       adx < 90 && Math.abs(dy) < 26;
-    if (inRange && Math.random() < 0.4) {
+    // The cast itself refuses a groundOnly ult in the air; the CPU should
+    // not keep pressing a button that does nothing.
+    const footing = me.grounded || !me.def.ult.groundOnly;
+    if (inRange && footing && Math.random() < 0.4) {
       pad.ult = true;
       a.cooldown = 40;
       return pad;
@@ -9000,6 +9922,19 @@ let battleFrames = 0;
 let banner = null;
 let winnerKey = null;
 let stagePick = 0;
+/* Which screen asked for a stage, and therefore what confirming one means.
+
+   'local' starts the match here, the way it always did. 'room' hands the
+   choice back to net.js and starts everybody's -- which is the whole of the
+   rematch fix: the room used to start straight off the host's HTML dropdown,
+   so a second match was silently played on the first one's stage, and in
+   fullscreen the dropdown was not even on screen to change. */
+let stageFor = 'local';
+/* Whether the second seat is a sandbag rather than an opponent. Menu state,
+   not simulation state: startBattle reads it once and the match it builds
+   carries the answer in the fighter it made, so a rollback has nothing to
+   put back. */
+let practice = false;
 
 /* How many fighters this match holds, and how many of them a person is
    driving. Everyone from `humanCount` up is a CPU, so "2 of 4" is a free-for-
@@ -9064,8 +9999,15 @@ function startBattle() {
   for (let i = 0; i < seats; i++) {
     const pick = ORDER[select.cursor[i]] ? select.cursor[i] : 0;
     const cpu = i >= humanCount;
-    fighters.push(new Fighter(ORDER[pick], i, cpu, seats, cpu ? null : schemeFor(i)));
+    // Seated by name rather than by a cursor position, because the sandbag is
+    // deliberately not in ORDER and so has no cursor position to be at.
+    const key = practice && i >= humanCount ? 'sandbag' : ORDER[pick];
+    fighters.push(new Fighter(key, i, cpu, seats, cpu ? null : schemeFor(i)));
   }
+  /* Practice does not end. The dummy already cannot lose a stock; this is
+     the other half, so that running yourself off the edge while working out
+     what a move does costs a moment rather than the session. Escape leaves. */
+  if (practice) for (const f of fighters) f.stocks = 99;
   scene = 'battle';
   announce('GO!', '#ffffff');
 }
@@ -9092,6 +10034,7 @@ let titleChoice = 0;
    untouched. What went away is the title entry that reached it locally. */
 const MODES = [
   { label: '1 PLAYER  (vs CPU)', players: 2, humans: 1 },
+  { label: 'PRACTICE  (vs sandbag)', players: 2, humans: 1, practice: true },
   { label: 'PLAY ONLINE', online: true },
   { label: 'LEADERBOARD', ladder: true },
 ];
@@ -9103,6 +10046,7 @@ function enterSelect() {
   if (m.ladder) { enterLadder(); return; }
   playerCount = m.players;
   humanCount = m.humans;
+  practice = !!m.practice;
   select.locked = new Array(MAX_PLAYERS).fill(false);
   select.activeSlot = 0;
   scene = 'select';
@@ -9364,8 +10308,23 @@ function updateRoom() {
     lb.pick(ORDER[select.cursor[0]], !snap.myReady);
   }
 
-  // Only the host can start, and only with somebody to fight.
-  if (snap.canStart && (tapped('Enter') || tapped('NumpadEnter'))) lb.start();
+  /* The rated switch. The host's call, and only ever theirs -- one machine
+     decides and the answer travels in the go message, because two people
+     disagreeing about whether a match counted is a dispute on the
+     leaderboard rather than a difference of opinion.
+
+     It cannot be turned on in a room with anybody unidentified in it. That
+     is net.js's rule, not a default this screen applies: setRated refuses
+     it. Drawn as refused too, so the reason is on the screen rather than in
+     the silence after a keypress that did nothing. */
+  if (tapped('KeyR') && snap.role === 'host' && snap.ratable) lb.setRated(!snap.rated);
+
+  // Only the host can start, and only with somebody to fight. The stage is
+  // chosen on the way, every time, including on the fourth rematch.
+  if (snap.canStart && (tapped('Enter') || tapped('NumpadEnter'))) {
+    stageFor = 'room';
+    scene = 'stage';
+  }
 }
 
 function drawRoom() {
@@ -9378,6 +10337,36 @@ function drawRoom() {
   // The code, big, because somebody is reading it out loud.
   text('ROOM', 10, 16, 7, '#5f6884', 'left', 600);
   text(snap.code || '----', 10, 30, 14, '#8fe08f', 'left', 800);
+
+  /* The rated switch, under the code, where the host is already looking for
+     the thing they read out loud.
+
+     It says the reason when it cannot be moved. A room with one unidentified
+     player in it can never rate a match -- there is nobody to credit -- and
+     a switch that simply refuses to flip, on the one screen where four
+     people are waiting for you, is the kind of silence that gets read as a
+     bug. */
+  const host = snap.role === 'host';
+  const rated = !!snap.rated;
+  /* Only the host is shown a VALUE, and that is not tidiness -- it is the
+     only honest thing this screen can draw. The host's answer does not go on
+     the wire until the match does, so a guest's `rated` is that guest's own
+     untouched default wearing the host's label. A switch reading ON in front
+     of somebody who cannot change it and is not being told the truth by it is
+     worse than no switch, so they get the one fact that is theirs: whether
+     the room COULD rate anything, which is about who has signed in. */
+  if (host) {
+    drawTextButton(rated ? 'RATED  ON' : 'RATED  OFF', 40, 46, 62, 12,
+                   () => { if (snap.ratable) lb.setRated(!rated); },
+                   { disabled: !snap.ratable });
+    text(snap.ratable ? 'R to change -- counts on the leaderboard'
+                      : 'everyone must be signed in to play rated',
+         10, 58, 4.5, '#5f6884', 'left', 500);
+  } else {
+    text(snap.ratable ? 'the host decides whether this one is rated'
+                      : 'unrated -- somebody here is not signed in',
+         10, 50, 5, snap.ratable ? '#5f6884' : '#ff9f43', 'left', 500);
+  }
 
   // Who is in it, and what they picked.
   const seats = snap.seats.filter((s) => s.here);
@@ -9859,8 +10848,10 @@ function updateSelect() {
     if (menuTap(sch, 'down')) moveCursor(slot, 0, 1);
     if (menuTap(sch, 'attack') || menuConfirm()) {
       select.locked[slot] = true;
-      if (slot + 1 < playerCount) select.activeSlot = slot + 1;
-      else scene = 'stage';
+      // In practice the second seat is a sandbag, so there is nobody to pick
+      // for and the stage comes straight after your own choice.
+      if (slot + 1 < playerCount && !practice) select.activeSlot = slot + 1;
+      else { stageFor = 'local'; scene = 'stage'; }
       return;
     }
     // Back up a seat rather than starting over.
@@ -9882,6 +10873,7 @@ function updateSelect() {
 
 function updateStageSelect() {
   if (menuBackOrShield()) {
+    if (stageFor === 'room') { scene = 'room'; return; }
     scene = 'select';
     select.locked = new Array(MAX_PLAYERS).fill(false);
     select.activeSlot = 0;
@@ -9893,7 +10885,20 @@ function updateStageSelect() {
   if (tapped('KeyD') || tapped('ArrowRight')) {
     stagePick = (stagePick + 1) % STAGES.length;
   }
-  if (menuConfirm()) startBattle();
+  if (menuConfirm()) {
+    if (stageFor === 'room') {
+      /* Told, then started. net.js owns the stage the room is on -- it is in
+         the go message and in the match record -- so this sets it there
+         rather than starting a match locally on a stage the other machines
+         have never heard of. */
+      const lb = lobby();
+      if (!lb) { scene = 'title'; return; }
+      lb.setStage(STAGES[stagePick].key);
+      lb.start();
+      return;
+    }
+    startBattle();
+  }
 }
 
 function drawStageSelect() {
@@ -10544,10 +11549,45 @@ function drawPinIrons(g, f, strain) {
   g.globalAlpha = 1;
 }
 
+/* The dummy, drawn straight rather than through sprite().
+
+   Everything in the sheet pipeline is built on a 16x16 cell and a set of
+   named poses -- standR, walkR, and so on -- and the sandbag is one 14x21
+   shape with no poses and no facing. Squeezing it into that shape to reuse
+   thirty lines of translate is the wrong trade; it gets its own six lines. */
+function drawSandbag(g, f) {
+  const n = sandbagFrames().length;
+  /* Six frames in three pairs, row by row: a pair looking aside, the upright
+     pair, and a pair blushing at each other. Upright is the middle one, so
+     rest is 2 and not 0 -- and being hit turns its head the way it is going,
+     which is the only tell a thing with no arms can give you that the hit
+     landed. The heart pair is not used in a fight. */
+  const frame = f.hitstun > 0 ? (f.vx >= 0 ? 0 : 1) : 2;
+  const im = n ? IMG['sandbag.' + Math.min(n - 1, frame)] : null;
+  if (im) {
+    g.imageSmoothingEnabled = false;
+    g.drawImage(im, Math.round(f.x) - im.width / 2, Math.round(f.y) - im.height);
+  } else {
+    g.fillStyle = '#e8e4d8';
+    g.fillRect(Math.round(f.x) - 7, Math.round(f.y) - 21, 14, 21);
+    g.fillStyle = '#2a2f42';
+    g.fillRect(Math.round(f.x) - 4, Math.round(f.y) - 15, 2, 2);
+    g.fillRect(Math.round(f.x) + 2, Math.round(f.y) - 15, 2, 2);
+  }
+}
+
+/* Whatever shape build.py settled on, as one ordered list. */
+function sandbagFrames() {
+  const sp = SPRITES.sandbag;
+  if (!sp) return [];
+  return Array.isArray(sp) ? sp : [].concat(sp.rest || [], sp.hit || []);
+}
+
 function drawFighter(g, f) {
   // An eliminated fighter is still on screen while the KO that removed them
   // plays out. 'gone' is when they are actually off the board.
   if (f.eliminated && f.state !== 'ko') return;
+  if (f.def.dummy) { drawSandbag(g, f); return; }
   const im = f.sprite();
   if (!im) return;
 
@@ -10717,6 +11757,7 @@ function drawFighter(g, f) {
   drawDrink(g, f);
   drawSlots(g, f);
   drawGuillotine(g, f);
+  drawAxe(g, f);
   drawSleep(g, f);
 
   /* Confused had no tell at all. The only way to find out your controls were
@@ -10876,6 +11917,27 @@ function drawHUD() {
     sctx.fillRect(px(bx), px(manaY), px(barW), px(2));
     sctx.fillStyle = f.manaDenied > 0 ? '#ff6b6b' : '#4fa8ff';
     sctx.fillRect(px(bx), px(manaY), px(barW * clamp(f.mana / COMBAT.manaMax, 0, 1)), px(2));
+    /* While specials are free the bar is pinned full, which on its own is
+       indistinguishable from simply having full mana -- so it gets a
+       current running through it, and the lit stretch is how much of the
+       ten seconds is left. It shrinks back along the bar as it runs out,
+       which is the countdown a permanently full bar cannot otherwise show.
+
+       Two fillStyle changes for the whole bar, not one per cell: this is
+       the same shape of loop over the same size of rectangle as the matrix
+       rain, where setting the state per pixel cost forty times what it drew. */
+    if (f.manaFree > 0) {
+      const span = (f.def.ult && f.def.ult.manaFree) || f.manaFree;
+      const lit = barW * clamp(f.manaFree / span, 0, 1);
+      sctx.fillStyle = '#9fe8ff';
+      sctx.fillRect(px(bx), px(manaY), px(lit), px(2));
+      sctx.fillStyle = '#ffffff';
+      const phase = (battleFrames * 0.9) % 9;
+      for (let i = -9 + phase; i < lit; i += 9) {
+        if (i < 0) continue;
+        sctx.fillRect(px(bx + i), px(manaY), px(Math.min(3, lit - i)), px(2));
+      }
+    }
 
     // Ult, flashing when it is ready to spend.
     if (f.def.ult) {
@@ -10969,6 +12031,33 @@ function drawTitle() {
   drawButton('start', VW / 2 - 30, 161, 48, enterSelect);
   drawButton('help', VW / 2 + 30, 161, 48, () => { scene = 'help'; });
   text('W/S to choose', VW / 2, VH - 3, 5, '#454c66', 'center', 500);
+  drawSignInChip();
+}
+
+/* Signing in, from the first screen.
+
+   It was only ever reachable from inside the leaderboard, which is exactly
+   backwards: the leaderboard is the thing you look at once a week and the
+   sign-in is the thing that has to have happened before any of the evening's
+   matches count for anything. By the time you noticed it there, the matches
+   were already unrated.
+
+   Top right, out of the way of a title screen that is otherwise centred, and
+   absent entirely from the standalone build -- NerdWarsAuth is a page thing,
+   and a button that cannot do anything is worse than no button. */
+function drawSignInChip() {
+  const auth = ladderAuth();
+  if (!auth) return;
+  const me = ladderMe();
+  const busy = auth.busy && auth.busy();
+  const label = busy ? '...' : me ? (me.name || 'SIGNED IN') : 'SIGN IN';
+  drawTextButton(label, VW - 30, 12, 52, 13, () => {
+    if (busy) return;
+    if (me) auth.signOut();
+    else auth.signIn();
+  }, { disabled: busy });
+  text(me ? 'tap to sign out' : 'to play rated', VW - 30, 22, 4.5,
+       '#5f6884', 'center', 500);
 }
 
 /* The keyboard half of the game has never been written down anywhere the
@@ -11213,7 +12302,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '72e2ba8bff';
+const BUILD_ID = '1ac44a9ff3';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -11224,7 +12313,7 @@ const BUILD_ID = '72e2ba8bff';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.53';
+const VERSION = '2.55';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -12003,6 +13092,7 @@ function netAdvance() {
 }
 
 function netStart(opts) {
+  practice = false;
   const stageIdx = STAGES.findIndex((st) => st.key === opts.stage);
   stagePick = stageIdx < 0 ? 0 : stageIdx;
 

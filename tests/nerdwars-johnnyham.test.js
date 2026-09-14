@@ -248,18 +248,29 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
   assert.ok(john, "johnnyham missing from the roster");
   assert.equal(john.ult, "HONEY BAKED");
 
-  // Every other ult is still where it was: a build that dropped or renamed one
-  // shipped something other than what was intended. Compared as JSON because
-  // the engine runs in its own vm context, so its arrays have a different
-  // Array.prototype and deepStrictEqual rejects identical values.
-  assert.equal(
-    JSON.stringify(g.nw.roster.map((c) => c.ult)),
-    JSON.stringify([
-      "OUT OF THE TREES", "HONEY BAKED", "LEG DAY", "THE STROKES",
-      "SHIRTS OPTIONAL", "LASER SWORD", "DESIGNATED DRIVER",
-      "SIMON SLOUCH", "PLACEHOLDER ULT",
-    ])
-  );
+  /* Every other ult is still where it was: a build that dropped or renamed
+     one shipped something other than what was intended. Checked per character
+     rather than as one list, so adding a fighter is not a failure -- 2.55
+     appended Christian and THE PLAGUE, and an equality on the whole array
+     called that a regression. What it must still catch is an ult that moved,
+     vanished, or landed on the wrong person, so every pair below is asserted
+     by key. Read out of the vm as strings: the engine has its own
+     Array.prototype, so deepStrictEqual rejects identical values. */
+  const ults = Object.fromEntries(g.nw.roster.map((c) => [c.key, c.ult]));
+  for (const [key, ult] of Object.entries({
+    autisnick: "OUT OF THE TREES", johnnyham: "HONEY BAKED", kel: "LEG DAY",
+    ladeane: "THE STROKES", reese: "SHIRTS OPTIONAL", trev: "LASER SWORD",
+    cobeus: "DESIGNATED DRIVER", simon: "SIMON SLOUCH",
+    squalls: "PLACEHOLDER ULT", christian: "THE PLAGUE",
+  })) {
+    assert.equal(ults[key], ult, key + "'s ult should be " + ult);
+  }
+
+  // And nobody is left without one: an ult read off a fighter who has none is
+  // a null the HUD draws as blank rather than an error anybody would notice.
+  const ultless = g.nw.roster.filter((c) => !c.ult).map((c) => c.key).join(", ");
+  assert.equal(ultless, "", "every fighter needs an ult; these have none: " +
+    ultless);
 });
 
 test("the ham fires in a real match and both machines agree about it", async () => {

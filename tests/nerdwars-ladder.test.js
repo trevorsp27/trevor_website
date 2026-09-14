@@ -208,21 +208,27 @@ test("every client folds the same log into the same ladder", async () => {
   assert.equal(forward, shuffled);
 });
 
-test("a four-way is logged but not rated", async () => {
-  /* Elo has no agreed meaning for a free-for-all, and this game does not
-     record the order people went out in -- at the end every loser simply has
-     no stocks. So a four-way carries nothing to rate with beyond who
-     survived. It is kept, shown, and left unrated rather than guessed at. */
+test("a four-way is logged and rated", async () => {
+  /* This used to assert the opposite, and the note it carried said a
+     free-for-all would stay unrated until somebody decided what one was
+     worth. Somebody has: the winner takes rating off the losers, scored as
+     though every pair in the room played at once. The arithmetic, the
+     normalization that keeps a four-way win worth about one win, and the
+     proof that two seats still fold to the old numbers exactly are all in
+     nerdwars-ladder-multi.test.js. What belongs here is only that a four-way
+     no longer falls out of the ladder. */
   const L = kit();
   const v = L.fold([
     match("m1", 1, ["a", "b", "c", "d"], 2,
           { b: { agree: true, winnerSlot: 2 } }),
   ]);
   assert.equal(v.counted, 1, "it still counts as a match that happened");
-  assert.equal(v.unrated, 1, "but it does not move anybody's rating");
-  assert.equal(v.rows.every((r) => r.rating === L.START), true,
-    "everybody should still be on the starting rating");
-  assert.equal(v.matches[0].rated, false);
+  assert.equal(v.unrated, 0, "and now it moves ratings too");
+  assert.equal(v.matches[0].rated, true);
+  assert.ok(v.rows.find((r) => r.uid === "c").rating > L.START,
+    "the survivor should have gained");
+  assert.equal(v.rows.filter((r) => r.rating < L.START).length, 3,
+    "and the other three should have paid for it");
 });
 
 test("the store is create-only, so a result cannot be rewritten", async () => {
