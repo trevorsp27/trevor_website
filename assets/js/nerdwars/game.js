@@ -3742,9 +3742,12 @@ class Fighter {
       releaseGrab(this);
       return;
     }
-    const s = this.grabKind === 0 ? BASIC_GRAB
-            : this.grabKind === 2 ? this.def.specials.up
-            : this.def.specials.down;
+    const s = grabSpecOf(this);
+    /* A hold with no spec behind it has nowhere to pay out to, and the frame
+       the timer runs out it would hand applyHit an undefined move. Let go
+       instead: a grab that quietly ends is a bug you can play through, and
+       the alternative is one you cannot. */
+    if (!s || !s.grab) { releaseGrab(this); return; }
     this.vx = 0;
     if (!this.grounded) this.vy = Math.min(this.vy, 0.6);
     if (this.grabTimer % 7 === 0) {
@@ -6357,10 +6360,40 @@ function drawDrink(g, f) {
   }
 }
 
+/* Which slot a move sits in, as the code tickGrab stores. The two of them
+   are the only places that know this encoding and they are written next to
+   each other on purpose: a grab is caught in one function and paid out in
+   another, and a mapping that disagreed between them is a freeze. */
+function grabSlotOf(f, move) {
+  const sp = f.def.specials || {};
+  if (move === sp.up) return 2;
+  if (move === sp.neutral) return 3;
+  return 1;
+}
+
+function grabSpecOf(f) {
+  const sp = f.def.specials || {};
+  return f.grabKind === 0 ? BASIC_GRAB
+       : f.grabKind === 2 ? sp.up
+       : f.grabKind === 3 ? sp.neutral
+       : sp.down;
+}
+
+/* Whichever of his specials is a fishing pole, wherever it was put. Trev
+   casts one downward and Squalls casts the same move upward, so nothing that
+   draws or resolves it may assume a slot. */
+function poleMoveOf(f) {
+  const sp = (f.def && f.def.specials) || {};
+  for (const key of ['down', 'up', 'neutral']) {
+    if (sp[key] && sp[key].kind === 'pole') return sp[key];
+  }
+  return null;
+}
+
 /** The rod, the line and the lure, for whoever is casting or holding one. */
 function drawPole(g, f) {
-  const s = f.def.specials && f.def.specials.down;
-  if (!s || s.kind !== 'pole') return;
+  const s = poleMoveOf(f);
+  if (!s) return;
 
   /* Two reasons to draw, and they overlap on purpose. The hold runs on
      grabTimer for 32 frames while the cast runs on attackFrame for 39, so a
@@ -6369,9 +6402,11 @@ function drawPole(g, f) {
      which point attackFrame means nothing at all. The hold wins: it is the
      one with a person on it.
 
-     grabKind 1 is "caught by the character's own down special", which is the
-     only thing separating this from the universal Y grab. He has both, and
-     the Y grab must not sprout a fishing rod.
+     The grab test is "caught by the slot this man's pole is actually in",
+     which is the only thing separating it from the universal Y grab. He has
+     both, and the Y grab must not sprout a fishing rod. Trev's pole is a down
+     special and Squalls's is an up special, so the slot is looked up rather
+     than written down.
 
      moveFor('special') rather than specialSlot === 'down': specialSlot is
      assigned in startAttack and is NOT one of the constructor's fields, so
@@ -6379,7 +6414,7 @@ function drawPole(g, f) {
      entitled to take it away on a rewind past his first special of the
      match. Asking the engine which move it believes is running draws
      whatever he is actually doing either way. */
-  const holding = f.grabbing >= 0 && f.grabKind === 1;
+  const holding = f.grabbing >= 0 && grabSpecOf(f) === s;
   const casting = f.state === 'special' && f.moveFor('special') === s;
   if (!holding && !casting) return;
 
@@ -10303,9 +10338,20 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   if (move.grab) {
     if (defender.eliminated || defender.grabbedBy >= 0 || attacker.grabbing >= 0) return;
     attacker.grabbing = defender.slot;
-    // 0 the universal grab, 1 a special in the down slot, 2 one in the up
-    // slot -- which is Simon's guillotine, and the only choke.
-    attacker.grabKind = move.basic ? 0 : move.choke ? 2 : 1;
+    /* 0 the universal grab, 1 a special in the down slot, 2 one in the up
+       slot, 3 one in the neutral slot. tickGrab turns it back into a spec, so
+       it has to be the SLOT and nothing else.
+
+       It used to be guessed from the shape of the move -- `move.choke ? 2 : 1`
+       -- which was right for exactly as long as the only two grabbing
+       specials were Simon's choke in an up slot and Trev's pole in a down
+       one. Squalls carries the same pole in his UP slot, so the guess said 1,
+       tickGrab went looking in `specials.down`, found SLEEP ON IT, and handed
+       applyHit an undefined `throwFwd` on the frame the hold ran out. That is
+       a hard freeze, and drawPole looking in the same wrong place is why the
+       rod never appeared at all. Asked of the slot now, so a grab works from
+       whichever one it is put in. */
+    attacker.grabKind = move.basic ? 0 : grabSlotOf(attacker, move);
     attacker.grabTimer = move.grab.hold;
     /* Both of these, not just the aim. throwDirX survived from whatever was
        last held BEFORE the catch, so walking left into a cast threw them left
@@ -13266,7 +13312,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '4948b51f76';
+const BUILD_ID = '4f132ee4ee';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13277,7 +13323,7 @@ const BUILD_ID = '4948b51f76';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.60';
+const VERSION = '2.61';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
