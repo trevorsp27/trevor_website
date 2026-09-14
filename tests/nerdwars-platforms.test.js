@@ -1650,9 +1650,14 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
      floor, and that is the half that lasts: missing still takes a piece of
      the stage away from the other player.
 
-     The glass is built on `pierce` + `hitAt` + `hitEvery`, the same three
-     fields the smoke and the fart use, so resolveCombat needed no new code
-     and standing in it keeps costing rather than costing once. */
+     What "lasts" means is a clock and not a toll. The glass used to be built
+     on `pierce` + `hitAt` + `hitEvery`, like the smoke and the fart, so
+     standing in it kept costing -- and a pane that bit every twenty-six
+     frames with a nearly-vertical launch angle had people hopping in it,
+     stuck. It is a `graze` now: one victim, one bite, and then it breaks the
+     way any other shot does. So the four seconds are what it is worth to
+     somebody who never comes near it, and the second half of this test
+     measures them with nobody standing in it. */
   const run = await bootEngine();
   run("select.cursor=[6,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
@@ -1721,36 +1726,85 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
     "and it should still ARC. Shortening it by slowing the throw flattens " +
     "it into a straight line; it rose " + thrown.peak + "px");
 
-  /* And it has to bite somebody standing in it MORE THAN ONCE, which is what
-     separates glass from a trap that fires and is spent. */
-  const stood = run(`(function () {
+  /* And left alone it has to SIT there for its four seconds, because that is
+     the denial: the ground is his, and the other player has to go round.
+
+     The foe is parked at the far end and untouchable for the whole of it --
+     the pane breaks on the first person through it now, so a foe who wanders
+     in is a foe who ends the measurement. */
+  const alone = run(`(function () {
     ${setup}
     foe.setState('idle'); foe.stocks = 99; foe.health = 1000;
-    foe.x = main.x + 46; foe.y = main.y; foe.hasHit = true; foe.grounded = true;
-    var hits = 0, before = foe.health, lived = 0;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    foe.grounded = true; foe.invuln = 9999;
+    var lived = 0, born = 0;
     netplay.active = true;
     for (var i = 0; i < 340; i++) {
       me.hitstop = 0; me.mana = 999;
-      // Pinned in the glass: this is the worst case, not a likely one.
-      foe.hitstop = 0; foe.invuln = 0; foe.hitstun = 0; foe.setState('idle');
-      foe.x = main.x + 46; foe.vx = 0; foe.y = main.y; foe.grounded = true;
+      foe.invuln = 9999; foe.x = main.x + main.w - 6; foe.vx = 0;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
+      step();
+      var g = projectiles.filter(function (q) {
+        return q.constructor.name === 'Glass';
+      })[0];
+      if (g) { lived++; if (!born) born = g.born; }
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { lived: lived, born: born };
+  })()`);
+
+  assert.ok(alone.lived >= 200 && alone.lived <= 260,
+    "glass nobody walks into should last about four seconds; it lived " +
+    alone.lived + " frames");
+  assert.ok(Math.abs(alone.lived - alone.born) <= 2,
+    "and see out the `life` it was given (" + alone.born + " frames); it " +
+    "lasted " + alone.lived);
+
+  /* And then the other half of the same clock: somebody walking into it ends
+     it early. One victim, one bite, and the pane is gone -- so the thing it
+     denies is the ground, not a share of your health. */
+  const stepped = run(`(function () {
+    ${setup}
+    foe.setState('idle'); foe.stocks = 99; foe.health = 1000;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
+    foe.grounded = true; foe.invuln = 9999;
+    var hits = 0, before = foe.health, lived = 0, leftOver = -1, at = -1;
+    netplay.active = true;
+    for (var i = 0; i < 340; i++) {
+      me.hitstop = 0; me.mana = 999;
+      var g = projectiles.filter(function (q) {
+        return q.constructor.name === 'Glass';
+      })[0];
+      // In it from frame 120, well before its four seconds are up.
+      if (g && i >= 120) {
+        if (leftOver < 0) leftOver = g.life;
+        foe.invuln = 0; foe.hitstun = 0; foe.hitstop = 0; foe.setState('idle');
+        foe.x = g.x; foe.y = main.y; foe.vx = 0; foe.vy = 0; foe.grounded = true;
+      }
       netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
       var h0 = foe.health;
       step();
-      if (foe.health < h0) hits++;
-      if (projectiles.some(function (q) { return q.constructor.name === 'Glass'; })) lived++;
+      if (foe.health < h0) { hits++; if (at < 0) at = i; }
+      if (projectiles.some(function (q) {
+        return q.constructor.name === 'Glass';
+      })) lived++;
     }
     netplay.active = false; netplay.framePads = null;
-    return { hits: hits, lost: before - foe.health, lived: lived };
+    return { hits: hits, lost: before - foe.health, lived: lived,
+             leftOver: leftOver, at: at };
   })()`);
 
-  assert.ok(stood.hits > 1,
-    "standing in glass should keep costing, not cost once; bit " +
-    stood.hits + " times");
-  assert.ok(stood.lost > 0, "and take real health; took " + stood.lost);
-  assert.ok(stood.lived >= 200 && stood.lived <= 260,
-    "the glass should last about four seconds; it lived " + stood.lived +
-    " frames");
+  assert.equal(stepped.hits, 1,
+    "walking into it should cost exactly once; it bit " + stepped.hits +
+    " times");
+  assert.ok(stepped.lost > 0, "and take real health; took " + stepped.lost);
+  assert.ok(stepped.leftOver > 20,
+    "precondition: he should reach it with the four seconds still running; " +
+    "it had " + stepped.leftOver + " frames left");
+  assert.ok(stepped.lived < alone.lived,
+    "and the pane should break on him rather than see out its clock; left " +
+    "alone it lived " + alone.lived + " frames and with him in it " +
+    stepped.lived);
 });
 
 test("Cobeus's ult drives a car across the whole stage", async () => {
@@ -4949,4 +5003,67 @@ test("the CPU throws the pizza it was aiming for", async () => {
     "not the down one, which for AutisNick is the kiss and has no throw in it");
   assert.equal(withDown, spN,
     "and it should hold DOWN with it, or the slice flies straight past them");
+});
+
+test("casting the pole does not lift him", async () => {
+  /* It briefly did, and it was the first thing anybody noticed about the
+     move: cast in the air, the rod put a `rise` into his vy and he hopped.
+     Read as a mistimed jump rather than as a cast, and on a DOWN special it
+     also quietly handed him a second recovery.
+
+     This used to be pinned in nerdwars-squalls.test.js, where the same rod
+     was Squalls's up special and the two copies were compared field for
+     field. He has a whip there now and no pole at all, so the assertion
+     comes back here, next to the rest of the rod.
+
+     Cast from well up in the air, because that is the only place a lift is
+     visible: with nothing under him a move that has one climbs out of its
+     own fall and a move that does not simply keeps going down. */
+  const run = await bootEngine();
+  run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
+      " stagePick=0; startBattle();");
+  run("for (var i=0;i<130;i++) step();");
+  assert.equal(run("fighters[0].def.specials.down.label"), "FISHING POLE",
+    "precondition: player 1 is the one with the rod");
+
+  const DOWN_SPECIAL = 1024;
+  const r = run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    freezeFrames = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 100; me.grabbing = -1;
+    me.specialSpawned = false; me.facing = 1;
+    me.x = main.x + main.w / 2; me.y = main.y - 70;
+    me.grounded = false; me.vx = 0; me.vy = 0;
+    // Out of reach and untouchable, so nothing the line catches can move him.
+    foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99;
+    foe.health = 1000; foe.hasHit = true;
+    foe.x = main.x + main.w - 8; foe.y = main.y; foe.grounded = true;
+    var y0 = me.y, best = me.y, cast = false, worstVY = 0;
+    netplay.active = true;
+    for (var i = 0; i < 30; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? ${DOWN_SPECIAL} : 0), bitsToPad(0)];
+      step();
+      if (me.state === 'special') cast = true;
+      if (me.y < best) best = me.y;
+      if (me.vy < worstVY) worstVY = me.vy;
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { cast: cast, lift: +(y0 - best).toFixed(3),
+             worstVY: +worstVY.toFixed(3) };
+  })()`);
+
+  assert.ok(r.cast, "precondition: he should have cast the pole");
+  assert.equal(r.lift, 0,
+    "casting it must not gain him a single pixel of height; he gained " +
+    r.lift + "px");
+  assert.ok(r.worstVY >= 0,
+    "and his vy must never go negative during the cast -- a rise written " +
+    "into it is the exact shape of the jolt that was taken back out; the " +
+    "best it reached was " + r.worstVY);
+  assert.equal(run("ROSTER.trev.specials.down.rise"), undefined,
+    "and no `rise` may creep back into the table either");
 });

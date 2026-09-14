@@ -260,66 +260,154 @@ test("negative control: a bone worth half of that fails the bone test", async ()
     "with the bone halved the bone test should fail; it passed");
 });
 
-/* The glass is not one hit, so the measurement is not one number: it is a
-   floor tax, re-arming on `hitEvery`, and the thing that changed in 2.55 is
-   what one careless step costs. Standing in it is simulated by parking the
-   foe on the pane every frame and collecting each time his health drops. */
-const glassTicks = (run) => run(`(function () {
+/* The glass used to be a floor TAX: it pierced, it re-armed on `hitEvery`,
+   and standing in it cost you again every twenty-six frames. That is not
+   what it is any more, and the reason is worth writing down because the test
+   changed shape with it.
+
+   Its knockback angle was 78, which is nearly straight up, and hitstun is
+   `6 + kb * 2.2` -- never under six frames even at no knockback. So every
+   re-arm popped you off the floor and froze you, and a patch that bit every
+   twenty-six frames had you stuck in it, hopping, unable to walk out. Broken
+   glass does not hold people. `graze` is the fix and it is a GENERAL flag in
+   applyHit: health comes off and the function returns before a single line of
+   the launch below it. `pierce` went at the same time, so the pane breaks on
+   the first person to find it the way any other shot does.
+
+   Which makes the measurement one step rather than three: park the foe on
+   the pane, take the one hit, and then keep him standing there for the rest
+   of the pane's life to prove nothing else ever happens.
+
+   He is held out of reach and untouchable until the glass exists, because
+   the bottle that leaves it is itself a hit -- a foe who catches the bottle
+   is a foe whose health moved for the wrong reason. */
+const glassStep = (run) => run(`(function () {
   ${SETUP}
-  var ticks = [], gaps = [], hp = 100, last = -1, sawGlass = false;
+  foe.x = main.x + main.w - 12; foe.invuln = 9999;
+  var sawGlass = false, bornAt = -1, took = 0, at = -1, ticks = 0;
+  var vy = 0, vx = 0, state = '', stun = -1, stop = -1, grounded = true;
+  var aliveAfter = 0, lifeLeft = -1;
   netplay.active = true;
-  for (var i = 0; i < 220; i++) {
+  for (var i = 0; i < 320; i++) {
     me.hitstop = 0; me.mana = 999;
-    foe.invuln = 0; foe.hitstun = 0; foe.hitstop = 0; foe.vx = 0; foe.vy = 0;
     var g = projectiles.filter(function (q) {
-      return q.constructor.name === 'Glass';
+      return q.constructor.name === 'Glass' && !q.dead;
     })[0];
-    // Stand in it, whatever it took off the bottle to get there.
-    if (g) { sawGlass = true; foe.x = g.x; foe.y = main.y; foe.grounded = true; }
-    netplay.framePads = [bitsToPad(i === 0 ? ${SP_NEUTRAL} : 0), bitsToPad(0)];
-    step();
-    if (g && foe.health < hp) {
-      ticks.push(+(hp - foe.health).toFixed(3));
-      if (last >= 0) gaps.push(i - last);
-      last = i; hp = foe.health;
+    if (g) {
+      if (!sawGlass) { sawGlass = true; bornAt = i; lifeLeft = g.life; }
+      // Stand in it, a few frames after it lands so the bottle is long gone.
+      if (i > bornAt + 5) {
+        foe.invuln = 0; foe.hitstun = 0; foe.hitstop = 0;
+        foe.x = g.x; foe.y = main.y; foe.vx = 0; foe.vy = 0;
+        foe.grounded = true; foe.setState('idle');
+      }
+      if (at >= 0) aliveAfter++;
     }
-    if (ticks.length >= 3) break;
+    netplay.framePads = [bitsToPad(i === 0 ? ${SP_NEUTRAL} : 0), bitsToPad(0)];
+    var h0 = foe.health;
+    step();
+    if (g && foe.health < h0) {
+      ticks++;
+      if (at < 0) {
+        /* Read on the frame it happened. A graze returns BEFORE the launch,
+           so what is being collected here is everything applyHit would have
+           written afterwards and did not. */
+        at = i; took = +(h0 - foe.health).toFixed(3);
+        vy = +foe.vy.toFixed(4); vx = +foe.vx.toFixed(4);
+        state = foe.state; stun = foe.hitstun; stop = foe.hitstop;
+        grounded = foe.grounded;
+      }
+    }
   }
   netplay.active = false; netplay.framePads = null;
-  return { sawGlass: sawGlass, ticks: ticks.join(','), gaps: gaps.join(',') };
+  return { sawGlass: sawGlass, took: took, at: at, ticks: ticks, vy: vy,
+           vx: vx, state: state, stun: stun, stop: stop, grounded: grounded,
+           aliveAfter: aliveAfter, lifeLeft: lifeLeft };
 })()`);
 
 function checkGlass(run, g) {
-  const spec = run("JSON.stringify(ROSTER.cobeus.specials.neutral.glass)");
-  const glass = JSON.parse(spec);
-  assert.equal(glass.damage, 2.5,
-    "the glass is 2.5 a step on paper -- halved from 5 in 2.55, with nothing " +
-    "else about it touched: same four seconds, same 22 pixels, same re-arm");
-  assert.equal(glass.life, 240, "and it still lasts four seconds");
-  assert.equal(glass.hitEvery, 26,
-    "and still re-arms rather than costing once -- it is glass, not a trap");
+  const glass = JSON.parse(
+    run("JSON.stringify(ROSTER.cobeus.specials.neutral.glass)"));
+  assert.equal(glass.graze, true,
+    "the glass is a `graze` now: health and nothing else. It is the flag " +
+    "that carries the whole behavior, so it is read off the spec before " +
+    "anything is measured");
+  assert.equal(glass.hitEvery, undefined,
+    "and it no longer re-arms, because there is nothing left for it to " +
+    "re-arm ON -- the pane breaks on the first person through it; " +
+    "`hitEvery` is " + glass.hitEvery);
+  assert.equal(glass.base, 0, "and it launches nobody: `base` is " + glass.base);
+  assert.equal(glass.scale, 0, "nor scales with damage: `scale` is " + glass.scale);
+
   assert.ok(g.sawGlass, "the bottle should have broken and left glass");
-  assert.equal(g.ticks, "2.5,2.5,2.5",
-    "every step in it should cost 2.5, again and again; it cost " + g.ticks);
-  for (const gap of g.gaps.split(",")) {
-    assert.ok(Number(gap) >= glass.hitEvery,
-      "and never faster than hitEvery (" + glass.hitEvery + " frames); the " +
-      "gaps between ticks were " + g.gaps);
-  }
+  assert.ok(g.at >= 0, "and the man standing in it should have felt it");
+  assert.equal(g.took, glass.damage,
+    "it costs the spec's `damage` (" + glass.damage + "); it took " + g.took);
+
+  /* What it must NOT do, item by item, because each of these is a separate
+     line in applyHit below the `graze` return and any one of them coming
+     back is the hopping bug coming back with it. */
+  assert.equal(g.state, "idle",
+    "stepping in glass must not put anybody in hitstun; he came out in " +
+    g.state);
+  assert.equal(g.stun, 0,
+    "nor give them hitstun frames to sit through; he had " + g.stun);
+  assert.equal(g.stop, 0,
+    "nor freeze the frame -- hitstop on a floor hazard is a stutter every " +
+    "time you cross it; he had " + g.stop);
+  assert.equal(g.vy, 0,
+    "and above all it must not LAUNCH him: the angle is 78, nearly straight " +
+    "up, so a graze that stopped working would pop him off the floor. His " +
+    "vy was " + g.vy);
+  assert.equal(g.vx, 0, "or shove him sideways; his vx was " + g.vx);
+  assert.ok(g.grounded, "he should still have his feet on the ground");
+
+  /* And it is SPENT. One patch, one victim: the denial is that it was there,
+     not that it keeps collecting. `aliveAfter` counts frames the pane was
+     still on the stage with him standing on it, which under `pierce` was
+     hundreds and is now none. */
+  assert.equal(g.ticks, 1,
+    "one victim, one bite; it bit " + g.ticks + " times");
+  assert.equal(g.aliveAfter, 0,
+    "and the pane breaks on him rather than waiting out its four seconds; " +
+    "it was still there " + g.aliveAfter + " frames afterwards");
+  assert.ok(g.lifeLeft > 10,
+    "which has to be the WALKING that ended it and not the clock -- it had " +
+    g.lifeLeft + " frames left when he arrived");
 }
 
-test("Cobeus's broken glass takes 2.5 a step, over and over", async () => {
+test("Cobeus's broken glass costs 2.5, launches nobody, and is spent", async () => {
   const run = await arena(COBEUS, REESE);
-  checkGlass(run, glassTicks(run));
+  checkGlass(run, glassStep(run));
 });
 
-test("negative control: glass back at its old price fails the glass test", async () => {
+test("negative control: glass that still launches fails the glass test", async () => {
+  /* `graze` off and nothing else touched, which is the regression exactly:
+     the damage is the same 2.5, the pane is the same 22 pixels, and applyHit
+     simply runs on past the return into the launch. On screen that is the
+     2.55 bug -- a man hopping in a pile of glass. */
   const run = await arena(COBEUS, REESE, { engine: sabotage(
-    "glass: { life: 240, w: 22, h: 5, hitEvery: 26,\n               damage: 2.5,",
-    "glass: { life: 240, w: 22, h: 5, hitEvery: 26,\n               damage: 5,") });
-  const g = glassTicks(run);
+    "               damage: 2.5, graze: true,",
+    "               damage: 2.5, graze: false,") });
+  const g = glassStep(run);
   expectToFail(() => checkGlass(run, g),
-    "with the glass back at 5 the glass test should fail; it passed");
+    "with the graze switched off the glass test should fail; it passed");
+});
+
+test("negative control: glass that survives its first victim fails the glass test", async () => {
+  /* The other half, put back where it was taken from: `pierce` on the class.
+     resolveCombat then keeps the pane alive through the contact and re-arms
+     it on `hitEvery || 30`, so it goes back to being a tax collected for four
+     seconds -- and a graze that costs nothing but health, over and over, is
+     still not what one careless step is supposed to cost. */
+  const run = await arena(COBEUS, REESE, { engine: sabotage(
+    "    this.hitAt = new Array(MAX_PLAYERS).fill(0);\n    this.dead = false;\n" +
+    "    // A deterministic scatter",
+    "    this.pierce = true;\n    this.hitAt = new Array(MAX_PLAYERS).fill(0);\n" +
+    "    this.dead = false;\n    // A deterministic scatter") });
+  const g = glassStep(run);
+  expectToFail(() => checkGlass(run, g),
+    "with the glass piercing again the glass test should fail; it passed");
 });
 
 /* =====================================================================
@@ -969,6 +1057,86 @@ test("negative control: frogs that hop away from you fail the frog test", async 
   const r = frogArmy(run);
   expectToFail(() => checkFrogs(run, r),
     "with the frogs hopping away the frog test should fail; it passed");
+});
+
+/* And what the frogs COST, which is the half of the move that changed last.
+
+   14 made it a frog faucet: his recovery was cheap because it is his
+   recovery, and cheap meant he could throw it five times over before the bar
+   noticed and fill the floor with hoppers that each cost him nothing. It is
+   three quarters of the whole bar now, which is one cast per bar and an
+   investment rather than a habit.
+
+   The bar is never topped up in this measurement, unlike most of the ones
+   above it -- the bar IS the measurement. He casts once from the air, and
+   then tries again forty frames later, by which time regeneration has given
+   him back nowhere near enough. */
+const frogPrice = (run) => run(`(function () {
+  ${SETUP}
+  me.grounded = false; me.y = main.y - 40; me.vy = 0;
+  foe.invuln = 9999; foe.x = main.x + main.w - 12;
+  var before = +me.mana.toFixed(3), afterCast = -1, casts = 0, denied = 0;
+  var was = 'idle';
+  netplay.active = true;
+  for (var i = 0; i < 80; i++) {
+    me.hitstop = 0;
+    netplay.framePads = [bitsToPad(i === 0 || i === 40 ? ${SP_UP} : 0),
+                         bitsToPad(0)];
+    step();
+    // Counted as EDGES into the cast, so one cast is one count however many
+    // frames it runs for.
+    if (me.state === 'special' && was !== 'special') casts++;
+    was = me.state;
+    if (i === 0) afterCast = +me.mana.toFixed(3);
+    if (i === 40 && me.manaDenied > 0) denied = me.manaDenied;
+  }
+  netplay.active = false; netplay.framePads = null;
+  return { before: before, afterCast: afterCast, casts: casts,
+           denied: denied, manaMax: COMBAT.manaMax };
+})()`);
+
+function checkFrogPrice(run, r) {
+  const s = JSON.parse(run("JSON.stringify(ROSTER.christian.specials.up)"));
+  assert.equal(s.label, "FROG ARMY", "precondition: the up special is the frogs");
+  /* Against the spec, not against 75. The number is the point of the change
+     and it will be tuned again; what must not come apart is the override
+     reaching the pricing loop and the pricing loop reaching the bar. */
+  assert.equal(s.mana, s.manaOverride,
+    "the price the engine charges should be the `manaOverride` written for " +
+    "it (" + s.manaOverride + "); it charges " + s.mana);
+  assert.equal(r.casts, 1,
+    "he should get exactly one cast out of a full bar in eighty frames; he " +
+    "got " + r.casts);
+  assert.equal(+(r.before - r.afterCast).toFixed(3), s.mana,
+    "and the cast should take `mana` (" + s.mana + ") off the bar; it went " +
+    r.before + " -> " + r.afterCast);
+  /* Over half the bar is what makes it one cast per bar rather than a
+     habit, and the engine says so itself: a second press inside the same bar
+     sets `manaDenied`, which is the flash on the meter that tells the player
+     why nothing happened. */
+  assert.ok(s.mana > r.manaMax / 2,
+    "it has to cost more than half the bar or it is a faucet again; it " +
+    "costs " + s.mana + " of " + r.manaMax);
+  assert.ok(r.denied > 0,
+    "so a second press forty frames later should be refused out loud rather " +
+    "than eaten; `manaDenied` was " + r.denied);
+}
+
+test("FROG ARMY costs what its override says, and that is most of the bar", async () => {
+  const run = await arena(CHRISTIAN, REESE);
+  checkFrogPrice(run, frogPrice(run));
+});
+
+test("negative control: frogs back at their old price fail the price test", async () => {
+  /* 14, exactly as it was. Everything you can see is unchanged -- same lift,
+     same three frogs, same hop -- and he can now throw it twice in forty
+     frames, which is the faucet. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "      manaOverride: 75,",
+    "      manaOverride: 14,") });
+  const r = frogPrice(run);
+  expectToFail(() => checkFrogPrice(run, r),
+    "with the frogs back at 14 the price test should fail; it passed");
 });
 
 /* FOUR AND TWENTY, which replaced THE PLAGUE in 2.60.

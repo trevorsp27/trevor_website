@@ -699,11 +699,26 @@ test("a tapped pawn walks off in front of him", async () => {
   const later = pawns()[0];
   assert.ok(later, "and it should still be out: it is slow on purpose");
   const travelled = (later.x - start) * facing;
+
+  /* Against the SPEC rather than against a number written down here.
+     `pawnSpeed` went 0.85 -> 1.5, and forty frames of the old one came to
+     34px where forty of the new one come to 60 -- so a test that pinned the
+     distance pinned the tuning, and it failed the moment the tuning was the
+     point. What has to stay true is the shape of the move: it walks the way
+     he is looking, at the pace the spec says, and it is still a thing you
+     send ahead of you rather than a thing that arrives. */
+  const s = g.run(
+    "({ speed: ROSTER.trev.specials.up.pawnSpeed, VW: VW })");
   assert.ok(travelled > 10,
     "it should walk the way he is looking; moved " + travelled.toFixed(1) + "px");
-  assert.ok(travelled < 60,
-    "and slowly -- 40 frames should not cross the stage; moved " +
-    travelled.toFixed(1) + "px");
+  assert.ok(Math.abs(travelled - 40 * s.speed) < 2,
+    "and at `pawnSpeed` (" + s.speed + ") a frame, so forty frames is about " +
+    (40 * s.speed).toFixed(1) + "px; it moved " + travelled.toFixed(1) + "px");
+  assert.ok(40 * s.speed < s.VW / 3,
+    "which still has to be slow enough that it does not cross the stage " +
+    "while you watch -- it is a thing he follows up on, not a projectile; " +
+    "forty frames of it covers " + (40 * s.speed).toFixed(1) + "px of a " +
+    s.VW + "px stage");
 });
 
 test("the guillotine grabs through a raised shield and always lets go", async () => {

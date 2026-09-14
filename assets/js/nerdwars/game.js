@@ -594,7 +594,13 @@ const ROSTER = {
            first, so in practice he has one at a time and a decision about
            when it ends. */
         burst: {
-          radius: 34, damageMul: 1.2,
+          /* 24, down from 34. At 34 the ball reached most of a body-length
+             past where the shot visibly was, so "stand clear of where it is
+             going" stopped being an answer -- being anywhere near the arc
+             was enough. 24 is about a body and a half wide in total, which
+             still punishes standing next to it and no longer punishes being
+             in the same postcode. */
+          radius: 24, damageMul: 1.2,
           base: 4.2, scale: 7.6, angle: 68,
           kx: 0.37460659341591196, ky: 0.9271838545667874,
         },
@@ -1189,7 +1195,13 @@ const ROSTER = {
            on those fired instantly every time and always handed over the
            first piece in the cycle. */
         charge: { swapEvery: 20 },
-        pawnSpeed: 0.85, life: 320,
+        /* 1.5, up from 0.85. Slow was the idea -- it is a thing you send
+           ahead of you and follow up on -- but 0.85 is under two thirds of a
+           walk, so it never arrived anywhere its target had not comfortably
+           left, and the charge you spent choosing a piece was spent on
+           something nobody had to respect. At 1.5 it is still slower than
+           everybody's walk and now it actually closes. */
+        pawnSpeed: 1.5, life: 320,
         /* What one ray of the burst is. `damage` is filled in per piece when
            the shard is built -- see PieceShard -- so the number here is only
            a placeholder for moveCost, which never sees the real one. */
@@ -1411,8 +1423,22 @@ ROSTER.cobeus = {
          same clock. What was wrong was the price of one careless step. The
          move is denial -- it is supposed to make you go around, not to take
          a fifth of a stock off you for walking. */
-      glass: { life: 240, w: 22, h: 5, hitEvery: 26,
-               damage: 2.5, base: 1.6, scale: 3.2,
+      /* Stepping in it costs health and NOTHING else, and then it is gone.
+
+         It used to hold you: angle 78 is nearly straight up, so each tick
+         popped you off the floor, and hitstun is `6 + kb * 2.2` -- never
+         less than six frames even at no knockback -- so a patch that re-armed
+         every twenty-six frames had you stuck in it, hopping, unable to
+         leave. That is not what broken glass does. `graze` is the fix and it
+         is a general one: damage, no launch, no hitstun, no hitstop.
+
+         And it breaks on the first person to find it. `pierce` is gone, so
+         resolveCombat kills it on contact the way it kills any other shot --
+         one patch, one victim, and the denial is that it was THERE, not that
+         it keeps collecting. */
+      glass: { life: 240, w: 22, h: 5,
+               damage: 2.5, graze: true,
+               base: 0, scale: 0,
                angle: 78, kx: 0.20791169081775934, ky: 0.97814760073380569 },
     },
     /* Three rounds, five frames apart. Not a shotgun and not a machine gun:
@@ -1429,7 +1455,15 @@ ROSTER.cobeus = {
       startup: 9, active: 18, recovery: 17,
       burst: 3, gap: 5,
       speed: 5.4, life: 44, tint: '#ffe08a', cue: 'gunshot',
-      damage: 6, base: 2.0, scale: 4.6, angle: 18, kx: 0.95105651629515353, ky: 0.309016994374947451,
+      /* 3 a round, halved from 6.
+
+         Eighteen for a press was more than any other projectile in the game
+         lands at once, and it was landing on a character who also throws a
+         bottle, leaves the glass, drinks for double damage and drives a car.
+         Nine still rewards putting all three on somebody, which is the part
+         that takes aim -- the gap between rounds is three separate chances
+         to miss and that has not changed. */
+      damage: 3, base: 2.0, scale: 4.6, angle: 18, kx: 0.95105651629515353, ky: 0.309016994374947451,
     },
     /* PLACEHOLDER, but a working recovery: every other character's `up` is
        how they get home, and a fighter who cannot is not playable. */
@@ -1730,101 +1764,95 @@ ROSTER.squalls = {
          base: 2.4, scale: 6.6, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
          ox: 2, oy: -9, w: 12, h: 10 },
   specials: {
-    /* YAWN. Three Zs drift out in front of him, growing as they go -- which
-       is not decoration, it is the art: the sheet has one Z at three sizes
-       and it would be a waste to pick one.
+    /* STAR OF DAVID. Two triangles, and it can be either.
 
-       They barely hurt. One damage is a rounding error next to any other
-       projectile in the game and it is meant to be: what they carry is
-       DROWSINESS, on the counter Simon's aura already writes to, so a walk
-       slows under the first one and a second one inside ten seconds puts
-       somebody on the floor asleep.
+       Thrown whole it is one slow six-pointed star, turning as it goes.
+       Press the button again while it is in the air and it comes APART along
+       the seam it was always drawn on: the upward triangle climbs away and
+       the downward one dives, and between them they cover two lanes the
+       whole star never could.
 
-       They PIERCE, on a slow re-arm, so one yawn drifting through a
-       four-player scramble touches everybody in it. And they are slow --
-       barely faster than a walk -- so against one opponent paying attention
-       they are simply avoided. That is fine. They are not how he wins; they
-       are how he gets thirty frames to lie down. */
+       That is the entire move, and it is the shape of the thing itself
+       rather than an effect bolted to it -- a Star of David is two
+       overlapping triangles, so the projectile made of two overlapping
+       triangles comes apart into two triangles. The halves hit for less than
+       the whole, so splitting is a choice about coverage and not a free
+       upgrade, and WHEN you split is the skill: early sends them wide and
+       shallow, late sends them steep and close.
+
+       The split costs nothing and is heard in every state -- see
+       splitStars -- because it is a command to a thing already in the air,
+       not a cast, and no state of his has any business eating it. */
     neutral: {
-      kind: 'yawn', label: 'YAWN',
-      startup: 9, active: 1, recovery: 14, maxAlive: 3,
-      speed: 1.15, lift: -0.22, drop: 0.006, life: 150,
-      grow: 46,                 // frames at each of the three sizes
-      hitEvery: 40,
-      /* Read by applyHit, beside poison and confusion.
-
-         60, not the 46 it started at, and the number is set by the DECAY
-         rather than by how much one yawn ought to be worth. Drowsiness falls
-         a point a frame, and the fastest he can land two yawns on the same
-         person is about thirty frames apart -- the move is 24 frames end to
-         end and the second Z has to fly the same distance as the first, so
-         they never close the gap. At 46 the first dose was down to 16 by the
-         time the second arrived and the total never reached 90: the nap was
-         arithmetically unreachable, which a spec you only read is very happy
-         to hide from you.
-
-         At 60 one yawn is a slow and two inside half a second is a nap. */
-      drowsy: { add: 60, cap: 90, sleep: 46 },
-      manaOverride: 16,
-      damage: 1, base: 0.8, scale: 1.2, angle: 84,
-      kx: 0.10452846326765346, ky: 0.9945218953682733,
+      kind: 'star', label: 'STAR OF DAVID',
+      startup: 8, active: 1, recovery: 13, maxAlive: 2,
+      speed: 2.5, lift: -0.9, drop: 0.05, life: 190, spin: 5,
+      manaOverride: 22,
+      damage: 9, base: 2.9, scale: 5.8, angle: 40,
+      kx: 0.766044443118978, ky: 0.6427876096865393,
+      /* The two halves, as patches over the spec above -- `parts` is built
+         after the pricing loop the way the hotdog's are, so each half is a
+         finished spec applyHit can be handed. */
+      up: { damage: 6, base: 2.6, scale: 5.2, angle: 66,
+            kx: 0.40673664307580021, ky: 0.91354545764260087,
+            climb: -1.5, life: 95 },
+      down: { damage: 6, base: 2.6, scale: 5.2, angle: 16,
+              kx: 0.96126169593831889, ky: 0.27563735581699916,
+              climb: 1.9, life: 95 },
     },
-    /* SLEEP ON IT. He lies down on the spot and the dream starts building.
+    /* SOMEDAY, A BAKERY. He wants to own one. He is thinking about it now.
 
-       Five seconds if he takes all of it, and he can get up early on any
-       input -- the pad is read in updateAttack and remembered, the way the
-       soul's controls are, because runSpecial is not allowed to see one.
+       This is the move the old nap used to be -- the thing that fills the
+       DREAM the dragon is made of -- and it is the same bargain in a much
+       better hat: he stops dead in the middle of a fight and commits to
+       something that pays later. What has changed is what he is doing while
+       he stands there. He is not asleep. He is picturing the shop.
 
-       He is NOT invulnerable. Knockback is softened to three fifths because
-       a body on the floor is harder to launch than one standing up, but
-       every point of damage lands, and being hit does not wake him -- so an
-       opponent who finds him asleep gets a free combo on a target that is
-       not going anywhere. That is the price of the dragon.
+       And the daydream leaves crumbs. Every `every` frames a loaf he has
+       imagined lands in front of him and stays there, warm, as something
+       anybody can pick up: he heals for it, and SO DOES WHOEVER ELSE GETS
+       THERE FIRST. That is the joke and it is also the balance -- standing
+       and dreaming about bread in the middle of a fight puts bread in the
+       middle of a fight, and it is not your bread until you have eaten it.
 
-       `dream` is on the fighter and in the constructor, so a rollback carries
-       it: a meter that came back differently after a rewind would change what
-       the dragon is made of, which is about as visible as a desync gets. */
+       Shorter than the nap was, and interruptible on any input, because the
+       payoff is no longer five seconds of invulnerable healing; it is a
+       meter and a floor full of pastry. He is not invulnerable and being hit
+       does not stop him -- it just means somebody else is eating. */
     down: {
-      kind: 'sleep', label: 'SLEEP ON IT',
-      startup: 14, active: 300, recovery: 16,
-      heal: 18,
-      dream: 0.42,              // per sleeping frame; the full nap is 126
-      knockbackTakenMul: 0.6,
+      kind: 'bakery', label: 'SOMEDAY, A BAKERY',
+      startup: 12, active: 240, recovery: 14,
+      dream: 0.52,              // per dreaming frame; a full stand fills it
+      every: 60, loaves: 4,
+      loaf: { heal: 11, life: 420, w: 9, h: 6 },
+      knockbackTakenMul: 0.75,
       manaOverride: 12,
       damage: 0, base: 0, scale: 0,
     },
-    /* FISHING POLE. Trev's, borrowed whole, and openly a stand-in until
-       something is drawn for this slot.
+    /* THE WHIP. Long, slow, and worth twice as much at the very end of it.
 
-       Every number below is his -- the same startup, the same hold, the same
-       three throws at the same angles -- because a placeholder that has been
-       quietly retuned is a placeholder nobody can compare to the thing it is
-       standing in for.
+       The whole move is the tip. It reaches forty pixels and every pixel of
+       that hurts, but the last eight -- `sweet` -- hit for double and launch
+       like something that should not come out of a whip. Standing at the
+       range where only the end of it can reach is the hard part and the
+       point; anywhere closer and it is a long poke with a lot of recovery.
 
-       It briefly had a `rise` on it so that an up-special could double as a
-       way home. Played, that jolt was the first thing anybody noticed about
-       the move and it was taken back out: it made every cast feel like a
-       mistimed jump, and a stand-in that draws attention to itself is worse
-       than one that is simply somebody else's move.
+       That is a spacing move rather than a panic button, which is why the
+       recovery is what it is: whiffing it at the wrong distance has to be
+       the punish, or there is no reason to stand at the right one.
 
-       So he has no recovery special. That is a real cost and it is not
-       unprecedented -- Trev has not had one since the pawn replaced KNIGHT,
-       and lives on his double jump -- but it is worth writing down rather
-       than discovering. If it turns out to matter the fix is a `rise` here
-       and four lines in runSpecial's `pole` case, which is how it was done
-       the first time. */
+       It goes in the up slot because that is where his pole was, and like
+       the pole it does not lift him. He gets home on his double jump. */
     up: {
-      kind: 'pole', label: 'FISHING POLE',
-      startup: 9, active: 30, recovery: 16,
-      ox: 4, oy: -12, w: 46, h: 10,
-      grab: { hold: 32, damage: 0 },
-      damage: 0, base: 0, scale: 0,
-      throwFwd: { damage: 12, base: 4.6, scale: 9.6, angle: 32,
-                  kx: 0.84804809615642596, ky: 0.52991926423320490 },
-      throwUp: { damage: 10, base: 4.4, scale: 10.2, angle: 84,
-                 kx: 0.10452846326765346, ky: 0.99452189536827329 },
-      throwDown: { damage: 14, base: 4.2, scale: 8.0, angle: 12,
-                   kx: 0.97814760073380569, ky: 0.20791169081775934 },
+      kind: 'whip', label: 'THE WHIP',
+      startup: 12, active: 6, recovery: 22,
+      ox: 4, oy: -11, w: 40, h: 9,
+      // The far end of that box, and what it is worth.
+      sweet: { from: 32, damage: 20, base: 4.4, scale: 9.0, angle: 42,
+               kx: 0.7431448254773942, ky: 0.6691306063588582 },
+      manaOverride: 26,
+      damage: 10, base: 2.4, scale: 5.0, angle: 30,
+      kx: 0.86602540378443871, ky: 0.49999999999999994,
     },
   },
   /* SALAMENCE. The dream, and it kills whatever it touches.
@@ -1854,6 +1882,11 @@ ROSTER.squalls = {
     // standing beside it. Nothing like a recovery -- the pole is that now.
     rise: -3.0, drift: 0.5,
     speed: 2.1, life: 280, flap: 6, hitEvery: 60,
+    /* And it does not fly in a straight line. `wander` is how hard it can
+       climb and dive as it crosses, `veer` how often it changes its mind.
+       See Salamence.update: the path is a hash of its own age, so it is
+       unpredictable to a player and identical on both machines. */
+    wander: 1.15, veer: 17,
     // The meter buys speed and nothing else: see above.
     dreamMax: 100, dreamDamage: 0, dreamSpeed: 1.5, dreamLife: 0,
     damage: 999, base: 5.0, scale: 10.0, angle: 46,
@@ -1946,12 +1979,17 @@ ROSTER.christian = {
          the first attempt at this fix entirely over his own head: measured,
          the box came out 64..105 on a man standing at 104.
 
-         Centred two pixels above his feet and 46 tall: y-25 to y+21, which
-         is over his shoulder where the axe starts and a good way below his
-         feet where it finishes. On the ground the bottom half is buried in
-         the platform and touches nobody, which costs nothing. In the air it
-         is the spike the downward knockback always implied. */
-      ox: 3, oy: -2, w: 20, h: 46,
+         Centred two pixels above his feet: over his shoulder where the axe
+         starts, and below his feet where it finishes, so the air chop is the
+         spike the downward knockback always implied.
+
+         Trimmed from 20x46 to 16x36. Forty-six tall was reaching a clear
+         body-and-a-half below him and twenty wide was most of an arm past
+         the drawn blade, which together made a swing that connected with
+         people the picture plainly missed. 36 still covers head height down
+         to a good way under his feet -- the air spike is intact, measured --
+         and 16 is the blade rather than the blade and the air around it. */
+      ox: 3, oy: -2, w: 16, h: 36,
       step: 1.15,
       manaOverride: 30,
       damage: 17, base: 3.4, scale: 7.6, angle: 300,
@@ -1975,11 +2013,22 @@ ROSTER.christian = {
       startup: 7, active: 1, recovery: 18,
       rise: -5.9, drift: 0.7,
       count: 3, spread: 1.25, toss: -2.1,
-      /* Half of the 28 it was. It is his recovery before it is anything
-         else, and a recovery you cannot afford twice in a row is a hole in
-         the character rather than a cost -- the frogs it leaves behind are
-         the bonus, not the thing being paid for. */
-      manaOverride: 14,
+      /* Three quarters of the whole bar, up from 14.
+
+         It was cheap because it is his recovery, and cheap is exactly what
+         made it a frog faucet: at 14 he could throw it five times over
+         before the bar noticed, and the floor filled up with hoppers that
+         each cost him almost nothing. At 75 it is one cast per bar and the
+         frogs are an investment.
+
+         WORTH KNOWING, because it is the real cost of this change: it is
+         still his way home, and at 75 there will be times he is knocked off
+         the stage and cannot afford to come back. His double jump is the
+         fallback. If that turns out to be the thing that kills him rather
+         than the frogs being the thing that kills everybody else, the answer
+         is a cheaper cast in the air than on the ground, which is a branch in
+         runSpecial rather than a different number here. */
+      manaOverride: 75,
       frog: {
         hopEvery: 26, hop: -2.5, speed: 1.45, drop: 0.26, life: 280,
         damage: 4, base: 2.3, scale: 4.8, angle: 62,
@@ -2136,6 +2185,26 @@ for (const key in ROSTER) {
   if (!n || n.kind !== 'hotdog') continue;
   n.parts = { top: Object.assign({}, n, n.top),
               bottom: Object.assign({}, n, n.bottom) };
+}
+
+/* The whip's tip, as a finished spec. Same reason as the tints and the
+   halves: applyHit is handed a move, and a sweet spot that differs in
+   damage, knockback AND angle is a different move rather than a factor. */
+for (const key in ROSTER) {
+  const sp = ROSTER[key].specials;
+  for (const slot of ['neutral', 'down', 'up']) {
+    const m = sp[slot];
+    if (m && m.sweet) m.sweetSpec = Object.assign({}, m, m.sweet);
+  }
+}
+
+// And the star's two triangles, which come apart the same way for the same
+// reason -- the shape is literally two triangles, so the projectile is too.
+for (const key in ROSTER) {
+  const n = ROSTER[key].specials.neutral;
+  if (!n || n.kind !== 'star') continue;
+  n.parts = { up: Object.assign({}, n, n.up),
+              down: Object.assign({}, n, n.down) };
 }
 
 /* Appended rather than slotted in alphabetically, and that is deliberate:
@@ -2996,8 +3065,9 @@ class Fighter {
     this.airCast = false;
     // Whether this frame's press split a hotdog -- see splitHotdogs().
     this.hotdogSplit = false;
-    // ...and the same for a rainbow going off. See burstRainbows().
+    // ...and the same for a rainbow going off, and a star coming apart.
     this.rainbowBurst = false;
+    this.starSplit = false;
     // Frames of specials that cost nothing. See the slouch.
     this.manaFree = 0;
     /* How much Remy has slept, and whether he has been told to get up.
@@ -3162,7 +3232,7 @@ class Fighter {
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'hotdog' || s.kind === 'slots' || s.kind === 'slouch' ||
           s.kind === 'cookie' || s.kind === 'frogs' || s.kind === 'plague' ||
-          s.kind === 'yawn' || s.kind === 'sleep' || s.kind === 'salamence' ||
+          s.kind === 'star' || s.kind === 'bakery' || s.kind === 'salamence' ||
           s.kind === 'pie' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
@@ -3215,6 +3285,18 @@ class Fighter {
     }
   }
 
+  /* The star's second press, heard wherever he is, for the reason
+     splitHotdogs below is: it talks to a thing already in the air. */
+  splitStars(pad) {
+    this.starSplit = false;
+    if (!pad || !pad.spNeutral || this.state === 'ko') return;
+    for (const b of projectiles) {
+      if (b instanceof Star && b.owner === this && !b.dead && b.piece === 'whole') {
+        if (b.split()) this.starSplit = true;
+      }
+    }
+  }
+
   splitHotdogs(pad) {
     this.hotdogSplit = false;
     if (!pad || !pad.spNeutral || this.state === 'ko') return;
@@ -3243,6 +3325,7 @@ class Fighter {
     }
 
     this.splitHotdogs(pad);
+    this.splitStars(pad);
     this.burstRainbows(pad);
     /* Free specials, from the slouch. Pinning the bar rather than teaching
        canSpecial and the three places that spend about a second rule: the
@@ -3560,6 +3643,8 @@ class Fighter {
          second. Two halves in the air are not "a whole one", so the button
          casts again over them. */
       if (intent && intent.kind === 'hotdog' && this.hotdogSplit) return;
+      // The press that split a star is not also the press that throws one.
+      if (intent && intent.kind === 'star' && this.starSplit) return;
       // And the same rule for the rainbow: the press that burst one is not
       // also the press that throws the next.
       if (intent && intent.kind === 'rainbow' && this.rainbowBurst) return;
@@ -3888,7 +3973,7 @@ class Fighter {
 
     /* Getting up. Any direction, any button: a man asleep on the floor
        should stand up for whatever you press, not for one particular key. */
-    if (m.kind === 'sleep' && pad) {
+    if (m.kind === 'bakery' && pad) {
       if (pad.left || pad.right || pad.up || pad.down || pad.jump ||
           pad.attack || pad.shield || pad.grab || pad.special) {
         this.wakeUp = true;
@@ -4806,40 +4891,50 @@ class Fighter {
         }
         break;
 
-      case 'yawn':
+      case 'star':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Yawn(this, s));
-          cue('throw', { slot: this.slot, x: this.x, gain: 0.4 });
+          projectiles.push(new Star(this, s));
+          cue('throw', { slot: this.slot, x: this.x });
         }
         break;
 
-      case 'sleep': {
-        const down = this.attackFrame >= s.startup &&
-                     this.attackFrame < s.startup + s.active;
+      case 'bakery': {
+        const dreaming = this.attackFrame >= s.startup &&
+                         this.attackFrame < s.startup + s.active;
         this.vx = 0;
-        if (down) {
-          /* Spelled with a local rather than inline, and that is not a style
-             preference: Simon's slouch heals with the identical expression,
-             and the negative controls that keep his sleep honest sabotage it
-             by string match and assert the string appears exactly once. Two
-             more copies of it quietly disarmed two of his tests. */
-          const mend = s.heal / s.active;
-          this.health = Math.min(COMBAT.maxHealth, this.health + mend);
+        if (dreaming) {
           this.dream = Math.min(100, this.dream + s.dream);
-          /* Up early on anything at all. `wakeUp` is written in updateAttack,
+          /* A loaf every `every` frames, up to `loaves`. Counted off
+             attackFrame rather than a tally of its own so a rollback bakes
+             the same bread on the same frames. */
+          const t = this.attackFrame - s.startup;
+          if (t > 0 && t % s.every === 0 && t / s.every <= s.loaves) {
+            projectiles.push(new Loaf(this, s.loaf,
+                                      this.x + this.facing * (6 + (t / s.every) * 7),
+                                      this.y));
+            cue('land', { slot: this.slot, x: this.x, gain: 0.4 });
+          }
+          /* Out of it on anything at all. `wakeUp` is written in updateAttack,
              which is the only place with a pad -- and it is cleared here so a
-             single press cannot wake him twice. */
+             single press cannot end the daydream twice. */
           if (this.wakeUp && this.attackFrame > s.startup + 8) {
             this.wakeUp = false;
             this.attackFrame = s.startup + s.active;
           }
-          if (this.attackFrame % 24 === 0) {
-            addEffect('spark', this.x + rand(-4, 8), this.y - rand(6, 14), '#cfe4ff');
+          if (this.attackFrame % 20 === 0) {
+            addEffect('spark', this.x + rand(-6, 6), this.y - rand(10, 20), '#ffe4b0');
           }
         }
         break;
       }
+
+      case 'whip':
+        if (this.attackFrame === s.startup) {
+          addEffect('dust', this.x + this.facing * 26, this.y - 10, '#d8cfc0');
+          cue('throw', { slot: this.slot, x: this.x });
+        }
+        break;
 
       case 'salamence':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
@@ -7407,81 +7502,175 @@ function drawSleep(g, f) {
 }
 
 /* =====================================================================
-   YAWN - a Z, drifting, getting bigger.
+   STAR OF DAVID - two triangles that can stop being one star.
 
-   Almost not a projectile. It moves barely faster than a walk, it carries a
-   single point of damage, and anybody watching for it can step around it.
-   What it does is leave DROWSINESS behind -- the same counter Simon's aura
-   writes to, so the machinery that slows a walk and draws the Zs over a
-   sleeping head was already in the file and none of it had to be invented
-   twice.
+   Whole, it turns slowly on a flat arc. Split, it stops existing and two
+   triangles carry on in its place: the upward one climbs away, the downward
+   one dives, and each is its own finished spec out of `parts` so applyHit
+   never has to know a star came apart.
 
-   Three sizes, held for `grow` frames each, which is the whole reason it is
-   drawn as three separate Zs rather than one: a yawn spreading out is the
-   picture the sheet is of.
-
-   It PIERCES, on a long re-arm, because the one thing a yawn ought to be is
-   contagious. Drifting through four people in a scramble it touches all of
-   them; drifting through the same person twice it only counts once.
+   The seam it splits along is the one it was drawn on, which is the whole
+   reason the move is this shape. Six points is two triangles whichever way
+   you look at it; this just stops pretending otherwise on demand.
    ===================================================================== */
 
-class Yawn {
-  constructor(owner, spec) {
+class Star {
+  constructor(owner, spec, piece, x, y, vx, vy) {
     this.owner = owner;
-    this.spec = spec;
-    this.x = owner.x + owner.facing * 8;
-    this.y = owner.y - 11;
-    this.vx = owner.facing * spec.speed;
-    this.vy = spec.lift;
-    this.t = 0;
-    this.life = spec.life;
-    this.pierce = true;
-    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.base = spec;
+    this.piece = piece || 'whole';
+    const part = this.piece === 'whole' ? spec : spec.parts[this.piece];
+    this.spec = part;
+    this.x = x === undefined ? owner.x + owner.facing * 8 : x;
+    this.y = y === undefined ? owner.y - 10 : y;
+    this.vx = vx === undefined ? owner.facing * spec.speed : vx;
+    this.vy = vy === undefined ? spec.lift : vy;
+    this.life = part.life || spec.life;
+    this.spin = 0;
     this.dead = false;
   }
 
   update() {
-    const s = this.spec;
-    this.t++;
+    this.spin++;
     this.life--;
-    for (let i = 0; i < this.hitAt.length; i++) {
-      if (this.hitAt[i] > 0) this.hitAt[i]--;
-    }
     this.x += this.vx;
     this.y += this.vy;
-    this.vy += s.drop;
-
+    // A whole star sags; a half climbs or dives on its own account.
+    this.vy += this.piece === 'whole' ? this.base.drop : this.spec.climb * 0.06;
     if (this.life <= 0) this.dead = true;
-    if (this.x < -14 || this.x > VW + 14 || this.y < -14 || this.y > VH + 20) {
+    if (this.x < -16 || this.x > VW + 16 || this.y < -20 || this.y > VH + 24) {
       this.dead = true;
     }
   }
 
-  /* Which of the three it is right now. Also its size, which is why the box
-     below asks the same question. */
-  stage() {
-    const n = (SPRITES.zzz && SPRITES.zzz.length) || 3;
-    return Math.min(n - 1, Math.floor(this.t / this.spec.grow));
+  /* Comes apart where it is. Returns whether it did, so the press that split
+     something can be told from one that found nothing to split. */
+  split() {
+    if (this.dead || this.piece !== 'whole') return false;
+    const p = this.base.parts;
+    this.dead = true;
+    for (const half of ['up', 'down']) {
+      const st = new Star(this.owner, this.base, half, this.x, this.y,
+                          this.vx, p[half].climb);
+      projectiles.push(st);
+    }
+    for (let i = 0; i < 7; i++) {
+      addEffect('spark', this.x + rand(-5, 5), this.y + rand(-5, 5), '#8fd6ff');
+    }
+    cue('promote', { slot: this.owner.slot, x: this.x, gain: 0.5 });
+    return true;
   }
 
   box() {
-    const r = 3 + this.stage() * 2;
+    const r = this.piece === 'whole' ? 5 : 4;
     return { x: this.x - r, y: this.y - r, w: r * 2, h: r * 2 };
   }
 
+  /* Drawn rather than blitted: nobody drew a Star of David, and two crossed
+     triangles are six lines. A half draws only its own triangle, which is
+     the entire point of the move being visible. */
   draw(g) {
-    const im = IMG['zzz.' + this.stage()];
-    if (im) {
-      g.imageSmoothingEnabled = false;
-      g.globalAlpha = Math.min(1, this.life / 40);
-      g.drawImage(im, Math.round(this.x) - im.width / 2,
-                  Math.round(this.y) - im.height / 2);
-      g.globalAlpha = 1;
-    } else {
-      g.fillStyle = '#e8eeff';
-      const r = 2 + this.stage();
-      g.fillRect(Math.round(this.x) - r, Math.round(this.y) - r, r * 2, r * 2);
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const r = this.piece === 'whole' ? 5 : 4;
+    // A slow turn, in four steps -- at six pixels across, smooth rotation is
+    // a blur and four poses read as spin.
+    const wob = Math.floor(this.spin / this.base.spin) % 4;
+    const k = (wob === 1 || wob === 3) ? 1 : 0;
+    g.fillStyle = this.piece === 'down' ? '#9fd0ff' : '#cfe8ff';
+    const tri = (up) => {
+      for (let i = 0; i < r; i++) {
+        const wdt = up ? (i + 1) : (r - i);
+        const yy = up ? y - r + i + k : y + i - k;
+        g.fillRect(x - wdt, yy, wdt * 2, 1);
+      }
+    };
+    if (this.piece !== 'down') tri(true);
+    if (this.piece !== 'up') tri(false);
+    // The seam, so a whole one reads as two overlapping shapes.
+    if (this.piece === 'whole') {
+      g.fillStyle = '#6fa8dc';
+      g.fillRect(x - r, y - 1, r * 2, 1);
     }
+  }
+}
+
+/* =====================================================================
+   LOAF - bread, on the floor, belonging to nobody.
+
+   Left behind by the daydream. It sits where it landed and the FIRST person
+   to walk over it eats it and is healed, which very much includes the person
+   he is fighting. It is not a projectile in any sense that matters -- it
+   never damages anybody -- so it stays out of resolveCombat entirely and
+   does its own looking.
+   ===================================================================== */
+
+class Loaf {
+  constructor(owner, spec, x, y) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = clamp(x, 8, VW - 8);
+    this.y = y;
+    this.vy = -1.4;
+    this.grounded = false;
+    this.life = spec.life;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update() {
+    this.t++;
+    this.life--;
+    if (!this.grounded) {
+      const prevY = this.y;
+      this.vy += PHYS.gravity * 0.5;
+      this.y += this.vy;
+      if (this.vy > 0) {
+        for (const p of platformsNow()) {
+          if (this.x < p.x || this.x > p.x + p.w) continue;
+          if (prevY <= p.y && this.y >= p.y) {
+            this.y = p.y; this.vy = 0; this.grounded = true;
+            addEffect('dust', this.x, p.y, '#e8d6a8');
+            break;
+          }
+        }
+      }
+    }
+    /* Whoever gets there first, and that is the joke: he stood in the middle
+       of a fight thinking about bread, so now there is bread in the middle
+       of the fight and it is not his until he has eaten it. */
+    for (const f of fighters) {
+      if (f.eliminated || f.state === 'ko') continue;
+      if (Math.abs(f.x - this.x) > 9) continue;
+      if (Math.abs(f.y - this.y) > 14) continue;
+      f.health = Math.min(COMBAT.maxHealth, f.health + this.spec.heal);
+      addEffect('ring', this.x, this.y - 6, '#ffe4b0');
+      for (let i = 0; i < 5; i++) {
+        addEffect('spark', this.x + rand(-6, 6), this.y - rand(2, 12), '#ffe4b0');
+      }
+      cue('drink', { slot: f.slot, x: this.x });
+      this.dead = true;
+      return;
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.y > VH + 30) this.dead = true;
+  }
+
+  /* Never dangerous, so resolveCombat is told to skip it outright rather
+     than handed a box it would have to ignore. */
+  live() { return false; }
+  box() { return { x: this.x - 4, y: this.y - 6, w: 8, h: 6 }; }
+
+  draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    // Still warm: it lifts a pixel every so often for the first second.
+    const warm = this.life > this.spec.life - 60 && (Math.floor(this.t / 8) % 2) ? 1 : 0;
+    g.fillStyle = '#c08a46';
+    g.fillRect(x - 4, y - 5 - warm, 9, 5);
+    g.fillStyle = '#e0b878';
+    g.fillRect(x - 4, y - 6 - warm, 9, 1);
+    g.fillStyle = '#8a5f36';
+    g.fillRect(x - 2, y - 5 - warm, 1, 2);
+    g.fillRect(x + 1, y - 5 - warm, 1, 2);
   }
 }
 
@@ -7520,6 +7709,11 @@ class Salamence {
     this.vx = this.dir * (spec.speed + (spec.dreamSpeed || 0) * this.power);
     this.t = 0;
     this.life = spec.life + (spec.dreamLife || 0) * this.power;
+    /* Where its wandering comes from. Off the owner's position and the match
+       clock, so two dragons in the same match fly differently and the same
+       dragon replays identically through a rollback. */
+    this.seed = ((Math.round(owner.x) * 2654435761) ^ (battleFrames * 40503)) >>> 0;
+    this.drift = 0;
     this.pierce = true;
     this.hitAt = new Array(MAX_PLAYERS).fill(0);
     this.dead = false;
@@ -7532,8 +7726,38 @@ class Salamence {
       if (this.hitAt[i] > 0) this.hitAt[i]--;
     }
     this.x += this.vx;
-    // A lazy rise and fall, so it flies rather than slides.
-    this.y += Math.floor(this.t / 9) % 2 ? 0.12 : -0.12;
+
+    /* It wanders. Every `veer` frames it picks a new vertical drift out of a
+       hash of its own age, so the path across the screen is a different
+       ragged line every time and there is no lane to stand out of.
+
+       A hash rather than Math.random for the reason nothing in this
+       simulation rolls dice: two machines have to fly the identical dragon,
+       and a rollback has to replay the identical dragon. It is a pure
+       function of `t`, so it does both for free.
+
+       It also no longer dies of old age mid-screen -- `life` is a backstop
+       measured in the hundreds now, and what actually ends it is leaving on
+       the far side. A dragon that expired over the stage was the one thing
+       you could rely on it doing. */
+    const w = this.base.wander || 0;
+    if (w) {
+      if (this.t % (this.base.veer || 17) === 0) {
+        let h = Math.imul((this.t + this.seed) >>> 0, 0x9e3779b1) >>> 0;
+        h ^= h >>> 15;
+        h = Math.imul(h, 0x85ebca6b) >>> 0;
+        h ^= h >>> 13;
+        // -1..1, off the top bits, which are the well-mixed ones.
+        this.drift = ((h >>> 22) / 512 - 1) * w;
+      }
+      this.y += this.drift;
+      // Never so high or low that it leaves the stage it is crossing.
+      this.y = clamp(this.y, 16, VH - 14);
+    } else {
+      // A lazy rise and fall, so it flies rather than slides.
+      this.y += Math.floor(this.t / 9) % 2 ? 0.12 : -0.12;
+    }
+
     if (this.t % 11 === 0) {
       addEffect('spark', this.x - this.dir * 14, this.y + rand(-3, 3), '#7fb2ff');
     }
@@ -9217,7 +9441,9 @@ class Glass {
     this.h = gs.h;
     this.life = gs.life;
     this.born = gs.life;
-    this.pierce = true;
+    /* NOT pierce any more. A piercing shot survives contact and re-arms on
+       `hitEvery`; this one is meant to break on the first person to walk
+       through it, which is what resolveCombat does to an ordinary shot. */
     this.hitAt = new Array(MAX_PLAYERS).fill(0);
     this.dead = false;
     // A deterministic scatter: the shards have to be in the same place on
@@ -10495,7 +10721,8 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   /* Catching a yawn. Beside poison and confusion because it is the same kind
      of thing and belongs on the same path -- blocked by a shield if they are,
      applied once per landed hit, and nowhere near the projectile that carried
-     it. The first draft had the Yawn reach into `fighters` itself and work
+     it. The first draft had the drowsiness projectile reach into `fighters`
+     itself and work
      out who it had just touched from its own re-arm clock, which was both
      wrong (resolveCombat sets that clock AFTER the projectiles update, so it
      read one frame late) and a second, private copy of a rule this function
@@ -10535,6 +10762,21 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   // Built from move.damage, NOT the buffed dmg: Reese's ult multiplies his
   // damage by 1.8, and if that multiplied launch too it would silently
   // rewrite every spacing in the game for thirteen seconds.
+  /* A GRAZE costs health and NOTHING else, and it has to return before any
+     of the launch below: `defender.vx/vy` are written first, then
+     setState('hitstun') and `grounded = false`. A flag checked after all
+     that would have suppressed the hitstun COUNTER while leaving the victim
+     in the hitstun STATE, in the air, which is the exact thing being fixed.
+
+     Broken glass on the floor is the case it was written for -- a hazard
+     whose point is the ground it denies, not the frames it takes off you. */
+  if (move.graze) {
+    defender.hitstop = 0;
+    attacker.hitstop = 0;
+    defender.sinceHitFrames = 0;
+    return;
+  }
+
   const kb = (move.base + move.damage * 0.14) *
              (100 / defender.def.weight) * defender.kbTakenMul;
 
@@ -10619,7 +10861,25 @@ function resolveCombat(fighters) {
       if (b === a || b.eliminated) continue;
       if (b.invulnerable || b.state === 'ko') continue;
       if (overlap(h.box, b.hurtbox())) {
-        applyHit(a, b, h.move, a.x);
+        /* The tip of a whip is worth more than the rest of it.
+
+           `sweet` names how far along the box the good part starts, and the
+           test is against the victim's NEAR edge -- the part of them the end
+           of the whip actually reaches -- so standing at tip range is what
+           earns it and walking further in gives it away. A whole separate
+           spec rather than a multiplier, because the sweet spot launches on
+           a different angle as well as hitting harder, which is most of what
+           makes it worth spacing for. */
+        let move = h.move;
+        if (move.sweet) {
+          const hb = b.hurtbox();
+          const near = a.facing > 0 ? hb.x : hb.x + hb.w;
+          if (Math.abs(near - a.x) >= move.sweet.from) {
+            move = move.sweetSpec || move.sweet;
+            addEffect('spark', near, hb.y + hb.h / 2, '#fff2b0');
+          }
+        }
+        applyHit(a, b, move, a.x);
         a.hasHit = true;
         break;
       }
@@ -10775,7 +11035,7 @@ function aiDecide(me, foe) {
   // Close the gap.
   const s = me.def.specials.neutral;
   const ranged = s.kind === 'projectile' || s.kind === 'pizza' ||
-                 s.kind === 'hotdog' || s.kind === 'cookie' || s.kind === 'yawn';
+                 s.kind === 'hotdog' || s.kind === 'cookie' || s.kind === 'star';
   const idealRange = ranged ? AI_TUNE.rangedIdeal : s.kind === 'beam' ? 45 : 13;
 
   const crowded = ranged || s.kind === 'beam' ? AI_TUNE.rangedCrowd : 0;
@@ -13393,7 +13653,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '35a1c6040b';
+const BUILD_ID = 'e7ec37db2f';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13404,7 +13664,7 @@ const BUILD_ID = '35a1c6040b';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.64';
+const VERSION = '2.65';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
