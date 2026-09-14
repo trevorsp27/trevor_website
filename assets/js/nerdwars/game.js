@@ -1667,48 +1667,159 @@ ROSTER.simon = {
    his sheet carried eight more frames with the punching arm out, and
    sprite() swaps to them for the whole of any attack, special or ult. That
    is free here -- no engine change, just art that exists. */
+/* SQUALLS, whose name is Remy.
+
+   Squalls is the name he plays under; the drawings that arrived for this kit
+   are signed Remy, and they are the same brown hair over the same blue shirt
+   as the sheet he has had since 2016. He kept the placeholder moves longer
+   than anybody -- an uppercut wearing three different labels -- because
+   nothing had been drawn for him. Now three things have.
+
+   Taken one at a time they are a debuff, a nap and a projectile, and any
+   character could have them. Taken together they are one idea, and the idea
+   is him:
+
+       he sleeps on it, and then he dreams something up.
+
+   SLEEP ON IT charges a DREAM. SALAMENCE is what the dream turns out to be.
+   The nap is the only thing that fills the meter and the dragon is the only
+   thing that spends it, so every decision he makes is the same decision --
+   can I afford to lie down right now -- and the answer is the whole game
+   against him. Sleep early and the dragon is worth having; never sleep and
+   his recovery is a tired little hop.
+
+   The YAWN is how he buys the time. It does almost no damage; what it does
+   is make you DROWSY, on the same counter Simon's slouch uses, which slows
+   your walk and then puts you out entirely if you take a second one. A
+   character whose whole kit needs a quiet moment has to be able to make one.
+
+   He is not Simon. Simon's sleep is invulnerable, and that is the point of
+   it -- five seconds nobody can touch. This one is not. He lies there, he
+   can be hit, and the knockback is softened only because he is a sack on the
+   floor rather than a man on his feet. What he is buying is not safety. */
 ROSTER.squalls = {
   name: 'SQUALLS',
-  origin: 'fresh',
-  tag: 'PLACEHOLDER MOVES, AWAITING A REAL KIT',
+  origin: 'sprites',
+  tag: 'SLEEPS ON IT, THEN DREAMS SOMETHING UP',
   drawn: true,
+  /* Unchanged from the placeholder years: he was already the heavy, slow one
+     and the kit that arrived suits that -- a man who has to find a quiet
+     moment to lie down should not also be the quickest across the floor. */
   weight: 104, walk: 1.38, jump: 6.3, doubleJump: 5.8,
   jab: { startup: 6, active: 4, recovery: 12, damage: 7,
          base: 2.4, scale: 6.6, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
          ox: 2, oy: -9, w: 12, h: 10 },
   specials: {
-    // A shoulder barge: almost no lift, a lot of forward.
+    /* YAWN. Three Zs drift out in front of him, growing as they go -- which
+       is not decoration, it is the art: the sheet has one Z at three sizes
+       and it would be a waste to pick one.
+
+       They barely hurt. One damage is a rounding error next to any other
+       projectile in the game and it is meant to be: what they carry is
+       DROWSINESS, on the counter Simon's aura already writes to, so a walk
+       slows under the first one and a second one inside ten seconds puts
+       somebody on the floor asleep.
+
+       They PIERCE, on a slow re-arm, so one yawn drifting through a
+       four-player scramble touches everybody in it. And they are slow --
+       barely faster than a walk -- so against one opponent paying attention
+       they are simply avoided. That is fine. They are not how he wins; they
+       are how he gets thirty frames to lie down. */
     neutral: {
-      kind: 'uppercut', label: 'PLACEHOLDER',
-      startup: 7, active: 6, recovery: 15,
-      rise: -1.2, drift: 1.9,
-      damage: 8, base: 2.5, scale: 5.4, angle: 30, kx: 0.86602540378443871, ky: 0.49999999999999994,
-      ox: 1, oy: -10, w: 15, h: 13,
+      kind: 'yawn', label: 'YAWN',
+      startup: 9, active: 1, recovery: 14, maxAlive: 3,
+      speed: 1.15, lift: -0.22, drop: 0.006, life: 150,
+      grow: 46,                 // frames at each of the three sizes
+      hitEvery: 40,
+      /* Read by applyHit, beside poison and confusion.
+
+         60, not the 46 it started at, and the number is set by the DECAY
+         rather than by how much one yawn ought to be worth. Drowsiness falls
+         a point a frame, and the fastest he can land two yawns on the same
+         person is about thirty frames apart -- the move is 24 frames end to
+         end and the second Z has to fly the same distance as the first, so
+         they never close the gap. At 46 the first dose was down to 16 by the
+         time the second arrived and the total never reached 90: the nap was
+         arithmetically unreachable, which a spec you only read is very happy
+         to hide from you.
+
+         At 60 one yawn is a slow and two inside half a second is a nap. */
+      drowsy: { add: 60, cap: 90, sleep: 46 },
+      manaOverride: 16,
+      damage: 1, base: 0.8, scale: 1.2, angle: 84,
+      kx: 0.10452846326765346, ky: 0.9945218953682733,
     },
-    // A stamp: up a little, down hard.
+    /* SLEEP ON IT. He lies down on the spot and the dream starts building.
+
+       Five seconds if he takes all of it, and he can get up early on any
+       input -- the pad is read in updateAttack and remembered, the way the
+       soul's controls are, because runSpecial is not allowed to see one.
+
+       He is NOT invulnerable. Knockback is softened to three fifths because
+       a body on the floor is harder to launch than one standing up, but
+       every point of damage lands, and being hit does not wake him -- so an
+       opponent who finds him asleep gets a free combo on a target that is
+       not going anywhere. That is the price of the dragon.
+
+       `dream` is on the fighter and in the constructor, so a rollback carries
+       it: a meter that came back differently after a rewind would change what
+       the dragon is made of, which is about as visible as a desync gets. */
     down: {
-      kind: 'uppercut', label: 'PLACEHOLDER', overhead: '#6f7a90',
-      startup: 8, active: 8, recovery: 17,
-      rise: -2.4, drift: 0.9,
-      damage: 8, base: 2.6, scale: 5.8, angle: 68, kx: 0.37460659341591201, ky: 0.92718385456678742,
-      ox: 2, oy: -12, w: 13, h: 16,
+      kind: 'sleep', label: 'SLEEP ON IT',
+      startup: 14, active: 300, recovery: 16,
+      heal: 18,
+      dream: 0.42,              // per sleeping frame; the full nap is 126
+      knockbackTakenMul: 0.6,
+      manaOverride: 12,
+      damage: 0, base: 0, scale: 0,
     },
-    /* The recovery, and the one move here that has to work. -6.0 is a shade
-       under Kel's CLEAN & JERK, which suits the heavier of the two. */
+    /* SALAMENCE. The dream, and his way home.
+
+       It comes in from behind him, he gets a lift off it, and it carries on
+       across the stage through anything in the way. The lift is FIXED -- a
+       recovery that only works when you have been sleeping is not a
+       recovery, it is a way to lose a stock for a mistake you made twenty
+       seconds ago -- so an empty dream still gets him back to the ledge.
+
+       What the dream buys is the dragon. At nothing it is a tired blue thing
+       that flaps past for eight. At a full meter it crosses the whole screen
+       at nearly twice the speed and hits for twenty, and it does not stop at
+       the first person it reaches. Spends the meter either way, all of it:
+       there is no dribbling it out. */
     up: {
-      kind: 'uppercut', label: 'PLACEHOLDER',
-      startup: 5, active: 14, recovery: 19,
+      kind: 'salamence', label: 'SALAMENCE',
+      startup: 8, active: 1, recovery: 20,
       rise: -6.0, drift: 0.8,
-      damage: 6, base: 2.2, scale: 5.2, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
-      ox: -6, oy: -20, w: 13, h: 24,
+      speed: 2.6, life: 150, flap: 7, hitEvery: 34,
+      dreamMax: 100, dreamDamage: 12, dreamSpeed: 1.9, dreamLife: 70,
+      manaOverride: 24,
+      damage: 8, base: 2.8, scale: 5.8, angle: 46,
+      kx: 0.6946583704589973, ky: 0.7193398003386512,
     },
   },
+  /* REM SLEEP. The pun is the move: REM is the sleep you dream in, and it is
+     most of his name.
+
+     He goes down properly this time -- invulnerable, healing, out for five
+     seconds -- and the dragon arrives at full strength whatever the meter
+     said, three times, from alternating sides. He is not steering it and he
+     is not defending himself; he is asleep, and this is what he is dreaming.
+
+     The passes are what makes it an ult rather than a big Salamence. One
+     dragon is a thing you jump over. Three, ninety-six frames apart, from
+     both directions, is a stage you have to keep solving while the person
+     who caused it is lying down. */
   ult: {
-    kind: 'uppercut', label: 'PLACEHOLDER ULT',
-    startup: 12, active: 16, recovery: 26,
-    rise: -4.6, drift: 1.6,
-    damage: 19, base: 4.2, scale: 9.2, angle: 48, kx: 0.66913060635885824, ky: 0.74314482547739424,
-    ox: -8, oy: -22, w: 22, h: 28,
+    kind: 'remsleep', label: 'REM SLEEP',
+    startup: 20, active: 300, recovery: 18,
+    heal: 30,
+    passes: 3, every: 96,
+    dragon: {
+      speed: 4.4, life: 160, flap: 5, hitEvery: 30,
+      damage: 17, base: 3.6, scale: 7.2, angle: 50,
+      kx: 0.6427876096865394, ky: 0.766044443118978,
+    },
+    damage: 0, base: 0, scale: 0,
   },
 };
 
@@ -1896,154 +2007,6 @@ ROSTER.sandbag = {
 };
 
 
-/* REMY.
-
-   Three pieces of art arrived: a yawn with Zs coming off it, him lying down
-   asleep, and a Salamence. Taken one at a time they are a debuff, a nap and
-   a projectile, and any character could have them. Taken together they are
-   one idea, and the idea is the character:
-
-       he sleeps on it, and then he dreams something up.
-
-   SLEEP ON IT charges a DREAM. SALAMENCE is what the dream turns out to be.
-   The nap is the only thing that fills the meter and the dragon is the only
-   thing that spends it, so every decision he makes is the same decision --
-   can I afford to lie down right now -- and the answer is the whole game
-   against him. Sleep early and the dragon is worth having; never sleep and
-   his recovery is a tired little hop.
-
-   The YAWN is how he buys the time. It does almost no damage; what it does
-   is make you DROWSY, on the same counter Simon's slouch uses, which slows
-   your walk and then puts you out entirely if you take a second one. A
-   character whose whole kit needs a quiet moment has to be able to make one.
-
-   He is not Simon. Simon's sleep is invulnerable, and that is the point of
-   it -- five seconds nobody can touch. Remy's is not. He lies there, he can
-   be hit, and the knockback is softened only because he is a sack on the
-   floor rather than a man on his feet. What he is buying is not safety. */
-ROSTER.remy = {
-  name: 'REMY',
-  origin: 'fresh',
-  tag: 'SLEEPS ON IT, THEN DREAMS SOMETHING UP',
-  drawn: true,
-  weight: 98, walk: 1.44, jump: 6.4, doubleJump: 5.9,
-  jab: { startup: 6, active: 3, recovery: 11, damage: 5,
-         base: 2.2, scale: 6.0, angle: 42,
-         kx: 0.7431448254773942, ky: 0.6691306063588582,
-         ox: 2, oy: -9, w: 11, h: 10 },
-  specials: {
-    /* YAWN. Three Zs drift out in front of him, growing as they go -- which
-       is not decoration, it is the art: the sheet has one Z at three sizes
-       and it would be a waste to pick one.
-
-       They barely hurt. One damage is a rounding error next to any other
-       projectile in the game and it is meant to be: what they carry is
-       DROWSINESS, on the counter Simon's aura already writes to, so a walk
-       slows under the first one and a second one inside ten seconds puts
-       somebody on the floor asleep.
-
-       They PIERCE, on a slow re-arm, so one yawn drifting through a
-       four-player scramble touches everybody in it. And they are slow --
-       barely faster than a walk -- so against one opponent paying attention
-       they are simply avoided. That is fine. They are not how he wins; they
-       are how he gets thirty frames to lie down. */
-    neutral: {
-      kind: 'yawn', label: 'YAWN',
-      startup: 9, active: 1, recovery: 14, maxAlive: 3,
-      speed: 1.15, lift: -0.22, drop: 0.006, life: 150,
-      grow: 46,                 // frames at each of the three sizes
-      hitEvery: 40,
-      /* Read by applyHit, beside poison and confusion.
-
-         60, not the 46 it started at, and the number is set by the DECAY
-         rather than by how much one yawn ought to be worth. Drowsiness falls
-         a point a frame, and the fastest he can land two yawns on the same
-         person is about thirty frames apart -- the move is 24 frames end to
-         end and the second Z has to fly the same distance as the first, so
-         they never close the gap. At 46 the first dose was down to 16 by the
-         time the second arrived and the total never reached 90: the nap was
-         arithmetically unreachable, which a spec you only read is very happy
-         to hide from you.
-
-         At 60 one yawn is a slow and two inside half a second is a nap. */
-      drowsy: { add: 60, cap: 90, sleep: 46 },
-      manaOverride: 16,
-      damage: 1, base: 0.8, scale: 1.2, angle: 84,
-      kx: 0.10452846326765346, ky: 0.9945218953682733,
-    },
-    /* SLEEP ON IT. He lies down on the spot and the dream starts building.
-
-       Five seconds if he takes all of it, and he can get up early on any
-       input -- the pad is read in updateAttack and remembered, the way the
-       soul's controls are, because runSpecial is not allowed to see one.
-
-       He is NOT invulnerable. Knockback is softened to three fifths because
-       a body on the floor is harder to launch than one standing up, but
-       every point of damage lands, and being hit does not wake him -- so an
-       opponent who finds him asleep gets a free combo on a target that is
-       not going anywhere. That is the price of the dragon.
-
-       `dream` is on the fighter and in the constructor, so a rollback carries
-       it: a meter that came back differently after a rewind would change what
-       the dragon is made of, which is about as visible as a desync gets. */
-    down: {
-      kind: 'sleep', label: 'SLEEP ON IT',
-      startup: 14, active: 300, recovery: 16,
-      heal: 18,
-      dream: 0.42,              // per sleeping frame; the full nap is 126
-      knockbackTakenMul: 0.6,
-      manaOverride: 12,
-      damage: 0, base: 0, scale: 0,
-    },
-    /* SALAMENCE. The dream, and his way home.
-
-       It comes in from behind him, he gets a lift off it, and it carries on
-       across the stage through anything in the way. The lift is FIXED -- a
-       recovery that only works when you have been sleeping is not a
-       recovery, it is a way to lose a stock for a mistake you made twenty
-       seconds ago -- so an empty dream still gets him back to the ledge.
-
-       What the dream buys is the dragon. At nothing it is a tired blue thing
-       that flaps past for eight. At a full meter it crosses the whole screen
-       at nearly twice the speed and hits for twenty, and it does not stop at
-       the first person it reaches. Spends the meter either way, all of it:
-       there is no dribbling it out. */
-    up: {
-      kind: 'salamence', label: 'SALAMENCE',
-      startup: 8, active: 1, recovery: 20,
-      rise: -6.0, drift: 0.8,
-      speed: 2.6, life: 150, flap: 7, hitEvery: 34,
-      dreamMax: 100, dreamDamage: 12, dreamSpeed: 1.9, dreamLife: 70,
-      manaOverride: 24,
-      damage: 8, base: 2.8, scale: 5.8, angle: 46,
-      kx: 0.6946583704589973, ky: 0.7193398003386512,
-    },
-  },
-  /* REM SLEEP. The pun is the move: REM is the sleep you dream in, and it is
-     most of his name.
-
-     He goes down properly this time -- invulnerable, healing, out for five
-     seconds -- and the dragon arrives at full strength whatever the meter
-     said, three times, from alternating sides. He is not steering it and he
-     is not defending himself; he is asleep, and this is what he is dreaming.
-
-     The passes are what makes it an ult rather than a big Salamence. One
-     dragon is a thing you jump over. Three, ninety-six frames apart, from
-     both directions, is a stage you have to keep solving while the person
-     who caused it is lying down. */
-  ult: {
-    kind: 'remsleep', label: 'REM SLEEP',
-    startup: 20, active: 300, recovery: 18,
-    heal: 30,
-    passes: 3, every: 96,
-    dragon: {
-      speed: 4.4, life: 160, flap: 5, hitEvery: 30,
-      damage: 17, base: 3.6, scale: 7.2, angle: 50,
-      kx: 0.6427876096865394, ky: 0.766044443118978,
-    },
-    damage: 0, base: 0, scale: 0,
-  },
-};
 
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
@@ -2124,7 +2087,7 @@ for (const key in ROSTER) {
    left a hole in the second row that every screen drawing the roster had to
    not mind. */
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
-               'cobeus', 'simon', 'squalls', 'christian', 'remy'];
+               'cobeus', 'simon', 'squalls', 'christian'];
 
 /* =====================================================================
    CANVAS
@@ -2271,6 +2234,10 @@ function loadAssets(done) {
   SPRITES.slouch.L.forEach((uri, i) => grab('slouch.L.' + i, uri));
   sandbagFrames().forEach((uri, i) => grab('sandbag.' + i, uri));
   if (SPRITES.zzz) SPRITES.zzz.forEach((uri, i) => grab('zzz.' + i, uri));
+  if (SPRITES.yawning) {
+    grab('yawning.R', SPRITES.yawning.R[0]);
+    grab('yawning.L', SPRITES.yawning.L[0]);
+  }
   if (SPRITES.sleeping) {
     // Lists of one, not strings: build.py emits both facings as arrays so a
     // second sleeping pose can be drawn later without changing this shape.
@@ -5160,6 +5127,17 @@ class Fighter {
                          this.state === 'ult')) {
       set = 'attack';
     }
+    /* Mid-yawn, which he was drawn doing. Its own set rather than a pose in
+       his attack sheet, so the open mouth belongs to the one move that is a
+       yawn instead of to every swing he throws. */
+    if (this.state === 'special' && SPRITES.yawning) {
+      const m = this.moveFor('special');
+      if (m && m.kind === 'yawn') {
+        const im = IMG['yawning.' + (this.facing < 0 ? 'L' : 'R')];
+        if (im) return im;
+      }
+    }
+
     /* Asleep on the floor, which is a whole different silhouette -- 15 by 9
        rather than 10 by 14 -- and so is its own picture rather than a pose
        in the sheet. */
@@ -11461,13 +11439,16 @@ const SEAT_COLORS = ['#59a5ff', '#ff5f5f', '#5fd46a', '#ffc14d'];
    The cells narrow from 74 to 60 to pay for it: 5 x 60 is 300 across a 320px
    screen, where 5 x 74 would be 370. Ten characters still fit in two rows.
    The eleventh is somebody else's problem, and it will be a real one. */
-/* Six across, not five. Eleven fighters on a five-wide grid is three rows,
-   and the third row's names land at y 173 on a 180-pixel screen -- which is
-   not "tight", it is off the bottom. Six columns puts eleven back into two
-   rows with a seat spare, and 52 is the widest cell that fits six of them
-   across 320 with the row still centred. */
-const GRID_COLS = 6;
-const CELL_W = 52;
+/* Five across. It went to six for a moment when Remy looked like an
+   eleventh fighter -- eleven on a five-wide grid is three rows, and the
+   third row's names land off the bottom of a 180-pixel screen -- and came
+   back when he turned out to be Squalls under another name. Ten is two clean
+   rows of five, which is what these cells were measured for.
+
+   If a genuine eleventh ever arrives: six columns at a 52-pixel cell is the
+   widest that fits across 320, and it holds twelve in two rows. */
+const GRID_COLS = 5;
+const CELL_W = 60;
 
 function moveCursor(slot, dx, dy) {
   let i = select.cursor[slot];
@@ -13025,7 +13006,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'd7f0b91e11';
+const BUILD_ID = '6f1e95ee3d';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong

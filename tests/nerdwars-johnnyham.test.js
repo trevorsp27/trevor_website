@@ -261,10 +261,20 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
     autisnick: "OUT OF THE TREES", johnnyham: "HONEY BAKED", kel: "LEG DAY",
     ladeane: "THE STROKES", reese: "SHIRTS OPTIONAL", trev: "LASER SWORD",
     cobeus: "DESIGNATED DRIVER", simon: "SIMON SLOUCH",
-    squalls: "PLACEHOLDER ULT", christian: "THE PLAGUE",
+    squalls: "REM SLEEP", christian: "THE PLAGUE",
   })) {
     assert.equal(ults[key], ult, key + "'s ult should be " + ult);
   }
+
+  /* And none of them is still a placeholder. Squalls was the last one -- he
+     kept an uppercut wearing the word for several releases because nothing
+     had been drawn for him -- so this is the assertion that stops the next
+     one being shipped quietly and left there. */
+  const placeholders = g.nw.roster
+    .filter((c) => /PLACEHOLDER/i.test(c.ult || ""))
+    .map((c) => c.key).join(", ");
+  assert.equal(placeholders, "",
+    "no ult should still be a placeholder; these are: " + placeholders);
 
   // And nobody is left without one: an ult read off a fighter who has none is
   // a null the HUD draws as blank rather than an error anybody would notice.
