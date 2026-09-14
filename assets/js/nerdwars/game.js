@@ -2006,7 +2006,15 @@ ROSTER.simon = {
                     eleven damage to everyone standing close -- and that is
                     now the ONLY thing this symbol pays besides the
                     transformation itself. */
-                 damageMul: 3, sizeMul: 3 },
+                 /* DOUBLE damage, not triple. Three was what was asked for
+                    first and two is what was asked for after seeing it, which
+                    is the right order to decide a number like this in: triple
+                    damage on every attack he owns, for the rest of a stock,
+                    off a fifteen percent pull he can learn the timing of, is
+                    the strongest thing in the game by a distance. The SIZE is
+                    still three -- that is the joke and it costs him, because a
+                    27x42 hurtbox is a much easier thing to hit. */
+                 damageMul: 2, sizeMul: 3 },
       chips: { mana: 100 },
       /* 50, so three of a kind is half a health bar and a pair is 25. A lot,
          and meant to be: green is the symbol you chase when you are losing,
@@ -2063,7 +2071,21 @@ ROSTER.simon = {
       startup: 6, active: 8, recovery: 16,
       manaOverride: 26,
       ox: 2, oy: -12, w: 15, h: 14,
-      lunge: 2.4,
+      /* 4.2, up from 2.4. He asked for it twice: it was still too hard to
+         land, and what he wanted was for it to LAUNCH him forward and take
+         whoever he touches on the way.
+
+         That is what it already did in shape -- the box is live for exactly
+         the frames he is moving, so contact during the lunge is the catch --
+         it simply did not travel far enough to catch anybody who was not
+         nearly in range already. Eight active frames at 2.4 carried him 19
+         pixels; at 4.2 it is 34, which is most of a body-length further and
+         turns "you had to already be there" into a real approach.
+
+         It is still a grab, so it still goes through a shield, and it is
+         still sixteen frames of recovery if it catches nothing. The lunge is
+         what he pays that with. */
+      lunge: 4.2,
       /* `damage` here is what the CATCH takes, the frame it bites -- applyHit
          subtracts it directly, so leaving it off subtracts undefined and the
          victim's health is NaN for the rest of the match. The choke below is
@@ -2083,7 +2105,21 @@ ROSTER.simon = {
          2.2/3.8 still slams, and at an edge it is still the end of a stock,
          which is what the angle is for. It is simply no longer the best
          single hit in the game arriving on top of the best hold. */
-      finish: { damage: 0, base: 2.2, scale: 3.8, angle: 300, kx: 0.50000000000000011, ky: -0.8660254037844386 },
+      /* 340 degrees rather than 300, and a little more of it.
+         
+         It read as no knockback at all, and it very nearly was: 300 is sixty
+         degrees BELOW the horizontal, so almost all of a small force went
+         straight into a floor that was already there. A man slammed downward
+         while standing on the ground does not move, he just stops.
+         
+         340 is twenty degrees below horizontal -- still a slam, still forward
+         and down, still the thing that ends a stock at a ledge, but now most
+         of the force is travel he can see. Slight on purpose: this is the end
+         of an eighty-four frame hold that has already done its damage, and it
+         was explicitly tuned DOWN once for launching people further than most
+         ults. */
+      finish: { damage: 0, base: 2.6, scale: 4.2, angle: 340,
+                kx: 0.9396926207859084, ky: -0.3420201433256686 },
       damage: 0, base: 0, scale: 0,
       air: { rise: -6.2, drift: 0.6,
              drop: { speed: 4.2, life: 70, w: 12, h: 14,
@@ -3999,11 +4035,30 @@ class Fighter {
        this changes no box in the game except a jackpot Simon's. */
     const k = this.sizeMul;
     const ox = m.ox * k, w = m.w * k, h = m.h * k;
+    /* GROWING MUST NOT LIFT THE BOX OFF THE FLOOR, and getting this wrong
+       broke every attack he owned rather than only the one that was reported.
+
+       `oy` is the box's CENTRE, so scaling it scales the height at which the
+       box floats. The guillotine is authored at oy -12, h 14: on a normal man
+       that is y-19 to y-5, which comfortably overlaps a foe standing at y-14
+       to y0. Tripled it becomes y-57 to y-15 -- and the bottom edge, at 15
+       above the floor, is ONE PIXEL above the top of a normal man's head. The
+       giant's every swing passed over everybody, and on screen it read as the
+       move simply not working while he was big.
+
+       It is geometrically honest -- a giant does swing at giant head height --
+       and it is useless, because nobody else in the match grew with him. So
+       the bottom edge is held at the lower of the two: a bigger body reaches
+       further UP and further out, and never loses anything it could reach
+       before. At sizeMul 1 both terms are the same number and this changes
+       nothing for anybody else. */
+    const bottom = this.y + Math.max(m.oy * k + h / 2, m.oy + m.h / 2);
+    const top = Math.min(this.y + m.oy * k - h / 2, bottom - h);
     return {
       x: this.facing > 0 ? this.x + ox : this.x - ox - w,
-      y: this.y + m.oy * k - h / 2,
+      y: top,
       w: w,
-      h: h,
+      h: bottom - top,
     };
   }
 
@@ -4494,6 +4549,17 @@ class Fighter {
         s.maxAlive;
     }
     if (s.kind === 'buff') return this.buffTimer <= 0;
+    /* No gambling while he IS the jackpot. Nothing stopped him pulling again
+       mid-transformation, and every outcome of doing so was wrong: another
+       three sevens re-armed the growth from scratch and snapped a settled
+       giant back to normal size for ten frames, and every other symbol paid
+       him a second prize on top of the one he is still wearing. A slot
+       machine you play while standing inside your own payout is not a gamble.
+
+       Asked of the buff rather than of a flag, so it ends exactly when the
+       transformation does -- there is one fact here, not two that can drift. */
+    if (s.kind === 'slots' && this.buffTimer > 0 &&
+        this.buffStats && this.buffStats.sizeMul > 1) return false;
     return true;
   }
 
@@ -17072,7 +17138,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'cc8e35da7e';
+const BUILD_ID = 'd85b46943c';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -17083,7 +17149,7 @@ const BUILD_ID = 'cc8e35da7e';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.69';
+const VERSION = '2.70';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
