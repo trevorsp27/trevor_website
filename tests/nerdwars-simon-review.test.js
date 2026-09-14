@@ -299,11 +299,15 @@ test("control: without its guard the jackpot takes a second stock and hits throu
 /* 2. The wake ring.                                                    */
 
 /* The whole slouch, driven through the pad: ULT on frame 0, 24 frames of
-   nodding off, 300 asleep, and the stretch on attackFrame startup+active.
-   The foe stands twenty pixels away, dozes off in the aura, and on the frame
-   BEFORE the stretch is made into whichever thing the ring must skip. The
-   twelve-frame KO freeze is pinned to 0 so the frame count is the
-   fighters' own. */
+   nodding off, TEN SECONDS asleep, and the stretch on attackFrame
+   startup+active. The foe stands twenty pixels away, dozes off in the aura,
+   and on the frame BEFORE the stretch is made into whichever thing the ring
+   must skip. The twelve-frame KO freeze is pinned to 0 so the frame count is
+   the fighters' own.
+
+   700 frames, not 400. The sleep doubled and a drive that stopped at 400
+   never reached the wake frame at all, which showed up as the precondition
+   failing rather than as a recording that ran out. */
 const WAKE = (mode) => `(function () {
   ${RESET}
   foe.x = me.x + 20; foe.y = me.y;
@@ -313,7 +317,7 @@ const WAKE = (mode) => `(function () {
             meterArmed: -1, invulnerable: false, wakeAt: -1, stocks: -1,
             state: '', health: -1, meter: -1, radius: u.wake.radius, damage: u.wake.damage };
   netplay.active = true;
-  for (var i = 0; i < 400; i++) {
+  for (var i = 0; i < 700; i++) {
     if (me.state === 'ult' && me.attackFrame === WAKE_AT - 1) {
       if (${JSON.stringify(mode)} === 'ko') foe.knockOut();
       if (${JSON.stringify(mode)} === 'invuln') foe.invuln = 50;
@@ -474,7 +478,8 @@ test("control: with groundOnly off, or the cast's grounded gate gone, an airborn
 const ROOTED = `(function () {
   ${RESET}
   me.ultMeter = 999;
-  var r = { walk: ROSTER.simon.walk, walkVx: 0, x0: 0, fired: false, lastFrame: 0,
+  var r = { walk: ROSTER.simon.walk, wake: u.startup + u.active,
+            walkVx: 0, x0: 0, fired: false, lastFrame: 0,
             endState: '', groundDx: 0, groundVx: 0, airFrames: 0, airMaxDx: 0, airMaxVx: 0,
             maxDx: 0, maxVx: 0 };
   netplay.active = true;
@@ -484,7 +489,7 @@ const ROOTED = `(function () {
     step();
   }
   r.walkVx = me.vx; r.x0 = me.x;
-  for (var i = 0; i < 400; i++) {
+  for (var i = 0; i < 700; i++) {
     me.hitstop = 0; me.mana = 999;
     var airborne = me.state === 'ult' && me.attackFrame >= 100 && me.attackFrame < 200;
     if (airborne) { me.y = main.y - 50; me.vy = 0; me.grounded = false; }
@@ -528,9 +533,12 @@ function checkRooted(r) {
     "no steering: he must fall straight, but drifted " + r.airMaxDx.toFixed(3) + "px");
   assert.ok(r.maxVx === 0 && r.maxDx === 0,
     "nor at any other point in the move: vx reached " + r.maxVx + ", x moved " + r.maxDx.toFixed(3) + "px");
-  assert.ok(r.lastFrame >= 324 && r.endState === "idle",
-    "precondition: the whole move should have run; it ended on attackFrame " + r.lastFrame +
-    " in state " + r.endState);
+  /* Read off the spec rather than written down. The sleep went from five
+     seconds to ten, and a hard-coded 324 in here would have gone on passing
+     against a drive that stopped halfway through the nap. */
+  assert.ok(r.lastFrame >= r.wake && r.endState === "idle",
+    "precondition: the whole move should have run past its wake frame (" + r.wake +
+    "); it ended on attackFrame " + r.lastFrame + " in state " + r.endState);
 }
 
 const SLOUCH_VX = [
@@ -581,7 +589,7 @@ const SLEEPERS = (koAt) => `(function () {
             lapses: 0, koState: '', wokeAt: -1, endState: '', endHitstun: -1,
             beforeWake: null, wake: null, wakeDamage: u.wake.damage };
   netplay.active = true;
-  for (var i = 0; i < 400; i++) {
+  for (var i = 0; i < 700; i++) {
     if (i === ${koAt}) { me.knockOut(); r.koState = me.state; }
     // After the KO above, which sets the freeze this pins away.
     me.hitstop = 0; me.mana = 999; freezeFrames = 0;

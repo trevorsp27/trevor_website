@@ -2740,7 +2740,11 @@ test("Simon is in the game off one sheet, with a kit that works", async () => {
       foe.setState('idle'); foe.stocks=99; foe.health=1000; foe.eliminated=false;
       foe.hasHit=true; foe.grabbedBy=-1; foe.x = main.x + 120; foe.y = main.y;
       var sawMove = false, wasDone = false;
-      for (var i = 0; i < 420; i++) {
+      /* 700, not 420. The longest of the five is the slouch, and it is
+         24 + 600 + 18 = 642 frames now that the sleep is ten seconds: at 420
+         the ult alone never handed him back, which read as a broken move
+         rather than a window that closed too early. */
+      for (var i = 0; i < 700; i++) {
         me.hitstop=0; me.mana=999;
         netplay.framePads = [bitsToPad(i === 0 ? BITS[b] : 0), bitsToPad(0)];
         step();

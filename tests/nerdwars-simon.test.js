@@ -858,17 +858,37 @@ function checkChoke(log, S) {
     ticks.length + " times on hold frames " + ticks.join(","));
   assert.equal(u.choke.every + "/" + u.choke.damage, "12/1.5", "every 12 for 1.5 -- retune on purpose");
 
+  /* The blade takes NOTHING off. It used to land for 14 on the last frame of
+     the hold, which was the choke being paid for twice -- seven ticks of a
+     slow squeeze and then the single biggest hit in the game on the way out.
+     All of the move's damage is in the choke now; the finish only moves
+     them. */
   const finished = log[F - 1].fhp - log[F].fhp;
   assert.equal(finished, u.finish.damage,
-    "on the last frame of the hold the blade lands for " + u.finish.damage + "; he lost " + finished);
-  assert.equal(u.finish.damage, 14, "which is 14 -- retune on purpose");
+    "on the last frame of the hold the blade takes " + u.finish.damage +
+    "; he lost " + finished);
+  assert.equal(u.finish.damage, 0,
+    "and that is 0 -- the throw costs no health at all any more, retune on purpose");
   assert.equal(log[F].nan, false, "and his health is a number");
+
+  // It takes nothing and still throws: that half of the move is the point.
   assert.equal(log[F].fst, "hitstun", "and he is launched out of the hold");
   assert.equal(log[F].gr, -1, "and let go of");
   assert.ok(log[F].fvy > 0, "launched DOWN: vy should be positive, it was " + log[F].fvy);
   assert.equal(Math.sign(log[F].fvx), 1, "and forward, the way Simon faces; vx was " + log[F].fvx);
-  assert.ok(near(100 - log[F].fhp, u.grab.damage + ticks.length * u.choke.damage + u.finish.damage),
-    "everything the move took adds up; total lost " + (100 - log[F].fhp));
+  assert.ok(u.finish.base > 0 && u.finish.scale > 0,
+    "a throw with no force behind it is not a throw; base/scale read " +
+    u.finish.base + "/" + u.finish.scale);
+  assert.equal(u.finish.base + "/" + u.finish.scale + "@" + u.finish.angle, "2.2/3.8@300",
+    "and the blade is 2.2/3.8 at 300 now, down from 3.6/6.4 -- retune on purpose");
+
+  /* Which leaves the choke holding every point the move costs: the catch,
+     then the ticks, and nothing added on the way out. */
+  const choked = ticks.length * u.choke.damage;
+  assert.ok(choked > 0, "the choke is where the damage lives; the ticks took " + choked);
+  assert.ok(near(100 - log[F].fhp, u.grab.damage + choked),
+    "and the catch plus the choke is the whole bill -- " + u.grab.damage + " + " + choked +
+    "; total lost " + (100 - log[F].fhp));
 }
 
 test("GUILLOTINE on the ground: a lunge into a catch, a slow choke, and a blade that throws down and forward", async () => {
@@ -906,6 +926,34 @@ test("negative control: a finish thrown backward fails the choke test", async ()
   const S = SPEC(run);
   const log = drive(run, "foe.x = me.x + 14;", 120, CHOKE);
   expectToFail(() => checkChoke(log, S), "with the finish launching backward the choke test should fail; it passed");
+});
+
+test("negative control: a blade that takes health again fails the choke test", async () => {
+  /* The retune the whole check now hangs on. The spec still reads 0, so this
+     is not a number the checker can be talked out of by reading it back --
+     the blade is handed a patched copy with the old 14 on it, and the frame
+     the hold ends has to show the health going. */
+  const run = await simonVsReese({ engine: sabotage(
+    "      releaseGrab(this);\n      applyHit(this, victim, s.finish, from);\n",
+    "      releaseGrab(this);\n" +
+    "      applyHit(this, victim, Object.assign({}, s.finish, { damage: 14 }), from);\n") });
+  const S = SPEC(run);
+  const log = drive(run, "foe.x = me.x + 14;", 120, CHOKE);
+  expectToFail(() => checkChoke(log, S),
+    "with the blade taking 14 again the choke test should fail; it passed");
+});
+
+test("negative control: a finish with no force left fails the choke test", async () => {
+  /* Damage 0 on its own would be a move that lets go rather than a throw.
+     With base and scale gone too the hold ends with the foe standing where
+     he was, which is what this half of the check exists to catch. */
+  const run = await simonVsReese({ engine: sabotage(
+    "      finish: { damage: 0, base: 2.2, scale: 3.8, angle: 300,",
+    "      finish: { damage: 0, base: 0, scale: 0, angle: 300,") });
+  const S = SPEC(run);
+  const log = drive(run, "foe.x = me.x + 14;", 120, CHOKE);
+  expectToFail(() => checkChoke(log, S),
+    "with nothing behind the blade the choke test should fail; it passed");
 });
 
 const CHOKE_VS_SHIELD = {
@@ -1031,13 +1079,19 @@ const SLOUCH_REC =
 
 /* Health at 40 and mana at 10, so the heal and the free-mana window have
    room to be seen; the ult meter is full. `at` is where the foe stands. */
+/* 700 by default, not 360. Ten seconds of sleep plus the 24 nodding off and
+   the 18 getting up is 642 frames, and a recording that stopped at 360 ended
+   mid-sleep -- every check that reads the wake frame came back undefined,
+   which reads like a move that never ends rather than a recording that was
+   too short. */
 const slouch = (run, at, extra, frames) => drive(run,
   "me.ultMeter = 999; me.health = 40; me.mana = 10; foe.x = me.x + " + at + ";",
-  frames || 360, { mana: false, p0: `i === 0 ? ${ULT} : 0`, pre: extra || "", rec: SLOUCH_REC });
+  frames || 700, { mana: false, p0: `i === 0 ? ${ULT} : 0`, pre: extra || "", rec: SLOUCH_REC });
 
 function checkSleep(log, S) {
   const u = S.ult, sleepFrom = u.startup, wake = u.startup + u.active;
-  assert.equal(u.startup + "/" + u.active, "24/300", "24 frames of nodding off, 300 asleep -- retune on purpose");
+  assert.equal(u.startup + "/" + u.active, "24/600",
+    "24 frames of nodding off, then TEN seconds asleep -- it was five, retune on purpose");
   assert.equal(log[0].st, "ult", "precondition: the press was heard");
   assert.equal(log[wake + u.recovery - 1].st, "ult", "the move runs its whole length");
   assert.equal(log[wake + u.recovery].st, "idle", "and ends on schedule");
@@ -1059,21 +1113,39 @@ function checkSleep(log, S) {
     "a full sleep heals " + u.heal + ": from 40 to " + (40 + u.heal) + "; he woke on " + log[wake - 1].hp);
   assert.equal(u.heal, 25, "and the heal is 25 -- retune on purpose");
 
-  /* The mana is not refilled, it is suspended: from the frame after he
-     commits the bar is pinned full for `manaFree` frames -- long enough to
-     cover the sleep and hand him the same again awake. The pin runs at the
-     top of update(), one frame behind the runSpecial frame that opens it. */
+  /* The mana is not refilled, it is suspended: while the window runs the bar
+     is simply pinned full. The pin runs at the top of update(), one frame
+     behind the runSpecial frame that opens it, so the frame it is armed on
+     is the one frame it cannot have covered yet.
+
+     One clock, not two. The window opens on the frame the eyes close -- not
+     the frame he commits -- and it is the same length as the sleep, so the
+     bar emptying IS the ult ending. It used to be five seconds of sleep
+     inside ten seconds of free specials, and the second half was a countdown
+     to nothing anyone could see. */
+  assert.equal(u.manaFree, u.active,
+    "one clock: the free window is exactly as long as the sleep (" + u.active +
+    "); manaFree is " + u.manaFree);
   assert.ok(log[0].mana < S.manaMax, "precondition: the bar was low going in; it read " + log[0].mana);
-  assert.equal(log[1].mf, u.manaFree,
-    "the free window opens on his first frame in the move at the roster's " + u.manaFree + "; manaFree read " + log[1].mf);
-  assert.equal(u.manaFree, 600, "and that is ten seconds -- retune on purpose");
-  assert.ok(u.manaFree > wake, "long enough to outlive the sleep");
-  for (let f = 2; f <= 1 + u.manaFree; f++) {
-    assert.equal(log[f].mana, S.manaMax, "the bar reads full on every frame of the window; on frame " + f + " it read " + log[f].mana);
+  assert.equal(log[sleepFrom - 1].mf, 0,
+    "nothing is free while he is still nodding off; on frame " + (sleepFrom - 1) +
+    " manaFree read " + log[sleepFrom - 1].mf);
+  assert.equal(log[sleepFrom].mf, u.manaFree,
+    "and the whole window is on the clock the frame the eyes close (" + sleepFrom +
+    ") at the roster's " + u.manaFree + "; manaFree read " + log[sleepFrom].mf);
+  for (let f = sleepFrom + 1; f <= sleepFrom + u.manaFree; f++) {
+    assert.equal(log[f].mana, S.manaMax,
+      "the bar reads full on every frame of the window; on frame " + f + " it read " + log[f].mana);
   }
-  assert.ok(log[wake].mf > 0, "still open when he wakes -- the second five seconds are his; manaFree was " + log[wake].mf);
-  assert.ok(log[u.manaFree].mf > 0, "and not closed a frame early");
-  assert.equal(log[1 + u.manaFree].mf, 0, "closes exactly " + u.manaFree + " frames after it opened");
+  for (let f = sleepFrom + 1; f <= sleepFrom + u.manaFree; f++) {
+    assert.equal(log[f].mf, log[f - 1].mf - 1,
+      "and it ticks down one a frame; it went " + log[f - 1].mf + " -> " + log[f].mf +
+      " on frame " + f);
+  }
+  assert.equal(log[wake - 1].mf, 1, "not closed a frame early; on the last sleeping frame it read " + log[wake - 1].mf);
+  assert.equal(log[wake].mf, 0,
+    "and empty on the wake frame exactly: the bar running out is how you know the ult is over; " +
+    "manaFree read " + log[wake].mf);
 
   if (u.soul) {
     // The part of him that does not sleep: out when the eyes close, gone when they open.
@@ -1123,9 +1195,11 @@ function checkWakeRing(log, S) {
   assert.equal(log[wake].fst, "hitstun", "and it is a real hit");
 }
 
-const SLEEP_FRAMES = 620;   // past the end of the ten-second free-mana window
+// Past the recovery, which is now the same thing as past the free-mana
+// window: 24 + 600 + 18 = 642, and the pair end together.
+const SLEEP_FRAMES = 700;
 
-test("SLOUCH: 24 frames to nod off, then 300 asleep -- untouchable, healing, rooted, with ten seconds of free specials", async () => {
+test("SLOUCH: 24 frames to nod off, then ten seconds asleep -- untouchable, healing, rooted, and every special free for exactly as long", async () => {
   const run = await simonVsReese();
   const S = SPEC(run);
   checkSleep(slouch(run, 30, "", SLEEP_FRAMES), S);
@@ -1156,6 +1230,36 @@ test("negative control: a free window that does not pin the bar fails the sleep 
   const S = SPEC(run);
   const log = slouch(run, 30, "", SLEEP_FRAMES);
   expectToFail(() => checkSleep(log, S), "with the window counting but not paying the sleep test should fail; it passed");
+});
+
+test("negative control: a window armed a nod early fails the sleep test", async () => {
+  /* Where it used to be armed: attackFrame 1, the frame he commits, twenty-
+     three frames ahead of the eyes closing. The window still runs its full
+     length, so the only thing that gives it away is that it does not line up
+     with the sleep any more -- which is the whole retune. */
+  const run = await simonVsReese({ engine: sabotage(
+    "        if (this.attackFrame === s.startup && s.manaFree) this.manaFree = s.manaFree;\n" +
+    "        const asleep = this.attackFrame >= s.startup &&\n",
+    "        if (this.attackFrame === 1 && s.manaFree) this.manaFree = s.manaFree;\n" +
+    "        const asleep = this.attackFrame >= s.startup &&\n") });
+  const S = SPEC(run);
+  const log = slouch(run, 30, "", SLEEP_FRAMES);
+  expectToFail(() => checkSleep(log, S),
+    "with the window opening on the commit frame the sleep test should fail; it passed");
+});
+
+test("negative control: a window longer than the sleep fails the sleep test", async () => {
+  /* The old shape, in miniature: a bar that is still running after he is up
+     and awake. It costs nothing in the fiction and it is invisible on the
+     HUD, which is exactly why the two lengths are pinned to each other
+     rather than to a number. */
+  const run = await simonVsReese({ engine: sabotage(
+    "    manaFree: 600,\n    aura: { radius: 40, doze: 90 },\n",
+    "    manaFree: 900,\n    aura: { radius: 40, doze: 90 },\n") });
+  const S = SPEC(run);
+  const log = slouch(run, 30, "", SLEEP_FRAMES);
+  expectToFail(() => checkSleep(log, S),
+    "with the free window outliving the sleep the sleep test should fail; it passed");
 });
 
 test("negative control: a sleep with no soul fails the sleep test", async () => {

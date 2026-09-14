@@ -544,56 +544,93 @@ function checkFreeBar(run, rows) {
   const u = JSON.parse(run(`JSON.stringify({
     startup: ROSTER.simon.ult.startup, active: ROSTER.simon.ult.active,
     manaFree: ROSTER.simon.ult.manaFree, cap: COMBAT.manaMax })`));
-  assert.equal(u.manaFree, 600,
-    "ten seconds of free specials -- five spent asleep and five his own when " +
-    "he wakes up, which is the whole point of the number");
-  assert.equal(u.startup + "/" + u.active, "24/300",
-    "precondition: 24 frames nodding off, 300 asleep");
+  /* One clock, not two. The window used to be twice the sleep -- five
+     seconds asleep inside ten seconds of free specials -- and the second
+     five were a countdown to nothing anybody could see. They are the same
+     ten seconds now, armed on the frame the eyes close and empty on the
+     frame he gets up, so the bar running out IS the ult ending.
+
+     Pinned to each other rather than to 600: whatever the sleep is retuned
+     to, the window is that. */
+  assert.equal(u.manaFree, u.active,
+    "the free window and the sleep are one clock; the sleep is " + u.active +
+    " and the window is " + u.manaFree);
+  assert.equal(u.startup + "/" + u.active, "24/600",
+    "precondition: 24 frames nodding off, then ten seconds asleep");
   assert.equal(rows[0].st, "ult", "precondition: the press was heard");
 
-  // Armed the frame the move starts, not spread over it.
-  assert.equal(rows[1].free, u.manaFree,
-    "the whole ten seconds should be on the clock by the second frame; it " +
-    "read " + rows[1].free);
+  const sleepFrom = u.startup, wake = u.startup + u.active;
+  assert.equal(rows[sleepFrom].af, sleepFrom,
+    "precondition: attackFrame should be the row index; frame " + sleepFrom +
+    " read " + rows[sleepFrom].af);
 
-  // And then it runs down exactly one frame per frame.
-  for (let i = 2; i < Math.min(rows.length, u.manaFree); i++) {
+  /* Armed on the frame the eyes close, not the frame he commits, and all of
+     it at once rather than spread over the nod. */
+  assert.equal(rows[sleepFrom - 1].free, 0,
+    "nothing is free while he is still nodding off; frame " + (sleepFrom - 1) +
+    " read " + rows[sleepFrom - 1].free);
+  assert.equal(rows[sleepFrom].free, u.manaFree,
+    "the whole ten seconds should be on the clock the frame he falls asleep; it " +
+    "read " + rows[sleepFrom].free);
+
+  // And then it runs down exactly one frame per frame, to nothing on the
+  // frame he wakes.
+  for (let i = sleepFrom + 1; i <= wake; i++) {
     assert.equal(rows[i].free, rows[i - 1].free - 1,
       "the free window should tick down one a frame; it went " +
       rows[i - 1].free + " -> " + rows[i].free + " on frame " + i);
   }
+  assert.equal(rows[wake - 1].free, 1,
+    "not closed a frame early; the last sleeping frame read " + rows[wake - 1].free);
+  assert.equal(rows[wake].free, 0,
+    "and empty on the wake frame exactly, which is what makes the bar emptying " +
+    "the same event as the ult ending; it was " + rows[wake].free);
 
   /* Pinned full, not refilled. He began on 10, and a refill spread over the
      sleep would climb through the forties around here; a suspension is at
      the cap on every frame it covers. */
-  /* From frame 2, not frame 1. The window is armed inside runSpecial, which
-     runs after the pin in update(), so the frame it is set on is the one
-     frame it cannot have covered yet -- 10.5 there, and the cap from then on. */
-  for (let i = 2; i < rows.length; i++) {
-    if (rows[i].free <= 0) continue;
+  /* From the frame after it is armed. The window is set inside runSpecial,
+     which runs after the pin in update(), so the frame it is set on is the
+     one frame it cannot have covered yet -- and the cap from then on. */
+  for (let i = sleepFrom + 1; i < rows.length; i++) {
+    if (rows[i].free <= 0 && rows[i - 1].free <= 0) continue;
     assert.equal(rows[i].mana, u.cap,
       "while the free window runs the bar is simply pinned at " + u.cap +
       "; on frame " + i + " (" + rows[i].free + " left) it read " + rows[i].mana);
   }
-  // Long enough to outlive the sleep, which is what makes it a setup rather
-  // than something to survive.
-  assert.ok(u.manaFree > u.startup + u.active,
-    "the free window has to outlast the sleep (" + u.manaFree + " against " +
-    (u.startup + u.active) + "), or none of it is ever his to use");
 }
 
-test("the slouch buys 600 free frames, and pins the bar full while they run", async () => {
+/* 700 frames, not 360. The sleep is ten seconds now and a drive that stopped
+   at 360 ended in the middle of it, which reads like a move that never ends
+   rather than a recording that ran out. */
+const SLOUCH_FRAMES = 700;
+
+test("the slouch buys its free frames the moment he nods off, and pins the bar full until he gets up", async () => {
   const run = await arena(SIMON, REESE);
-  checkFreeBar(run, slouch(run, 360));
+  checkFreeBar(run, slouch(run, SLOUCH_FRAMES));
 });
 
 test("negative control: a window that refills instead of pinning fails the free-bar test", async () => {
   const run = await arena(SIMON, REESE, { engine: sabotage(
     "if (this.manaFree > 0) { this.manaFree--; this.mana = COMBAT.manaMax; }",
     "if (this.manaFree > 0) { this.manaFree--; this.mana += COMBAT.manaMax / 600; }") });
-  const rows = slouch(run, 360);
+  const rows = slouch(run, SLOUCH_FRAMES);
   expectToFail(() => checkFreeBar(run, rows),
     "with the bar trickling back rather than pinned the free-bar test should fail; it passed");
+});
+
+test("negative control: a window armed on the commit frame fails the free-bar test", async () => {
+  /* Where it used to be armed -- attackFrame 1, twenty-three frames before
+     the eyes close. The bar still gets pinned; it simply stops being the
+     same clock as the sleep, which is the whole of what 2.64 changed. */
+  const run = await arena(SIMON, REESE, { engine: sabotage(
+    "        if (this.attackFrame === s.startup && s.manaFree) this.manaFree = s.manaFree;\n" +
+    "        const asleep = this.attackFrame >= s.startup &&\n",
+    "        if (this.attackFrame === 1 && s.manaFree) this.manaFree = s.manaFree;\n" +
+    "        const asleep = this.attackFrame >= s.startup &&\n") });
+  const rows = slouch(run, SLOUCH_FRAMES);
+  expectToFail(() => checkFreeBar(run, rows),
+    "with the window opening on the commit frame the free-bar test should fail; it passed");
 });
 
 function checkSoul(run, rows) {
@@ -623,14 +660,14 @@ function checkSoul(run, rows) {
 
 test("a soul climbs out while he sleeps, and is gone when he wakes", async () => {
   const run = await arena(SIMON, REESE);
-  checkSoul(run, slouch(run, 360));
+  checkSoul(run, slouch(run, SLOUCH_FRAMES));
 });
 
 test("negative control: a sleep with nobody climbing out fails the soul test", async () => {
   const run = await arena(SIMON, REESE, { engine: sabotage(
     "          projectiles.push(new Soul(this, s.soul));",
     "          void new Soul(this, s.soul);") });
-  const rows = slouch(run, 360);
+  const rows = slouch(run, SLOUCH_FRAMES);
   expectToFail(() => checkSoul(run, rows),
     "with no soul spawned the soul test should fail; it passed");
 });
