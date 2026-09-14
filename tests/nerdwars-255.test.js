@@ -1146,14 +1146,15 @@ test("negative control: frogs back at their old price fail the price test", asyn
    because that was the only thing separating the ult from the recovery. The
    pie asks for more. He sets it down where he is standing and it COOKS: a
    hundred and ten frames of a thing on the floor that hurts to touch, and
-   then it opens, and everybody near it goes up and ten frogs come out of the
-   crust.
+   then it opens, and everybody near it goes up and a crust full of frogs comes
+   out of it.
 
    So there are four separate pieces that can ship half-working -- the hazard,
    the clock, the burst, and the frogs -- and each of them looks completely
    fine from the outside if any one of the others is doing its job. A pie
    that never opens is still a pie on the floor hurting people. A pie that
-   opens at once is still a burst and ten frogs. They are measured one at a
+   opens at once is still a burst and a spray of frogs. They are measured one
+   at a
    time below for exactly that reason.
 
    The class is called Pie and its burst method is called `open`, not
@@ -1181,7 +1182,7 @@ test("negative control: frogs back at their old price fail the price test", asyn
    measured -- just not while it is on the scales. */
 const bakeRun = (run, off) => run(`(function () {
   ${SETUP}
-  /* The middle of the floor. Ten frogs come out of this in a fan, and a pie
+  /* The middle of the floor. A fan of frogs comes out of this, and a pie
      baked on the ledge loses half of them over the side. */
   me.x = main.x + main.w / 2;
   freezeFrames = 0;
@@ -1317,9 +1318,23 @@ test("negative control: a pie that does not set you alight fails the hazard test
    on the same frame the crust comes off and they are hit-tested on that very
    frame, so a man standing in the middle of it takes the burst AND half a
    dozen frogs at once -- which is correct, and useless for counting either
-   of them. Thirty pixels out he is still well inside `burst.radius` and
-   already beyond the widest frog. */
-const BESIDE = 30;
+   of them. Out here he is still well inside `burst.radius` and already
+   beyond the widest frog.
+
+   THIRTY, until the count went to fifteen. The outermost frog is born at
+   `(count - 1)` pixels out and moves `(count - 1) / 2 * spread` on the frame
+   it is born, so a denser fan reaches further on its first frame even though
+   the arc did not get wider: at ten it stopped 5px short of a man standing
+   thirty out, and at fifteen it overlapped him by a fifth of a pixel. That
+   is enough. The frog is frail, so it died on him -- which took one frog off
+   the count the opening test reads AND put its five damage onto the burst
+   reading, and the two tests failed with different numbers for one cause.
+
+   Forty leaves the edge frog ten pixels short of his hurtbox and still
+   leaves him 35 from the pie, well inside the 44 the blast carries. The
+   precondition in checkPieBurst below is what makes a future collision say
+   so instead of arriving as arithmetic that is quietly five too high. */
+const BESIDE = 40;
 /* And clear of the blast, but still on the floor: the main platform runs a
    good way past the middle, so this is a man standing on the same ground
    watching it go off. */
@@ -1333,9 +1348,10 @@ function checkOpening(run, r) {
   assert.equal(r.lastT + 1, u.bake,
     "and open on the frame its own clock reaches `bake` (" + u.bake +
     "); the last reading off it was t " + r.lastT);
-  /* Against the spec, never against ten. The whole joke is four and twenty
-     blackbirds, the number has already moved once, and a test that writes it
-     down stops being about the move the moment somebody tunes it. */
+  /* Against the spec, never against a number typed in here. The whole joke
+     is four and twenty blackbirds, the count has been ten and is now
+     fifteen, and a test that writes the figure down stops being about the
+     move the moment somebody tunes it. */
   assert.equal(r.most, u.count,
     "and exactly `count` (" + u.count + ") frogs should come out of the " +
     "crust; the most on the stage at once was " + r.most);
@@ -1365,14 +1381,24 @@ test("negative control: a pie that lets out three frogs fails the opening test",
     "    for (let i = 0; i < 3; i++) {\n      const k = i - (s.count - 1) / 2;") });
   const r = bakeRun(run, BESIDE);
   expectToFail(() => checkOpening(run, r),
-    "with three frogs in the crust instead of ten the opening test should " +
-    "fail; it passed");
+    "with three frogs in the crust instead of fifteen the opening test " +
+    "should fail; it passed");
 });
 
 function checkPieBurst(run, near, far) {
   const u = JSON.parse(run(PIE));
   assert.ok(near.goneAt >= 0 && far.goneAt >= 0,
     "precondition: both pies should have opened");
+  /* And he stood clear of the fan while it went off. A frog is frail, so one
+     that reaches him dies ON him: the crust comes up one frog short and his
+     five damage lands on the same frame as the burst, so the reading below
+     stops being the burst at all. It arrives as a number that is exactly
+     `frog.damage` too high, which looks like a retuned burst rather than a
+     victim standing in the wrong place -- see BESIDE. */
+  assert.equal(near.most, u.count,
+    "precondition: nothing out of the crust touched him, so what he lost " +
+    "below is the burst and nothing else; " + (u.count - near.most) +
+    " of the " + u.count + " frogs died on him");
   assert.equal(near.burst, u.burst.damage,
     "a man standing " + BESIDE + "px from the pie when it opens is inside " +
     "`burst.radius` (" + u.burst.radius + ") and should lose `burst.damage` " +
@@ -1875,4 +1901,267 @@ test("negative control: a door that never arms fails the trapdoor test", async (
   const t = trapdoor(run);
   expectToFail(() => checkTrap(t),
     "with the door never arming the trapdoor test should fail; it passed");
+});
+
+/* =====================================================================
+   THE ARC THE FIFTEEN CAME OUT IN  (2.71)
+   ===================================================================== */
+
+/* The pie let out ten frogs at `spread` 1.5 and now lets out fifteen at
+   0.96, and the second number moved because of the first rather than
+   alongside it.
+
+   open() builds the fan out of the index: k runs from -(count - 1) / 2 to
+   +(count - 1) / 2 and each frog is launched at k * spread. So the OUTERMOST
+   frog's speed is set by the count every bit as much as by the spread, and
+   raising the count on its own does not make the spray denser -- it makes it
+   WIDER, at the edges, where there is nothing to catch it. Ten at 1.5 threw
+   the edge frog at 6.75 a frame. Fifteen at the same 1.5 would have thrown
+   it at 10.5, and the ult would have quietly become a move that fires two
+   thirds of its frogs off the side of the stage before they can land.
+
+   0.96 puts the edge frog back at 6.72. That is the whole of the change, it
+   is invisible to every other test in this file -- the count is right, the
+   damage is right, the burst is right, the survivors hop the right way --
+   and it is exactly the kind of thing undone by the next person to type a
+   bigger number into `count`. So this measures the consequence rather than
+   the constant: where the fan ENDS UP.
+
+   Each frog is followed by identity from the frame it is born until it first
+   touches down or dies, and neither outcome is inferred from a position:
+   `grounded` and `dead` are the frog's own, and a frog that skimmed the
+   floor and carried on is not a frog that landed. */
+const fanLaunch = (run) => run(`(function () {
+  ${SETUP}
+  /* Baked in the middle of the floor. The fan is symmetric, so anywhere else
+     loses one side of it to the drop rather than to its own launch speed,
+     and then this measures the ledge instead of the spread. */
+  me.x = main.x + main.w / 2;
+  freezeFrames = 0;
+  /* Untouchable, and parked at the far end where his hurtbox is nowhere near
+     the crust. A frog is frail: one that reaches a man who can be hit dies
+     on him, and the only thing allowed to kill one here is the edge of the
+     stage. */
+  foe.invuln = 9999; foe.x = main.x + main.w - 12;
+  var born = [], vx = [], skin = [], fate = [], where = [], openAt = -1;
+  netplay.active = true;
+  for (var i = 0; i < 300; i++) {
+    me.hitstop = 0; me.mana = 999;
+    netplay.framePads = [bitsToPad(i === 0 ? ${ULT} : 0), bitsToPad(0)];
+    step();
+    if (openAt < 0) {
+      var out = projectiles.filter(function (q) {
+        return q.constructor.name === 'Frog';
+      });
+      if (out.length) {
+        openAt = i;
+        born = out.slice();
+        for (var j = 0; j < born.length; j++) {
+          /* Read a frame after the launch and still the launch: a frog in
+             the air never touches its own vx -- the 0.82 that bleeds it off
+             runs only while it is grounded -- and the frame it was made on
+             is the first one it can be observed on at all. */
+          vx.push(+born[j].vx.toFixed(4));
+          var mo = born[j].morph();
+          skin.push(mo ? mo.skin + '|' + mo.pattern : '-');
+          fate.push(''); where.push(0);
+        }
+      }
+    } else {
+      for (var j = 0; j < born.length; j++) {
+        if (fate[j]) continue;
+        // Landed beats died, because a frog that came down and was later run
+        // over by its own clock is not one the launch threw away.
+        if (born[j].grounded) { fate[j] = 'down'; where[j] = +born[j].x.toFixed(2); }
+        else if (born[j].dead) { fate[j] = 'gone'; where[j] = +born[j].x.toFixed(2); }
+      }
+      // Long enough for the slowest arc to come down: the middle frog is on
+      // the floor by thirty-odd frames, and six of those are the freeze the
+      // burst puts on the world.
+      if (i > openAt + 90) break;
+    }
+  }
+  netplay.active = false; netplay.framePads = null;
+  return { n: born.length, openAt: openAt, vx: vx.join(','),
+           skin: skin.join(','), fate: fate.join(','), where: where.join(','),
+           floorX: main.x, floorW: main.w };
+})()`);
+
+function checkFan(run, r) {
+  const u = JSON.parse(run(PIE));
+  assert.ok(r.openAt >= 0 && r.n === u.count,
+    "precondition: the pie opened and all `count` (" + u.count + ") frogs " +
+    "came out of it; " + r.n + " did");
+  const vx = r.vx.split(",").map(Number);
+  const fate = r.fate.split(",");
+  const where = r.where.split(",").map(Number);
+  assert.equal(fate.filter((f) => f !== "down" && f !== "gone").length, 0,
+    "precondition: ninety frames is long enough for every frog to have come " +
+    "down or gone off the side, so none of them is counted as neither; the " +
+    "fates were " + r.fate);
+
+  /* The fan is the index times the spread, asserted as arithmetic rather
+     than as a number because that is the whole trap: both sides of this come
+     out of the spec, so a count that goes up agrees with itself here and
+     fails below, where it does damage. */
+  const edge = ((u.count - 1) / 2) * u.spread;
+  const widest = Math.max(...vx.map(Math.abs));
+  assert.ok(Math.abs(widest - edge) < 1e-3,
+    "the outermost frog should leave at `(count - 1) / 2 * spread` (" +
+    edge.toFixed(3) + "px a frame); the fastest one measured " + widest);
+  const sorted = vx.slice().sort((a, b) => a - b);
+  for (let i = 0; i < sorted.length; i++) {
+    const want = (i - (u.count - 1) / 2) * u.spread;
+    assert.ok(Math.abs(sorted[i] - want) < 1e-3,
+      "and the fan is an even spread built from the index rather than a " +
+      "handful of speeds -- frog " + i + " of " + u.count + " should leave " +
+      "at " + want.toFixed(3) + " and left at " + sorted[i] + " (the fan " +
+      "was " + r.vx + ")");
+  }
+
+  /* THE POINT OF THE SPREAD. The edge of the fan is the fastest thing in it
+     and the stage is only so wide, so past a certain launch speed the outer
+     frogs are gone before they can land and the ult is paying for frogs
+     nobody ever meets. Fifteen at 0.96 keeps a majority of them; fifteen at
+     the old 1.5 loses ten of the fifteen, and so does raising the count
+     again without touching the spread. Written as a comparison between the
+     two halves rather than against a number, because how much of a fan the
+     stage will absorb is a property of the stage. */
+  const down = fate.filter((f) => f === "down").length;
+  const gone = fate.filter((f) => f === "gone").length;
+  assert.ok(down > gone,
+    "more of the fan should come down on the floor than sail off the side " +
+    "of the stage -- the frogs are what the ult is, and the edge ones leave " +
+    "at `(count - 1) / 2 * spread`, so a count raised without the spread " +
+    "coming down throws them clean off; " + down + " landed and " + gone +
+    " were lost");
+
+  /* And the ones that stay come down on the floor he baked it on, rather
+     than on a ledge somewhere out of the fight. A frog that landed off the
+     main platform is one the fan carried past the stage and gravity happened
+     to catch, which is luck rather than design. */
+  for (let i = 0; i < fate.length; i++) {
+    if (fate[i] !== "down") continue;
+    assert.ok(where[i] >= r.floorX && where[i] <= r.floorX + r.floorW,
+      "a frog that comes down should come down on the floor the pie was " +
+      "baked on (x " + r.floorX + " to " + (r.floorX + r.floorW) + "); one " +
+      "landed at " + where[i]);
+  }
+}
+
+test("the fifteen come out in the arc ten used to, not a wider one", async () => {
+  const run = await arena(CHRISTIAN, REESE);
+  checkFan(run, fanLaunch(run));
+});
+
+test("negative control: the old spread under fifteen frogs fails the arc test", async () => {
+  /* The change itself, undone: fifteen frogs at the spread ten of them had.
+     The arithmetic assertions still agree -- they read `spread` too -- and
+     it fails on the stage, where ten of the fifteen are off the side before
+     they can land. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "count: 15, spread: 0.96,",
+    "count: 15, spread: 1.5,") });
+  const r = fanLaunch(run);
+  expectToFail(() => checkFan(run, r),
+    "with the edge frog back up to 10.5 a frame the arc test should fail; " +
+    "it passed");
+});
+
+test("negative control: a bigger count with the spread untouched fails the arc test", async () => {
+  /* The failure this test exists for, and the one nothing else in the file
+     would notice: every other pie assertion reads `count` out of the spec,
+     so raising it keeps them all green while the edge of the fan goes from
+     6.72 a frame to 11.52 and most of it leaves the stage. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "count: 15, spread: 0.96,",
+    "count: 25, spread: 0.96,") });
+  const r = fanLaunch(run);
+  expectToFail(() => checkFan(run, r),
+    "with twenty-five frogs at a spread tuned for fifteen the arc test " +
+    "should fail; it passed");
+});
+
+test("negative control: a fan with no spread in it fails the arc test", async () => {
+  /* The other direction, and the reason the arithmetic is asserted at all:
+     frogs that all leave at the same speed land in a heap, every one of them
+     on the floor, and pass every count and damage assertion in this file. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "                                k * s.spread, -3.4",
+    "                                0 * s.spread, -3.4") });
+  const r = fanLaunch(run);
+  expectToFail(() => checkFan(run, r),
+    "with every frog leaving straight up the arc test should fail; it passed");
+});
+
+/* FIFTEEN FROGS, FIFTEEN SKINS.
+
+   `morphs` is read as morphs[hatch % morphs.length], so the list WRAPS
+   rather than running out -- which means a count raised past the length of
+   it does not throw, does not warn, and simply hands the last frogs out of
+   the crust the skins the first ones are already wearing. Five morphs were
+   added when the count went from ten to fifteen for exactly that reason, and
+   no two alike is the whole of what the list is for.
+
+   Asked of the frogs on the stage rather than of the list, because a list
+   long enough and every frog actually reaching a different entry of it are
+   two different promises. */
+function checkMorphs(run, r) {
+  const u = JSON.parse(run(PIE));
+  assert.equal(r.n, u.count,
+    "precondition: all `count` (" + u.count + ") frogs came out of the " +
+    "crust; " + r.n + " did");
+  const worn = r.skin.split(",");
+  assert.equal(worn.filter((s) => s === "-").length, 0,
+    "precondition: every frog out of the pie has a morph at all -- FROG " +
+    "ARMY's three have none by design and would read as bare here; the " +
+    "skins were " + r.skin);
+  assert.equal(new Set(worn).size, u.count,
+    "no two frogs out of one pie should wear the same skin: `morphs` is " +
+    "indexed by hatch order modulo its own length (" + u.frog.morphs.length +
+    " entries for " + u.count + " frogs), so a count raised past the list " +
+    "quietly dresses the last frogs as the first; " + new Set(worn).size +
+    " of the " + u.count + " were distinct");
+}
+
+test("no two frogs out of one pie wear the same skin", async () => {
+  const run = await arena(CHRISTIAN, REESE);
+  checkMorphs(run, fanLaunch(run));
+});
+
+test("negative control: more frogs than morphs fails the skins test", async () => {
+  /* Not by shortening the list -- by doing the thing that actually happens.
+     The list stays at fifteen and the count goes past it, which is what a
+     tuning pass looks like from the inside. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "count: 15, spread: 0.96,",
+    "count: 25, spread: 0.96,") });
+  const r = fanLaunch(run);
+  expectToFail(() => checkMorphs(run, r),
+    "with twenty-five frogs drawing from fifteen morphs the skins test " +
+    "should fail; it passed");
+});
+
+/* The guard added to checkPieBurst in 2.71, with a control of its own. It
+   sits down here rather than beside the burst test it belongs to because
+   every vm in this file draws from a counter that advances once per boot: a
+   test inserted mid-file hands a different Math stream to every test after
+   it, so new ones go at the end whatever they are about. */
+test("negative control: a frog that reaches the man beside the pie fails the burst test", async () => {
+  /* The failure this precondition exists for, reproduced the way it actually
+     turned up. The fan reaches further on its FIRST frame as the count goes
+     up even though the arc does not widen: the outermost frog is born
+     `count - 1` pixels out and moves `(count - 1) / 2 * spread` immediately,
+     so at twenty-five it starts ten pixels wider and travels 11.52 rather
+     than 6.72. It lands on the man standing beside the pie, and because a
+     frog is frail it DIES on him -- one frog off the count, `frog.damage`
+     onto the burst reading. Unguarded that arrives as a burst worth 23
+     instead of 18, which reads as somebody retuning the number rather than
+     as a victim standing in the wrong place. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "count: 15, spread: 0.96,",
+    "count: 25, spread: 0.96,") });
+  expectToFail(() => checkPieBurst(run, bakeRun(run, BESIDE), bakeRun(run, CLEAR)),
+    "with a frog dying on the man beside the pie the burst test should " +
+    "fail; it passed");
 });

@@ -50,6 +50,46 @@ const JS_DIR = path.join(HERE, "..", "assets", "js", "nerdwars");
 const SPRITES = readFileSync(path.join(JS_DIR, "sprites.js"), "utf8");
 const GAME = readFileSync(path.join(JS_DIR, "game.js"), "utf8");
 
+/* One line of the engine, changed in memory. Never written to disk, and
+   never handed to anything but a negative control.
+
+   Both halves are asserted. A needle that is missing, or that appears twice,
+   makes a control that mutates nothing or mutates the wrong line -- which is
+   exactly the failure a negative control exists to rule out, so it must be a
+   loud error rather than a quietly green run. */
+function sabotage(needle, replacement) {
+  const at = GAME.indexOf(needle);
+  assert.ok(at >= 0,
+    "sabotage needle not found in the engine: " + JSON.stringify(needle));
+  assert.equal(GAME.indexOf(needle, at + 1), -1,
+    "sabotage needle is not unique in the engine: " + JSON.stringify(needle));
+  return GAME.slice(0, at) + replacement + GAME.slice(at + needle.length);
+}
+
+/* The other half of a negative control: the SAME checker the real test ran,
+   which now has to throw -- and to throw on the assertion the control was
+   aimed at. `want` is matched against the message because a checker that
+   dies somewhere else entirely (on its own precondition, say, because the
+   sabotage also broke the fight) has proved nothing, and without this check
+   it would be indistinguishable from a control that worked. Anything that
+   is not an assertion failure is rethrown as itself: that is a broken
+   checker, not a caught regression. */
+function expectToFail(check, want, why) {
+  try {
+    check();
+  } catch (e) {
+    if (e && e.code === "ERR_ASSERTION") {
+      assert.ok(
+        String(e.message).includes(want),
+        why + " -- it did fail, but on the wrong assertion: " + e.message
+      );
+      return;
+    }
+    throw e;
+  }
+  assert.fail(why);
+}
+
 function stubContext() {
   return new Proxy(
     {},
@@ -190,11 +230,15 @@ function throwingAudioContext() {
  * @param {function} [opts.makeAudioContext] factory for the fake AudioContext
  *   to install when opts.audio is set (default recordingAudioContext) --
  *   how a test swaps in throwingAudioContext instead
+ * @param {string} [opts.engine] engine source to run instead of the real
+ *   one -- how a negative control boots a sabotage() copy. The mutation
+ *   lives in this vm and nowhere else; nothing ever writes it to disk.
  */
 async function bootGame(opts) {
   const withAudio = !!(opts && opts.audio);
   const makeAudioContext = (opts && opts.makeAudioContext) || recordingAudioContext;
   const decodeSeconds = opts && opts.decode != null ? opts.decode : null;
+  const engineSrc = (opts && opts.engine) || GAME;
   const view = stubCanvas(960, 540);
   const winListeners = new Map();
   const docListeners = new Map();
@@ -327,7 +371,7 @@ async function bootGame(opts) {
 
   vm.createContext(sandbox);
   vm.runInContext(SPRITES, sandbox, { filename: "sprites.js" });
-  vm.runInContext(GAME, sandbox, { filename: "game.js" });
+  vm.runInContext(engineSrc, sandbox, { filename: "game.js" });
 
   for (let i = 0; i < 5; i++) await Promise.resolve();
 
@@ -885,6 +929,56 @@ function tradeBlows(engines, rounds, onRound) {
   }
 }
 
+/**
+ * Walk the two fighters back together, whichever side of each other they
+ * have ended up on.
+ *
+ * bringIntoContact() above always walks seat 0 RIGHT, which is correct
+ * exactly once: at the spawns, where seat 1 starts to his right. Blows land,
+ * bodies move, and a seat 0 whose opponent is now on his LEFT walks away
+ * from him for 200 frames and then swings at the horizon. This reads the
+ * sign of the gap first and holds whichever key actually closes it.
+ *
+ * Driven off engines[0] and pumping every engine the same number of frames,
+ * exactly like bringIntoContact(), so the lockstep the comparisons below
+ * depend on survives. 10px, not 18: AUTISNICK's jab is ox 2, w 11 against a
+ * 9-wide hurtbox, so it reaches about 17px of center-to-center gap and
+ * stopping at the edge of that spends the round on a whiff.
+ */
+function closeTheGap(engines) {
+  const gap = () =>
+    engines[0].nw.fighters[1].x - engines[0].nw.fighters[0].x;
+  const key = gap() > 0 ? "KeyD" : "KeyA";
+  for (const g of engines) g.press(key);
+  let n = 0;
+  while (n < 90 && Math.abs(gap()) > 10) {
+    for (const g of engines) g.pump(1);
+    n++;
+  }
+  for (const g of engines) g.release(key);
+}
+
+/**
+ * tradeBlows(), but closing the distance before every round rather than once
+ * before the first.
+ *
+ * Standing still and swinging was enough while the CPU seat stayed in front
+ * of it. It no longer does: measured against this engine, a fifteen-round
+ * bringIntoContact()-then-tradeBlows() script lands NOTHING -- the first nine
+ * rounds are spent inside COMBAT.respawnInvuln (110 frames, and a round is
+ * 8), so every early jab passes through a target that cannot be hurt however
+ * close it is, and by the time the i-frames lapse Reese has walked 90px away
+ * from a seat 0 who never follows. Re-closing each round, first blood lands
+ * on round 6 and the fight keeps trading after it.
+ */
+function tradeBlowsInRange(engines, rounds, onRound) {
+  for (let r = 0; r < rounds; r++) {
+    closeTheGap(engines);
+    tradeBlows(engines, 1);
+    if (onRound) onRound(r);
+  }
+}
+
 /* The whole safety argument in one test: two engines fed identical inputs must
    reach identical state, whether or not either of them is making noise. If
    audio ever reads a value it then writes back, this is what catches it --
@@ -964,138 +1058,169 @@ test("an engine with audio and one without stay in identical states", async () =
 });
 
 /* This is the only test that runs audioVoice against a live battle, so it is
-   the one built to catch a write the moment it happens rather than after
-   the frames being compared have already settled.
+   the one built to catch a write the moment it happens rather than after the
+   frames being compared have already settled.
 
-   An earlier version let ~60 idle frames pass after the flush before
-   comparing (every key released). Measured with an actual write injected
-   into audioVoice: an idle window erased a position/velocity-class write
-   outright -- vx snaps to exactly 0 when grounded with no input held -- and
-   never made a hitstop-class write observable at all, since nothing was
-   happening for an extra frozen frame to shift the timing of. Fixed by
-   checking stateHash immediately after the flush, before anything can
-   settle a position/velocity write away, and by replacing the idle window
-   with more rounds of tradeBlows(), so hitstop has real behavior to alter.
+   The scenario is run once by flushMidMatch() and MEASURED rather than
+   asserted on the spot, so the negative controls at the end of this file can
+   drive the identical script against a sabotaged engine and hand the
+   identical checker the identical readout. Nothing is given up by deferring
+   the assertions: every checkpoint is a snapshot taken at the instant it is
+   named -- a stateHash is a number, and `fighters` is deep-copied -- so
+   comparing them at the end is exactly as strict as comparing them there.
 
-   Adding a shield hold to also catch `shield` turned out not to be a matter
-   of just inserting it: placed before tradeBlows() (right after the flush,
-   which is also the only place shield is still close to whatever the write
-   left it at, since it regenerates every frame it is not held), it reliably
-   erased the hitstop-class divergence before tradeBlows() ever got to
-   develop it -- measured directly, and confirmed the trigger is timing, not
-   the shield mechanic specifically: even a few idle frames inserted in that
-   same spot, with no shield involved at all, erased hitstop just as
-   completely. tradeBlows() has to run immediately after the flush with
-   nothing between them for that check to mean anything. So the hold runs
-   after tradeBlows() instead, checked separately -- costing nothing, since
-   measurement showed seat 0's shield regenerates only to ~2.7 (of a max of
-   100) over those 8 rounds, most of them spent attacking rather than idle.
+   WHY THE SCRIPT NOW CLOSES THE DISTANCE EVERY ROUND. It used to be
+   bringIntoContact() once, then fifteen rounds of standing still and jabbing,
+   and that stopped landing anything at all -- which the precondition below
+   caught, exactly as it was written to. Two things stack up against a
+   standing script: every fighter spawns with COMBAT.respawnInvuln (110)
+   frames of invulnerability and a round is 8 frames, so the first nine rounds
+   swing at a target that cannot be hurt however close it is (measured: seat
+   0's jab overlapping Reese's hurtbox, `invulnerable` true, on every one of
+   those frames); and by the time the i-frames lapse the CPU has walked 90px
+   away from a seat 0 who never follows him. tradeBlowsInRange() follows, and
+   first blood lands on round 6 with both fighters down real health well
+   before the flush under test.
 
-   What is and is not caught, measured field by field against the fields
-   this task's own rationale names, by injecting a write into audioVoice
-   and running the real suite against it:
-     - vx, x (position/velocity-class): caught, by the immediate hash check.
-     - hitstop: caught, by the hash after the active window -- specifically
-       the hash, not `fighters`, which still agreed at that point.
-     - shield: caught, by the hold after that. Measured with the `fighters`
-       deepEqual removed: stateHash alone still fails at this same
-       checkpoint (the failure output shows y: 119 vs 130, a hashed field
-       still diverging by then), so the deepEqual is not uniquely catching
-       this one -- it only runs first in the test, ahead of the final
-       stateHash() call, so it is the assertion that actually throws.
-     - ultMeter, volleyHits: NOT caught. Nothing in this script casts an
-       ult, so ultMeter is never read; volleyHits needs a multi-projectile
-       move only an ult provides, so nothing ever produces a volley to
-       register a hit against. A write into either ships undetected here.
-     - combo: NOT caught here, but IS caught by the test above for a
-       sufficiently non-idempotent write (measured with combo forced to 99;
-       forcing it to 1 was not enough to diverge, since real combat already
-       passes through 1 early on) -- see that test's own comment for why
-       the two differ on this one field. */
-test("flushing a cue mid-match does not change the simulation", async () => {
-  const wired = await bootGame({ audio: true, seed: 20260913 });
-  const mute = await bootGame({ seed: 20260913 });
+   An earlier version also let ~60 idle frames pass after the flush before
+   comparing (every key released). Measured with an actual write injected into
+   audioVoice: an idle window erased a position/velocity-class write outright
+   -- vx snaps to exactly 0 when grounded with no input held -- and never made
+   a hitstop-class write observable at all, since nothing was happening for an
+   extra frozen frame to shift the timing of. Fixed by checking stateHash
+   immediately after the flush, before anything can settle a position/velocity
+   write away, and by replacing the idle window with more rounds of combat, so
+   hitstop has real behavior to alter.
+
+   WHAT EACH CHECKPOINT CATCHES, measured field by field by injecting a write
+   into audioVoice and running this same checker against the result. Scoped to
+   the cue under test where it says so (`recipe.f0 === 440` is test-a and
+   nothing else), because an unscoped write also fires on the engine's own
+   combat cues -- 22 of them before the flush under test -- and has already
+   diverged the two engines long before the flush, which says nothing about
+   which checkpoint earned the catch:
+     - vx and x (position/velocity-class): caught by the immediate hash, and
+       that is the only place a cue-scoped one is still legible.
+     - hitstop: the immediate hash still AGREES. hitstop is not one of the
+       eleven fields stateHash covers, so it is only ever visible through the
+       frame of timing it steals, and the active window is what develops it
+       into a difference. That is what the window is for, and why it runs with
+       nothing idle between it and the flush.
+     - shield: caught only by the `fighters` comparison after the shield hold,
+       with both hashes still agreeing at that point -- seat 0 holding
+       ShiftLeft on a shield that has been zeroed enters `break` while the
+       other seat shields normally. Unscoped only: shield regenerates every
+       frame it is not held, so a single doctored cue is long gone by the
+       hold. The hold is aimed at the realistic shape of this bug -- a
+       write-back inside audioVoice, which fires on every voice -- not at one
+       doctored cue.
+     - ultMeter: caught by the `fighters` comparison, which exposes `ult`, and
+       by nothing else: it is not in stateHash, and nothing in this script
+       casts an ult, so it never feeds back into the fight.
+     - volleyHits: NOT caught, even unscoped. It is the stale-damage counter a
+       multi-projectile ult drives, and nothing here casts one, so no volley
+       ever exists to register a hit against. A write into it ships undetected
+       here, the same as it did before this test was rewritten.
+     - combo: NOT caught here, scoped or not, but IS caught by the test above
+       for a sufficiently non-idempotent write (measured with combo forced to
+       99; forcing it to 1 was not enough, since real combat already passes
+       through 1 early on) -- see that test's own comment for why the two
+       differ on this one field. */
+async function flushMidMatch(opts) {
+  const engine = opts && opts.engine;
+  const wired = await bootGame({ audio: true, seed: 20260913, engine: engine });
+  const mute = await bootGame({ seed: 20260913, engine: engine });
   // See the comment in the test above: unlock directly so both engines get
   // strictly identical input.
   wired.nw.audio.unlock();
 
-  for (const g of [wired, mute]) enterBattle(g);
-  for (const g of [wired, mute]) {
-    assert.equal(
-      g.nw.scene,
-      "battle",
-      "the script above should have started a real fight"
-    );
-  }
+  const both = [wired, mute];
+  for (const g of both) enterBattle(g);
+  const scenes = both.map((g) => g.nw.scene);
 
-  bringIntoContact([wired, mute]);
-  tradeBlows([wired, mute], 15); // real mid-match state: a hit has landed
-  assert.ok(
-    wired.nw.fighters.some((f) => f.health < 100),
-    "expected a real hit to have landed before the flush under test"
-  );
+  bringIntoContact(both);
+  tradeBlowsInRange(both, 12); // real mid-match state: a hit has landed
+  const bloodied = wired.nw.fighters.some((f) => f.health < 100);
 
+  /* The DELTA across the flush, not the running total. A fight makes its own
+     noise -- this engine is 22 voices deep by now -- so a bare "some voice
+     exists" check would be satisfied by the last jab that connected, and
+     would stay green with the cue under test silently doing nothing at all.
+     Measured: the flush under test adds exactly one. */
+  const before = voiceCount(wired.audioLog);
   wired.nw.audio.emit("test-a", { slot: 0, frame: 1 });
   wired.nw.audio.flush();
-  assert.ok(
-    voiceCount(wired.audioLog) > 0,
-    "the cue under test should have actually produced a voice"
-  );
-
-  // Checked here, before anything else runs, because a position/velocity
+  const voicesFromFlush = voiceCount(wired.audioLog) - before;
+  // Sampled here, before anything else runs, because a position/velocity
   // class write is exactly the kind of thing ongoing physics settles away
   // (see the comment above) -- this is the one place it is still visible.
-  assert.equal(
-    wired.nw.__test.stateHash(),
-    mute.nw.__test.stateHash(),
-    "state must be identical immediately after the flush"
-  );
+  const afterFlush = both.map((g) => g.nw.__test.stateHash());
 
-  // Active propagation window: more rounds of tradeBlows, not an idle
-  // pump(), so a field like hitstop has real behavior to alter rather than
-  // two characters standing still with nothing happening for it to change.
-  // This has to run right here, with nothing between it and the flush
-  // above: measured that even a few idle frames inserted before it are
-  // enough to let a hitstop-class divergence resolve itself before
-  // tradeBlows ever presses a key, which is exactly the kind of thing this
-  // window exists to prevent.
-  tradeBlows([wired, mute], 8);
+  // Active propagation window: more rounds of real combat, not an idle
+  // pump(), so a field like hitstop has behavior to alter rather than two
+  // characters standing still with nothing happening for it to change. This
+  // has to run right here, with nothing between it and the flush above:
+  // measured that even a few idle frames inserted before it are enough to
+  // let a hitstop-class divergence resolve itself before a key is ever
+  // pressed, which is exactly what this window exists to prevent.
+  tradeBlowsInRange(both, 8);
+  const afterWindow = both.map((g) => g.nw.__test.stateHash());
 
-  // Checked again here, because this is the window a hitstop-class write
-  // actually surfaces in: measured with hitstop injected, this checkpoint
-  // catches it via stateHash while `fighters` below still agrees.
-  assert.equal(
-    wired.nw.__test.stateHash(),
-    mute.nw.__test.stateHash(),
-    "state must be identical after the active window"
-  );
+  /* Hold seat 0's shield key so a write into `shield` is live: the drain
+     only reads it, and only trips the break branch, while the key is
+     actually held. This runs after the active window rather than before it,
+     because measurement showed a shield hold placed between the flush and
+     that window erased the hitstop-class divergence before the window could
+     develop it -- and the trigger was the timing, not the shield mechanic:
+     a few plain idle frames in the same spot erased it just as completely.
+     20 frames covers the startup -- shield is only read once a fighter is
+     back in a free state, and the first several held frames are still
+     finishing whatever swing was in progress -- and it leaves an untouched
+     shield well short of breaking, which is what makes a zeroed one
+     (`break`) legible against it. */
+  for (const g of both) g.press("ShiftLeft");
+  for (const g of both) g.pump(20);
+  for (const g of both) g.release("ShiftLeft");
 
-  // Hold seat 0's shield key so a write into `shield` is live: the drain
-  // only reads it, and only trips the break branch, while the key is
-  // actually held. This runs after tradeBlows(8) rather than before it, so
-  // it cannot cost the hitstop check above -- and it still works from
-  // here: measured that seat 0's shield regenerates only to ~2.7 (of a max
-  // 100) over those 8 rounds, since most of them are spent attacking, not
-  // idle, and the same measurement showed the first several held frames
-  // are still spent finishing whatever attack was in progress -- shield is
-  // only read once a fighter returns to its free state. 20 frames covers
-  // that startup and still breaks seat 0 with room to spare, while the
-  // other seat's untouched shield (100) is nowhere close to breaking. The
-  // break shows up in the `fighters` comparison below via `state`
-  // ("break" vs "shield"). Measured with that deepEqual removed: the final
-  // stateHash() check below still fails at this same point too -- a hashed
-  // field is still diverging here, not just `state` -- so `fighters` is
-  // not catching something the hash would have missed; it is just the
-  // assertion that runs first.
-  for (const g of [wired, mute]) g.press("ShiftLeft");
-  for (const g of [wired, mute]) g.pump(20);
-  for (const g of [wired, mute]) g.release("ShiftLeft");
+  return {
+    scenes: scenes,
+    bloodied: bloodied,
+    voicesFromFlush: voicesFromFlush,
+    afterFlush: afterFlush,
+    afterWindow: afterWindow,
+    // Deep-copied at the instant the hold ends, so the checker compares what
+    // was there then rather than whatever the objects say later.
+    fighters: both.map((g) => JSON.parse(JSON.stringify(g.nw.fighters))),
+    afterShield: both.map((g) => g.nw.__test.stateHash()),
+  };
+}
 
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(wired.nw.fighters)),
-    JSON.parse(JSON.stringify(mute.nw.fighters))
-  );
-  assert.equal(wired.nw.__test.stateHash(), mute.nw.__test.stateHash());
+/* The assertions, split out so a negative control can run this exact set
+   against a sabotaged engine. The two guards come first and stay guards:
+   they exist so the comparisons below cannot pass vacuously once the
+   scenario stops working, which is precisely what happened to the old
+   standing-still script. */
+function checkFlushIsInvisible(r) {
+  for (const scene of r.scenes) {
+    assert.equal(scene, "battle",
+      "the script above should have started a real fight");
+  }
+  assert.ok(r.bloodied,
+    "expected a real hit to have landed before the flush under test");
+  assert.ok(r.voicesFromFlush > 0,
+    "the cue under test should have actually produced a voice");
+  assert.equal(r.afterFlush[0], r.afterFlush[1],
+    "state must be identical immediately after the flush");
+  assert.equal(r.afterWindow[0], r.afterWindow[1],
+    "state must be identical after the active window");
+  assert.deepEqual(r.fighters[0], r.fighters[1],
+    "audio must be invisible to the simulation, field by field");
+  assert.equal(r.afterShield[0], r.afterShield[1],
+    "state must be identical after the shield hold");
+}
+
+test("flushing a cue mid-match does not change the simulation", async () => {
+  checkFlushIsInvisible(await flushMidMatch());
 });
 
 /* The existing "no Web Audio at all" test above only pumps frames -- it never
@@ -1576,4 +1701,97 @@ test("music loops, so a 67 second track does not end a long match", async () => 
   assert.ok(st.length > 0);
   // loop is set on the element itself; surfaced via the engine's own view.
   assert.match(GAME, /el\.loop = true;/, "music elements must loop");
+});
+
+/* THE NEGATIVE CONTROLS for "flushing a cue mid-match does not change the
+   simulation", one per checkpoint that test carries.
+
+   All three sabotage the same line -- the first statement of audioVoice(),
+   the one function every voice in the game passes through -- because that is
+   the shape the bug would really take: sound code that reads a fighter and
+   writes something back. Only the WIRED engine has an AudioContext, so only
+   it ever reaches the injected line; the muted engine boots the same doctored
+   text and never runs it, which is what makes the pair diverge.
+
+   They exist to prove the checkpoints are not decoration, and both halves of
+   that are measured. Take the active window out and the hitstop control stops
+   failing where it is aimed: the hash after the window agrees, the final hash
+   agrees too, and only the `fighters` comparison still notices -- a write
+   caught in passing rather than by the checkpoint written for it. Take the
+   shield hold out and the shield control goes green outright, both hashes and
+   `fighters` agreeing. And a checker that had quietly stopped fighting -- the
+   failure that brought this test down in the first place -- would fail all
+   three of these on the precondition instead, which expectToFail reports as a
+   wrong-assertion failure rather than accepting as a catch. */
+
+const AUDIO_VOICE_HEAD =
+  "function audioVoice(recipe, when, gain, pan) {\n  const ac = AUDIO.ac;";
+
+/** The same one-line injection, with `stmt` run on entry to every voice. */
+function audioVoiceWrites(stmt) {
+  return sabotage(
+    AUDIO_VOICE_HEAD,
+    "function audioVoice(recipe, when, gain, pan) {\n  " + stmt +
+      "\n  const ac = AUDIO.ac;"
+  );
+}
+
+test("negative control: a velocity write inside audioVoice is caught at the flush", async () => {
+  /* Half a pixel per frame of extra drift on seat 0, and nothing else in the
+     engine touched. Position and velocity are in stateHash, so this lands on
+     the first checkpoint -- the one taken before any physics can settle it
+     away, which is the entire reason that checkpoint is where it is. */
+  const r = await flushMidMatch({
+    engine: audioVoiceWrites("if (fighters[0]) fighters[0].vx += 0.5;"),
+  });
+  expectToFail(
+    () => checkFlushIsInvisible(r),
+    "state must be identical immediately after the flush",
+    "a voice that nudges vx should fail the flush test; it passed"
+  );
+});
+
+test("negative control: a hitstop write is caught only by the active window", async () => {
+  /* Scoped to test-a (f0 440 is that recipe and no other), so the ONLY voice
+     that writes anything is the one cue the test flushes by hand -- the
+     cleanest possible version of "the flush changed the simulation".
+
+     hitstop is not one of the eleven fields stateHash covers, so the
+     immediate checkpoint above sees nothing at all here; what diverges is
+     the frame of timing it steals, and that needs frames of real combat to
+     turn into a different position. Measured: with this engine the hash
+     immediately after the flush still matches, and the hash after the
+     window does not. That is the window earning its place. */
+  const r = await flushMidMatch({
+    engine: audioVoiceWrites(
+      "if (recipe.f0 === 440 && fighters[0]) fighters[0].hitstop = 3;"
+    ),
+  });
+  expectToFail(
+    () => checkFlushIsInvisible(r),
+    "state must be identical after the active window",
+    "a cue that freezes a fighter for three frames should fail the flush " +
+      "test; it passed"
+  );
+});
+
+test("negative control: a shield write is caught only after the shield hold", async () => {
+  /* Unscoped, because a shield write is only observable while the key is
+     held and shield regenerates every frame it is not: a single doctored cue
+     at the flush has fully healed by the time ShiftLeft goes down, and a
+     scoped version of this control is caught by nothing in the test at all
+     (measured). Firing on every voice is also the honest shape of the bug.
+
+     Both hashes still agree when this one fails: `shield` is not in
+     stateHash, and what actually differs is that seat 0's zeroed shield
+     breaks under the hold while the other seat's does not -- a `state` of
+     "break" against "shield", which only the `fighters` comparison sees. */
+  const r = await flushMidMatch({
+    engine: audioVoiceWrites("if (fighters[0]) fighters[0].shield = 0;"),
+  });
+  expectToFail(
+    () => checkFlushIsInvisible(r),
+    "audio must be invisible to the simulation, field by field",
+    "a voice that empties a shield should fail the flush test; it passed"
+  );
 });

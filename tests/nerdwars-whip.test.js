@@ -594,8 +594,13 @@ test("negative control: the frame-0 early return fails the every-frame test", as
      as long as it did -- one frame in sixty is not something anybody sees, it
      is something that makes the swing feel very slightly wrong. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "  const kf = k < 1 ? 1 : k;",
-    "  if (k < 1) return;\n  const kf = k;") });
+    /* Anchored on the line ABOVE the clamp as well as the clamp itself: the
+       grab and the jab were given the same one-line guard word for word, so
+       three functions in this engine now open with the identical line and
+       sabotage() insists on a needle that matches exactly once. The comment
+       above it is the whip's alone. */
+    "     correctly nothing at all on that frame. */\n  const kf = k < 1 ? 1 : k;",
+    "     correctly nothing at all on that frame. */\n  if (k < 1) return;\n  const kf = k;") });
   expectToFail(() => checkDrawnEveryFrame(whipSpec(run), whipTrace(run, SP_UP, 1, 0)),
     "with frame 0 returning early the every-frame test should fail; it passed");
 });

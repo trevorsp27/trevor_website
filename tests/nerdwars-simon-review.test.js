@@ -221,15 +221,27 @@ const RESET = `
 /* ------------------------------------------------------------------ */
 /* 1. The JACKPOT ring.                                                 */
 
-/* Three sevens, paid deterministically: the reels are set by hand and
+/* A PAIR of sevens, paid deterministically: the reels are set by hand and
    payout() is called with the SLOTS spec, which is the frame the ring goes
-   off. Three foes in turn at the same twenty pixels -- a corpse in KO
-   flight, a man in his i-frames, and a plain one to prove the ring reaches
-   that spot at all. */
+   off.
+
+   A pair and not a triple, which is the whole of what 2.69 changed under this
+   test. Three sevens now pay the TRANSFORMATION and nothing else -- payout()
+   skips the ring loop outright at n === 3 -- so a triple leaves no hit here
+   for the guard to skip and the test passed on a ring that never fired. The
+   pair is the only thing that still swings that loop, so the pair is what
+   this drives. The third reel is a blue purely to make the pair unambiguous:
+   count[0] is 2, count[1] is 1, best stays 0, and the sevens branch is the
+   one that runs. See "the seven pays in two currencies" at the end of this
+   file for the split itself.
+
+   Three foes in turn at the same twenty pixels -- a corpse in KO flight, a
+   man in his i-frames, and a plain one to prove the ring reaches that spot at
+   all. */
 const JACKPOT = `(function () {
   ${RESET}
   var s = ROSTER.simon.specials.down;
-  function ring() { me.reels = [0, 0, 0]; me.payout(s); }
+  function ring() { me.reels = [0, 0, 1]; me.payout(s); }
   function beside() { foe.x = me.x + 20; foe.y = me.y; foe.vx = 0; foe.vy = 0; }
 
   beside();
@@ -250,15 +262,29 @@ const JACKPOT = `(function () {
   ${RESET}
   beside();
   ring();
+  /* The ring is only ever paid at k = 0.5 now, so what lands is HALF of what
+     the spec writes. damage stays written as 22 in ROSTER so a pair reads as
+     half of something; 11 is what a body actually loses. */
   var plain = { health: foe.health, state: foe.state,
-                radius: s.jackpot.radius, damage: s.jackpot.damage };
+                radius: s.jackpot.radius, damage: s.jackpot.damage * 0.5 };
   return { corpse: corpse, iframes: iframes, plain: plain };
 })()`;
 
 function checkJackpot(r) {
+  /* Without this the i-frames assertion below is vacuous: at 0 damage a man
+     in his i-frames finishes on 100 health whether the guard skipped him or
+     the ring simply had nothing to pay. */
+  assert.ok(r.plain.damage > 0,
+    "precondition: a pair of sevens must still pay real damage; the spec pays " +
+    r.plain.damage);
   assert.equal(r.plain.health, 100 - r.plain.damage,
     "precondition: the ring (radius " + r.plain.radius + ") should reach a plain " +
     "foe 20px away for " + r.plain.damage + "; his health is " + r.plain.health);
+  /* And the plain foe must have been HIT, not merely chipped by something
+     else: the corpse and i-frames readings below only mean anything if the
+     ring is landing real hits at that distance. */
+  assert.equal(r.plain.state, "hitstun",
+    "precondition: the plain foe should be in hitstun off the ring, not " + r.plain.state);
   assert.equal(r.corpse.paid, 98, "precondition: the KO itself should have cost one stock");
   assert.equal(r.corpse.stocks, r.corpse.paid,
     "no second stock off a corpse: the foe was already in KO flight and the " +
@@ -783,4 +809,156 @@ test("control: without the hotdogSplit gate one press splits AND throws", async 
   assert.equal(r.after.mana, 999 - 22, "but the same press also pays for a throw");
   assert.equal(r.later.census.whole, 1, "and a second whole is in the air seven frames later");
   assert.throws(() => checkSplit("in free state", r, "idle"), /one press never both splits and throws/);
+});
+
+/* ------------------------------------------------------------------ */
+/* 5. The two currencies on the seven.                                  */
+
+/* 2.69 split the seven in half, and the split is what broke the first test in
+ * this file: it drove three sevens to get a ring, and three sevens stopped
+ * paying one. What the symbol pays now is
+ *
+ *   THREE -- the transformation, and NOTHING else. No damage to anybody
+ *     standing next to him, no mana, no meter, no health. He grows, he hits
+ *     for double, and it holds until he loses a stock.
+ *   TWO   -- the ring, at k = 0.5, and nothing else. Eleven damage to
+ *     everyone close and he stays a man.
+ *
+ * Three lines in the engine carry all of that: the `n === 3 ? [] : fighters`
+ * that skips the ring loop on a jackpot, the `if (n === 3)` that gates the
+ * buff, and the slots clause in canSpecial that stops him pulling again while
+ * he is wearing the payout. Every one of them reads like something a tidy-up
+ * would collapse, and collapsing any one of them puts the move back to a
+ * version somebody already decided against: a jackpot that is three rewards
+ * in one hat, a near miss that half-transforms him, or a giant who can keep
+ * feeding the machine until he rolls something else.
+ *
+ * Simon's mana and meter are zeroed before each pull so anything paid shows
+ * up as a number above zero rather than as a difference against 999. The
+ * buff is cleared by hand between pulls because RESET does not clear it --
+ * without that the pair is measured on a man who is still a giant from the
+ * triple, and "the pair does not transform him" passes on the wrong man. */
+const CURRENCIES = `(function () {
+  var s = ROSTER.simon.specials.down;
+  function beside() { foe.x = me.x + 20; foe.y = me.y; foe.vx = 0; foe.vy = 0; }
+  function read() {
+    var r = { foeHealth: foe.health, foeState: foe.state, health: me.health,
+              mana: me.mana, meter: me.ultMeter, buffTimer: me.buffTimer,
+              damageMul: me.damageMul,
+              grows: me.buffStats ? me.buffStats.sizeMul : 1,
+              held: me.buffStats ? me.buffStats.hold : 0 };
+    /* canSpecial fails on the price before it ever reaches the slots clause,
+       so the refusal has to be asked of a Simon who can afford the pull.
+       Restored afterwards -- what he spent is one of the readings. */
+    var keep = me.mana;
+    me.mana = 999;
+    r.canPull = me.canSpecial(bitsToPad(${SP_DOWN}));
+    me.mana = keep;
+    return r;
+  }
+
+  ${RESET}
+  me.buffTimer = 0; me.buffStats = null;
+  me.mana = 0; me.ultMeter = 0; beside();
+  me.reels = [0, 0, 0]; me.payout(s);
+  var triple = read();
+
+  ${RESET}
+  me.buffTimer = 0; me.buffStats = null;
+  me.mana = 0; me.ultMeter = 0; beside();
+  me.reels = [0, 0, 1]; me.payout(s);
+  var pair = read();
+
+  return { triple: triple, pair: pair,
+           pairDamage: s.jackpot.damage * 0.5,
+           damageMul: s.jackpot.damageMul, sizeMul: s.jackpot.sizeMul };
+})()`;
+
+function checkCurrencies(r) {
+  /* The pair's readings are the precondition for the triple's: if the ring
+     were not reaching that foe at all, "three sevens do no damage" would be
+     true of a move that does nothing to anybody. */
+  assert.ok(r.pairDamage > 0, "precondition: the pair should pay real damage, not " + r.pairDamage);
+  assert.equal(r.pair.foeHealth, 100 - r.pairDamage,
+    "precondition: a pair should still ring a foe 20px away for " + r.pairDamage +
+    "; he finished on " + r.pair.foeHealth);
+
+  assert.equal(r.triple.foeHealth, 100,
+    "three sevens pay no damage: the same foe at the same twenty pixels lost " +
+    (100 - r.triple.foeHealth) + " health to a jackpot");
+  assert.equal(r.triple.meter, 0,
+    "and no meter, which is the tell that no hit landed at all; he gained " + r.triple.meter);
+  assert.equal(r.triple.mana, 0,
+    "and no mana -- blue is the mana symbol, and a seven that paid a bar as well " +
+    "left nobody a reason to chase blue; he gained " + r.triple.mana);
+  assert.equal(r.triple.health, 100,
+    "and no health; green is the health symbol. He finished on " + r.triple.health);
+
+  assert.ok(r.triple.buffTimer > 0,
+    "three sevens transform him: buffTimer should be armed and read " + r.triple.buffTimer);
+  assert.equal(r.triple.grows, r.sizeMul,
+    "he is on his way to " + r.sizeMul + "x size, not " + r.triple.grows +
+    " (the getter ramps from buffStats.since, so this reads the target)");
+  assert.equal(r.triple.damageMul, r.damageMul,
+    "and hits for " + r.damageMul + "x, not " + r.triple.damageMul +
+    " -- double was chosen over triple after seeing triple");
+  assert.ok(r.triple.held,
+    "and the buff is HELD, not timed: without hold, update() counts buffTimer " +
+    "down and the transformation that is supposed to last until he dies ends " +
+    "on the next frame");
+  assert.equal(r.triple.canPull, false,
+    "and he cannot feed the machine while he is standing in his own payout");
+
+  assert.equal(r.pair.buffTimer, 0,
+    "a pair does not transform him: half a transformation is not a thing, and " +
+    "buffTimer read " + r.pair.buffTimer);
+  assert.equal(r.pair.damageMul, 1,
+    "so he still hits for 1x, not " + r.pair.damageMul);
+  assert.equal(r.pair.mana, 0, "a pair pays no mana either; he gained " + r.pair.mana);
+  assert.equal(r.pair.canPull, true,
+    "and a man who only came close is free to pull again");
+}
+
+/* One line each. RING_ON_TRIPLE puts the ring back on a jackpot at k = 1,
+   which is the version where the payout is three rewards in one hat;
+   BUFF_ON_PAIR transforms him off a near miss; SLOTS_WHILE_GIANT lets a giant
+   keep pulling. */
+const RING_ON_TRIPLE = [
+  "        for (const other of (n === 3 ? [] : fighters)) {\n",
+  "        for (const other of fighters) {\n",
+];
+const BUFF_ON_PAIR = [
+  "        if (n === 3) {\n          announce('JACKPOT', '#ffd60a');\n",
+  "        if (n >= 2) {\n          announce('JACKPOT', '#ffd60a');\n",
+];
+const SLOTS_WHILE_GIANT = [
+  "    if (s.kind === 'slots' && this.buffTimer > 0 &&\n" +
+  "        this.buffStats && this.buffStats.sizeMul > 1) return false;\n",
+  "",
+];
+
+test("the seven pays in two currencies: three transform, two ring", async () => {
+  const run = await simonVsReese();
+  checkCurrencies(run(CURRENCIES));
+});
+
+test("control: collapse any of the three lines and the seven pays the wrong currency", async (t) => {
+  const ring = (await simonVsReese(sabotaged(...RING_ON_TRIPLE)))(CURRENCIES);
+  t.diagnostic("sabotaged ring loop read triple.foeHealth=" + ring.triple.foeHealth +
+    ", triple.meter=" + ring.triple.meter + ", pair.foeHealth=" + ring.pair.foeHealth);
+  assert.equal(ring.triple.foeHealth, 100 - ring.pairDamage * 2,
+    "the sabotage should ring the jackpot at full k, for twice a pair's damage");
+  assert.throws(() => checkCurrencies(ring), /three sevens pay no damage/);
+
+  const buff = (await simonVsReese(sabotaged(...BUFF_ON_PAIR)))(CURRENCIES);
+  t.diagnostic("sabotaged buff gate read pair.buffTimer=" + buff.pair.buffTimer +
+    ", pair.grows=" + buff.pair.grows + ", pair.damageMul=" + buff.pair.damageMul);
+  assert.ok(buff.pair.buffTimer > 0, "the sabotage should transform him off a pair");
+  assert.throws(() => checkCurrencies(buff), /a pair does not transform him/);
+
+  const giant = (await simonVsReese(sabotaged(...SLOTS_WHILE_GIANT)))(CURRENCIES);
+  t.diagnostic("sabotaged canSpecial read triple.canPull=" + giant.triple.canPull +
+    ", triple.buffTimer=" + giant.triple.buffTimer);
+  assert.equal(giant.triple.canPull, true, "the sabotage should let a giant pull again");
+  assert.throws(() => checkCurrencies(giant), /standing in his own payout/);
 });

@@ -90,7 +90,11 @@ function stubCanvas(w, h) {
   return el;
 }
 
-async function bootEngine() {
+/* Takes the engine SOURCE rather than always reading it off disk, so the
+   negative controls at the foot of this file can boot a one-line-mutated copy
+   in a fresh vm without that copy ever being written anywhere. Undefined --
+   which is what every real test passes -- still reads the shipped engine. */
+async function bootEngine(engineSrc) {
   const view = stubCanvas(960, 540);
   const sandbox = {
     console, Math: seededMath(), JSON, Date, Promise, Object, Array, Map, Set, Number,
@@ -118,7 +122,8 @@ async function bootEngine() {
   vm.runInContext(
     "var SPRITES=window.NERDWARS_ASSETS.SPRITES,TILES=window.NERDWARS_ASSETS.TILES," +
       "UI=window.NERDWARS_ASSETS.UI;", sandbox);
-  vm.runInContext(readFileSync(ENGINE_PATH, "utf8"), sandbox, { filename: "nerdwars.js" });
+  vm.runInContext(engineSrc || readFileSync(ENGINE_PATH, "utf8"), sandbox,
+                  { filename: "nerdwars.js" });
   for (let i = 0; i < 5; i++) await Promise.resolve();
   return (src) => vm.runInContext(src, sandbox);
 }
@@ -130,6 +135,55 @@ async function battle() {
   run("for (var i=0;i<130;i++) step();");     // past the 110-frame spawn invuln
   return run;
 }
+
+/* One line of the engine changed, in a string, on its way into a fresh vm --
+   the copy is never written anywhere. A needle that matches twice would
+   mutate a place the control was not reasoning about, and one that matches
+   nowhere would hand back the shipped engine and "prove" a control that never
+   ran, so both are refused rather than warned about. */
+function sabotage(needle, replacement) {
+  const src = readFileSync(ENGINE_PATH, "utf8");
+  const at = src.indexOf(needle);
+  assert.ok(at >= 0, "sabotage needle not found in the engine: " + JSON.stringify(needle));
+  assert.equal(src.indexOf(needle, at + 1), -1,
+    "sabotage needle is not unique in the engine: " + JSON.stringify(needle));
+  return src.slice(0, at) + replacement + src.slice(at + needle.length);
+}
+
+/* The other half of a negative control: the SAME checker the real test ran,
+   and it has to throw an assertion. Anything else thrown is a broken checker,
+   not a failed test, and is let through so it cannot be mistaken for the
+   control working. */
+async function expectToFail(check, why) {
+  try {
+    await check();
+  } catch (e) {
+    if (e instanceof assert.AssertionError) return e.message;
+    throw e;
+  }
+  assert.fail(why);
+}
+
+/* 130 frames of both seats holding NOTHING, in place of 130 frames of two
+   CPUs fighting each other.
+
+   updateBattle only asks aiPad for a pad when netplay has none to give it, so
+   pinning both pads to neutral takes the AI -- and therefore Math.random --
+   out of the warmup entirely. It still spends the 110-frame spawn invuln,
+   which is all the warmup was ever for.
+
+   This exists because a live warmup leaves state behind that the probe after
+   it did not think to clear, and what is left behind depends on a Math stream
+   shared by every test in the file. That is how a test can pass alone, fail
+   in suite order, and change its mind again when somebody inserts a test
+   above it. See the recovery check below for the one that actually did. */
+const QUIET_WARMUP = `
+  netplay.active = true;
+  for (var i = 0; i < 130; i++) {
+    netplay.framePads = [bitsToPad(0), bitsToPad(0)];
+    step();
+  }
+  netplay.active = false; netplay.framePads = null;`;
 
 /* The warmup frames run both CPUs off Math.random, so whichever state a
    fighter lands in is luck -- and a fighter mid-special ignores the jump
@@ -379,26 +433,40 @@ test("an online results screen returns to picking without a keypress", async () 
 /* The sword, and the clock -- both need the engine itself: the meter is
    earned elsewhere, and drawHUD is not on the public surface. */
 
-test("Trev walks and jumps while swinging the sword", async () => {
-  /* Thirty-three frames a swing and eighteen swings in the ult. Rooted, the
-     reward for filling the meter was ten seconds of standing still. */
-  const run = await bootEngine();
+/* The swing, driven and asserted in one function so the negative control at
+   the foot of this file can run the identical checks against an engine where
+   the swing is rooted again. */
+async function checkSwordIsMobile(engineSrc) {
+  const run = await bootEngine(engineSrc);
   run("select.cursor=[5,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
 
   const RIGHT = 2, JUMP = 16, ULT = 256;
   const r = run(`(function(){
-    var f = fighters[0];
+    var f = fighters[0], foe = fighters[1];
     var main = STAGE.platforms.find(function (p) { return p.main; });
-    projectiles.length = 0;
+    projectiles.length = 0; effects.length = 0; freezeFrames = 0;
     f.setState('idle'); f.timer = 0; f.hitstun = 0; f.hitstop = 0; f.landLag = 0;
     f.invuln = 0; f.vx = 0; f.vy = 0; f.grounded = true; f.facing = 1;
+    f.grabbing = -1; f.grabbedBy = -1; f.poison = 0; f.burn = 0;
     f.x = main.x + 40; f.y = main.y;
     f.swordTimer = 400;                  // hand him the sword
+    /* Out of reach and untouchable. Whoever the warmup left standing next to
+       him is close enough for the first swing to CONNECT, and a connect is
+       hitstop: attackFrame stops, the pad is read on a frame that never
+       advances, and the jump press on frame 8 is swallowed whole. The test
+       then reports a sword that cannot jump, on the Math streams where the
+       other fighter happened to walk over -- which is a fight, not a swing.
+       hitstop is cleared every frame as well, for the same reason. */
+    foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
+    foe.invuln = 9999; foe.stocks = 99; foe.health = 1000; foe.hasHit = true;
+    foe.grabbing = -1; foe.grabbedBy = -1; foe.vx = 0; foe.vy = 0;
+    foe.x = main.x + main.w - 6; foe.y = main.y; foe.grounded = true;
     var x0 = f.x, y0 = f.y, airborne = false, swung = false;
     netplay.active = true;
     for (var i = 0; i < 22; i++) {
+      f.hitstop = 0;
       var bits = ${RIGHT};
       if (i === 0) bits |= ${ULT};       // swing
       if (i === 8) bits |= ${JUMP};
@@ -415,6 +483,16 @@ test("Trev walks and jumps while swinging the sword", async () => {
   assert.ok(r.moved > 4,
     "he should walk through a swing; moved " + r.moved.toFixed(1) + "px");
   assert.ok(r.airborne, "and jump through it");
+}
+
+test("Trev walks and jumps while swinging the sword", async () => {
+  /* Thirty-three frames a swing and eighteen swings in the ult. Rooted, the
+     reward for filling the meter was ten seconds of standing still.
+
+     Everything it checks lives in checkSwordIsMobile above, so the negative
+     control at the foot of this file can run the identical checks against a
+     swing that is rooted again. */
+  await checkSwordIsMobile();
 });
 
 test("the match clock is drawn, because it decides matches", async () => {
@@ -1304,82 +1382,312 @@ test("Kel's bone is three throws, and which one depends on what he was doing", a
     running.far.toFixed(1) + " against " + still.far.toFixed(1));
 });
 
-test("the shout is red waves that travel, and the box goes as far as they do", async () => {
-  /* A fixed green puff at arm's length said "melee" while the box said
-     otherwise. It is a shout: what carries is the noise, so the noise leaves
-     him now -- three red waves on consecutive frames, travelling forward.
+/* The whole shout: driven, measured and asserted in one function.
 
-     The reach assertion is the one that matters. Art and hitbox have to make
-     the same claim, in BOTH directions: the first cut had the waves living 17
-     frames and outrunning the box by eight pixels, which is the same lie as a
-     box that outruns the art. */
-  const run = await bootEngine();
+   It is a function rather than a test body because a negative control at the
+   foot of this file runs THIS code against a one-line-mutated copy of the
+   engine and requires it to throw. A control that re-types the checks is not
+   checking the same thing, and a control that passes because the copy was
+   subtly different proves nothing at all. `engineSrc` is undefined for the
+   real run, which is what makes bootEngine read the shipped engine. */
+async function checkShout(engineSrc) {
+  const run = await bootEngine(engineSrc);
   run("select.cursor=[4,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
   assert.equal(run("fighters[0].def.specials.neutral.kind"), "belch",
     "player 1 should be the one who shouts");
 
+  /* The direction bits, and the special-neutral button. UP and DOWN are held
+     from the frame AFTER the press rather than with it: updateAttack clears
+     the latch on attackFrame 1 and then reads the pad for as long as the
+     startup lasts, which is what a person's hands actually do, and pressing
+     DOWN on the same frame as the cast would be read by updateFree as a
+     drop-through before the special ever started. */
   const SP_N = 512;
-  const shout = (facing) => run(`(function () {
+  const BIT = { level: 0, up: 4, down: 8 };
+  const TINTS = run("BELCH_TINTS.slice().sort().join(',')");
+
+  /* Which way the drawn bracket has to LEAN, as a range on the mean of its
+     painted pixels measured from the wave's own center. This is the half of
+     the rewrite no geometric check can see: the bracket used to be a stroked
+     arc that always opened along x, and one that still did would sit dead
+     level on all three aims while every number below stayed perfect.
+     Measured: level 0.00, up -5.30, down +1.73. */
+  const LEAN = { level: [-1, 1], up: [-99, -2], down: [0.6, 99] };
+
+  const shout = (aim, facing) => run(`(function () {
     var me = fighters[0], foe = fighters[1];
     var main = STAGE.platforms.find(function (p) { return p.main; });
     projectiles.length = 0; effects.length = 0;
     me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
     me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.vy = 0;
+    me.poison = 0; me.burn = 0; me.confused = 0;
     me.grabbing = -1; me.grounded = true; me.facing = ${facing};
     me.x = 160; me.y = main.y; me.specialSpawned = false;
     foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
     foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
-    var most = 0, colors = {}, far = 0, back = 0, reach = 0;
+    var box = null, colors = {}, drawn = null, most = 0, n = 0;
+    var fwdMin = 1e9, fwdMax = -1e9, dyMin = 1e9, dyMax = -1e9;
     netplay.active = true;
     for (var i = 0; i < 34; i++) {
       me.hitstop = 0; me.mana = 999; me.facing = ${facing};
-      netplay.framePads = [bitsToPad(i === 0 ? ${SP_N} : 0), bitsToPad(0)];
+      var bits = i === 0 ? ${SP_N} : (i <= 8 ? ${BIT[aim]} : 0);
+      netplay.framePads = [bitsToPad(bits), bitsToPad(0)];
       step();
-      var w = effects.filter(function (e) { return e.kind === 'wave'; });
-      if (w.length > most) most = w.length;
-      for (var j = 0; j < w.length; j++) {
-        colors[w[j].color] = 1;
-        var d = (w[j].x - me.x) * ${facing};
-        if (d > far) far = d;
-        if (d < back) back = d;
+
+      /* The box, taken once on the first frame it is live. It is only live
+         for the five active frames and the waves outlive that by a dozen, so
+         every wave below is compared against a box remembered from earlier
+         in the same cast -- which is fair because he does not move: no
+         input, no velocity, both feet on the floor. Stored forward-relative
+         so one set of numbers covers both facings. */
+      var live = me.hitbox();
+      if (live && !box) {
+        var e0 = (live.box.x - me.x) * ${facing};
+        var e1 = (live.box.x + live.box.w - me.x) * ${facing};
+        box = { near: Math.min(e0, e1), far: Math.max(e0, e1),
+                top: live.box.y - me.y, bot: live.box.y + live.box.h - me.y,
+                damage: live.move.damage };
       }
-      var b = me.hitbox();
-      if (b && !reach) {
-        reach = ${facing} > 0 ? b.box.x + b.box.w - me.x : me.x - b.box.x;
+
+      var ws = effects.filter(function (e) { return e.kind === 'wave'; });
+      if (ws.length > most) most = ws.length;
+      var tip = null;
+      for (var j = 0; j < ws.length; j++) {
+        colors[ws[j].color] = 1;
+        n++;
+        var fwd = (ws[j].x - me.x) * ${facing}, dy = ws[j].y - me.y;
+        if (fwd < fwdMin) fwdMin = fwd;
+        if (fwd > fwdMax) fwdMax = fwd;
+        if (dy < dyMin) dyMin = dy;
+        if (dy > dyMax) dyMax = dy;
+        if (!tip || fwd > (tip.x - me.x) * ${facing}) tip = ws[j];
+      }
+
+      /* And what the furthest one actually PAINTS. The canvas the engine is
+         handed here throws every call away, so the bracket has to be drawn
+         into a recorder to be seen at all. Only the tip wave is left in
+         effects for the call, so nothing else's pixels can be counted as its
+         -- the sparks and the burp word are drawn by the same pass and are
+         the same handful of fillRects. Overwritten every frame, so what
+         survives the loop is the last wave alive, which is the one standing
+         where the hitbox ends. */
+      if (tip) {
+        var rects = [];
+        var rec = { globalAlpha: 1, fillStyle: '#000',
+          fillRect: function (x, y, w, h) { rects.push([x, y, rec.fillStyle]); },
+          drawImage: function () {}, save: function () {}, restore: function () {},
+          translate: function () {}, scale: function () {}, beginPath: function () {},
+          arc: function () {}, fill: function () {}, stroke: function () {},
+          ellipse: function () {}, moveTo: function () {}, lineTo: function () {},
+          closePath: function () {}, fillText: function () {},
+          measureText: function () { return { width: 0 }; } };
+        var all = effects.slice();
+        effects.length = 0; effects.push(tip);
+        drawEffects(rec);
+        effects.length = 0;
+        for (var q = 0; q < all.length; q++) effects.push(all[q]);
+        var sx = 0, sy = 0, farR = 0;
+        for (var m = 0; m < rects.length; m++) {
+          sx += rects[m][0]; sy += rects[m][1];
+          var ddx = rects[m][0] - tip.x, ddy = rects[m][1] - tip.y;
+          var dd = Math.sqrt(ddx * ddx + ddy * ddy);
+          if (dd > farR) farR = dd;
+        }
+        var cnt = rects.length || 1;
+        drawn = { n: rects.length,
+                  color: rects.length ? rects[0][2] : null,
+                  fwd: ((sx / cnt) - tip.x) * ${facing},
+                  dy: (sy / cnt) - tip.y,
+                  farR: farR };
       }
     }
     netplay.active = false; netplay.framePads = null;
-    return { most: most, colors: Object.keys(colors), far: far, back: back,
-             reach: reach };
+    return { aim: me.belchAim, box: box, most: most, n: n, drawn: drawn,
+             colors: Object.keys(colors).sort().join(','),
+             fwdMin: fwdMin, fwdMax: fwdMax, dyMin: dyMin, dyMax: dyMax };
   })()`);
 
-  for (const facing of [1, -1]) {
-    const r = shout(facing);
-    const which = facing > 0 ? "right" : "left";
+  for (const aim of ["level", "up", "down"]) {
+    for (const facing of [1, -1]) {
+      const r = shout(aim, facing);
+      const where = aim + " facing " + (facing > 0 ? "right" : "left");
 
-    assert.ok(r.most >= 2,
-      "a shout should put several waves in the air facing " + which +
-      "; saw " + r.most);
-    assert.deepEqual(r.colors.length, 1, "one colour, facing " + which);
-    assert.ok(/^#ff/i.test(r.colors[0]),
-      "the waves should be red; got " + r.colors[0]);
+      // Preconditions. Every comparison below is vacuous without these.
+      assert.equal(r.aim, aim,
+        "holding the direction through the startup should latch the " + aim +
+        " burp, " + where + "; it latched " + r.aim);
+      assert.ok(r.box,
+        "the " + aim + " burp has to put a live hitbox on the screen, " +
+        where + ", or there is nothing to compare the art against");
+      assert.ok(r.most >= 2,
+        "a shout should put several waves in the air, " + where +
+        "; most alive at once was " + r.most);
+      assert.equal(r.colors, TINTS,
+        "the waves should wear the belch's own tints, " + where +
+        "; saw " + r.colors + ", expected " + TINTS);
 
-    // They go FORWARD, whichever way he is looking.
-    assert.ok(r.far > 20,
-      "waves should travel out in front of him facing " + which +
-      "; furthest " + r.far.toFixed(1));
-    assert.ok(r.back > -2,
-      "and never behind him facing " + which + "; furthest back " +
-      r.back.toFixed(1));
+      /* REACH, which is the assertion this test has always been for. Art and
+         hitbox have to make the same claim in BOTH directions: the first cut
+         had the waves living 17 frames and outrunning the box by eight
+         pixels, which is the same lie as a box that outruns the art.
 
-    /* The art must not promise more than the box, nor the box more than the
-       art. Five pixels of slack either way. */
-    assert.ok(Math.abs(r.far - r.reach) < 5,
-      "the waves and the hitbox should agree on the reach facing " + which +
-      "; waves " + r.far.toFixed(1) + ", box " + r.reach.toFixed(1));
+         It has to hold in y as well now, because a wave can climb or dive. A
+         shout whose noise leaves the top of its own box is painting one move
+         and hitting with another. */
+      assert.ok(r.fwdMin >= r.box.near - 0.01 && r.fwdMax <= r.box.far + 0.01,
+        "every wave has to stay inside its own box in x, " + where +
+        "; waves ran " + r.fwdMin.toFixed(1) + ".." + r.fwdMax.toFixed(1) +
+        ", box " + r.box.near.toFixed(1) + ".." + r.box.far.toFixed(1));
+      assert.ok(r.dyMin >= r.box.top - 0.01 && r.dyMax <= r.box.bot + 0.01,
+        "and in y, " + where + "; waves ran " + r.dyMin.toFixed(1) + ".." +
+        r.dyMax.toFixed(1) + ", box " + r.box.top.toFixed(1) + ".." +
+        r.box.bot.toFixed(1));
+      assert.ok(r.box.far - r.fwdMax <= 1.5,
+        "and the box must not reach further than the art does, " + where +
+        "; furthest wave " + r.fwdMax.toFixed(1) + ", box ends " +
+        r.box.far.toFixed(1));
+
+      /* The vertical half of the same claim, per aim. Containment on its own
+         would be satisfied by waves that never left his mouth, so each aim
+         also has to SPEND the height its box is drawing. */
+      if (aim === "up") {
+        assert.ok(r.dyMin - r.box.top <= 1.5,
+          "the upward shout has to climb to the top of its own box, " +
+          where + "; highest wave " + r.dyMin.toFixed(1) + ", box top " +
+          r.box.top.toFixed(1));
+      }
+      if (aim === "down") {
+        assert.ok(r.box.bot - r.dyMax <= 1.5,
+          "the downward shout has to fall to the bottom of its own box, " +
+          where + "; lowest wave " + r.dyMax.toFixed(1) + ", box bottom " +
+          r.box.bot.toFixed(1));
+      }
+      if (aim === "level") {
+        assert.ok(Math.abs(r.dyMax - r.dyMin) < 0.01,
+          "the level shout travels flat -- it is the aim you press when you " +
+          "do not want height -- but it drifted from " + r.dyMin.toFixed(2) +
+          " to " + r.dyMax.toFixed(2) + ", " + where);
+      }
+
+      /* And the bracket that is actually painted. It is fillRect now, and it
+         rotates onto the direction of travel; a bracket that still opened
+         along x would leave every number above untouched and still draw an
+         upward shout with its mouth pointing sideways. */
+      assert.ok(r.drawn && r.drawn.n >= 8,
+        "the furthest wave should paint a bracket, " + where + "; it drew " +
+        (r.drawn ? r.drawn.n : 0) + " rects");
+      assert.ok(r.drawn.farR <= 14,
+        "and every pixel of it belongs to that wave, " + where +
+        "; furthest painted pixel was " + r.drawn.farR.toFixed(1) +
+        "px from the wave's center");
+      assert.ok(r.drawn.fwd > 3,
+        "the bracket opens AHEAD of the wave it belongs to, " + where +
+        "; its middle sat " + r.drawn.fwd.toFixed(1) + "px forward");
+      assert.ok(r.drawn.dy >= LEAN[aim][0] && r.drawn.dy <= LEAN[aim][1],
+        "and it leans the way the shout is aimed, " + where +
+        "; its middle sat " + r.drawn.dy.toFixed(1) +
+        "px below the wave, wanted " + LEAN[aim][0] + ".." + LEAN[aim][1]);
+    }
   }
+
+  /* THE AIM IS A REAL CHOICE, which is the other half of what two extra
+     frames of startup and ten extra mana bought.
+
+     up stops sixteen pixels above his feet and a standing hurtbox is
+     fourteen tall, so a man on the same floor is entirely underneath it.
+     down is eleven pixels tall and slung under him, so anything that has
+     left the ground is over it. If either of those stops being true the
+     three aims collapse into one skin over one move.
+
+     The level burp lands in BOTH placements, and that is what stops the two
+     misses being vacuous: the victim is standing somewhere a shout can
+     reach, and only the WRONG aim fails to reach him. */
+  const dmg = run("(function(){var p=fighters[0].def.specials.neutral.parts;" +
+                  "return {level:p.level.damage, up:p.up.damage," +
+                  " down:p.down.damage};})()");
+
+  /* lift is how far off the floor the victim's feet are. Twelve, because at
+     twelve his hurtbox still overlaps the level box and the up box and has
+     cleared the down one entirely -- the tightest placement that tells all
+     three aims apart. He is re-seated every frame until he is hit, because
+     gravity would otherwise walk him back down into the aim that is supposed
+     to miss him. */
+  const connect = (aim, lift) => run(`(function () {
+    var me = fighters[0], foe = fighters[1];
+    var main = STAGE.platforms.find(function (p) { return p.main; });
+    projectiles.length = 0; effects.length = 0;
+    me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
+    me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.vy = 0;
+    me.poison = 0; me.burn = 0; me.confused = 0; me.hasHit = false;
+    me.grabbing = -1; me.grounded = true; me.facing = 1;
+    me.x = 160; me.y = main.y; me.specialSpawned = false;
+    foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
+    foe.invuln = 0; foe.stocks = 99; foe.health = 1000; foe.eliminated = false;
+    foe.poison = 0; foe.burn = 0; foe.grabbing = -1; foe.grabbedBy = -1;
+    foe.hasHit = true; foe.vx = 0; foe.vy = 0;
+    var fy = main.y - ${lift};
+    foe.x = 185; foe.y = fy; foe.grounded = ${lift} === 0;
+    var h0 = foe.health;
+    netplay.active = true;
+    for (var i = 0; i < 24; i++) {
+      me.hitstop = 0; me.mana = 999; me.facing = 1;
+      if (foe.health >= h0) {
+        foe.x = 185; foe.y = fy; foe.vx = 0; foe.vy = 0;
+        foe.grounded = ${lift} === 0;
+      }
+      var bits = i === 0 ? ${SP_N} : (i <= 8 ? ${BIT[aim]} : 0);
+      netplay.framePads = [bitsToPad(bits), bitsToPad(0)];
+      step();
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { aim: me.belchAim, took: +(h0 - foe.health).toFixed(2) };
+  })()`);
+
+  const HITS = {
+    level: { floor: true, aloft: true },
+    up:    { floor: false, aloft: true },
+    down:  { floor: true, aloft: false },
+  };
+  for (const aim of ["level", "up", "down"]) {
+    for (const spot of ["floor", "aloft"]) {
+      const r = connect(aim, spot === "floor" ? 0 : 12);
+      const who = spot === "floor"
+        ? "a fighter standing on the same floor"
+        : "a fighter twelve pixels off the ground";
+      assert.equal(r.aim, aim,
+        "the " + aim + " burp should have latched before it went live " +
+        "against " + who + "; it latched " + r.aim);
+      if (HITS[aim][spot]) {
+        assert.equal(r.took, dmg[aim],
+          "the " + aim + " burp has to hit " + who + " for its own " +
+          dmg[aim] + " damage; it took off " + r.took);
+      } else {
+        assert.equal(r.took, 0,
+          "the " + aim + " burp must not be able to touch " + who +
+          " at all -- that miss is the whole reason the aim is a choice -- " +
+          "but it took off " + r.took);
+      }
+    }
+  }
+}
+
+test("the shout is aimed, and every aim's waves stay inside its own box", async () => {
+  /* A fixed green puff at arm's length said "melee" while the box said
+     otherwise. It is a shout: what carries is the noise, so the noise leaves
+     him -- three waves on consecutive frames, travelling forward.
+
+     It is three shouts now. Hold up and it goes over his head, hold down and
+     it goes along the floor, hold nothing and it goes straight out, and the
+     direction is LATCHED during the startup so a shout already in the air
+     cannot be swung around somebody standing inside it. Each aim is a
+     finished spec with its own box, its own damage and its own launch angle.
+
+     Everything this asserts lives in checkShout above, so the negative
+     control at the foot of this file can run the identical checks against a
+     deliberately broken engine. */
+  await checkShout();
 });
 
 test("no move puts any fighter at a coordinate that is not a number", async () => {
@@ -1492,6 +1800,89 @@ test("no move puts any fighter at a coordinate that is not a number", async () =
     "multiply the facing by undefined; it went NaN on frame " + halfWritten);
 });
 
+/* Every recovery in the roster, driven off the ledge and measured, in one
+   function so the negative control at the foot of this file can run the
+   IDENTICAL checks against an engine with one character's `rise` flipped.
+   `engineSrc` is undefined for the real run, which is what makes bootEngine
+   read the shipped engine. */
+async function checkRecoveries(engineSrc) {
+  const run = await bootEngine(engineSrc);
+  const order = run("ORDER.slice()");
+  const failed = [];
+
+  for (let i = 0; i < order.length; i++) {
+    run(`select.cursor=[${i},4]; twoPlayer=true; playerCount=2; humanCount=0;
+         stagePick=0; startBattle();`);
+    /* Quiet, not a live warmup. This test used to hold both CPUs' leashes
+       here and it made it a coin flip: on some Math streams Reese put a CROP
+       DUST cloud on the fighter under test during those 130 frames, and a
+       poisoned fighter plus the `me.health = 0` this probe used to set is a
+       knockOut() on the first tick of the probe -- state 'ko' for all 24
+       frames, 0px gained, a recovery blamed for a fight nobody was measuring.
+       It passed alone and failed in suite order, because the seed each vm
+       gets depends on how many tests before it booted an engine. */
+    run(QUIET_WARMUP);
+    const r = run(`(function () {
+      var me = fighters[0], foe = fighters[1];
+      var main = STAGE.platforms.find(function (p) { return p.main; });
+      var up = me.def.specials.up;
+      /* Anything that claims to move him: 'uppercut' says so in its kind,
+         and Christian's FROG ARMY says so by carrying a rise of -5.9 under a
+         kind of its own. A recovery is a recovery whichever case it is
+         written as, and the one that is not in this list is the one that
+         quietly stops working. */
+      if (up.kind !== 'uppercut' && up.rise === undefined) return null;
+      projectiles.length = 0; effects.length = 0;
+      /* Nothing left over from before the probe may reach into it. The
+         freeze is a KO's twelve dead frames -- they would eat the launch and
+         read as a recovery that never moved -- and the poison and burn are
+         damage that ticks through every state there is, including the one
+         this is trying to measure. */
+      freezeFrames = 0;
+      foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.eliminated=false;
+      foe.x=main.x+10; foe.y=main.y; foe.hasHit=true;
+      foe.poison=0; foe.burn=0; foe.grabbing=-1; foe.grabbedBy=-1;
+      // Hanging past the ledge, which is the only place a recovery matters.
+      me.setState('fall'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
+      me.invuln=0; me.mana=999; me.stocks=99; me.eliminated=false;
+      /* Full health rather than the 0 this used to sit at. At zero he is one
+         tick of anything at all from dead, and the height a recovery gains
+         has never depended on his health -- an uppercut reads its rise off
+         its own spec and nothing else. (No backticks in here: this comment
+         lives inside a template literal, and one would end the probe.) */
+      me.health=COMBAT.maxHealth; me.poison=0; me.burn=0; me.confused=0;
+      me.grabbing=-1; me.grabbedBy=-1; me.grounded=false; me.facing=-1;
+      me.x=main.x-30; me.y=main.y-40; me.vx=0; me.vy=0; me.specialSpawned=false;
+      var y0 = me.y, best = me.y, cast = false;
+      netplay.active = true;
+      for (var i = 0; i < 24; i++) {
+        me.hitstop = 0; me.mana = 999;
+        netplay.framePads = [bitsToPad(i === 0 ? 2048 : 0), bitsToPad(0)];
+        step();
+        if (me.state === 'special') cast = true;
+        if (me.y < best) best = me.y;   // smaller y is higher up
+      }
+      netplay.active = false; netplay.framePads = null;
+      return { name: me.def.name, label: up.label, cast: cast,
+               gained: +(y0 - best).toFixed(1) };
+    })()`);
+    if (!r) continue;
+    /* Reported apart from the height, because they are different bugs: a
+       move that never started is a broken probe or a move that refuses to
+       come out, and a move that started and went nowhere is the anti-recovery
+       this test is here for. Both still fail. */
+    if (!r.cast) {
+      failed.push(r.name + "'s " + r.label + " never left the ground state");
+    } else if (r.gained < 8) {
+      failed.push(r.name + "'s " + r.label + " gained " + r.gained + "px");
+    }
+  }
+
+  assert.deepEqual(failed, [],
+    "an up-special that claims to move the fighter has to LIFT him -- " +
+    "`rise` is negative for up: " + failed.join(", "));
+}
+
 test("every up-special that is a recovery actually gains height", async () => {
   /* `rise` is NEGATIVE for up -- every real uppercut uses -6.1 or -6.2 --
      and Cobeus's placeholder shipped as POSITIVE 5.4, which drove him
@@ -1503,48 +1894,12 @@ test("every up-special that is a recovery actually gains height", async () => {
 
      Not everyone's `up` is a recovery -- AutisNick throws a rainbow and Trev
      sends a pawn, and Trev's jump gets him home by design -- so this asserts
-     only about the ones whose `kind` claims to move the fighter. */
-  const run = await bootEngine();
-  const order = run("ORDER.slice()");
-  const failed = [];
+     only about the ones that claim to move the fighter at all.
 
-  for (let i = 0; i < order.length; i++) {
-    run(`select.cursor=[${i},4]; twoPlayer=true; playerCount=2; humanCount=0;
-         stagePick=0; startBattle();`);
-    run("for (var i=0;i<130;i++) step();");
-    const r = run(`(function () {
-      var me = fighters[0], foe = fighters[1];
-      var main = STAGE.platforms.find(function (p) { return p.main; });
-      var up = me.def.specials.up;
-      if (up.kind !== 'uppercut') return null;
-      projectiles.length = 0; effects.length = 0;
-      foe.setState('idle'); foe.invuln=9999; foe.stocks=99; foe.eliminated=false;
-      foe.x=main.x+10; foe.y=main.y; foe.hasHit=true;
-      // Hanging past the ledge, which is the only place a recovery matters.
-      me.setState('fall'); me.timer=0; me.hitstun=0; me.hitstop=0; me.landLag=0;
-      me.invuln=0; me.mana=999; me.stocks=99; me.eliminated=false; me.health=0;
-      me.grabbing=-1; me.grounded=false; me.facing=-1;
-      me.x=main.x-30; me.y=main.y-40; me.vx=0; me.vy=0; me.specialSpawned=false;
-      var y0 = me.y, best = me.y;
-      netplay.active = true;
-      for (var i = 0; i < 24; i++) {
-        me.hitstop = 0; me.mana = 999;
-        netplay.framePads = [bitsToPad(i === 0 ? 2048 : 0), bitsToPad(0)];
-        step();
-        if (me.y < best) best = me.y;   // smaller y is higher up
-      }
-      netplay.active = false; netplay.framePads = null;
-      return { name: me.def.name, label: up.label,
-               gained: +(y0 - best).toFixed(1) };
-    })()`);
-    if (r && r.gained < 8) {
-      failed.push(r.name + "'s " + r.label + " gained " + r.gained + "px");
-    }
-  }
-
-  assert.deepEqual(failed, [],
-    "an up-special of kind 'uppercut' has to lift the fighter -- `rise` is " +
-    "negative for up: " + failed.join(", "));
+     Everything it checks lives in checkRecoveries above, so the negative
+     control at the foot of this file can run the identical checks against a
+     deliberately broken engine. */
+  await checkRecoveries();
 });
 
 test("Cobeus is in the game, off a sprite sheet, and the select screen fits him", async () => {
@@ -1849,61 +2204,124 @@ test("Cobeus's ult drives a car across the whole stage", async () => {
     "and hit whoever it drove through; took " + r.lost);
 });
 
-test("the fart shoves Reese upward, but only in the air", async () => {
-  /* Every action has an equal and opposite one. Mechanically it hands him a
-     second way back that is not JITTERS, which is a committed horizontal dash
-     and no use at all when what he needs is height.
-
-     Assigned rather than added, like SIDEARM's vertical kick: it cancels the
-     fall and replaces it, because adding would let a fast enough descent eat
-     the whole thing -- which is exactly the moment you want it to work. */
-  const run = await bootEngine();
+/* The fart's effect on the man who let it off -- which is now none at all --
+   driven and asserted in one function, so the two negative controls at the
+   foot of this file can run the IDENTICAL checks against an engine with the
+   shove put back. */
+async function checkFartMovesHimNowhere(engineSrc) {
+  const run = await bootEngine(engineSrc);
   run("select.cursor=[4,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
-  run("for (var i=0;i<130;i++) step();");
+  run(QUIET_WARMUP);
   assert.equal(run("fighters[0].def.specials.down.label"), "CROP DUST",
-    "player 1 should be the one with the fart");
+    "precondition: player 1 is the one with the fart");
 
   const SP_D = 1024;
   const fart = (inAir) => run(`(function () {
     var me = fighters[0], foe = fighters[1];
     var main = STAGE.platforms.find(function (p) { return p.main; });
-    projectiles.length = 0;
+    projectiles.length = 0; effects.length = 0; freezeFrames = 0;
     me.setState('idle'); me.timer = 0; me.hitstun = 0; me.hitstop = 0;
     me.landLag = 0; me.invuln = 0; me.mana = 999; me.vx = 0; me.grabbing = -1;
-    me.facing = 1; me.specialSpawned = false; me.x = main.x + 60;
+    me.grabbedBy = -1; me.poison = 0; me.burn = 0; me.confused = 0;
+    me.health = COMBAT.maxHealth; me.specialSpawned = false; me.facing = 1;
+    me.x = main.x + 60;
     /* 120 up, not 50. Falling at 4.5 he covers 50 pixels inside the move's
-       own nine frames of startup, lands, and the airborne branch never runs
-       -- which reads as "the lift does not work" when it is the setup that
-       is wrong. */
+       own startup, lands, and the airborne case never runs at all -- which
+       would make every number below a measurement of a grounded cast. */
     if (${inAir}) { me.grounded = false; me.y = main.y - 120; me.vy = 4.5; }
     else { me.grounded = true; me.y = main.y; me.vy = 0; }
     foe.setState('idle'); foe.invuln = 9999; foe.stocks = 99; foe.health = 1000;
     foe.x = main.x + main.w - 6; foe.y = main.y; foe.hasHit = true;
-    var before = null, after = null, air = null;
+    foe.poison = 0; foe.burn = 0; foe.grabbing = -1; foe.grabbedBy = -1;
+    var before = null, after = null, air = null, dv = null;
+    var ySpawn = null, low = 0, worstVY = 0;
     netplay.active = true;
     for (var i = 0; i < 30; i++) {
       me.hitstop = 0; me.mana = 999;
+      var vy0 = me.vy, y0 = me.y, was = me.specialSpawned;
+      if (!was) { before = me.vy; air = !me.grounded; }
       netplay.framePads = [bitsToPad(i === 0 ? ${SP_D} : 0), bitsToPad(0)];
-      if (!me.specialSpawned) { before = me.vy; air = !me.grounded; }
       step();
-      if (me.specialSpawned && after === null) after = me.vy;
+      /* The frame the gas actually leaves him is the only frame a shove
+         could be written on, so it is measured on its own: vy across that
+         one step, and where he was standing as it happened. */
+      if (!was && me.specialSpawned) {
+        after = me.vy; dv = me.vy - vy0; ySpawn = y0; low = y0;
+      }
+      if (ySpawn !== null && me.y < low) low = me.y;
+      if (me.vy < worstVY) worstVY = me.vy;
     }
     netplay.active = false; netplay.framePads = null;
-    return { before: before, after: after, airborne: air };
+    return { spawned: ySpawn !== null, airborne: air, before: before,
+             after: after, dv: +((dv === null ? 0 : dv).toFixed(3)),
+             climb: +((ySpawn === null ? 0 : ySpawn - low).toFixed(3)),
+             worstVY: +worstVY.toFixed(3), grounded: me.grounded };
   })()`);
 
   const up = fart(true);
+  // Preconditions. Every number below is vacuous without all three.
+  assert.ok(up.spawned,
+    "precondition: the gas has to actually come out, or nothing was cast");
   assert.ok(up.airborne,
-    "he has to still be off the ground when it goes off, or this measures nothing");
-  assert.ok(up.before > 0, "he should be falling into it; vy was " + up.before);
-  assert.ok(up.after < 0,
-    "letting one off while falling should send him upward; vy went from " +
-    up.before.toFixed(1) + " to " + up.after.toFixed(1));
+    "precondition: he has to still be off the ground when it goes off, or " +
+    "this measures a grounded cast");
+  assert.ok(up.before > 0,
+    "precondition: and he has to be falling into it -- a lift is only " +
+    "visible against a fall; vy was " + up.before);
+
+  /* The assertion the old one was, inverted. It used to read up.after < 0.
+     A rise written back in is worth about -9 on this one frame, which is
+     why the frame is measured by itself rather than over the whole move. */
+  assert.ok(up.dv >= 0,
+    "the frame the gas comes out must not take a thing off his fall; his " +
+    "vy went from " + up.before.toFixed(1) + " to " + up.after.toFixed(1) +
+    " across it, a change of " + up.dv);
+  assert.ok(up.worstVY >= 0,
+    "and his vy must never go negative anywhere in the move -- negative vy " +
+    "is upward, and upward is the exact shape of the shove that was taken " +
+    "out; the best it reached was " + up.worstVY);
+  assert.equal(up.climb, 0,
+    "so he must not gain a single pixel after letting it off; he climbed " +
+    up.climb + "px above where he was standing when it went off");
 
   const flat = fart(false);
-  assert.ok(Math.abs(flat.after) < 0.01,
-    "on the ground it should shove him nowhere; vy became " + flat.after);
+  assert.ok(flat.spawned,
+    "precondition: the grounded cast has to go off too");
+  assert.equal(flat.dv, 0,
+    "on the ground it moves him nowhere either; vy changed by " + flat.dv +
+    " on the frame it went off");
+  assert.ok(flat.grounded && flat.climb === 0,
+    "and it must not peel him off the floor at all -- the fart is not a " +
+    "jump in either place; he climbed " + flat.climb + "px and ended " +
+    (flat.grounded ? "grounded" : "airborne"));
+
+  assert.equal(run("ROSTER.reese.specials.down.liftSelf"), undefined,
+    "and no `liftSelf` may creep back onto the spec either; the field is " +
+    "how the shove was written the first time, and a live one is a shove " +
+    "waiting for somebody to read it again");
+}
+
+test("the fart leaves Reese exactly where he was, in the air and on the ground",
+     async () => {
+  /* This used to pin the opposite: a `liftSelf: 4.2` that threw him upward
+     when he let one off in the air. It is gone on purpose, so the test that
+     guarded it is gone with it and this one guards the removal.
+
+     Being launched by your own fart was funny, but mechanically it was a
+     second recovery -- one that is not JITTERS, costs nothing, and points
+     the way JITTERS cannot. Reese now has exactly one way back that is not
+     his double jumps, and the thing that would quietly undo that decision is
+     somebody adding a small upward nudge here and calling it feel.
+
+     What did NOT change is the cast: it works in the air and always did,
+     canSpecial has never looked at `grounded`. The only difference off the
+     ground is that he keeps falling, which is what this measures.
+
+     Everything it checks lives in checkFartMovesHimNowhere above, so the
+     negative controls at the foot of this file can run the identical checks
+     against an engine with the shove put back. */
+  await checkFartMovesHimNowhere();
 });
 
 test("Trev's sword is a mode: nothing else in his kit answers", async () => {
@@ -2593,18 +3011,11 @@ test("casting roots him, and the move that does not stops when you let go", asyn
     drawing.moved.toFixed(1) + "px");
 });
 
-test("a status ticks damage every frame but only speaks every twentieth", async () => {
-  /* Measured before the fix: one poisoned, burning fighter fired 350 poison
-     cues in four seconds -- roughly 85 a second, at 880Hz. That is not a
-     status sound, it is an alarm.
-
-     The throttle keys off the status counter itself rather than a new timer
-     field, which matters for netcode specifically: restoreSim deletes any key
-     that is not in the snapshot, so a fresh poisonCueTimer would have to be
-     declared in the constructor or vanish on every rollback. Deriving the
-     throttle from state that is already snapshotted means a resimulated frame
-     replays the identical cue pattern for nothing. */
-  const run = await bootEngine();
+/* The throttle, driven and asserted in one function so the negative control
+   at the foot of this file can run the identical checks against an engine
+   with the throttle taken out. */
+async function checkStatusThrottle(engineSrc) {
+  const run = await bootEngine(engineSrc);
   run("select.cursor=[0,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
@@ -2612,8 +3023,16 @@ test("a status ticks damage every frame but only speaks every twentieth", async 
   const r = run(`(function () {
     var counts = {};
     var realCue = cue;
-    cue = function (name) {
-      counts[name] = (counts[name] || 0) + 1;
+    /* Only the fighter being measured. Every status cue carries the slot it
+       is speaking for, and counting them all counts the OTHER fighter's
+       statuses as this one's: Reese drops a CROP DUST cloud during the
+       warmup, the poison on his neighbor runs its 150 frames alongside this
+       one, and 150 frames of somebody else is seven more cues on a count of
+       nine. Seen as 16 cues over 188 ticks -- a test failing for a fighter
+       it was not looking at, and only on the Math streams where the cloud
+       happened to land. */
+    cue = function (name, o) {
+      if (o && o.slot === f.slot) counts[name] = (counts[name] || 0) + 1;
       return realCue.apply(null, arguments);
     };
     var f = fighters[1];
@@ -2635,6 +3054,9 @@ test("a status ticks damage every frame but only speaks every twentieth", async 
       other.timer = 0; other.attackFrame = 0; other.hasHit = true;
       other.x = main.x + 4; other.y = main.y; other.vx = 0; other.vy = 0;
       other.grounded = true; other.mana = 0; other.ultMeter = 0;
+      // And nothing ticking on it either: a status it caught in the warmup
+      // would tick down beside this one for as long as it lasts.
+      other.poison = 0; other.burn = 0;
       projectiles.length = 0;
     };
     /* Counted rather than assumed. Both statuses are frozen by hitstop --
@@ -2678,6 +3100,24 @@ test("a status ticks damage every frame but only speaks every twentieth", async 
   assert.ok(Math.abs(r.lost - expect) < 0.01,
     "every tick should still take its damage: expected " + expect.toFixed(3) +
     ", lost " + r.lost.toFixed(3));
+}
+
+test("a status ticks damage every frame but only speaks every twentieth", async () => {
+  /* Measured before the fix: one poisoned, burning fighter fired 350 poison
+     cues in four seconds -- roughly 85 a second, at 880Hz. That is not a
+     status sound, it is an alarm.
+
+     The throttle keys off the status counter itself rather than a new timer
+     field, which matters for netcode specifically: restoreSim deletes any key
+     that is not in the snapshot, so a fresh poisonCueTimer would have to be
+     declared in the constructor or vanish on every rollback. Deriving the
+     throttle from state that is already snapshotted means a resimulated frame
+     replays the identical cue pattern for nothing.
+
+     Everything it checks lives in checkStatusThrottle above, so the negative
+     control at the foot of this file can run the identical checks against an
+     engine with the throttle removed. */
+  await checkStatusThrottle();
 });
 
 test("the status and burp sounds sit under the sounds that matter", async () => {
@@ -5066,4 +5506,84 @@ test("casting the pole does not lift him", async () => {
     "best it reached was " + r.worstVY);
   assert.equal(run("ROSTER.trev.specials.down.rise"), undefined,
     "and no `rise` may creep back into the table either");
+});
+
+/* ---- negative controls ------------------------------------------------
+   Each of these boots a copy of the engine with ONE line changed, in memory
+   and never on disk, and requires the checker the real test ran to fail on
+   the assertion it exists for. A test that cannot be made to fail is not
+   evidence of anything, and these three are the proof that the two checkers
+   above are reading the engine rather than agreeing with themselves. */
+
+test("control: a positive `rise` is an anti-recovery, and the check says so",
+     async () => {
+  /* Ladeane's -6.2 flipped to +6.2 -- byte for byte the bug Cobeus shipped
+     with, a recovery that drives its owner into the floor. The check has to
+     name the character and the move: a control that merely throws could be
+     throwing because the probe broke. */
+  const msg = await expectToFail(
+    () => checkRecoveries(sabotage("rise: -6.2, drift: 1.0, multi: 3,",
+                                   "rise: 6.2, drift: 1.0, multi: 3,")),
+    "an up-special driving its owner DOWNWARD has to fail this check");
+  assert.ok(msg.includes("LADEANE's HIGH NOTE gained 0px"),
+    "and it has to fail by naming the move that went nowhere; it said: " + msg);
+});
+
+test("control: a shove written back into the cloud is caught", async () => {
+  /* The removed behavior, restored where it used to live -- one assignment
+     next to the Cloud that comes out. This is the line somebody would write
+     if they wanted the old feel back, so it is the line the test has to
+     notice. */
+  const msg = await expectToFail(
+    () => checkFartMovesHimNowhere(sabotage(
+      "projectiles.push(new Cloud(this, gas));",
+      "projectiles.push(new Cloud(this, gas)); if (!this.grounded) this.vy = -4.2;")),
+    "a fart that throws its owner upward has to fail this check");
+  assert.ok(msg.includes("must not take a thing off his fall"),
+    "and it has to fail on the frame the gas comes out, which is the only " +
+    "frame a shove can be written on; it said: " + msg);
+});
+
+test("control: a `liftSelf` back on the spec is caught even if nothing reads it",
+     async () => {
+  /* The other half, and the reason the spec is asserted about separately: a
+     field nobody reads yet moves no fighter at all, so every measurement
+     above still passes. It is still how the shove was spelled the first
+     time, and a live one is a shove waiting for somebody to wire up. */
+  const msg = await expectToFail(
+    () => checkFartMovesHimNowhere(sabotage(
+      "speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,",
+      "speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86, liftSelf: 4.2,")),
+    "a liftSelf back on CROP DUST has to fail this check");
+  assert.ok(msg.includes("no `liftSelf` may creep back onto the spec"),
+    "and it has to fail on the spec, not on the motion -- nothing reads the " +
+    "field, so he really does stay put; it said: " + msg);
+});
+
+test("control: a status that speaks on every tick is caught", async () => {
+  /* The throttle taken out at the call site, which is where it lives and
+     therefore where it would be lost. 188 ticks would speak 188 times, and
+     the window this checks tops out at one in twelve. */
+  const msg = await expectToFail(
+    () => checkStatusThrottle(sabotage(
+      "if (this.poison % 20 === 0) cue('poison', { slot: this.slot, x: this.x });",
+      "cue('poison', { slot: this.slot, x: this.x });")),
+    "a poison that fires a cue every single tick has to fail this check");
+  assert.ok(msg.includes("poison should speak about once every twenty ticks"),
+    "and it has to fail on how often it SPEAKS, not on the damage -- the " +
+    "damage is unchanged; it said: " + msg);
+});
+
+test("control: a rooted swing is caught", async () => {
+  /* `mobile` taken off the swing -- the one word that is the difference
+     between holding a sword and being held by one, and the one word a
+     rewrite of the spec would drop. */
+  const msg = await expectToFail(
+    () => checkSwordIsMobile(sabotage(
+      "kind: 'laser', label: 'LASER SWORD', mobile: true,",
+      "kind: 'laser', label: 'LASER SWORD',")),
+    "a swing that roots him has to fail this check");
+  assert.ok(msg.includes("he should walk through a swing"),
+    "and it has to fail on the walking, which is the half of it a player " +
+    "feels first; it said: " + msg);
 });

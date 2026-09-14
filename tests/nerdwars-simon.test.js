@@ -20,6 +20,10 @@
  * the shape of the kit itself: the hotdog's arc and split, the reels and
  * their payouts, the choke and the drop, and the sleep -- with the ten-second
  * free-mana window that now rides on it and the soul that climbs out of him.
+ * Three sevens no longer pay a number at all, so what that reel DOES pay --
+ * the giant, and everything that stops being true while he is one -- is
+ * pinned at the END of this file, where a new boot cannot shift the seeded
+ * Math stream out from under everything that already runs after it.
  *
  * These load the engine source, as nerdwars-kel-buff.test.js does, because
  * none of this is reachable through NerdWars.fighters: projectiles, hitbox(),
@@ -215,12 +219,13 @@ const HELPERS = `
    cross the boundary as JSON; nothing here is compared by identity. */
 const SPEC = (run) => JSON.parse(run(`JSON.stringify({
   n: ROSTER.simon.specials.neutral, d: ROSTER.simon.specials.down,
-  u: ROSTER.simon.specials.up, ult: ROSTER.simon.ult,
+  u: ROSTER.simon.specials.up, ult: ROSTER.simon.ult, jab: ROSTER.simon.jab,
   manaMax: COMBAT.manaMax, maxHealth: COMBAT.maxHealth, ultMax: COMBAT.ultMax,
   gravity: PHYS.gravity, friction: PHYS.groundFriction, landLag: PHYS.landLag,
   main: STAGE.platforms.find(function (p) { return p.main; }) })`));
 
-const RIGHT = 2, SHIELD = 128, ULT = 256, SP_NEUTRAL = 512, SP_DOWN = 1024, SP_UP = 2048;
+const ATTACK = 32, RIGHT = 2, SHIELD = 128, ULT = 256,
+      SP_NEUTRAL = 512, SP_DOWN = 1024, SP_UP = 2048;
 
 /* Both of them clean and standing on the main floor, Simon on the left
    facing in and Reese far across the stage. Everything the warmup could have
@@ -371,12 +376,19 @@ function checkWholeHit(log, S) {
 }
 
 test("HOTDOG: a whole one hits for 9 and knocks the foe the way it was thrown", async () => {
-  /* Twenty pixels ahead is squarely in the first few frames of the arc. The
-     knockback direction is the whole point of a projectile that travels:
+  /* THIRTY pixels ahead, not twenty. The whole dog's box was an eight-pixel
+     square and is now eleven long -- the shape of the sprite rather than the
+     shape of nothing in particular -- which reaches two pixels further
+     forward, and two pixels was the whole margin: at twenty he is caught on
+     the very frame it leaves the hand, so there is no frame before the hit in
+     which the thing that hit him was in flight, and the check below has
+     nothing to read. Thirty puts the contact three frames into the arc.
+
+     The knockback direction is the whole point of a projectile that travels:
      applyHit reads it from which side of the victim the shot was on. */
   const run = await simonVsReese();
   const S = SPEC(run);
-  checkWholeHit(drive(run, "foe.x = me.x + 20;", 40, HOTDOG_HIT), S);
+  checkWholeHit(drive(run, "foe.x = me.x + 30;", 40, HOTDOG_HIT), S);
 });
 
 test("negative control: knockback read backwards fails the whole-hotdog hit test", async () => {
@@ -384,7 +396,7 @@ test("negative control: knockback read backwards fails the whole-hotdog hit test
     "const dir = Math.sign(defender.x - sourceX) || attacker.facing;",
     "const dir = -(Math.sign(defender.x - sourceX) || attacker.facing);") });
   const S = SPEC(run);
-  const log = drive(run, "foe.x = me.x + 20;", 40, HOTDOG_HIT);
+  const log = drive(run, "foe.x = me.x + 30;", 40, HOTDOG_HIT);
   expectToFail(() => checkWholeHit(log, S),
     "with the launch direction negated the hit test should fail, and it passed");
 });
@@ -394,7 +406,7 @@ test("negative control: a whole hotdog carrying the bun's payload fails the hit 
     "    this.base = spec;\n    this.spec = spec;\n    this.piece = 'whole';",
     "    this.base = spec;\n    this.spec = spec.parts.bottom;\n    this.piece = 'whole';") });
   const S = SPEC(run);
-  const log = drive(run, "foe.x = me.x + 20;", 40, HOTDOG_HIT);
+  const log = drive(run, "foe.x = me.x + 30;", 40, HOTDOG_HIT);
   expectToFail(() => checkWholeHit(log, S),
     "with the whole hotdog dealing the bun's 7 the hit test should fail, and it passed");
 });
@@ -402,7 +414,9 @@ test("negative control: a whole hotdog carrying the bun's payload fails the hit 
 /* Thrown from the left balcony so the whole flies over the main floor with
    forty pixels of air under it; the foe stands where it will be twelve frames
    after it leaves the hand, which is where the second press splits it. The
-   top keeps going well above his head; the bun drops onto it. */
+   top keeps going well above his head and off the side of the screen; the bun
+   planes down onto him. Sixty pixels of air below the split is what makes the
+   two lanes readable as two lanes: only one of them can reach the man. */
 const SPLIT_SETUP = `
     var perch = STAGE.platforms.filter(function (p) {
       return !p.main && p.y < main.y && p.x < main.x + main.w / 2;
@@ -413,8 +427,9 @@ const SPLIT_SETUP = `
 const HOTDOG_SPLIT = {
   p0: `(i === 0 || i === NEUTRAL.startup + 12) ? ${SP_NEUTRAL} : 0`,
   rec: "{ whole: countOf(Hotdog, 'whole')," +
-       " top: pick(shotOf(Hotdog, 'top'), ['x', 'y', 'vx', 'vy'])," +
-       " half: pick(shotOf(HotdogHalf), ['x', 'y', 'vy']), fhp: foe.health, st: me.state }",
+       " top: pick(shotOf(Hotdog, 'top'), ['x', 'y', 'vx', 'vy', 'slide', 'launchVx'])," +
+       " half: pick(shotOf(HotdogHalf), ['x', 'y', 'vx', 'vy'])," +
+       " fhp: foe.health, st: me.state }",
 };
 
 function checkSplit(log, S) {
@@ -423,25 +438,86 @@ function checkSplit(log, S) {
     "the second press splits it on that very frame; the top appeared on frame " + split);
   assert.equal(log[split - 1].whole, 1, "a whole one was in the air the frame before");
   assert.equal(log[split].whole, 0, "and is not after");
+
+  /* THE SAUSAGE PEELS OUT OF THE BUN, it does not teleport out of it. The
+     split used to be one baked sprite swapped for another between two frames,
+     at which point the top simply WAS faster and there was nothing to watch;
+     it now leaves at a quarter of what the whole dog was doing and closes the
+     gap back up to full speed over the slide. So the speed to pin is the
+     target it eases towards -- launchVx -- and the frame it arrives on,
+     because a top that starts at the target is the thing this shape was
+     introduced to stop. */
   const top = log[split].top;
-  assert.ok(near(Math.abs(top.vx), S.n.speed * S.n.top.speedMul),
-    "the top is faster: speed " + S.n.speed + " times speedMul " + S.n.top.speedMul +
-    " is " + (S.n.speed * S.n.top.speedMul) + "; its vx was " + top.vx);
+  const full = S.n.speed * S.n.top.speedMul;
+  assert.ok(near(Math.abs(top.launchVx), full),
+    "the top is easing up to speed " + S.n.speed + " times speedMul " + S.n.top.speedMul +
+    " = " + full + "; launchVx was " + top.launchVx);
   assert.equal(S.n.top.speedMul, 1.35, "and speedMul is 1.35 -- retune on purpose");
   assert.ok(top.vx > 0, "still heading the way it was thrown");
+  assert.ok(top.vx < S.n.speed,
+    "and SLOWER than the whole dog was for the moment it is coming free -- that is the peel; " +
+    "its vx on the split frame was " + top.vx + " against the whole's " + S.n.speed);
+  assert.equal(S.n.top.kick, 0.25, "it leaves at a quarter of it -- retune on purpose");
+
+  /* Snapped exactly onto the target on the last frame of the slide rather
+     than left wherever a geometric series happened to reach: two machines
+     replaying this frame have to agree to the bit, and the easiest number to
+     agree on is one that is stated outright. The slide starts at `slide` and
+     the split frame's own update has already spent one of it, so the arrival
+     is slide - 1 frames after the split. */
+  const upToSpeed = split + S.n.slide - 1;
+  assert.equal(log[upToSpeed].top.slide, 0, "the slide has run out by frame " + upToSpeed);
+  assert.ok(near(log[upToSpeed].top.vx, full),
+    "and the top is snapped exactly onto " + full + " there, not merely near it; vx was " +
+    log[upToSpeed].top.vx);
+  assert.equal(S.n.slide, 6, "and the slide is 6 frames -- retune on purpose");
+  for (let f = split; f < upToSpeed; f++) {
+    assert.ok(log[f].top.vx < log[f + 1].top.vx,
+      "climbing on every frame of the slide rather than jumping there; frame " + f +
+      " read " + log[f].top.vx + " and frame " + (f + 1) + " read " + log[f + 1].top.vx);
+  }
+
+  /* THE BUN CATCHES THE AIR. It used to be 3.2 a frame straight down, no
+     drift, dead on the first thing it touched -- which from throwing height
+     over the main floor was five frames of bun, and half of this move was
+     something nobody ever saw happen. It is now shed BACKWARD off the same
+     launch that threw the sausage forward, popped upward as it comes free,
+     and eased down to a fall it never exceeds. */
   const half = log[split].half;
   assert.ok(half, "and a bottom bun should be falling from the split");
-  assert.equal(half.vy, S.n.bottom.fall,
-    "at the spec's fall speed of " + S.n.bottom.fall + "; its vy was " + (half || {}).vy);
-  assert.equal(S.n.bottom.fall, 3.2, "which is 3.2 -- retune on purpose");
-  assert.ok(near(half.x, top.x - top.vx, 1e-6),
-    "dropped from exactly where the split happened -- the top has moved one frame on, the bun has not");
+  // Where the two came apart: the top has moved one frame on, and this is the
+  // point it moved on FROM.
+  const splitX = top.x - top.vx;
+  assert.ok(half.x < splitX,
+    "the bun is shed BACKWARD from the split at " + splitX + " -- the equal and opposite half " +
+    "of the launch that threw the sausage forward; it was at " + half.x);
+  assert.equal(S.n.bottom.shed, 0.16, "shed is 0.16 of that launch -- retune on purpose");
+  assert.ok(half.vy < 0,
+    "and it is popped UP as the dog leaves rather than dropping the instant it is free; vy was " +
+    half.vy);
+  assert.equal(S.n.bottom.pop, -0.7, "the pop is -0.7 -- retune on purpose");
 
-  for (let f = split + 1; f < log.length && log[f].half; f++) {
-    assert.equal(log[f].half.vy, S.n.bottom.fall, "the bun falls at one speed, no gravity; frame " + f);
-    assert.ok(near(log[f].half.y - log[f - 1].half.y, S.n.bottom.fall),
-      "and moves exactly that far each frame; frame " + f);
+  let air = 0, fastest = -Infinity, wentLeft = false, wentRight = false;
+  for (let f = split; f < log.length && log[f].half; f++) {
+    air++;
+    fastest = Math.max(fastest, log[f].half.vy);
+    if (log[f].half.vx < 0) wentLeft = true;
+    if (log[f].half.vx > 0) wentRight = true;
+    assert.ok(log[f].half.vy <= S.n.bottom.fall + 1e-9,
+      "it never falls faster than the speed it planes at (" + S.n.bottom.fall +
+      "); on frame " + f + " vy was " + log[f].half.vy);
   }
+  assert.equal(S.n.bottom.fall, 1.25, "which is 1.25, down from 3.2 -- retune on purpose");
+  assert.ok(near(fastest, S.n.bottom.fall, 0.01),
+    "and it does settle onto that speed rather than stopping short of it; the fastest it ever " +
+    "fell was " + fastest);
+  assert.ok(wentLeft && wentRight,
+    "it tips one way and then the other and slides whichever way it is tipped, so a whole fall " +
+    "has to show its vx going BOTH ways -- a bun that only ever drifts one way is a rock with " +
+    "a wind behind it; left " + wentLeft + ", right " + wentRight);
+  assert.ok(air >= 30,
+    "and it is in the air long enough to be somebody's problem: this same drop was over in " +
+    "five frames at the old flat 3.2 and has to take at least thirty now; it lasted " + air);
 
   const hit = log.findIndex((r) => r.fhp < 100);
   assert.ok(hit > split, "the foe under the split should have been hit; his health never moved");
@@ -449,33 +525,51 @@ function checkSplit(log, S) {
     "the bun takes " + S.n.bottom.damage + "; he lost " + (100 - log[hit].fhp));
   assert.equal(S.n.bottom.damage, 7, "which is 7 -- retune on purpose");
   assert.ok(log[hit - 1].half && !log[hit].half, "the bun is spent on the hit");
-  assert.ok(log[hit].top, "while the top is still flying: the 7 was the bun's, not the top's");
+  /* And it was the BUN that took them. The top left at twenty degrees over a
+     man standing sixty pixels below the split and is off the side of the
+     screen long before the bread lands, so the only thing that can have been
+     in contact is the half that planed down onto him -- which is the whole
+     claim that one throw covers two lanes. */
+  assert.ok(log.slice(split, hit).every((r) => r.fhp === 100),
+    "and nothing touched him between the split and the bun arriving");
+  assert.notEqual(S.n.bottom.damage, S.n.top.damage,
+    "precondition: the two halves have to deal different numbers, or the line above could not " +
+    "tell which of them landed");
   return { split, hit };
 }
 
-test("HOTDOG: the second press splits it -- a faster top and a bun that drops for 7", async () => {
+test("HOTDOG: the second press splits it -- a sausage that peels out and a bun that planes down for 7", async () => {
+  /* Ninety frames, not sixty. The bun used to be on the floor nineteen frames
+     after the split and now takes forty, so a sixty-frame recording ends with
+     the bread still in the air and every check that reads the hit comes back
+     undefined -- which reads like a move that stopped working rather than a
+     recording that was too short. */
   const run = await simonVsReese();
   const S = SPEC(run);
-  checkSplit(drive(run, SPLIT_SETUP, 60, HOTDOG_SPLIT), S);
+  checkSplit(drive(run, SPLIT_SETUP, 90, HOTDOG_SPLIT), S);
 });
 
-test("negative control: a top that keeps the whole's speed fails the split test", async () => {
+test("negative control: a top that never gets faster fails the split test", async () => {
   const run = await simonVsReese({ engine: sabotage(
-    "this.vx *= parts.top.speedMul;", "this.vx *= 1;") });
+    "this.launchVx = this.vx * top.speedMul;", "this.launchVx = this.vx;") });
   const S = SPEC(run);
-  const log = drive(run, SPLIT_SETUP, 60, HOTDOG_SPLIT);
+  const log = drive(run, SPLIT_SETUP, 90, HOTDOG_SPLIT);
   expectToFail(() => checkSplit(log, S),
-    "with the top no faster than the whole the split test should fail, and it passed");
+    "with the sausage easing towards the speed it already had the split test should fail, " +
+    "and it passed");
 });
 
-test("negative control: a bun that falls upward fails the split test", async () => {
+test("negative control: a bun that drops like a stone fails the split test", async () => {
+  /* Exactly the bun this replaced: settle 1 puts it on its fall speed the
+     first frame it exists, and 3.2 is what that speed used to be. Both at
+     once, because either on its own is still a glide -- what is pinned is the
+     four times longer it now takes to come down. */
   const run = await simonVsReese({ engine: sabotage(
-    "    this.vx = 0;\n    this.vy = spec.fall;",
-    "    this.vx = 0;\n    this.vy = -spec.fall;") });
+    "fall: 1.25, settle: 0.18,", "fall: 3.2, settle: 1,") });
   const S = SPEC(run);
-  const log = drive(run, SPLIT_SETUP, 60, HOTDOG_SPLIT);
+  const log = drive(run, SPLIT_SETUP, 90, HOTDOG_SPLIT);
   expectToFail(() => checkSplit(log, S),
-    "with the bun rising instead of dropping the split test should fail, and it passed");
+    "with the bun back on a flat 3.2 the split test should fail, and it passed");
 });
 
 /* Frame 24 is the first press the game can hear after the throw: the throw
@@ -708,49 +802,101 @@ test("negative control: a constant seed fails the determinism test", async () =>
 });
 
 /* The payout table, called directly with the reels forced: this is what
-   payout() does with a result, not how the reels arrive at one. */
+   payout() does with a result, not how the reels arrive at one. Every line
+   gets its own RESET, so no prize is ever read on top of another one -- and
+   because RESET clears buffTimer, a jackpot cannot leak its transformation
+   into the reel measured after it. */
 const PAYOUTS = `(function () {
     var out = {};
-    ${RESET} foe.x = me.x + 30; me.mana = 10; me.reels = [0, 0, 0]; me.payout(DOWN);
-    out.jackpotLost = 100 - foe.health; out.jackpotMana = me.mana; out.jackpotFoe = foe.state;
-    ${RESET} foe.x = me.x + 60; me.mana = 10; me.reels = [0, 0, 0]; me.payout(DOWN);
-    out.farLost = 100 - foe.health; out.farMana = me.mana;
-    ${RESET} me.mana = 10; me.reels = [1, 1, 1]; me.payout(DOWN);
-    out.chipsMana = me.mana;
-    ${RESET} me.health = 50; me.reels = [2, 2, 2]; me.payout(DOWN);
-    out.healed = me.health;
-    ${RESET} me.ultMeter = 0; me.reels = [3, 3, 3]; me.payout(DOWN);
-    out.house = me.ultMeter;
+    ${RESET} foe.x = me.x + 30; me.mana = 10; me.ultMeter = 10; me.reels = [0, 0, 0]; me.payout(DOWN);
+    out.jackLost = 100 - foe.health; out.jackFoe = foe.state; out.jackMana = me.mana;
+    out.jackHealth = me.health; out.jackUlt = me.ultMeter;
+    out.jackBuff = me.buffTimer; out.jackDmgMul = me.damageMul;
     ${RESET} foe.x = me.x + 30; me.mana = 10; me.reels = [0, 0, 1]; me.payout(DOWN);
-    out.pairLost = 100 - foe.health; out.pairMana = me.mana;
+    out.pairLost = 100 - foe.health; out.pairFoe = foe.state; out.pairMana = me.mana;
+    out.pairBuff = me.buffTimer;
+    ${RESET} foe.x = me.x + 60; me.mana = 10; me.reels = [0, 0, 1]; me.payout(DOWN);
+    out.farLost = 100 - foe.health;
+    ${RESET} me.mana = 10; me.reels = [1, 1, 1]; me.payout(DOWN); out.blue3 = me.mana;
+    ${RESET} me.mana = 10; me.reels = [1, 1, 0]; me.payout(DOWN); out.blue2 = me.mana;
+    ${RESET} me.health = 30; me.reels = [2, 2, 2]; me.payout(DOWN); out.green3 = me.health;
+    ${RESET} me.health = 30; me.reels = [2, 2, 0]; me.payout(DOWN); out.green2 = me.health;
+    ${RESET} me.ultMeter = 10; me.reels = [3, 3, 3]; me.payout(DOWN); out.spade3 = me.ultMeter;
+    ${RESET} me.ultMeter = 10; me.reels = [3, 3, 0]; me.payout(DOWN); out.spade2 = me.ultMeter;
     ${RESET} me.reels = [0, 1, 2]; me.payout(DOWN);
     out.bust = me.health;
-    ${RESET} me.health = 2; me.reels = [0, 1, 2]; me.payout(DOWN);
-    out.bustFloor = me.health;
-    ${RESET} me.health = 2; me.reels = [3, 2, 1]; me.payout(DOWN);
-    out.bustFloorAgain = me.health;
+    ${RESET} me.health = 2; me.reels = [0, 1, 2]; me.payout(DOWN); out.bustFloor = me.health;
+    ${RESET} me.health = 2; me.reels = [3, 2, 1]; me.payout(DOWN); out.bustFloorAgain = me.health;
     return JSON.stringify(out);
   })()`;
 
 function checkPayouts(p, S) {
-  assert.equal(p.jackpotLost, S.d.jackpot.damage,
-    "three sevens hit a foe inside the ring for " + S.d.jackpot.damage + "; he lost " + p.jackpotLost);
-  assert.equal(S.d.jackpot.damage, 22, "and that is 22 -- retune on purpose");
-  assert.equal(p.jackpotFoe, "hitstun", "and it is a real hit");
-  assert.equal(p.jackpotMana, S.manaMax,
-    "and refill his mana to the cap of " + S.manaMax + " from 10; it read " + p.jackpotMana);
+  /* THREE SEVENS PAY IN ONE CURRENCY AND IT IS NOT A NUMBER. No damage, no
+     mana, no health, no meter -- the transformation and nothing else. A
+     payout that also handed him a blast and a full bar was three rewards
+     wearing one hat, and it was the reason no other symbol on the reel was
+     worth chasing. Each of the four is asserted separately rather than as one
+     "nothing happened", because a jackpot that quietly started paying mana
+     again is exactly the regression this line is here to catch. */
+  assert.equal(p.jackLost, 0,
+    "three sevens take NOTHING off a foe standing well inside the ring; he lost " + p.jackLost);
+  assert.equal(p.jackFoe, "idle", "and do not even put him in hitstun; he was " + p.jackFoe);
+  assert.equal(p.jackMana, 10,
+    "no mana either -- blue is the mana symbol, and sevens paying a full bar as well is what " +
+    "made blue the one nobody ever had a reason to chase; it read " + p.jackMana);
+  assert.equal(p.jackHealth, 100, "no health; it read " + p.jackHealth);
+  assert.equal(p.jackUlt, 10, "and no meter; it read " + p.jackUlt);
+  assert.ok(p.jackBuff > 0, "what it pays instead is the transformation; buffTimer read " + p.jackBuff);
+  assert.equal(p.jackDmgMul, S.d.jackpot.damageMul,
+    "which is live from the frame it lands: damageMul read " + p.jackDmgMul);
+
+  /* A PAIR IS THE RING, and the ring is the only thing a near miss pays.
+     Half a transformation is not a thing, so jackpot.damage is only ever read
+     at k = 0.5 -- 22 is written down so a pair stays legibly HALF of
+     something the way every other pair on this reel is, and 11 is what lands. */
+  assert.equal(p.pairLost, S.d.jackpot.damage / 2,
+    "a pair of sevens hits a foe inside the ring for half of " + S.d.jackpot.damage +
+    "; he lost " + p.pairLost);
+  assert.equal(S.d.jackpot.damage, 22, "so the ring lands 11 -- retune on purpose");
+  assert.equal(p.pairFoe, "hitstun", "and it is a real hit; he was " + p.pairFoe);
+  assert.equal(p.pairMana, 10, "a pair pays no mana either; it read " + p.pairMana);
+  assert.equal(p.pairBuff, 0,
+    "and it does NOT transform him -- a jackpot a near miss mostly delivers is not a jackpot; " +
+    "buffTimer read " + p.pairBuff);
   assert.equal(p.farLost, 0,
     "a foe outside the " + S.d.jackpot.radius + "px ring is untouched; he lost " + p.farLost);
-  assert.equal(p.farMana, S.manaMax, "the mana still comes, hit or no hit");
-  assert.equal(p.chipsMana, S.manaMax, "three blues: mana to the cap from 10; it read " + p.chipsMana);
-  assert.equal(p.healed, 50 + S.d.heal.health,
-    "three greens heal " + S.d.heal.health + " from 50; health read " + p.healed);
-  assert.equal(S.d.heal.health, 24, "and that is 24 -- retune on purpose");
-  assert.equal(p.house, S.d.house.ult, "three spades add " + S.d.house.ult + " ult meter; it read " + p.house);
-  assert.equal(S.d.house.ult, 40, "and that is 40 -- retune on purpose");
-  assert.equal(p.pairLost, S.d.jackpot.damage / 2,
-    "a pair of sevens pays half: " + (S.d.jackpot.damage / 2) + " damage; he lost " + p.pairLost);
-  assert.equal(p.pairMana, 10 + S.d.jackpot.mana / 2, "and half the mana; it read " + p.pairMana);
+
+  assert.equal(p.blue3, S.manaMax,
+    "three blues pay " + S.d.chips.mana + " mana, which from 10 is the cap of " + S.manaMax +
+    "; it read " + p.blue3);
+  assert.equal(S.d.chips.mana, 100, "and that is 100 -- retune on purpose");
+  assert.equal(p.blue2, 10 + S.d.chips.mana / 2,
+    "and a pair pays half of it; it read " + p.blue2);
+
+  assert.equal(p.green3, 30 + S.d.heal.health,
+    "three greens heal " + S.d.heal.health + " from 30; health read " + p.green3);
+  assert.equal(S.d.heal.health, 50,
+    "and that is 50 now, not the old 24: green is the symbol you chase when you are losing, " +
+    "so three of them is half a bar -- retune on purpose");
+  assert.equal(p.green2, 30 + S.d.heal.health / 2,
+    "and a pair heals half of it; it read " + p.green2);
+
+  /* THE HOUSE IS THE ONE REEL THAT DOES NOT HALVE, in either direction.
+     Three spades fill the bar OUTRIGHT however empty it was -- "you may use
+     your ult now" reads cleaner off a symbol than a number you have to go
+     and find on the HUD -- and a pair adds the roster's number FLAT rather
+     than half of it, which is why payout() keeps this branch out of k
+     entirely. */
+  assert.ok(S.ultMax > 10 + S.d.house.ult,
+    "precondition: filling the bar outright and adding " + S.d.house.ult + " to 10 have to be " +
+    "different numbers or the next line cannot tell them apart; ultMax " + S.ultMax);
+  assert.equal(p.spade3, S.ultMax,
+    "three spades set the bar to " + S.ultMax + " outright from 10, not to 10 + " +
+    S.d.house.ult + "; it read " + p.spade3);
+  assert.equal(p.spade2, 10 + S.d.house.ult,
+    "and a pair adds " + S.d.house.ult + " FLAT, not half of it; it read " + p.spade2);
+  assert.equal(S.d.house.ult, 50, "and that is 50 -- retune on purpose");
+
   assert.equal(p.bust, 100 - S.d.bust.damage,
     "no pair busts for " + S.d.bust.damage + " off his own bar; it read " + p.bust);
   assert.equal(S.d.bust.damage, 3, "and that is 3 -- retune on purpose");
@@ -758,7 +904,7 @@ function checkPayouts(p, S) {
   assert.equal(p.bustFloorAgain, 1, "whatever three different symbols came up; it read " + p.bustFloorAgain);
 }
 
-test("SLOTS: the payout table -- three of a kind pays in full, a pair pays half, a bust costs 3", async () => {
+test("SLOTS: the payout table -- sevens pay a transformation, every other reel pays a number, and a bust costs 3", async () => {
   const run = await simonVsReese();
   const S = SPEC(run);
   checkPayouts(JSON.parse(run(PAYOUTS)), S);
@@ -789,13 +935,20 @@ test("negative control: a jackpot with no ring fails the payout test", async () 
   expectToFail(() => checkPayouts(p, S), "with the jackpot hitting at any range the payout test should fail; it passed");
 });
 
-test("negative control: a jackpot that pays no mana fails the payout test", async () => {
+test("negative control: a jackpot that pays mana again fails the payout test", async () => {
+  /* The inverse of the control that used to stand here. Sevens paying a full
+     bar on top of everything else was the shipped behavior once and is the
+     thing that was taken away, so the sabotage is putting it back: a hundred
+     mana into the sevens branch, ahead of the transformation, halved for a
+     pair like every other reel. */
   const run = await simonVsReese({ engine: sabotage(
-    "this.mana = Math.min(COMBAT.manaMax, this.mana + s.jackpot.mana * k);",
-    "this.mana = Math.min(COMBAT.manaMax, this.mana + s.jackpot.mana * k * 0);") });
+    "        addEffect('ring', this.x, this.y - 8, '#ffd60a');\n",
+    "        addEffect('ring', this.x, this.y - 8, '#ffd60a');\n" +
+    "        this.mana = Math.min(COMBAT.manaMax, this.mana + 100 * k);\n") });
   const S = SPEC(run);
   const p = JSON.parse(run(PAYOUTS));
-  expectToFail(() => checkPayouts(p, S), "with the sevens paying no mana the payout test should fail; it passed");
+  expectToFail(() => checkPayouts(p, S),
+    "with the sevens paying mana again the payout test should fail; it passed");
 });
 
 /* =====================================================================
@@ -821,13 +974,25 @@ function checkChoke(log, S) {
   assert.equal(C, u.startup,
     "a foe fourteen pixels ahead is caught on the first active frame (" + u.startup + "); caught on " + C);
   assert.equal(log[C].hb, true, "the grab box is live on that frame");
+  let carried = 0;
   for (let f = u.startup; f < u.startup + u.active; f++) {
     const dx = log[f].x - log[f - 1].x;
     assert.ok(dx >= 1 && dx <= u.lunge + 1e-9,
       "the lunge carries him forward on every active frame, up to the roster's " + u.lunge +
       " per frame; frame " + f + " moved him " + dx);
+    carried += dx;
   }
-  assert.equal(u.lunge, 2.4, "and the lunge is 2.4 -- retune on purpose");
+  assert.equal(u.lunge, 4.2, "and the lunge is 4.2, up from 2.4 -- retune on purpose");
+  /* The lunge is what turns this from a move you had to already be in range
+     for into an approach. The box is live for exactly the frames he is
+     moving, so contact during the lunge IS the catch -- it simply did not
+     travel far enough to reach anybody. Measured as the whole trip rather
+     than per frame because per frame is friction's business and the trip is
+     the move's: eight active frames carried him ten and a half pixels at 2.4
+     and carry him eighteen and a half now. */
+  assert.ok(carried > 15,
+    "and eight active frames of it have to carry him more than fifteen pixels -- at the old " +
+    "2.4 they carried him ten and a half; he travelled " + carried);
 
   assert.equal(log[C].gr, 1, "me.grabbing points at the foe's seat; it was " + log[C].gr);
   assert.equal(log[C].gk, 2, "grabKind 2 is the choke; it was " + log[C].gk);
@@ -879,8 +1044,19 @@ function checkChoke(log, S) {
   assert.ok(u.finish.base > 0 && u.finish.scale > 0,
     "a throw with no force behind it is not a throw; base/scale read " +
     u.finish.base + "/" + u.finish.scale);
-  assert.equal(u.finish.base + "/" + u.finish.scale + "@" + u.finish.angle, "2.2/3.8@300",
-    "and the blade is 2.2/3.8 at 300 now, down from 3.6/6.4 -- retune on purpose");
+  assert.equal(u.finish.base + "/" + u.finish.scale + "@" + u.finish.angle, "2.6/4.2@340",
+    "and the blade is 2.6/4.2 at 340 -- retune on purpose");
+  /* 340, not 300, and this is the half of that retune that can be seen. 300
+     is sixty degrees BELOW the horizontal, so nearly all of a small force was
+     going straight into a floor that was already there -- a man slammed
+     downward while standing on the ground does not move, he just stops, and
+     the throw read as no knockback at all. 340 is twenty degrees below, so
+     most of the force is TRAVEL. Pinned as a ratio of the two velocities
+     rather than as either number, because that is the claim: still down, but
+     mostly along. */
+  assert.ok(Math.abs(log[F].fvx) > Math.abs(log[F].fvy),
+    "most of the blade's force is travel rather than floor: |vx| has to beat |vy|, and they " +
+    "read " + Math.abs(log[F].fvx) + " against " + Math.abs(log[F].fvy));
 
   /* Which leaves the choke holding every point the move costs: the catch,
      then the ticks, and nothing added on the way out. */
@@ -948,8 +1124,8 @@ test("negative control: a finish with no force left fails the choke test", async
      With base and scale gone too the hold ends with the foe standing where
      he was, which is what this half of the check exists to catch. */
   const run = await simonVsReese({ engine: sabotage(
-    "      finish: { damage: 0, base: 2.2, scale: 3.8, angle: 300,",
-    "      finish: { damage: 0, base: 0, scale: 0, angle: 300,") });
+    "      finish: { damage: 0, base: 2.6, scale: 4.2, angle: 340,",
+    "      finish: { damage: 0, base: 0, scale: 0, angle: 340,") });
   const S = SPEC(run);
   const log = drive(run, "foe.x = me.x + 14;", 120, CHOKE);
   expectToFail(() => checkChoke(log, S),
@@ -1377,4 +1553,306 @@ test("negative control: a NaN in the roster fails the CPU sanity test", async ()
   const field = await simonVsReese({ warmup: 0, stage: 5, engine });
   const r2 = JSON.parse(field(SIM));
   expectToFail(() => checkSim(r2, "battlefield"), "and on Battlefield too; it passed");
+});
+
+/* =====================================================================
+   THE JACKPOT: WHAT THREE SEVENS ACTUALLY PAY
+
+   Appended here rather than beside the payout table above, and it is not a
+   matter of taste: every test in this file draws from one seeded Math stream,
+   so a boot inserted in the middle changes what both CPUs do in every test
+   after it. New tests go on the end.
+
+   The payout table above pins that the sevens pay no damage, no mana, no
+   health and no meter. This is the other half -- the thing they DO pay, and
+   the three ways it is unlike every other buff in the game: it ramps rather
+   than snapping on, it never counts down, and while it is up the machine that
+   handed it to him will not take another coin.
+   ===================================================================== */
+
+// payout() reads the reels off him and nothing else, so forcing them and
+// calling it is the whole spin without ninety frames of waiting for it.
+const JACKPOT = "me.reels = [0, 0, 0]; me.payout(DOWN);";
+
+const GIANT = {
+  p0: "0",
+  rec: "{ bt: me.buffTimer, dm: me.damageMul, sm: me.sizeMul," +
+       " hold: !!(me.buffStats && me.buffStats.hold) }",
+};
+
+function checkGiant(log, S) {
+  const j = S.d.jackpot;
+  assert.equal(j.damageMul + "x" + j.sizeMul, "2x3",
+    "DOUBLE damage and TRIPLE size. Three was asked for on both and two is what was kept on " +
+    "the damage after seeing it played: triple damage on every attack he owns, for the rest of " +
+    "a stock, off a pull he can learn the timing of, is the strongest thing in the game by a " +
+    "distance. The size is still three, and it costs him -- retune on purpose. It read " +
+    j.damageMul + "x" + j.sizeMul);
+
+  /* IT DOES NOT TICK. Reese's ult is a DURATION and counts down; this is
+     "until he loses a stock", and buffStats.hold is what stops update()
+     decrementing the timer. buffTimer is 1 rather than some enormous number
+     precisely because nothing is ever subtracted from it -- only its sign is
+     read -- so a timer that has started counting is a buff on its way out,
+     which this one must never be.
+
+     Read before the size below, because a timer that ticked is a buff that
+     is already GONE by the second frame, and a check that meets that as a
+     sizeMul of 1 reports it as a growth that never started. */
+  assert.ok(log.every((r) => r.hold),
+    "the buff carries the hold that stops the timer; it was missing by frame " +
+    log.findIndex((r) => !r.hold));
+  assert.ok(log.every((r) => r.bt > 0 && r.bt === log[0].bt),
+    "so buffTimer stays exactly where payout() put it, above zero and never moving, however " +
+    "long the recording runs; it read " + log[0].bt + " on the first frame and " +
+    log[log.length - 1].bt + " on the last");
+  assert.ok(log.every((r) => r.dm === j.damageMul),
+    "and the damage multiplier is live on every one of those frames; it first read " +
+    (log.find((r) => r.dm !== j.damageMul) || {}).dm);
+  assert.ok(log.length >= 300,
+    "precondition: the recording has to be long enough that a timed buff would have run out " +
+    "inside it, or 'it does not tick' is a claim about nothing; it was " + log.length + " frames");
+
+  /* IT RAMPS. The size is read through one getter off the frame the buff
+     landed, so the drawing, the hurtbox and his own hitboxes cannot disagree
+     about how big he is -- and the point of the ramp is that a man GROWING
+     is a thing you can watch, where a sprite swapped for a bigger one is a
+     thing you find out about by being hit. */
+  assert.ok(log[0].sm > 1,
+    "he is already growing on the first frame after the payout; sizeMul read " + log[0].sm);
+  assert.ok(log[0].sm < j.sizeMul,
+    "and is NOT there yet -- a size that arrives whole on the first frame is the sprite swap " +
+    "this ramp exists instead of; sizeMul read " + log[0].sm);
+  const grown = log.findIndex((r) => r.sm === j.sizeMul);
+  assert.equal(grown, 9,
+    "he is full size on the tenth frame after the payout -- a sixth of a second, long enough " +
+    "to read as growing and short enough that nobody fights a size he was never meant to be; " +
+    "he got there on frame " + grown);
+  for (let f = 1; f <= grown; f++) {
+    assert.ok(log[f].sm > log[f - 1].sm,
+      "climbing on every frame of it; frame " + f + " read " + log[f].sm +
+      " against " + log[f - 1].sm + " the frame before");
+  }
+  for (let f = grown; f < log.length; f++) {
+    assert.equal(log[f].sm, j.sizeMul,
+      "and he stays there: on frame " + f + " sizeMul read " + log[f].sm);
+  }
+}
+
+test("JACKPOT: he grows into it over ten frames, and then nothing counts down", async () => {
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  checkGiant(drive(run, JACKPOT, 300, GIANT), S);
+});
+
+test("negative control: a jackpot buff that counts down fails the giant test", async () => {
+  /* The buff without its hold, which is what every other buff in the game
+     is. buffTimer is 1, so an ordinary countdown takes it to 0 on the very
+     next frame and the giant is a man again before anyone has seen him. */
+  const run = await simonVsReese({ engine: sabotage(
+    "if (this.buffTimer > 0 && !(this.buffStats && this.buffStats.hold)) this.buffTimer--;",
+    "if (this.buffTimer > 0) this.buffTimer--;") });
+  const S = SPEC(run);
+  const log = drive(run, JACKPOT, 300, GIANT);
+  expectToFail(() => checkGiant(log, S),
+    "with the timer ticking the giant test should fail; it passed");
+});
+
+test("negative control: a size that snaps on instead of growing fails the giant test", async () => {
+  const run = await simonVsReese({ engine: sabotage(
+    "const JACKPOT_GROW = 10;", "const JACKPOT_GROW = 1;") });
+  const S = SPEC(run);
+  const log = drive(run, JACKPOT, 300, GIANT);
+  expectToFail(() => checkGiant(log, S),
+    "with the growth over in one frame the giant test should fail; it passed");
+});
+
+/* Fourteen pixels ahead is inside an ordinary jab, so the transformed one is
+   not being asked to reach any further than the plain one had to -- what is
+   being compared is the number on the hit, not whether it landed. The press
+   is on frame 30, well clear of anything the payout does. */
+const JAB = {
+  p0: `i === 30 ? ${ATTACK} : 0`,
+  rec: "{ fhp: foe.health, dm: me.damageMul }",
+};
+const jabbed = (run, setup) => drive(run, setup + " foe.x = me.x + 14;", 46, JAB);
+
+function checkDoubled(plain, giant, S) {
+  const plainLost = 100 - Math.min(...plain.map((r) => r.fhp));
+  const giantLost = 100 - Math.min(...giant.map((r) => r.fhp));
+  assert.equal(plain[0].dm, 1, "precondition: an untransformed Simon multiplies nothing");
+  assert.ok(plainLost > 0,
+    "precondition: the ordinary jab has to have LANDED, or there is nothing here to double " +
+    "and the comparison below is two zeroes agreeing with each other");
+  assert.equal(plainLost, S.jab.damage,
+    "precondition: and it takes the roster's jab damage of " + S.jab.damage + "; he lost " +
+    plainLost);
+  assert.ok(giantLost > 0,
+    "precondition: the giant's jab has to land too -- he is three times the size, so a whiff " +
+    "here is a broken scenario rather than a balance finding; he lost " + giantLost);
+  assert.equal(S.d.jackpot.damageMul, 2, "double, not triple -- retune on purpose");
+  assert.equal(giantLost, plainLost * 2,
+    "and a jackpot Simon's jab takes twice what the same jab took a moment ago: " + plainLost +
+    " becomes " + (plainLost * 2) + "; he lost " + giantLost);
+  assert.equal(giant[0].dm, 2,
+    "off the multiplier every hit in the game already goes through, live from the frame the " +
+    "payout landed; damageMul read " + giant[0].dm);
+}
+
+test("JACKPOT: every attack he owns takes double -- the same jab, on the same man, twice the number", async () => {
+  /* Measured rather than read off the spec. damageMul is a getter that
+     applyHit consults at the moment of the hit, and the thing worth pinning
+     is that a hit actually goes through it -- a buff that is set correctly
+     and read nowhere is the failure this catches. */
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  checkDoubled(jabbed(run, ""), jabbed(run, JACKPOT), S);
+});
+
+test("negative control: a damage multiplier nobody reads fails the double-damage test", async () => {
+  /* The spec still says 2 -- so this is not a number the checker can be
+     talked out of by reading it back. The getter every hit goes through is
+     what is broken, and the only thing that notices is the health bar. */
+  const run = await simonVsReese({ engine: sabotage(
+    "return this.buffTimer > 0 && this.buffStats ? this.buffStats.damageMul : 1;",
+    "return 1;") });
+  const S = SPEC(run);
+  const plain = jabbed(run, ""), giant = jabbed(run, JACKPOT);
+  expectToFail(() => checkDoubled(plain, giant, S),
+    "with the multiplier read nowhere the double-damage test should fail; it passed");
+});
+
+/* Stale reels are left on him so a pull that WAS heard has something visible
+   to do: the lever wipes them to -1,-1,-1 on its startup frame. */
+const RE_PULL = {
+  p0: `i === 10 ? ${SP_DOWN} : 0`,
+  rec: "{ st: me.state, can: me.canSpecial(bitsToPad(" + SP_DOWN + "))," +
+       " r: me.reels.join(','), bt: me.buffTimer }",
+};
+
+function checkNoRePull(plain, giant) {
+  assert.ok(plain.every((r) => r.bt === 0), "precondition: the control Simon is not transformed");
+  assert.equal(plain[10].st, "special",
+    "precondition: the SAME press on an untransformed Simon does pull the lever, so a refusal " +
+    "below is the buff and not a pad bit I got wrong; he was " + plain[10].st);
+  assert.ok(giant.every((r) => r.bt > 0),
+    "precondition: the other one is a giant for the whole recording");
+  assert.equal(giant[10].can, false,
+    "canSpecial refuses SLOTS outright while the jackpot is up; it read " + giant[10].can);
+  for (let f = 10; f < giant.length; f++) {
+    assert.equal(giant[f].st, "idle",
+      "and the press does nothing at all -- he never enters the move; on frame " + f +
+      " he was " + giant[f].st);
+  }
+  assert.ok(giant.every((r) => r.r === "2,2,2"),
+    "and the stale reels are never even wiped, which is the first thing a pull that was heard " +
+    "would do; they read " + giant[giant.length - 1].r);
+}
+
+test("JACKPOT: no gambling while he IS the jackpot -- the lever will not take another coin", async () => {
+  /* Every outcome of pulling again was wrong: three more sevens re-armed the
+     growth and snapped a settled giant back to a man for ten frames, and
+     every other symbol paid him a second prize on top of the one he is
+     already wearing. */
+  const run = await simonVsReese();
+  const plain = drive(run, "me.reels = [2, 2, 2];", 40, RE_PULL);
+  const giant = drive(run, JACKPOT + " me.reels = [2, 2, 2];", 40, RE_PULL);
+  checkNoRePull(plain, giant);
+});
+
+test("negative control: a lever that can be pulled mid-jackpot fails the no-re-pull test", async () => {
+  const run = await simonVsReese({ engine: sabotage(
+    "    if (s.kind === 'slots' && this.buffTimer > 0 &&\n" +
+    "        this.buffStats && this.buffStats.sizeMul > 1) return false;",
+    "    if (false) return false;") });
+  const plain = drive(run, "me.reels = [2, 2, 2];", 40, RE_PULL);
+  const giant = drive(run, JACKPOT + " me.reels = [2, 2, 2];", 40, RE_PULL);
+  expectToFail(() => checkNoRePull(plain, giant),
+    "with the refusal gone the giant pulls the lever again and the test should fail; it passed");
+});
+
+/* =====================================================================
+   THE REST OF THE CONTROLS FOR THE TESTS ABOVE
+
+   Same reason they are down here: each one is a boot, and a boot in the
+   middle of the file moves the seeded Math stream for everything after it.
+   ===================================================================== */
+
+test("negative control: a sausage that comes out at full speed fails the split test", async () => {
+  /* The split before the slide existed: the dog simply IS the faster thing
+     from the frame it comes free, which is the instant swap nobody could read. */
+  const run = await simonVsReese({ engine: sabotage(
+    "this.vx *= top.kick;", "this.vx = this.launchVx;") });
+  const S = SPEC(run);
+  const log = drive(run, SPLIT_SETUP, 90, HOTDOG_SPLIT);
+  expectToFail(() => checkSplit(log, S),
+    "with the sausage starting at its launch speed the split test should fail; it passed");
+});
+
+test("negative control: a bun that expires before it can land fails the split test", async () => {
+  /* Everything about the glide left alone -- the pop, the shed, the rock,
+     the speed it settles to -- and only the bun's life cut, so the one thing
+     that can notice is the assertion about how long it stays up. Which is
+     the point of that assertion: a bun is only a second lane for as long as
+     it is somebody's problem, and it does not matter whether it stops being
+     one by falling fast or by vanishing. */
+  const run = await simonVsReese({ engine: sabotage(
+    "                life: 150 },", "                life: 28 },") });
+  const S = SPEC(run);
+  const log = drive(run, SPLIT_SETUP, 90, HOTDOG_SPLIT);
+  expectToFail(() => checkSplit(log, S),
+    "with the bun gone before it lands the split test should fail; it passed");
+});
+
+test("negative control: a bun shed forward fails the split test", async () => {
+  /* The bun is thrown BACK by the same launch that throws the sausage
+     forward -- that is the equal and opposite half of the picture, and a bun
+     that leaves the split in front of the dog is two things going one way. */
+  const run = await simonVsReese({ engine: sabotage(
+    "-this.launchVx * parts.bottom.shed));", "this.launchVx * parts.bottom.shed));") });
+  const S = SPEC(run);
+  const log = drive(run, SPLIT_SETUP, 90, HOTDOG_SPLIT);
+  expectToFail(() => checkSplit(log, S),
+    "with the bun shed forward the split test should fail; it passed");
+});
+
+test("negative control: a jackpot that also pays the blast fails the payout test", async () => {
+  /* The loop that the jackpot branch is skipped for. Running it at k = 1
+     gives three sevens the ring as well as the transformation, which is the
+     two-prizes-in-one-hat this reel was rewritten to stop. */
+  const run = await simonVsReese({ engine: sabotage(
+    "for (const other of (n === 3 ? [] : fighters)) {", "for (const other of fighters) {") });
+  const S = SPEC(run);
+  const p = JSON.parse(run(PAYOUTS));
+  expectToFail(() => checkPayouts(p, S),
+    "with the jackpot hitting as well as transforming the payout test should fail; it passed");
+});
+
+test("negative control: three spades that merely add fails the payout test", async () => {
+  /* The house filling the bar OUTRIGHT is the whole difference between "you
+     may use your ult now" and a number you have to go and read. Turned back
+     into an addition, three spades from 10 leaves him on 60 and still short. */
+  const run = await simonVsReese({ engine: sabotage(
+    "this.ultMeter = n === 3 ? COMBAT.ultMax",
+    "this.ultMeter = n === 3 ? Math.min(COMBAT.ultMax, this.ultMeter + s.house.ult)") });
+  const S = SPEC(run);
+  const p = JSON.parse(run(PAYOUTS));
+  expectToFail(() => checkPayouts(p, S),
+    "with three spades merely adding 50 the payout test should fail; it passed");
+});
+
+test("negative control: a blade labeled 340 that throws like 300 fails the choke test", async () => {
+  /* The angle in the spec is left at 340 on purpose, so the pin that reads it
+     back still passes and the only thing that can catch this is the ratio of
+     the two velocities the throw actually produced. kx/ky are the baked
+     cosine and sine, and these are the pair the finish used to carry: sixty
+     degrees below the horizontal, most of the force going into a floor that
+     was already there. */
+  const run = await simonVsReese({ engine: sabotage(
+    "                kx: 0.9396926207859084, ky: -0.3420201433256686 },",
+    "                kx: 0.50000000000000011, ky: -0.8660254037844386 },") });
+  const S = SPEC(run);
+  const log = drive(run, "foe.x = me.x + 14;", 120, CHOKE);
+  expectToFail(() => checkChoke(log, S),
+    "with the blade throwing at the old 300 the choke test should fail; it passed");
 });

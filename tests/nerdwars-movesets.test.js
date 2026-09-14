@@ -62,11 +62,24 @@ const GAME = 'var SPRITES = window.NERDWARS_ASSETS.SPRITES,\n' +
              '    UI = window.NERDWARS_ASSETS.UI;\n' +
              readFileSync(ENGINE_PATH, "utf8");
 
-function stubContext() {
+/* `sink`, when it is given one, turns the swallow-everything stub into a
+   RECORDER.
+
+   Every sprite in this game is painted with fillRect, and the plain stub
+   answers every property with a function that does nothing -- which is
+   exactly what a test about the simulation wants and exactly what a test
+   about what was DRAWN cannot work with. With a sink the current fillStyle
+   is remembered and every rect is pushed onto it, so a rasterised 7x9 chess
+   piece can be read back afterwards and compared with another one. */
+function stubContext(sink) {
+  let fill = null;
   return new Proxy(
     {},
     {
       get(_t, key) {
+        if (key === "fillRect" && sink) {
+          return (x, y, w, h) => sink.push([x, y, w, h, fill]);
+        }
         if (key === "createLinearGradient" || key === "createRadialGradient") {
           return () => ({ addColorStop() {} });
         }
@@ -74,23 +87,35 @@ function stubContext() {
         if (key === "canvas") return { width: 0, height: 0 };
         return () => {};
       },
-      set() {
+      set(_t, key, value) {
+        if (key === "fillStyle") fill = value;
         return true;
       },
     }
   );
 }
 
-function stubCanvas(w, h) {
+/* A serial number per recording canvas. pixelArt caches by key and hands
+   back whatever it rasterised FIRST under that name, so "these two sprites
+   are one shared canvas" and "these two sprites merely look alike" are
+   different faults with the same symptom, and the serial is the only thing
+   that tells them apart. */
+let __canvasSerial = 0;
+
+function stubCanvas(w, h, record) {
   const el = {
     width: w,
     height: h,
     style: {},
-    getContext: () => stubContext(),
+    getContext: () => stubContext(el.rects),
     addEventListener() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h }),
     toDataURL: () => "",
   };
+  if (record) {
+    el.rects = [];
+    el.serial = ++__canvasSerial;
+  }
   el.parentElement = {
     clientWidth: w,
     clientHeight: h,
@@ -100,7 +125,13 @@ function stubCanvas(w, h) {
   return el;
 }
 
-async function bootGame() {
+/* `opts.engine` boots a source string instead of the shipped one -- see
+   sabotage() at the foot of this file -- and `opts.recordArt` hands every
+   offscreen canvas a recorder, for the tests that measure what was drawn
+   rather than what moved. Both default off, so a bare bootGame() is still
+   the game exactly as it ships. */
+async function bootGame(opts) {
+  const o = opts || {};
   const view = stubCanvas(960, 540);
   const winListeners = new Map();
   const rafQueue = [];
@@ -136,7 +167,7 @@ async function bootGame() {
     document: {
       getElementById: (id) => (id === "nw-canvas" || id === "game" ? view : null),
       querySelector: () => null,
-      createElement: () => stubCanvas(320, 180),
+      createElement: () => stubCanvas(320, 180, o.recordArt),
       addEventListener: on(new Map()),
       documentElement: {},
       fullscreenElement: null,
@@ -147,7 +178,7 @@ async function bootGame() {
 
   vm.createContext(sandbox);
   vm.runInContext(SPRITES, sandbox, { filename: "sprites.js" });
-  vm.runInContext(GAME, sandbox, { filename: "game.js" });
+  vm.runInContext(o.engine || GAME, sandbox, { filename: "game.js" });
   for (let i = 0; i < 5; i++) await Promise.resolve();
 
   const fire = (type, ev) => {
@@ -341,35 +372,68 @@ test("every new special actually puts something in the world", async () => {
    state -- if it were applied where input is READ instead, two machines would
    disagree about which way somebody walked and the match would desync. Two
    engines fed identical keystrokes must land in identical states. */
-test("two engines running the new kits stay identical", async () => {
-  const a = await bootGame();
-  const b = await bootGame();
-  for (const g of [a, b]) startAs(g, "johnnyham", "reese");
+/* Drive the scripted trade on `pair` -- one engine or two -- and report what
+   the fight came to. Split out of the test so a sabotaged engine can be run
+   through exactly the same 240 frames; see the negative controls at the foot
+   of this file. */
+function tradeBlows(pair) {
+  /* Close to a MEASURED distance rather than for a counted number of
+     frames. Forty-five frames of walking toward each other used to stop the
+     two of them a stride apart; it now walks them clean THROUGH one another,
+     and two fighters standing back to back spend the rest of the script
+     casting at empty stage. Every run came out at a hundred health each and
+     the vacuity guard at the bottom caught it, which is the guard doing its
+     job rather than the engine doing anything wrong. */
+  for (const g of pair) closeToGap(g, 22);
 
-  // Close the gap first: they spawn far enough apart that a script of
-  // specials alone never lands a hit, and two engines agreeing about two
-  // people missing each other proves nothing.
-  for (const g of [a, b]) {
-    g.press("KeyD");
-    g.press("ArrowLeft");
-    g.pump(45);
-    g.release("KeyD");
-    g.release("ArrowLeft");
-    g.pump(2);
-  }
+  /* A beat every sixteen frames, and BUTTONS ONLY -- no walking.
 
-  const script = ["KeyH", "KeyD", "KeyJ", "KeyA", "KeyK", "KeyG", "KeyW"];
-  const script2 = ["Period", "ArrowLeft", "Slash", "ArrowRight", "Semicolon", "Comma"];
+     Every direction key in the script this replaced pushed John toward a
+     ledge, and by the back half of the run he was off the left of DEEP
+     SPACE: a stock spent on the script rather than on the fight, and two
+     engines agreeing about a man falling into a pit is a thin thing to
+     prove.
+
+     The two directions that ARE held are the belch's AIM. Holding up or
+     down through Reese's startup latches `belchAim`, and the three variants
+     are three genuinely different boxes -- the up one cannot touch a
+     grounded man at all, the down one cannot touch an airborne one. That
+     latch is new simulation state, written in updateAttack and read back in
+     hitbox(), which is precisely what this test exists for: aim that a
+     renderer had been allowed to own would desync a match the first time
+     anybody rolled back over the startup. All three go past here, and the
+     assertion at the bottom says so, so this cannot quietly stop covering
+     them the way the old script quietly stopped connecting. */
+  const beat0 = ["KeyG", "KeyG", "KeyH", "KeyJ"];
+  const beat1 = ["Comma", "Period", "Comma", "Period"];
+  const aim = [null, "ArrowDown", null, "ArrowUp"];
+  const aimsSeen = new Set();
+  const lowest = [100, 100];
   for (let i = 0; i < 240; i++) {
-    const k1 = script[i % script.length];
-    const k2 = script2[i % script2.length];
-    for (const g of [a, b]) {
-      if (i % 5 === 0) { g.press(k1); g.press(k2); }
-      if (i % 5 === 3) { g.release(k1); g.release(k2); }
+    const n = Math.floor(i / 16) % beat0.length;
+    for (const g of pair) {
+      if (i % 16 === 0) {
+        g.press(beat0[n]); g.press(beat1[n]);
+        if (aim[n]) g.press(aim[n]);
+      }
+      if (i % 16 === 5) {
+        g.release(beat0[n]); g.release(beat1[n]);
+        if (aim[n]) g.release(aim[n]);
+      }
       g.pump(1);
     }
+    /* The LOW-WATER mark, not the health at the end. A knockout hands the
+       victim a fresh hundred, so a run that did land hits can finish with
+       both bars full and read exactly like a run that landed none. */
+    for (let s = 0; s < 2; s++) {
+      lowest[s] = Math.min(lowest[s], pair[0].nw.fighters[s].health);
+    }
+    aimsSeen.add(pair[0].run("fighters[1].belchAim"));
   }
+  return { lowest: lowest, aims: [...aimsSeen].sort() };
+}
 
+function checkSameFight(a, b, fight) {
   assert.deepEqual(
     JSON.parse(JSON.stringify(a.nw.fighters)),
     JSON.parse(JSON.stringify(b.nw.fighters)),
@@ -381,9 +445,23 @@ test("two engines running the new kits stay identical", async () => {
   );
   // And it has to have been a real fight, or this proves nothing.
   assert.ok(
-    a.nw.fighters.some((f) => f.health < 100),
-    "nobody took damage, so the comparison is vacuous"
+    fight.lowest[0] < 100 && fight.lowest[1] < 100,
+    "nobody took damage, so the comparison is vacuous -- the lowest either " +
+      "of them got was " + fight.lowest.join(" and ")
   );
+  /* And a real fight with the NEW belch in it. `belchAim` starts life as
+     'level', so that one is free; up and down only appear here if the latch
+     in updateAttack actually ran during a startup. */
+  assert.deepEqual(fight.aims, ["down", "level", "up"],
+    "the script is supposed to aim the belch every way it aims; it only ever " +
+      "reached " + fight.aims.join(", "));
+}
+
+test("two engines running the new kits stay identical", async () => {
+  const a = await bootGame();
+  const b = await bootGame();
+  for (const g of [a, b]) startAs(g, "johnnyham", "reese");
+  checkSameFight(a, b, tradeBlows([a, b]));
 });
 
 test("a long fight with both kits does not crash or stall", async () => {
@@ -673,6 +751,145 @@ test("one pawn at a time, and pressing again promotes the one that is out", asyn
   assert.equal(pawns().length, 1, "with the first one spent, a second may go");
 });
 
+/* The four pieces in the order the charge cycles them, written down rather
+   than read off the engine on purpose: a test that asks the engine what
+   order it uses cannot notice the order changing, and "hold longer, get a
+   better piece" is the whole of what the charge means. */
+const PIECES = ["knight", "bishop", "rook", "queen"];
+
+/* The live pawn, straight out of `projectiles`.
+
+   Not through g.nw.projectiles, which rounds x and y to whole pixels. A
+   rook's step is 2.85 a frame, and rounded that is a sequence of 3s and 2s
+   which matches nothing in the table it is supposed to be checked against;
+   a rest between a knight's hops and a rounding that happened to land twice
+   on the same pixel are indistinguishable too. */
+const PAWN_NOW =
+  "(function () { var p = null;" +
+  " for (var i = 0; i < projectiles.length; i++)" +
+  "   if (projectiles[i] instanceof Pawn) p = projectiles[i];" +
+  " return p ? JSON.stringify([p.x, p.y, p.pieceKey]) : 'null'; })()";
+
+/** What the move is worth on paper, for checking the walk against. */
+function pawnSpec(g) {
+  return JSON.parse(g.run(
+    "JSON.stringify({ pawnSpeed: ROSTER.trev.specials.up.pawnSpeed," +
+    " VW: VW, DIAG: DIAG, pace: CHESS_PIECES.reduce(" +
+    "   function (o, c) { o[c.key] = c.walk.pace; return o; }, {}) })"));
+}
+
+/* Cast PAWN charged until PIECES[want] is the one showing, then trace what
+   walks out: one [x, y, piece] a frame for `frames` frames.
+
+   Both fighters are placed by hand first, and both placements are about
+   keeping the measurement about the WALK. A piece that touches somebody
+   promotes on contact, so it stops existing partway through the window and
+   the trace simply ends, with nothing on the way out to say whether it
+   arrived or was interrupted -- Trev goes to the left end of DEEP SPACE's
+   floor and the dummy to the right end so the fastest of the four still has
+   forty pixels of runway left at the end of the window.
+
+   The charge is driven by watching `chargePiece` rather than by counting
+   frames to `swapEvery`, because which piece you get is the thing under
+   test and counting it out here would be answering the question in the
+   harness. */
+async function pawnWalk(want, frames, opts) {
+  const g = await bootGame(opts);
+  startAs(g, "trev", "reese");
+  waitOutSpawnInvuln(g);
+  g.run("fighters[0].x = 60; fighters[1].x = 276;");
+  g.pump(2);
+  const pawns = () => g.nw.projectiles.filter((p) => p.kind === "Pawn");
+  assert.equal(pawns().length, 0, "nothing out before he presses anything");
+
+  g.press("KeyK");
+  g.pump(2);            // a press is an edge: it has to survive a frame to land
+  for (let i = 0; i < 300 && g.run("fighters[0].chargePiece") !== want; i++) {
+    g.pump(1);
+  }
+  assert.equal(g.run("fighters[0].chargePiece"), want,
+    "could not charge as far as the " + PIECES[want] + " in 300 frames");
+  g.release("KeyK");
+
+  for (let i = 0; i < 20 && g.run(PAWN_NOW) === "null"; i++) g.pump(1);
+  assert.equal(pawns().length, 1, "a cast should send exactly one pawn");
+
+  const rows = [];
+  for (let i = 0; i < frames; i++) {
+    const raw = g.run(PAWN_NOW);
+    if (raw === "null") break;
+    rows.push(JSON.parse(raw));
+    g.pump(1);
+  }
+  return { g: g, rows: rows, spec: pawnSpec(g) };
+}
+
+/* What a traced walk actually did, in the terms the table is written in.
+
+   Every step is measured against the piece's OWN pace rather than against a
+   distance written down here, which is the property the test this replaced
+   had and is worth keeping: `pawnSpeed` is a tuning knob and a test that
+   pins the distance fails the moment somebody turns it. `other` is the
+   escape hatch -- the first step that was neither a rest, nor the piece's
+   flat step, nor its diagonal one -- because a walk that moves at some
+   fourth speed is the interesting failure and silently counting it as
+   nothing would hide it. */
+function walkShape(spec, rows) {
+  const piece = rows[0][2];
+  const flat = spec.pawnSpeed * spec.pace[piece];
+  const diag = flat * spec.DIAG;
+  const s = {
+    piece: piece, flatStep: flat, diagStep: diag,
+    rests: 0, flat: 0, diag: 0, climbs: 0, other: null,
+    frames: rows.length,
+    total: Math.abs(rows[rows.length - 1][0] - rows[0][0]),
+  };
+  for (let i = 1; i < rows.length; i++) {
+    const dx = Math.abs(rows[i][0] - rows[i - 1][0]);
+    if (dx < 1e-9) s.rests++;
+    else if (Math.abs(dx - flat) < 1e-6) s.flat++;
+    else if (Math.abs(dx - diag) < 1e-6) s.diag++;
+    else if (s.other === null) s.other = dx;
+    // Climbing, which on this stage only a piece that left the floor does.
+    if (rows[i][1] < rows[i - 1][1] - 1e-9) s.climbs++;
+  }
+  return s;
+}
+
+function checkTappedKnight(spec, rows) {
+  const s = walkShape(spec, rows);
+  assert.equal(s.frames, 40,
+    "it should still be out at the end: it is slow on purpose, and it only " +
+      "lasted " + s.frames + " frames");
+  /* A tap is not a charge, so what comes out is the first piece in the
+     cycle. That is the deal the move offers -- the cheapest piece for the
+     shortest commitment -- and it is also the thing that broke last time
+     the charge broke, when every cast handed over a knight. */
+  assert.equal(s.piece, "knight",
+    "tapping should send the first piece in the cycle, got " + s.piece);
+
+  assert.equal(s.other, null,
+    "every frame it moves it should move exactly `pawnSpeed` times the " +
+      "knight's own `pace` (" + s.flatStep + "px) or stand still; one frame " +
+      "moved " + s.other + "px");
+  assert.ok(s.flat > 20,
+    "and most of the window should be spent moving, not " + s.flat + " frames");
+  assert.equal(s.diag, 0, "a knight travels on the rank, not on a diagonal");
+
+  /* It HOPS, which is the whole of what changed here. The move used to send
+     a white pawn sliding along the floor at one speed; it now sends the
+     piece he charged for, travelling the way that piece travels. For the
+     knight that is an arc and a beat on landing, and both halves are
+     asserted because either one alone is a ball bouncing. */
+  assert.ok(s.climbs > 0,
+    "a knight leaves the ground; this one never went back up");
+  assert.ok(s.rests > 0,
+    "and it stands still between hops -- without the beat it reads as a " +
+      "bouncing ball, which is the one animal a knight is not");
+
+  return s;
+}
+
 test("a tapped pawn walks off in front of him", async () => {
   /* PAWN replaced KNIGHT, and KNIGHT was his recovery -- two squares up and
      one across, generous on the vertical precisely because it was his way
@@ -682,43 +899,33 @@ test("a tapped pawn walks off in front of him", async () => {
      Off the stage he is down to his double jump now. That is a real loss and
      it is deliberate, not an oversight: the brief was to rework the move
      completely, and a pawn walking forwards does nothing for a man falling.
-     What is guarded here instead is the thing the move actually does. */
-  const g = await bootGame();
-  startAs(g, "trev", "reese");
-  waitOutSpawnInvuln(g);
-  const pawns = () => g.nw.projectiles.filter((p) => p.kind === "Pawn");
+     What is guarded here instead is the thing the move actually does.
 
-  assert.equal(pawns().length, 0, "nothing out before he presses anything");
-  g.press("KeyK"); g.pump(2); g.release("KeyK");
-  g.pump(12);
-  assert.equal(pawns().length, 1, "tapping should send one pawn");
+     And what it does is no longer "walks off at pawnSpeed". The single
+     distance this test used to pin stopped describing the move when each
+     piece started travelling like itself: a tap sends a knight, a knight
+     multiplies `pawnSpeed` by its own `pace` and spends part of every cycle
+     standing still, and forty frames of it came to 70px where the old flat
+     walk came to 60. The number was right and the shape was wrong. The four
+     pieces get compared with one another further down the file; what is
+     pinned here is the one you get for not charging at all. */
+  const { g, rows, spec } = await pawnWalk(0, 40);
+  const s = checkTappedKnight(spec, rows);
 
-  const start = pawns()[0].x;
-  const facing = g.nw.fighters[0].x < g.nw.fighters[1].x ? 1 : -1;
-  g.pump(40);
-  const later = pawns()[0];
-  assert.ok(later, "and it should still be out: it is slow on purpose");
-  const travelled = (later.x - start) * facing;
-
-  /* Against the SPEC rather than against a number written down here.
-     `pawnSpeed` went 0.85 -> 1.5, and forty frames of the old one came to
-     34px where forty of the new one come to 60 -- so a test that pinned the
-     distance pinned the tuning, and it failed the moment the tuning was the
-     point. What has to stay true is the shape of the move: it walks the way
-     he is looking, at the pace the spec says, and it is still a thing you
-     send ahead of you rather than a thing that arrives. */
-  const s = g.run(
-    "({ speed: ROSTER.trev.specials.up.pawnSpeed, VW: VW })");
+  const facing = g.run("fighters[0].facing");
+  const travelled = (rows[rows.length - 1][0] - rows[0][0]) * facing;
   assert.ok(travelled > 10,
     "it should walk the way he is looking; moved " + travelled.toFixed(1) + "px");
-  assert.ok(Math.abs(travelled - 40 * s.speed) < 2,
-    "and at `pawnSpeed` (" + s.speed + ") a frame, so forty frames is about " +
-    (40 * s.speed).toFixed(1) + "px; it moved " + travelled.toFixed(1) + "px");
-  assert.ok(40 * s.speed < s.VW / 3,
-    "which still has to be slow enough that it does not cross the stage " +
-    "while you watch -- it is a thing he follows up on, not a projectile; " +
-    "forty frames of it covers " + (40 * s.speed).toFixed(1) + "px of a " +
-    s.VW + "px stage");
+
+  /* And it is still something you send ahead of you rather than something
+     that arrives. This is the one assertion left that is about the tuning
+     and not about the table, and it is deliberately loose: it does not care
+     what `pawnSpeed` is, only that forty frames of it is well short of
+     crossing the stage. */
+  assert.ok(s.total < spec.VW / 3,
+    "it still has to be slow enough not to cross the stage while you watch " +
+      "-- it is a thing he follows up on, not a projectile; forty frames " +
+      "covered " + s.total.toFixed(1) + "px of a " + spec.VW + "px stage");
 });
 
 test("the guillotine grabs through a raised shield and always lets go", async () => {
