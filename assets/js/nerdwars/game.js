@@ -555,19 +555,36 @@ const ROSTER = {
          except the drain -- five hooks and a shirt, rather than six new
          systems.
 
-         Damage is 11 rather than 15 flat: the colours are the payload now,
-         and ORANGE alone carries knockback that would kill at 15. Tuned
-         against the stage, not by feel -- apex is lift^2/(2*drop) at
-         speed*lift/drop away: ~40px up, ~78px out. The side platforms sit
-         38px above the floor, so the arc still reaches the one place the flat
-         pizza never can. */
+         Damage is 10, and reading the number alone understates the move. It
+         was 15 flat when this was a lobbed dot with nothing else to it, then
+         11 when the six colors became the payload, and this is the pass after
+         that. One press does not land 10: ORANGE is 12 rather than the flat
+         value, and any color caught inside a burst is that color times 1.2,
+         so the hardest single thing a rainbow can do is ORANGE-in-a-burst at
+         14.4, down from 15.6. Nothing was taken off the colors themselves --
+         the burn, the stun, the poison, the confusion and the drain are the
+         reason to throw this and are untouched.
+
+         DELIBERATELY SMALL, because this is a nerf to the weakest character
+         in the game. He measured 15.5% in the last CPU-vs-CPU balance run,
+         dead last on the roster, and the rainbow is most of his reason to be
+         at range. Counting the damage-over-time in, the whole cut is about 7%
+         off the move's average payload (13.6 to 12.6) and 8.8% off a plain
+         connect (11.3 to 10.3). `manaOverride` pins the cost at 30, so unlike
+         the pizza nerf above nothing comes back cheaper to soften it: what he
+         loses here he simply loses, and he could not afford much.
+
+         The arc is untouched. Tuned against the stage, not by feel -- apex is
+         lift^2/(2*drop) at speed*lift/drop away: ~40px up, ~78px out. The
+         side platforms sit 38px above the floor, so it still reaches the one
+         place the flat pizza never can. */
       up: {
         kind: 'rainbow', label: 'RAINBOW',
         startup: 9, active: 1, recovery: 13, maxAlive: 2,
         speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
         // Frames per colour. Six of these is 42 frames for the full wheel.
         cycle: 7,
-        damage: 11, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        damage: 10, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
         /* moveCost prices what a move does on paper and cannot see six
            payloads reached through an array. 30 is a little over a quarter of
            the bar: he is the lightest-hitting character on the roster and
@@ -609,7 +626,7 @@ const ROSTER = {
            knockback as well as add a status. */
         colors: [
           { tint: 'RED', css: '#ff2d55', burn: { frames: 110, dps: 0.055 } },
-          { tint: 'ORANGE', css: '#ff9500', damage: 13, base: 5.6, scale: 9.4 },
+          { tint: 'ORANGE', css: '#ff9500', damage: 12, base: 5.6, scale: 9.4 },
           { tint: 'YELLOW', css: '#ffd60a', stun: 26 },
           { tint: 'GREEN', css: '#34c759', poison: { frames: 150, dps: 0.05 } },
           { tint: 'BLUE', css: '#0a84ff', confuse: { frames: 140 } },
@@ -984,32 +1001,159 @@ const ROSTER = {
 
          So the box is both longer and deeper: 30px of reach, hanging low
          enough to catch somebody on the floor beneath him. */
+      /* AND NOW HE CAN AIM IT. Hold up and he tips his head back and
+         shouts over his own head; hold down and he bends and fires it along
+         the floor. Nothing is held, nothing is charged: the direction is
+         read during the startup and latched, so a shout that is already out
+         cannot be swung around somebody standing inside it.
+
+         Each aim is a PATCH over this spec, merged into a finished one at
+         load -- see the `parts` loop below ROSTER, which is the same
+         machinery the star's two triangles use. hitbox() indexes that table
+         with `belchAim` (written in updateAttack, because runSpecial is
+         handed no pad) and runSpecial spawns the waves out of the same
+         entry, so what is painted and what can hit you are one set of
+         numbers rather than two kept in step by hand.
+
+         They are three real options rather than three skins:
+
+           level  the longest, at chest height. Launches diagonally. The one
+                  you press when you do not know what else to press.
+           up     stops dead at 42 and climbs to 47 above his feet, and its
+                  BOTTOM edge is 16 up -- a man standing on the same floor is
+                  entirely underneath it. Pure anti-air, and it launches at
+                  80 degrees, which is a juggle and eventually a ceiling KO.
+           down   just as long as level but only eleven pixels tall and slung
+                  under him, so anything airborne is untouched. Hits hardest
+                  and launches at 8 degrees: this is the one that sends
+                  somebody at the ledge. */
+      /* WHAT THE AIMING COST. He measured 73.9% in the last balance run --
+         the strongest character on the roster -- and this is range AND
+         options, so it is paid for three times over in the open:
+
+           startup  4 -> 6. Two more frames of him visibly filling up before
+                    anything is live. It is also the animation: the cheek has
+                    to have somewhere to go.
+           damage   7 -> 6 level, 5 up. Only `down` keeps the old 7, and it
+                    buys that with the thinnest box of the three.
+           mana    36 -> 46. At half a mana a frame that is 92 frames of
+                    regen between burps instead of 72 -- a second and a half
+                    rather than a second and a fifth. The meter is the only
+                    thing that has ever bounded this move (see the note the
+                    36 came with) so the meter is where the reach is paid.
+
+         Measured the way every other number in this file was -- the whole
+         roster, both spawn sides, all six stages, two seeds, 19,440 CPU
+         matches a side, before and after -- the three together take him from
+         73.0% to 68.5% and pull the roster spread from 57.8 to 52.9. Nobody
+         else moves by more than 1.2 points.
+
+         READ THAT NUMBER CAREFULLY. The CPU never aims: across 108 CPU
+         matches it cast 1,534 belches and held a direction on exactly none
+         of them, so the tournament priced the LEVEL burp alone -- thirteen
+         more pixels of reach against one less damage, two more frames of
+         startup and ten more mana -- and the two new options rode along
+         unmeasured. A person who aims gets more than 68.5% says, so treat
+         that as the floor rather than the answer. If he needs bringing down
+         again the meter is still the lever it has always been. */
       neutral: {
         kind: 'belch', label: 'BELCH',
-        startup: 4, active: 5, recovery: 12,
-        /* 8 before. Half the box again is a real buff, and left at 8 it put
-           Reese back to 68.3% -- undoing the CROP DUST nerf he was measured
-           into a fortnight earlier. One point of damage buys the reach and
-           leaves him at 61.8%, which is where the fart nerf alone had him.
-           More range at the same strength, rather than more of both. */
-        damage: 7, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
-        /* moveCost said 21, which at half a mana a frame is a burp every
-           four fifths of a second -- and with the longer box there is no
-           spacing that answers it. The formula prices damage and knockback;
-           what it cannot see is that this one is safe, fast and now long, so
-           the ceiling on it has to be the meter. */
-        manaOverride: 36,
-        /* 30 before, and 20 before that. It is a shout: the thing that
-           carries is the noise, and the noise now visibly leaves him, so the
-           box has to go as far as the waves do or the art is writing a cheque
-           the hitbox will not honour.
+        /* 4 before. The two extra frames are the telegraph the extra reach
+           has to buy -- and they are not free-floating, they are the frames
+           the cheek spends inflating in drawBelch. Startup is the honest
+           place to pay for a safe move: it is the window in which somebody
+           can walk into him and take the turn away. */
+        startup: 6, active: 5, recovery: 12,
+        /* 7 before, and 8 before that. See the aiming note above: the reach
+           went from 43 to 56 and he gained two aims, so a point comes off
+           the default one. `down` keeps the 7 because it is the aim that
+           whiffs on anybody who is off the ground. */
+        damage: 6, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
+        /* 36 before, and moveCost said 21 before that. The formula prices
+           damage and knockback; what it cannot see is that this one is safe,
+           fast, long and now aimable, so the ceiling on it has to be the
+           meter. */
+        manaOverride: 46,
+        /* WHERE THE NOISE COMES OUT, and how fast, in the spec rather than
+           in runSpecial -- because the box below is derived from exactly
+           these numbers and a constant buried in a switch statement is how
+           the two drift apart. `spawnX` is forward from his center, `spawnY`
+           is up from his feet: his mouth moves when he tips his head. */
+        spawnX: 9, spawnY: -11, waveSpeed: 3.9, waveLife: 13,
+        /* The direction the noise travels, as a unit vector. Screen y points
+           DOWN, so `climb` is the sign that turns sin into "up" or "down"
+           and nothing else. Spelled angle/kx/ky on purpose: build.py greps
+           for that exact triple and verifies the three agree to 1e-12, so
+           any other spelling would quietly escape the check. */
+        wave: { angle: 0, kx: 1.0, ky: 0.0, climb: 1 },
+        // What he actually says. Picked per cast from a hash of the fight --
+        // see the belch case in runSpecial for why it is not Math.random.
+        words: ['BRAAP', 'BLORP', 'BUURP', 'HRRK', 'BLEEURGH'],
+        /* 43 before, 30 before that, 20 before that. It is a shout: the
+           thing that carries is the noise, so the box has to go as far as
+           the waves do or the art is writing a cheque the hitbox will not
+           honour.
 
-           They are matched deliberately: a wave spawns 9 ahead and travels
-           2.6 a frame for 13 frames, so the furthest one drawn is 42.8 ahead
-           and the box reaches 43. The first cut had the waves living 17
-           frames and outrunning the box by eight pixels, which is the same
-           lie in the other direction. Change either and check the other. */
-        ox: -1, oy: -15, w: 44, h: 24,
+           THE ARITHMETIC, which is the thing to re-derive if you touch any
+           part of it. A wave is spawned at (spawnX, spawnY) and stepped once
+           a frame by waveSpeed along its aim. updateEffects moves it BEFORE
+           the frame is drawn and deletes it the instant t reaches life, so
+           the last frame anybody sees it on is t = life - 1 and it has taken
+           life - 1 steps -- NOT life. The comment that used to sit here said
+           thirteen and meant twelve: it claimed the furthest wave was 42.8
+           ahead when a probe finds it at 40.2. Twelve steps of 3.9 is 46.8,
+           so per aim, in pixels from his center and from his feet:
+
+             level  spawn ( 9, -11) + 46.8 at  0 deg      -> (55.8, -11.0)
+                    box x -1..56, y -22..-4
+             up     spawn ( 6, -16) + 46.8 at 40 deg up   -> (41.9, -46.1)
+                    box x -1..42, y -47..-16
+             down   spawn (10,  -7) + 46.8 at 12 deg down -> (55.8,  +2.7)
+                    box x -1..56, y  -8..+3
+
+           Measured at the wave's CENTER, which is the convention this box
+           has always been matched against. The drawn arc opens out to about
+           eleven pixels of radius by the end, so the paint does bulge past
+           the box at the tip -- that is deliberate, and it is why a shout
+           looks like it carries a little further than it hits.
+
+           The level box is 18 tall where it used to be 24. It lost five
+           pixels off the top and one off the bottom, and it lost them
+           BECAUSE the aims exist now: a neutral shout no longer has to cover
+           every height by itself, and if it did, nobody would ever press a
+           direction. Change any of this and re-run the probe. */
+        ox: -1, oy: -13, w: 57, h: 18,
+        /* Over his head. Short, tall, and lifted clear of the floor: its
+           bottom edge is 16 above his feet and a standing hurtbox is 14
+           tall, so a man on the same ground as him is completely safe from
+           it. That is the trade for 30 pixels of vertical coverage and an
+           80-degree launch. Less damage than either of the others because a
+           juggle starter is paid for in what it sets up, not in what it
+           does. */
+        up: {
+          damage: 5, base: 2.7, scale: 6.8, angle: 80,
+          kx: 0.17364817766693041, ky: 0.984807753012208,
+          spawnX: 6, spawnY: -16,
+          wave: { angle: 40, kx: 0.766044443118978, ky: 0.6427876096865393, climb: -1 },
+          words: ['WHEEP', 'YOIK', 'HEEEP', 'BLIP'],
+          ox: -1, oy: -31.5, w: 43, h: 31,
+        },
+        /* Along the floor. Eleven pixels tall and slung under him -- it
+           reaches as far as the level one does (12 degrees costs almost
+           nothing forward: cos 12 is 0.978) but it cannot touch anything
+           that has left the ground, which in this game is most of what is
+           happening most of the time. It keeps the old 7 damage and launches
+           at 8 degrees, nearly flat, with LESS growth than level: it is not
+           the aim that kills, it is the aim that puts somebody over the
+           ledge and makes them come back. */
+        down: {
+          damage: 7, base: 2.3, scale: 5.6, angle: 8,
+          kx: 0.9902680687415704, ky: 0.13917310096006544,
+          spawnX: 10, spawnY: -7,
+          wave: { angle: 12, kx: 0.9781476007338057, ky: 0.20791169081775934, climb: 1 },
+          words: ['BLORRP', 'GLUMP', 'WOMP', 'BRUMP'],
+          ox: -1, oy: -2.5, w: 57, h: 11,
+        },
       },
       /* The fart. Same class as John's smoke and the same hitEvery pacing --
          the difference is entirely the payload: this one carries `poison`,
@@ -1022,8 +1166,15 @@ const ROSTER = {
         speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,
         life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
         hitEvery: 45, cue: 'belch',
-        // Off the ground it pushes back. See the cloud case in runSpecial.
-        liftSelf: 4.2,
+        /* There was a `liftSelf: 4.2` here and it is gone on purpose: let off
+           in the air the fart used to throw him upward, and being launched by
+           your own fart is not what the move is for. It cast fine in the air
+           before and it still does -- nothing ever gated this on the ground,
+           canSpecial included -- so what changed is only that he now stays
+           where he was when he did it.
+
+           What that costs him is written out beside JITTERS below, because
+           JITTERS is what has to do the job now. */
         tints: ['#9dc25a', '#c3dd86', '#7fa347'],
         /* Was dps 0.11 over the same 150 frames, which is 16.5 damage from a
            cloud you drop and walk away from -- more than BELCH does for a
@@ -1050,6 +1201,17 @@ const ROSTER = {
         kind: 'dash', label: 'JITTERS',
         startup: 3, active: 9, recovery: 10, speed: 5.4,
         airRise: 4.4,
+        /* He can vent mid-dash: pressing the down special during JITTERS
+           lays CROP DUST behind him WITHOUT ending the dash. A fart that
+           cancelled his own dash would be the opposite of the ask -- the
+           point is a gas trail down the length of it.
+
+           A slot name rather than a flag so the move it fires is looked up
+           rather than assumed, and so nothing here has to know Reese by
+           name. updateAttack reads it; see the block there for what stops it
+           being free. Not priced: moveCost only reads damage, knockback and
+           status terms, so an extra string costs zero mana. */
+        trailSpecial: 'down',
         // Frames after an air dash during which the side of the map wraps
         // rather than kills. Long enough to cover the coast: the dash is
         // nine active frames and he is still moving well past the end of it.
@@ -1203,7 +1365,16 @@ const ROSTER = {
            it is worth being honest that this now edges past a couple of
            walks rather than staying under all of them: Trev's own is 1.46.
            It is still slow enough to see coming and walk away from, which is
-           the property that matters; it is no longer slow enough to ignore. */
+           the property that matters; it is no longer slow enough to ignore.
+
+           It is a BASE now rather than the speed: each piece multiplies it by
+           its own `pace` in CHESS_PIECES, so the knight still travels at 1.5
+           and the rook, the quick one, at 2.85. Turning this one number still
+           makes the whole move faster or slower, which is what it was for.
+
+           `life` almost never runs out any more. At these paces every piece
+           reaches the end of the board first, and reaching the end of the
+           board is now a promotion rather than a death -- see Pawn.update. */
         pawnSpeed: 1.5, life: 320,
         /* What one ray of the burst is. `damage` is filled in per piece when
            the shard is built -- see PieceShard -- so the number here is only
@@ -1603,9 +1774,31 @@ ROSTER.simon = {
        grab branch long before it computes any. The force is in `finish`. */
     up: {
       kind: 'guillotine', label: 'GUILLOTINE',
-      startup: 6, active: 6, recovery: 16,
+      /* Eight active frames, up from six, and a box two pixels longer.
+
+         It was hard to land and it is a grab, so a whiff is one of the worst
+         trades in the game: sixteen frames of recovery and 26 mana spent
+         having caught nothing at all. Measured against a moving opponent --
+         every starting gap from 6 to 34 pixels crossed with nine things the
+         other man might be doing, walking in, walking away, rushing through,
+         jumping -- it connected in 37.2% of them. At 8 active and w 15 it
+         connects in 40.6%. Stationary reach ran out at 27 pixels and now
+         carries past 34.
+
+         The active frames are pulling double duty, which is why they are the
+         half that moved. `lunge` below runs for exactly the active window, so
+         two more frames is also five more pixels of chasing somebody who is
+         walking away -- the case this was worst at by a distance, 4/29 before
+         and 6/29 now.
+
+         What did NOT change is that you can still jump it: 0/29 against a
+         jumping opponent before, 0/29 after. Jumping a grab is the answer to
+         a grab and it stays the answer. A taller box would have taken it away
+         and measured, separately, as no improvement whatsoever -- height was
+         never what this move was short of. */
+      startup: 6, active: 8, recovery: 16,
       manaOverride: 26,
-      ox: 2, oy: -12, w: 13, h: 14,
+      ox: 2, oy: -12, w: 15, h: 14,
       lunge: 2.4,
       /* `damage` here is what the CATCH takes, the frame it bites -- applyHit
          subtracts it directly, so leaving it off subtracts undefined and the
@@ -2025,9 +2218,26 @@ ROSTER.christian = {
        twenty seconds later.
 
        Where the frogs land they hop after the nearest opponent, and they do
-       not stop for a shield or a ledge. Four damage each and they die on
-       contact, so they are not a kill; they are a reason you cannot stand
-       still and think. */
+       not stop for a shield or a ledge. TWO damage each -- halved from four
+       -- and they still die on contact, so all three of them landing is six,
+       which is exactly one jab, for a cast that also got him home and left
+       three things working for him for the next twenty seconds. At four it
+       was twelve, or two jabs, on top of the trip. That is the whole argument
+       for the change: they are not supposed to be the kill, they are supposed
+       to be the reason you cannot stand still and think.
+
+       THE PRICE DOES NOT MOVE WITH THE DAMAGE, which is worth knowing before
+       anybody goes looking for a refund. `manaOverride` below pins this at
+       75, and moveCost never saw a frog's damage in the first place: it
+       prices `damage`, which is 0 on the cast itself, so the formula valued
+       FROG ARMY at its floor of 6 whether a frog hit for four or for nothing
+       at all. Half-price frogs at full price is the real weight of this
+       change -- the move is half as good and still three quarters of the bar.
+
+       The ult's frogs are a separate spec and are NOT halved; they are still
+       5 each. Ten of them once a match off an ult that has to cook for two
+       seconds in front of everybody is a different question from three of
+       them on a recovery he can cast all game. */
     up: {
       kind: 'frogs', label: 'FROG ARMY',
       startup: 7, active: 1, recovery: 18,
@@ -2051,7 +2261,7 @@ ROSTER.christian = {
       manaOverride: 75,
       frog: {
         hopEvery: 26, hop: -2.5, speed: 1.45, drop: 0.26, life: 280,
-        damage: 4, base: 2.3, scale: 4.8, angle: 62,
+        damage: 2, base: 2.3, scale: 4.8, angle: 62,
         kx: 0.46947156278589086, ky: 0.8829475928589269,
       },
       damage: 0, base: 0, scale: 0,
@@ -2073,8 +2283,11 @@ ROSTER.christian = {
 
      Then it opens. Everyone inside forty-four pixels takes eighteen and goes
      up, and ten frogs come out of the crust in a fan and hop off after
-     whoever is nearest, for five seconds, exactly as the ones from his
-     recovery do.
+     whoever is nearest, for five seconds, the way the ones from his recovery
+     do. They come out RED. They have been baked, and a stage can have both
+     kinds of frog hopping about on it at once -- three of his own that are
+     worth two each and ten of these that are worth five -- so which is which
+     has to be readable at a glance rather than counted.
 
      It replaced THE PLAGUE, which rained frogs from the sky for a second and
      a half. The frogs were the good part and they are still here; what has
@@ -2097,6 +2310,18 @@ ROSTER.christian = {
              kx: 0.43837114678907746, ky: 0.898794046299167 },
     count: 10, spread: 1.5,
     frog: {
+      /* Baked. Read by Frog.draw for the frogs themselves and by Pie.draw for
+         the things pushing at the crust just before it opens, so the tell and
+         the payoff are the same red by construction rather than by two people
+         typing the same six characters.
+
+         It lives HERE, in the ROSTER literal, rather than being handed to a
+         Frog as it is made. simFrozen walks ROSTER, so a spec written down at
+         load is an object snapValue keeps by reference; a per-shot one would
+         be deep-copied into every snapshot, ten frogs at a time, sixty times
+         a second, for as long as they are hopping. FROG ARMY's frog has no
+         `tint` and stays the green the artist painted. */
+      tint: '#d8342c',
       hopEvery: 20, hop: -2.8, speed: 1.7, drop: 0.26, life: 300,
       damage: 5, base: 2.6, scale: 5.2, angle: 62,
       kx: 0.46947156278589086, ky: 0.8829475928589269,
@@ -2139,8 +2364,36 @@ ROSTER.sandbag = {
 
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
-  startup: 7, active: 3, recovery: 18,
-  ox: 1, oy: -12, w: 12, h: 14,
+  /* Four active frames, up from three, and a box two pixels longer.
+
+     THIS IS EVERY CHARACTER'S GRAB, and it is the only move in the game that
+     beats a raised shield. Ten fighters have it, so anything done here is
+     done to every matchup at once -- which is the reason it is one frame and
+     two pixels rather than anything more generous.
+
+     Both numbers are here because they fix different failures and neither one
+     fixes the other. Measured, before and after:
+
+       WHERE. Every starting gap from 6 to 34 pixels crossed with nine things
+       the opponent might be doing: 30.3% connected, now 32.2%. All of that is
+       the width. The stationary reach stopped at 17 pixels and now stops at
+       19 -- two pixels, which at this scale is a quarter of a body.
+
+       WHEN. Opponent walking in from forty pixels away, attacker pressing on
+       each of 41 different frames: 15 of them landed, now 18. That is the
+       fourth active frame, and the extra width barely touches this number.
+       Three frames of hitbox is a twentieth of a second to read a moving
+       body, and a move you have to be that exact with is one people stop
+       pressing at all.
+
+     NOT touched, on purpose. `startup` stays 7, so a grab is exactly as
+     readable coming out as it always was and nothing about what beats it
+     changes. `oy` and `h` stay where they are because a jumping opponent went
+     0-for-29 against this before and goes 0-for-29 after: jumping a grab is
+     the answer to a grab, a taller box would quietly have taken that away,
+     and it measured as no improvement in any other case either. */
+  startup: 7, active: 4, recovery: 18,
+  ox: 1, oy: -12, w: 14, h: 14,
   grab: { hold: 26, damage: 4 },
   // Never read for knockback: applyHit returns at the grab branch long before
   // it computes any. The force lives in the throws.
@@ -2224,6 +2477,26 @@ for (const key in ROSTER) {
   const n = ROSTER[key].specials.neutral;
   if (!n || n.kind !== 'star') continue;
   n.parts = { up: Object.assign({}, n, n.up),
+              down: Object.assign({}, n, n.down) };
+}
+
+/* And the belch's three aims -- same shape as the star's halves above, same
+   place, and for the same reason: hitbox() and runSpecial are both handed
+   ONE spec and neither should be doing arithmetic on a patch.
+
+   Two things this placement buys, both of which would be bugs anywhere else.
+   It is after the pricing loop, so every aim carries the single price the
+   cast actually pays -- updateFree spends `specials.neutral.mana` and never
+   a part's, so an aim that priced itself differently would be a lie. And
+   `level` is the spec copied whole, which means hitbox() can index this
+   table for all three cases instead of carrying a special case for "no
+   direction held". The sub-objects are on the MOVE, not the moveset: `n.up`
+   here is the belch aimed upward, not Reese's up special. */
+for (const key in ROSTER) {
+  const n = ROSTER[key].specials.neutral;
+  if (!n || n.kind !== 'belch') continue;
+  n.parts = { level: Object.assign({}, n),
+              up: Object.assign({}, n, n.up),
               down: Object.assign({}, n, n.down) };
 }
 
@@ -3121,6 +3394,17 @@ class Fighter {
        saveSim sweeps it up reflectively and restoreSim, which deletes any key
        it does not find in the snapshot, puts it back. */
     this.aimDown = false;
+    /* And which way a BELCH was aimed: 'level', 'up' or 'down'. Its own
+       field rather than a second reading of aimDown, because it is not the
+       same question -- aimDown is "is down held right now", this is "which
+       way was this shout pointed when it left him", latched during the
+       startup and then frozen for the rest of the move.
+
+       In the constructor for the reason everything else here is: restoreSim
+       deletes any key it cannot find in the snapshot, so an aim assigned on
+       first use would come back undefined after a rollback and the hitbox
+       would be in a different place on one machine than the other. */
+    this.belchAim = 'level';
     this.poison = 0;
     this.poisonDps = 0;
     /* Burning. Its own status rather than poison with a different color,
@@ -3151,6 +3435,20 @@ class Fighter {
        assigned mid-move works perfectly offline and vanishes on the first
        online rollback. */
     this.dashWrap = 0;
+    /* Has this dash already been stopped at a ledge, and has it already
+       vented? Both are declared HERE for the reason dashWrap above is:
+       restoreSim deletes any Fighter key a snapshot does not have, so a field
+       that first appears mid-move is a field the netcode is entitled to make
+       vanish.
+
+       Neither is known to misbehave today -- both are assigned on the dash's
+       startup frame, and a rollback always replays that frame before anything
+       reads them, so undefined never actually gets read. That is a property of
+       one move's frame order, though, not a rule, and it is not what the next
+       person editing the dash will be thinking about. Declared, like
+       everything else the simulation owns. */
+    this.dashStopped = false;
+    this.dashGassed = false;
     this.walkAnim = 0;
     // Trev's ult hands him a sword for ten seconds. While swordTimer is
     // running the ult button swings it instead of casting anything.
@@ -3245,6 +3543,21 @@ class Fighter {
           box: { x: hook.x - 6, y: hook.y - 6, w: 12, h: 12 },
           move: s,
         };
+      }
+      /* The belch is three moves wearing one button. Each aim is a finished
+         spec out of `parts` with its own box AND its own launch angle, which
+         is why it is a spec rather than a multiplier on one -- an anti-air
+         that launches at 80 degrees and a floor-scraper that launches at 8
+         are not the same move scaled.
+
+         `belchAim` was latched in updateAttack during the startup, so this
+         cannot change under a victim mid-swing. The fallback to `level`
+         covers a snapshot restored from before this field existed. */
+      if (s && s.kind === 'belch' && s.parts) {
+        const p = s.parts[this.belchAim] || s.parts.level;
+        if (this.attackFrame < p.startup) return null;
+        if (this.attackFrame >= p.startup + p.active) return null;
+        return { box: this.relBox(p), move: p };
       }
       if (!s || s.kind === 'projectile' || s.kind === 'buff' ||
           s.kind === 'equip' || s.kind === 'swingin' || s.kind === 'weight' ||
@@ -3991,6 +4304,71 @@ class Fighter {
        replayed, not this machine's keyboard right now. */
     if (pad) this.aimDown = !!pad.down;
 
+    /* Which way a belch is pointed. Read here for the same reason aimDown
+       above is -- runSpecial gets no pad, ever -- and LATCHED to the startup
+       for a reason of its own: the box and the drawn waves both come out of
+       the aim, so letting the stick move it after the move is live would
+       swing a hitbox around somebody already standing in it, and would move
+       the painted waves off the box they are supposed to be proving.
+
+       Cleared on frame 1 so the last burp's aim cannot leak into this one,
+       then the LAST direction held during the startup wins -- which also
+       means letting go before the move goes live hands you the level burp
+       back. Reading it every startup frame rather than only on the press is
+       deliberate: the button and the direction are two different keys on a
+       keyboard and do not have to land on the same frame. */
+    if (m.kind === 'belch') {
+      if (this.attackFrame === 1) this.belchAim = 'level';
+      if (pad && this.attackFrame <= m.startup) {
+        this.belchAim = pad.up ? 'up' : pad.down ? 'down' : 'level';
+      }
+    }
+
+    /* CROP DUST out of a dash.
+
+       Read here for the reason the reel stops below are: a fighter in the
+       'special' state never reaches updateFree, so the button that normally
+       starts a cast is never seen, and going through startAttack would be
+       wrong anyway -- it would END JITTERS and replace it with the fart. He
+       is meant to keep every pixel of the dash and leave the gas behind him.
+       So the cloud is spawned here, by hand, and the state is not touched.
+
+       Three things stop it being free, and all three are needed:
+
+         mana       the fart's own price, paid in full. A dash plus a vent is
+                    17 + 19 = 36 of a 100 bar, and the bar refills at half a
+                    point a frame, so the pair costs 72 frames of meter for a
+                    22 frame move. Mashing it empties him.
+         dashGassed one per dash. spDown is already an edge rather than a
+                    hold, so this is not about a stuck button -- it is about
+                    tapping it nine times down nine active frames and walking
+                    away behind a wall of gas.
+         startup    nothing before the dash has actually left, so this cannot
+                    be used to vent out of a JITTERS that is still winding up.
+
+       It cannot be chained into anything: the cloud is spawned, not queued,
+       and neither the dash nor the fart is refreshed by it. The worst case is
+       one extra cloud per dash at the ordinary price of a cloud. */
+    if (pad && pad.spDown && m.kind === 'dash' && m.trailSpecial &&
+        !this.dashGassed && this.attackFrame >= m.startup) {
+      const gas = this.def.specials[m.trailSpecial];
+      if (gas && this.mana >= gas.mana) {
+        this.dashGassed = true;
+        this.mana -= gas.mana;
+        projectiles.push(new Cloud(this, gas));
+        // Behind him, not in front: `ahead` on the spec is already negative,
+        // and the puff is placed to match so the art and the hitbox agree
+        // about which end of him it came out of.
+        addEffect('puff', this.x + this.facing * (gas.ahead || -8), this.y - 10,
+                  (gas.tints && gas.tints[0]) || '#9aa0a6');
+        cue(gas.cue || 'hit', { slot: this.slot, x: this.x });
+      } else if (gas) {
+        // Out of mana: say so, the same as a cast refused in updateFree,
+        // rather than swallowing the press and looking broken.
+        this.manaDenied = 18;
+      }
+    }
+
     /* Stopping a reel. runSpecial gets no pad, so the presses are counted
        here and spent there. Only presses AFTER the one that pulled the lever:
        that one was an edge on the cast frame, which is before this state. */
@@ -4342,21 +4720,19 @@ class Fighter {
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           projectiles.push(new Cloud(this, s));
-          /* Let off in the air, it shoves him up. Every action has an equal
-             and opposite one and this is the funniest available reading of
-             that -- and mechanically it gives him a second way back that is
-             not JITTERS, which is a committed horizontal dash and useless if
-             what he needs is height.
+          /* This is where the fart used to shove its owner upward, off a
+             `liftSelf` on the spec. Both halves are gone. It was funny and it
+             was also a second recovery, and the second recovery is the part
+             worth saying out loud: Reese now has exactly one way back from
+             off-stage that is not his double jumps, and that is JITTERS.
 
-             Assigned rather than added, like SIDEARM's vertical kick: a fart
-             cancels the fall and replaces it. Adding would let a fast enough
-             descent eat the whole thing, which is precisely the moment you
-             want it to work. Nothing to cap here -- the cloud is on a 45
-             frame re-arm and costs real mana, so it cannot be chained the way
-             an uncapped recoil could. */
-          if (!this.grounded && s.liftSelf) {
-            this.vy = Math.min(this.vy, 0) - s.liftSelf;
-          }
+             Nothing replaced it here rather than quietly somewhere else. If
+             the air fart ever needs to do something again, it should be a new
+             decision with its own number, not this one restored by accident.
+
+             Note what did NOT change: the cast itself. It works in the air and
+             always did -- canSpecial has never looked at `grounded` -- so the
+             only difference off the ground is that he keeps falling. */
           addEffect('puff', this.x + this.facing * 10, this.y - 10,
                     (s.tints && s.tints[0]) || '#9aa0a6');
           cue(s.cue || 'hit', { slot: this.slot, x: this.x });
@@ -4426,16 +4802,70 @@ class Fighter {
          train leaving him instead of a single object. Effects are
          presentation: addEffect returns null during a rollback resimulation
          and nothing here is snapshotted, so none of this can desync. */
-      case 'belch':
-        if (this.attackFrame >= s.startup &&
-            this.attackFrame < s.startup + 3) {
-          addEffect('wave', this.x + this.facing * 9, this.y - 11,
-                    '#ff3b30', this.facing);
+      case 'belch': {
+        /* The aim, as a finished spec. hitbox() indexes the same table with
+           the same field, so the waves below and the box that can actually
+           hurt somebody are two readings of one set of numbers. */
+        const p = (s.parts && s.parts[this.belchAim]) || s;
+        /* Where the noise goes, as a unit vector in world space. `climb` is
+           the sign on ky because screen y points down, and the facing goes
+           on kx because a burp aimed up is aimed up whichever way he is
+           looking. Everything below is placed off these two numbers. */
+        const ux = this.facing * p.wave.kx;
+        const uy = p.wave.climb * p.wave.ky;
+        const mx = this.x + this.facing * p.spawnX, my = this.y + p.spawnY;
+        if (this.attackFrame >= p.startup &&
+            this.attackFrame < p.startup + 3) {
+          const w = addEffect('wave', mx, my,
+                              BELCH_TINTS[this.attackFrame - p.startup],
+                              this.facing);
+          if (w) {
+            // The spec carries the life as well as the speed, so the whole
+            // reach lives in one place rather than half here and half in
+            // addEffect's table of defaults.
+            w.vx = ux * p.waveSpeed;
+            w.vy = uy * p.waveSpeed;
+            w.life = p.waveLife;
+          }
         }
-        if (this.attackFrame === s.startup) {
+        if (this.attackFrame === p.startup) {
+          /* WHAT HE SAYS. Nothing reads this back -- it is a word painted on
+             a cosmetic effect -- but it is still derived from the state of
+             the fight rather than from Math.random, because this function is
+             simulation code and the rule in this file is that nothing in
+             here ever reaches for the host's generator. Two machines that
+             disagree about a word are not a desync today; the habit is what
+             stops the line being copied somewhere it would be. Mana is in
+             the mix because it is the one number guaranteed to have moved
+             since his last burp: he just spent 46 of it. */
+          let h = Math.imul(this.slot + 1, 2654435761);
+          h = Math.imul(h ^ Math.round(this.x * 16), 2246822519);
+          h = Math.imul(h ^ Math.round(this.mana * 8), 3266489917);
+          h = (h ^ (h >>> 15)) >>> 0;
+          /* Set off the aim rather than on it. Eight pixels along the shout
+             and ten to the SIDE of it -- (uy, -ux) turned by the facing is
+             "up from wherever this is pointed", which is up over his head
+             for the level burp and back over his shoulder for the upward
+             one. On the aim, which is where it used to be, the word sat on
+             top of its own sound waves and hid the thing it was announcing. */
+          const wd = addEffect('burp', mx + ux * 8 + this.facing * uy * 10,
+                               my + uy * 8 - this.facing * ux * 10,
+                               '#fff3c4', this.facing,
+                               p.words[h % p.words.length]);
+          if (wd) {
+            // Two thirds of the noise's speed: the word is thrown out with
+            // it and then left behind by it, which is how a shout looks.
+            wd.vx = ux * p.waveSpeed * 0.66;
+            wd.vy = uy * p.waveSpeed * 0.66;
+          }
+          // Whatever was in there. Sparks already arc and fall on their own.
+          for (let i = 0; i < 5; i++) {
+            addEffect('spark', mx, my, BELCH_CRUMBS[i % BELCH_CRUMBS.length]);
+          }
           cue('belch', { slot: this.slot, x: this.x });
         }
         break;
+      }
 
       /* Throw it, or drink it.
 
@@ -4702,6 +5132,8 @@ class Fighter {
       case 'dash':
         if (this.attackFrame === s.startup) {
           this.dashStopped = false;
+          // One vent per dash, re-armed here rather than on the press.
+          this.dashGassed = false;
           /* A vertical kick on the first frame only, and only off the ground.
              Reese's dash is his recovery now that BOUNCE is gone, so it has
              to buy height -- but a grounded dash that also hopped would stop
@@ -4728,7 +5160,21 @@ class Fighter {
           // the moment she clears the edge `grounded` goes false and an
           // unlatched check would hand the momentum straight back.
           // A dash begun in mid-air keeps its speed and works as a recovery.
-          if (this.grounded && !this.groundAhead(18)) this.dashStopped = true;
+          /* The safety net asks where he would LAND, not whether the floor
+             continues at this exact height -- see dashLandingAhead. The old
+             question was groundAhead(18), which on a small floating platform
+             went false the moment he neared the edge and killed the dash
+             stone dead up there, for a drop of thirty pixels onto the stage's
+             own floor. It still stops a dash at the real edge of the stage.
+
+             Short-circuited on the latch: once the dash has decided to stop
+             there is nothing left to ask, and the projected fall is not
+             walked again for the rest of the move. */
+          if (!this.dashStopped && this.grounded &&
+              !this.dashLandingAhead(18, s.speed,
+                                     s.startup + s.active - this.attackFrame)) {
+            this.dashStopped = true;
+          }
           if (this.dashStopped) {
             this.vx *= 0.5;
           } else {
@@ -5101,6 +5547,69 @@ class Fighter {
     );
   }
 
+  /* Is there anywhere to LAND ahead of a grounded dash?
+
+     groundAhead() above asks a narrower question -- is there floor at this
+     same height a little way ahead -- and that is the right question at the
+     edge of the stage and the wrong one anywhere else. A dash on top of one
+     of Battlefield's floating platforms cut out the instant its owner got
+     near an edge, every time, because the platform is 58 pixels wide and the
+     probe reaches 18 of them. The drop it was refusing was thirty pixels onto
+     the island's own floor.
+
+     So level floor ahead still passes immediately, and otherwise the fall off
+     the ledge is WALKED, frame by frame, and the question is whether it ends
+     on a platform or outside the blast lines.
+
+     Walked rather than solved as sqrt(2h/g), which is what walkIsSafe uses
+     for the CPU's footing: the dash pins his descent while it is still
+     active -- the case above clamps vy to 0.4 every active frame -- so the
+     fall is genuinely not a plain parabola and the closed form lands him
+     tens of pixels short of where he really goes. Walking it costs nothing
+     that matters. It is asked only on the frames where there is no level
+     floor ahead and the dash has not already given up, so nine times in the
+     worst case, ninety steps each, over at most seven platforms -- and once
+     per dash in practice, because the first "no" latches.
+
+     The landing test is collidePlatforms' own one-way test on the same
+     platformsNow() list, so a trapdoor hanging open is a hole to this too,
+     and the stage's own blast box is the thing that says "and here he dies".
+     No clock and no random in any of it, so two machines replaying the frame
+     reach the same verdict.
+
+       lookahead   how far ahead the floor has to run out, in pixels
+       dashSpeed   the dash's own speed -- he keeps all of it the whole way
+                   down, because `rooted` gives the move no air friction
+       pinFrames   active frames of dash left, which is how long vy stays
+                   clamped. That hang is most of what clears a gap at all. */
+  dashLandingAhead(lookahead, dashSpeed, pinFrames) {
+    if (this.groundAhead(lookahead)) return true;
+    const bz = STAGE.blast;
+    // Start at the probe point rather than at his feet: that is the far side
+    // of the ledge, and stepping off it is the thing being judged.
+    let x = this.x + this.facing * (lookahead || 9);
+    let y = this.y;
+    let vy = 0;
+    let pinned = pinFrames || 0;
+    for (let t = 0; t < 90; t++) {
+      if (pinned > 0) { vy = Math.min(vy, 0.4); pinned--; }
+      vy = Math.min(vy + PHYS.gravity, PHYS.maxFall);
+      const was = y;
+      y += vy;
+      x += this.facing * dashSpeed;
+      // Out the side or out of the bottom with nothing having caught him:
+      // that is exactly the stock this safety net exists to save.
+      if (x < bz.left || x > bz.right || y > bz.bottom) return false;
+      for (const p of platformsNow()) {
+        if (x < p.x - 3 || x > p.x + p.w + 3) continue;
+        if (was <= p.y + 0.6 && y >= p.y) return true;
+      }
+    }
+    // Ninety frames is longer than any fall on any stage, so getting here at
+    // all means he is still in the air heading nowhere. Treat that as unsafe.
+    return false;
+  }
+
   applyGravity(fastFall) {
     const g = PHYS.gravity;
     this.vy += g;
@@ -5437,6 +5946,97 @@ function drawArtBig(g, art, x, y, s) {
   g.drawImage(art, Math.round(x) - (w >> 1), Math.round(y) - (h >> 1), w, h);
 }
 
+/* A drawn sprite repainted in somebody else's color.
+
+   The frogs that come out of the pie are the same twelve cells the artist
+   drew for FROG ARMY -- the joke only lands if they are plainly the same
+   animal -- so the difference between them has to be paint, not a second
+   sheet somebody has to keep in step with the first.
+
+   HUE AND SATURATION come from the tint; BRIGHTNESS is whatever the artist
+   put there. That is the whole of why the frog is still a frog afterwards:
+   the outline stays the darkest thing on it, the belly highlight stays the
+   lightest, and the three drawn variants stay three different weights of the
+   same color instead of collapsing into one flat silhouette. A wash laid over
+   the top at any alpha strong enough to read as red flattens all three at
+   once, which is what this is instead of. Pixels the artist left gray have no
+   hue to replace and are skipped, and that is the only reason the frog's
+   black eye is still an eye.
+
+   Purely presentational, like everything else in this section: the cache is a
+   Map the simulation cannot reach, so none of this has to survive a rollback,
+   and the per-frame cost after the first frog is a Map lookup. Nothing is
+   cached until the image has actually decoded -- caching an empty canvas
+   would leave the frog invisible for the rest of the match.
+
+   HSV here is max, min and division, and that is not just taste: the build
+   greps this whole file, comments included, for a cosine call and rejects it,
+   so a color wheel done with angles could not ship even if it were clearer. */
+const tintCache = new Map();
+
+function tintedSprite(key, im, css) {
+  const id = key + '|' + css;
+  const hit = tintCache.get(id);
+  if (hit) return hit;
+  const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+  if (!w || !h) return im;
+
+  /* The tint's own hue, as a sixth of the wheel, and its saturation. Kept in
+     sixths because that is the form the rebuild in the loop below wants, and
+     converting to degrees and back is two chances to lose a frog's color to
+     a rounding error. */
+  const packed = parseInt(css.slice(1), 16);
+  const tr = (packed >> 16) & 255, tg = (packed >> 8) & 255, tb = packed & 255;
+  const tmx = Math.max(tr, tg, tb), tmn = Math.min(tr, tg, tb);
+  const td = tmx - tmn;
+  let hue = 0;
+  if (td) {
+    if (tmx === tr) hue = ((tg - tb) / td + 6) % 6;
+    else if (tmx === tg) hue = (tb - tr) / td + 2;
+    else hue = (tr - tg) / td + 4;
+  }
+  const sat = tmx ? td / tmx : 0;
+  const sector = Math.floor(hue), frac = hue - sector;
+
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(im, 0, 0);
+  /* A context that will not hand its pixels back is not a reason to draw
+     nothing. The untinted frog is the wrong color; no frog at all is worse,
+     and it would be worse silently -- this runs inside the draw loop, so one
+     throw here takes the rest of the frame down with it.
+
+     Both halves of this guard are load-bearing. A browser refusing a readback
+     throws, and a context that simply has no readback to give hands back
+     nothing at all without complaining; the second is what a test harness
+     looks like, and it crashed one before this line existed. */
+  let img = null;
+  try { img = g.getImageData(0, 0, w, h); } catch (e) { img = null; }
+  if (!img || !img.data) return im;
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const r = d[i], gr = d[i + 1], b = d[i + 2];
+    const v = Math.max(r, gr, b);
+    if (v === Math.min(r, gr, b)) continue;   // gray: no hue to replace
+    const p = v * (1 - sat);
+    const q = v * (1 - sat * frac);
+    const t = v * (1 - sat * (1 - frac));
+    if (sector === 0) { d[i] = v; d[i + 1] = t; d[i + 2] = p; }
+    else if (sector === 1) { d[i] = q; d[i + 1] = v; d[i + 2] = p; }
+    else if (sector === 2) { d[i] = p; d[i + 1] = v; d[i + 2] = t; }
+    else if (sector === 3) { d[i] = p; d[i + 1] = q; d[i + 2] = v; }
+    else if (sector === 4) { d[i] = t; d[i + 1] = p; d[i + 2] = v; }
+    else { d[i] = v; d[i + 1] = p; d[i + 2] = q; }
+  }
+  g.putImageData(img, 0, 0);
+  tintCache.set(id, c);
+  return c;
+}
+
 /* Trev's cereal is Cinnamon Toast Crunch specifically, so it has to look like
    it and not merely like "a cereal": a square with a dark crusted edge, a
    toasted face, and cinnamon sugar scattered across it. Three squares, so a
@@ -5499,20 +6099,15 @@ const KNIGHT_ART = [
 ];
 
 /* The rest of the set, all seven by nine so they share the knight's footprint
-   -- the charge indicator swaps between them above his head and a piece that
-   changed size as it cycled would read as the whole board lurching. */
-const PAWN_ART = [
-  '.......',
-  '..###..',
-  '..###..',
-  '...#...',
-  '...#...',
-  '..###..',
-  '.#####.',
-  '.#####.',
-  '#######',
-];
+   -- the charge indicator swaps between them above his head, and the one he
+   settled on is also the sprite that walks the board, so a piece that changed
+   size as it cycled would read as the whole thing lurching.
 
+   There is no PAWN_ART any more. The move is still called PAWN and it is
+   still a promotion, but the pawn was never what anybody wanted to look at:
+   a white pawn with a two-pixel tick of colour over it was the only thing on
+   screen telling you which of the four you had spent a second charging, and
+   nobody reads a two-pixel tick. The piece travels as itself now. */
 const BISHOP_ART = [
   '...#...',
   '..###..',
@@ -5596,15 +6191,87 @@ const KNIGHT_DIRS = [
    Authored here rather than in the moveset because they are shared shape,
    not tuning: the move picks its damage and speed, the piece decides what a
    burst of it looks like. */
+/* How high above the last rank it touched a flying piece climbs before it
+   turns round.
+
+   Without a turn the bishop's diagonal is a one-way ticket out of the top of
+   the screen: it leaves the floor at forty-five degrees, meets nothing above
+   it, and threatens exactly one lane on the way out. Measured against the
+   screen's own ceiling instead, it climbs a hundred pixels above the stage
+   and spends most of its flight in empty sky -- flights that never came
+   within eighty pixels of anybody went from 2% to 12% when that was tried.
+
+   Sixteen, and the reason it is that small is the only reason that matters: a
+   standing fighter's hurtbox is fourteen tall. A piece that climbs much past
+   that is a piece that is out of everybody's reach for most of its flight.
+   Swept from 14 to 44 against a victim who stands, walks away, jumps or
+   shields, 16 came out best and 44 was the worst of them -- the bishop fell
+   from 7.7 damage a cast to 1.5, because it spent the crossing in the sky.
+   Sixteen is a visible zigzag with about a sixty-five pixel period and it
+   still has the piece inside somebody's box most of the way.
+
+   Relative to the rank it last bounced off rather than to the screen, so a
+   piece working its way across a stage full of platforms keeps sweeping the
+   shelf it is on instead of the sky above the whole thing. */
+const PIECE_RISE = 16;
+
+/* A hard lid as well, because a piece that bounces off a high platform could
+   still walk itself off the top. Fourteen puts the sprite's top row at six,
+   clear of the stock icons. */
+const PIECE_CEILING = 14;
+
+/* How far off one of its lines a victim can be and still be ON it.
+
+   The rays are 4 pixels wide and a fighter is 9 wide and 14 tall, so six is
+   about "the ray would go through them" with enough slack that a piece
+   travelling two or three pixels a frame does not step over the one frame
+   that lined up. */
+const PIECE_LINE = 6;
+
+/* How far above itself a piece will look for somebody to promote at.
+
+   Forty-four, because a single jump tops out between 47 and 50 pixels and
+   this is measured from the piece's HEAD, which is already eight above its
+   base -- so it covers the whole of an ordinary jump, and stops short of a
+   platform a full storey up, which would be a different move. */
+const PIECE_FILE = 44;
+
+/* The same 0.4 a fighter and the dog fall at. Shared so the knight's hop
+   arcs like a jump rather than like its own invented thing. */
+const PIECE_FALL = 0.4;
+
+/* The four you can charge into, in the order the button walks through them.
+
+   `walk` is how the piece crosses the board, and it is the whole point of the
+   rewrite: every one of them used to crawl at the same 1.5 along the floor,
+   which meant the piece you charged for changed the burst and nothing else.
+   You could jump over a queen exactly the way you jumped over a knight.
+
+     style  'rank'      flat and fast along whatever it is standing on
+            'diagonal'  forty-five degrees, reflecting off floor and ceiling
+            'hop'       a forward arc with a beat between hops
+            'both'      alternating flat and diagonal legs -- the queen
+     pace   multiplier on the move's own pawnSpeed, so one knob still makes
+            the whole move faster or slower and these stay relative
+     hop    launch speed of a knight's arc; rest is the beat it waits on the
+            ground between them, which is what makes the rhythm readable
+     leg    how many frames the queen holds one line before changing it
+
+   The piece decides its line, the move decides its pace, and the burst is
+   still the piece's business -- the same division the table already had. */
 const CHESS_PIECES = [
   { key: 'knight', label: 'KNIGHT', art: KNIGHT_ART, ink: '#efe7d2',
-    dirs: KNIGHT_DIRS, damage: 3, reach: 32 },
+    dirs: KNIGHT_DIRS, damage: 3, reach: 32,
+    walk: { style: 'hop', pace: 1.5, hop: 3.6, rest: 5 } },
   { key: 'bishop', label: 'BISHOP', art: BISHOP_ART, ink: '#9fd4ff',
-    dirs: DIAGONALS, damage: 4, reach: 48 },
+    dirs: DIAGONALS, damage: 4, reach: 48,
+    walk: { style: 'diagonal', pace: 1.8 } },
   { key: 'rook', label: 'ROOK', art: ROOK_ART, ink: '#c9c2b4',
-    dirs: ORTHOGONALS, damage: 5, reach: 64 },
+    dirs: ORTHOGONALS, damage: 5, reach: 64,
+    walk: { style: 'rank', pace: 1.9 } },
   { key: 'queen', label: 'QUEEN', art: QUEEN_ART, ink: '#ffd75e',
-    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6, reach: 82 },
+    dirs: DIAGONALS.concat(ORTHOGONALS), damage: 6, reach: 82,
+    walk: { style: 'both', pace: 1.7, leg: 26 } },
 ];
 
 /* The burst is a firework, not a volley.
@@ -7787,6 +8454,187 @@ function drawWhip(g, f) {
 }
 
 
+/* Thirteen points along an arc, sixty degrees either side of straight
+   ahead, as unit offsets ten degrees apart. Written out rather than computed
+   for the reason SHELL_ORBIT below is and the knockback triples are: the
+   build refuses a file containing Math.cos at all, so every point on a
+   circle in here is a literal. Rotated onto a wave's direction of travel by
+   drawEffects, which is how one table draws a bracket pointing any way. */
+const WAVE_ARC = [
+  [0.5000000000000001, -0.8660254037844386],
+  [0.6427876096865394, -0.766044443118978],
+  [0.766044443118978, -0.6427876096865393],
+  [0.8660254037844387, -0.49999999999999994],
+  [0.9396926207859084, -0.3420201433256687],
+  [0.984807753012208, -0.17364817766693033],
+  [1.0, 0.0],
+  [0.984807753012208, 0.17364817766693033],
+  [0.9396926207859084, 0.3420201433256687],
+  [0.8660254037844387, 0.49999999999999994],
+  [0.766044443118978, 0.6427876096865393],
+  [0.6427876096865394, 0.766044443118978],
+  [0.5000000000000001, 0.8660254037844386],
+];
+
+/* Three waves leave him on three consecutive frames and they are three
+   different colors, which is most of what stops them reading as one object
+   flickering. Hot to bright, in the order they are spawned. */
+const BELCH_TINTS = ['#ff3b30', '#ff9f0a', '#ffd60a'];
+// And whatever was still in there. Pea, crisp, sauce.
+const BELCH_CRUMBS = ['#c7e06a', '#ffd76a', '#e0764b'];
+
+/* A three-by-five alphabet, one number per row, bit 4 the left column and
+   bit 1 the right. Only the letters the burp words actually use are here --
+   this is a sound effect, not a font, and every glyph that exists is a glyph
+   somebody has to keep legible at three pixels wide. Adding a word means
+   checking its letters are all in this table; drawEffects skips anything
+   missing rather than drawing a hole. */
+const BURP_FONT = {
+  A: [2, 5, 7, 5, 5], B: [6, 5, 6, 5, 6], E: [7, 4, 6, 4, 7],
+  G: [3, 4, 5, 5, 3], H: [5, 5, 7, 5, 5], I: [7, 2, 2, 2, 7],
+  K: [5, 5, 6, 5, 5], L: [4, 4, 4, 4, 7], M: [5, 7, 7, 5, 5],
+  O: [7, 5, 5, 5, 7], P: [6, 5, 6, 4, 4], R: [6, 5, 6, 5, 5],
+  U: [5, 5, 5, 5, 7], W: [5, 5, 7, 7, 5], Y: [5, 5, 2, 2, 2],
+};
+
+/* REESE'S BELCH -- the half of it that is HIM.
+
+   The noise is effects: three brackets and a word, spawned in runSpecial and
+   left to fly. This is the man producing it, and it exists because the joke
+   was invisible. He stood perfectly still, a red arc appeared, and the
+   funniest move in the game read as a status effect.
+
+   Three beats, all of them off attackFrame -- which is snapshotted and
+   hashed, so a rollback replays the identical face rather than a wobble that
+   jumps a frame:
+
+     startup   he fills up. A bubble climbs out of his gut and arrives at his
+               mouth exactly as the cheek finishes swelling, which is the
+               whole gag in one line: you can watch it coming, and so can the
+               man standing in front of him. Those are the two frames the
+               startup was lengthened by.
+     release   the cheek bursts into four flying specks and a cone of noise
+               leaves his mouth along whichever way it was aimed.
+     after     nothing at all. He is empty.
+
+   Pure fillRect. No sprite is swapped, no transform is set and nothing is
+   written back, so this cannot fight with the rollback shift drawFighter is
+   already holding, and it cannot desync anything by existing. */
+function drawBelch(g, f) {
+  if (f.state !== 'special') return;
+  const s = f.def.specials && f.def.specials.neutral;
+  if (!s || s.kind !== 'belch') return;
+  /* Whether he is DOING it, not whether he owns it. The same guard drawWhip
+     needs and for the same reason: he has two other specials and they would
+     otherwise all come with a swollen cheek. moveFor rather than specialSlot
+     because specialSlot is not a constructor field and restoreSim is
+     entitled to delete it on a deep enough rewind. */
+  if (f.moveFor('special') !== s) return;
+  const p = (s.parts && s.parts[f.belchAim]) || s;
+  const k = f.attackFrame;
+  const fw = f.facing;
+  const x = Math.round(f.x), y = Math.round(f.y);
+  // His mouth, read off the same two numbers the waves spawn on, so the face
+  // and the sound can never end up in two different places.
+  const mx = x + fw * p.spawnX, my = y + p.spawnY;
+
+  if (k <= p.startup) {
+    const fill = k / p.startup;                 // 0 at the press, 1 at the pop
+    // He cannot hold still at the best of times, and he is holding a burp.
+    const sh = (k % 2) ? fw : 0;
+
+    /* The bubble, climbing. Starts at his belt and lands in his cheek on the
+       frame the cheek is full. Two pixels, because one is a speck of dust. */
+    const by = Math.round(y - 5 + (my - (y - 5)) * fill);
+    g.fillStyle = '#9ccf62';
+    g.fillRect(x + fw * 2 + sh, by, 2, 2);
+
+    /* The cheek. A filled disc built a row at a time out of the circle
+       equation -- sqrt, not cos, which is the banned one -- reddening as it
+       fills, so how close he is to going off is a color as well as a size. */
+    /* Radius 0.8 to 3.2, so it tops out about seven pixels across against a
+       nine-pixel-wide hurtbox: half of it is on his face and half of it is
+       hanging off the front. Bigger than that and it stops being a cheek and
+       starts being a man whose head has been replaced by a balloon -- which
+       was the first cut, and it hid every frame of his own sprite. */
+    const r = 0.8 + fill * 2.4;
+    const cx = x + fw * 4 + sh, cy = y - 11;
+    g.fillStyle = BELCH_CHEEK[Math.min(BELCH_CHEEK.length - 1,
+                                       Math.floor(fill * BELCH_CHEEK.length))];
+    for (let dy = -Math.round(r); dy <= Math.round(r); dy++) {
+      const q = r * r - dy * dy;
+      if (q < 0) continue;
+      const half = Math.round(Math.sqrt(q));
+      g.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
+    }
+
+    /* Two beads of sweat, alternating, once he is more than half full. They
+       are the only thing on him that says this is an effort. */
+    if (fill > 0.5) {
+      g.fillStyle = '#cfe8ff';
+      g.fillRect(x - fw * 5, y - 15 - (k % 3), 1, 1);
+      g.fillRect(x + fw * 6 + sh, y - 18 + (k % 2), 1, 1);
+    }
+  }
+
+  /* Three frames, not four. The burst wants to SNAP -- a cone that hangs
+     around for a fourth frame at a quarter alpha stops reading as a bang and
+     starts reading as a beam he is holding. */
+  const j = k - p.startup;
+  if (j >= 0 && j < 3) {
+    /* The cheek bursting. Four specks off the corners of his mouth, thrown
+       further every frame -- they are the cheek, so they wear the cheek's
+       last color, and they are gone in three because a burp is over before
+       you have finished hearing it. Rounded like everything else here: a
+       fillRect on a fractional coordinate is the one way to get a soft edge
+       into a drawing that is supposed to be nothing but hard ones. */
+    g.globalAlpha = 1 - j / 3;
+    g.fillStyle = BELCH_CHEEK[BELCH_CHEEK.length - 1];
+    for (let i = 0; i < BELCH_POP.length; i++) {
+      g.fillRect(Math.round(mx + fw * BELCH_POP[i][0] * (j + 1) * 2),
+                 Math.round(my + BELCH_POP[i][1] * (j + 1) * 2), 1, 1);
+    }
+
+    /* And a cone of noise out of the mouth itself, along the aim, opening as
+       it goes. It is the near end of the same statement the waves are making
+       further out -- without it the first bracket appears three pixels from
+       his face with nothing connecting the two. */
+    const ux = fw * p.wave.kx, uy = p.wave.climb * p.wave.ky;
+    // Perpendicular to the aim, turned by the facing so it is the same side
+    // of the shout whichever way he is looking. Six columns, each a pixel
+    // wider than the last: a cone, built the only way a cone can be built
+    // out of axis-aligned rectangles.
+    const px = fw * uy, py = -fw * ux;
+    for (let d = 1; d <= 6; d++) {
+      const half = Math.round(d * 0.6);
+      g.globalAlpha = (1 - j / 3) * (1 - d * 0.1);
+      g.fillStyle = BELCH_TINTS[(d - 1) % BELCH_TINTS.length];
+      for (let t = -half; t <= half; t++) {
+        g.fillRect(Math.round(mx + ux * (2 + d) + px * t),
+                   Math.round(my + uy * (2 + d) + py * t), 1, 1);
+      }
+    }
+
+    /* Three dashes trailing off the back of his head. He is not moving --
+       the move has no pushback and should not grow one for a drawing -- but
+       a shout with nothing behind it looks like it cost him nothing. */
+    g.globalAlpha = (1 - j / 3) * 0.85;
+    g.fillStyle = '#eef3fa';
+    for (let i = 0; i < 3; i++) {
+      const dx = 6 + i * 3 + j;
+      g.fillRect(fw > 0 ? x - dx - 3 : x + dx, y - 13 + i * 2, 3, 1);
+    }
+    g.globalAlpha = 1;
+  }
+}
+
+// Skin, flushed, redder, about to go. See drawBelch: the cheek's color is
+// how full he is, which is the only warning anybody gets.
+const BELCH_CHEEK = ['#e8b48a', '#e08a6a', '#d4604a', '#c03a2e'];
+// Four corners for the cheek to burst into, forward and out. Not a circle:
+// they come out of the corners of a mouth, which is a flat thing.
+const BELCH_POP = [[1, -1], [1, 1], [0.4, -1.4], [0.4, 1.4]];
+
 /* Eight points evenly round a circle, as unit offsets. Written out rather
    than computed for the reason the knockback triples are: the build refuses
    a file containing Math.cos or Math.tan at all, so that angles can never
@@ -8518,9 +9366,12 @@ class Pie {
     g.fillStyle = '#b8834a';
     for (let i = -6; i <= 6; i += 4) g.fillRect(x + i, y - 8 - puff, 1, 4 + puff);
     /* And near the end, things pushing at it from the inside. This is the
-       tell that says what is about to come out, and it is the whole joke. */
+       tell that says what is about to come out, and it is the whole joke --
+       so it is painted in the frogs' own color, read off the spec they are
+       spawned from rather than typed again here. The tell and the ten things
+       that follow it cannot drift apart. */
     if (k > 0.72) {
-      g.fillStyle = '#4c9a3f';
+      g.fillStyle = s.frog.tint || '#4c9a3f';
       const wob = Math.floor(this.t / 4) % 2;
       g.fillRect(x - 5 + wob, y - 10 - puff, 2, 2);
       g.fillRect(x + 3 - wob, y - 10 - puff, 2, 2);
@@ -8537,9 +9388,13 @@ class Pie {
    touches somebody or its clock runs out. It does not aim, it does not lead,
    and it will hop straight off a ledge after you, which is most of the charm.
 
-   The same class serves the recovery's three and the ult's rain. The only
+   The same class serves the recovery's three and the ult's ten. The only
    difference between them is the spec they are handed and where they start,
    which is the point: the ult should look like more of what he already does.
+   The spec is also the whole of why the ult's ten are RED and the recovery's
+   three are green -- one carries a `tint` and the other does not -- so even
+   the one difference you can see is a field on a move rather than a second
+   kind of frog with its own class to keep in step.
    ===================================================================== */
 
 class Frog {
@@ -8618,13 +9473,20 @@ class Frog {
        hop is the whole of what a frog does. */
     const right = this.vx >= 0;
     const col = this.grounded ? (right ? 0 : 3) : (right ? 1 : 2);
-    const im = n ? IMG['frog.' + Math.min(n - 1, this.variant * 4 + col)] : null;
+    const key = 'frog.' + Math.min(n - 1, this.variant * 4 + col);
+    /* A frog in a color the artist did not paint. The pie's frogs carry
+       `tint` on their spec and FROG ARMY's do not, so the ult's ten come out
+       red and the recovery's three stay green without this class ever being
+       told there are two kinds. tintedSprite caches, so after the first frog
+       of a color this is a Map lookup and not a recolor. */
+    let im = n ? IMG[key] : null;
+    if (im && this.spec.tint) im = tintedSprite(key, im, this.spec.tint);
     if (im) {
       g.imageSmoothingEnabled = false;
       g.drawImage(im, Math.round(this.x) - im.width / 2,
                   Math.round(this.y) - im.height);
     } else {
-      g.fillStyle = '#4c9a3f';
+      g.fillStyle = this.spec.tint || '#4c9a3f';
       g.fillRect(Math.round(this.x) - 4, Math.round(this.y) - 5, 8, 5);
     }
   }
@@ -9666,13 +10528,28 @@ class Dog {
   }
 }
 
-/* The pawn, and what it turns into.
+/* The piece he chose, walking the board, and what it turns into.
 
-   The pawn walks. It is deliberately the slowest thing on the stage -- you
-   send it and then you live with it being out there, which is the whole
-   reason the charge can afford to be as slow as it is. It rides whatever it
-   lands on, the same way the dog does, and it dies off the edge without
-   doing anything, because a pawn that walked off the board is just gone.
+   It used to be a pawn: one sprite, one speed, one line along the floor,
+   whichever of the four you had spent the charge on. Two things were wrong
+   with that and they were the same thing twice. You could not SEE what you
+   had chosen -- the piece was a two-pixel tick of colour over a white pawn --
+   and you could not FEEL it either, because a queen crossed the stage exactly
+   the way a knight did. So the charge bought a different burst and nothing
+   else, and the burst only happened if the crawl physically bumped into
+   somebody: measured over 719 casts against CPU opponents, 52% of them walked
+   the length of the stage untouched and fell into the blast zone having done
+   nothing at all.
+
+   Now the piece travels as itself. The knight hops, the bishop runs a
+   forty-five degree diagonal and bounces off the floor and the ceiling, the
+   rook is flat and fast along a rank, and the queen alternates the two. Which
+   means jumping is no longer a blanket answer to the move: it beats a rook
+   and it walks you straight into a bishop.
+
+   And reaching the far end of the board is a PROMOTION, which is the one
+   chess rule the whole move is named after and the one thing the old version
+   did not do.
 
    `pieceKey` rather than the piece object: restoreSim copies own keys with
    snapValue, and a key is a string. Looking the table up by key on demand
@@ -9689,6 +10566,30 @@ class Pawn {
     this.life = spec.life || 240;
     this.t = 0;
     this.dead = false;
+    /* Everything the flight needs to remember, declared HERE rather than on
+       the first frame that wants it. restoreSim deletes any key a snapshot
+       does not carry, so a field that appeared mid-flight would vanish on the
+       next rollback and take the flight with it -- the piece would snap back
+       to falling straight down in the middle of a bounce. */
+    const w = this.piece().walk;
+    /* Which way a diagonal is slanting: +1 down, -1 up. It starts DOWN so the
+       bishop meets the floor immediately in front of him and rises from
+       there, instead of leaving over his shoulder and threatening nothing for
+       its first sixty frames. */
+    this.vdir = 1;
+    /* The queen's leg timer and which kind of leg she is on. Zero for
+       everybody else, which is what keeps them on one line for their whole
+       life without needing a second test for it. */
+    this.legT = w.style === 'both' ? w.leg : 0;
+    this.flat = false;
+    // The knight's beat between hops, and whether it has a floor under it.
+    this.rest = 0;
+    this.grounded = false;
+    /* The rank a diagonal is measuring its climb from -- see PIECE_RISE. His
+       own feet to start with, so the first rise is a jump's worth above the
+       ground he cast it from rather than above wherever it happens to bounce
+       first. */
+    this.floorY = owner.y;
   }
 
   piece() {
@@ -9696,39 +10597,208 @@ class Pawn {
     return CHESS_PIECES[0];
   }
 
+  /* The platform this thing would come down on this frame, or null.
+
+     Shared by every style, because what differs between the pieces is not how
+     they find the floor but what they do when they get there: the knight
+     pushes off it, the bishop and the queen reflect off it, the rook stands
+     on it. Asks platformsNow() rather than STAGE.platforms so a piece falls
+     through an open trapdoor like everything else does. */
+  landing(prevY) {
+    for (const p of platformsNow()) {
+      if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
+      if (prevY <= p.y + 1 && this.y >= p.y) return p;
+    }
+    return null;
+  }
+
   update() {
     this.t++;
     this.life--;
-    this.x += this.dir * this.spec.pawnSpeed;
+    const piece = this.piece();
+    const w = piece.walk;
+    // The move sets the pace, the piece sets how much of it this one gets.
+    const speed = this.spec.pawnSpeed * w.pace;
 
-    // Falls onto whatever is under it and then rides it, same as the dog.
+    /* The queen is the only one that changes her mind partway across, because
+       she is the only piece that can: a flat leg, then a diagonal one, then a
+       flat one again, which is precisely the union of the two pieces below
+       her. Each new diagonal leaves on the opposite slant so she weaves down
+       the board rather than climbing out of the top of it. */
+    if (this.legT > 0 && --this.legT === 0) {
+      this.legT = w.leg;
+      this.flat = !this.flat;
+      if (!this.flat) this.vdir = -this.vdir;
+    }
+    const mode = w.style === 'both' ? (this.flat ? 'rank' : 'diagonal')
+                                    : w.style;
+
+    /* A resting knight stands still. Sliding forward through the beat between
+       hops made the pause invisible and the whole thing read as a ball
+       bouncing, which is the one animal a knight is not. */
+    const resting = mode === 'hop' && this.grounded && this.rest > 0;
+    if (!resting) {
+      /* DIAG on both axes rather than a full step on each. A (1, 1) diagonal
+         covers root two times the ground a flat one does in the same frames,
+         so `pace` would have meant two different speeds depending on which
+         leg the piece happened to be on. Same baked cosine of 45 the burst
+         uses, for the same reason: runtime trig is not bit-portable and this
+         is lockstep. */
+      this.x += this.dir * speed * (mode === 'diagonal' ? DIAG : 1);
+    }
+
     const prevY = this.y;
-    this.vy += 0.4;
-    this.y += this.vy;
-    for (const p of platformsNow()) {
-      if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
-      if (prevY <= p.y + 1 && this.y >= p.y) {
+    if (mode === 'diagonal') {
+      // Forty-five degrees, reflecting off whatever it meets instead of
+      // landing on it. A bishop does not stop; it changes colour square.
+      this.y += this.vdir * speed * DIAG;
+      const p = this.vdir > 0 ? this.landing(prevY) : null;
+      if (p) {
+        this.y = p.y;
+        this.floorY = p.y;
+        this.vdir = -1;
+      } else if (this.y <= this.floorY - PIECE_RISE || this.y <= PIECE_CEILING) {
+        this.vdir = 1;
+      }
+      this.grounded = false;
+    } else if (mode === 'hop') {
+      /* The knight is the piece that leaves the ground, so it does: a forward
+         arc, a beat on landing, another arc. At 3.6 against PIECE_FALL the
+         apex is sixteen pixels and the hop lasts eighteen frames.
+
+         It is deliberately LOW, and this is the number that was got wrong
+         first. A standing fighter's hurtbox is only fourteen tall, so a piece
+         at an apex of twenty-four is clean over their head -- raising the hop
+         to reach a jumping target dropped the knight from 9.5 damage against
+         somebody standing still to 2.0, because it spent the middle of every
+         hop out of everybody's reach and the ends of it leapfrogging them.
+         The knight stays a ground threat that can clear a ledge; what it does
+         about somebody in the air is its 32 pixels of lines, and if they got
+         higher than that, they got away. */
+      const wasAir = !this.grounded;
+      this.vy += PIECE_FALL;
+      this.y += this.vy;
+      const p = this.landing(prevY);
+      this.grounded = !!p;
+      if (p) {
         this.y = p.y;
         this.vy = 0;
-        break;
+        if (wasAir) this.rest = w.rest;
+        else if (this.rest > 0) this.rest--;
+        else {
+          this.vy = -w.hop;
+          this.grounded = false;
+        }
+      }
+    } else {
+      /* A rank: fall to the nearest one and then run flat and fast along it.
+         Running off the end drops it to the rank below and it carries on,
+         which is what the piece does on a board with holes in it. */
+      this.vy += PIECE_FALL;
+      this.y += this.vy;
+      const p = this.landing(prevY);
+      this.grounded = !!p;
+      if (p) {
+        this.y = p.y;
+        this.vy = 0;
       }
     }
 
-    if (this.life <= 0) this.dead = true;
-    /* Off the edge and it is gone, with no burst. Promotion is something you
-       earn by connecting; walking into the blast zone is not that. */
-    if (this.x < -14 || this.x > VW + 14 ||
-        this.y > VH + 30 || this.y < -40) this.dead = true;
+    /* THE SQUARE IT ATTACKS.
+
+       This is the answer to the one measurement that mattered. Against a
+       victim who simply JUMPED as it arrived, every piece in the old move
+       dealt exactly zero damage, at every range tried -- you did not dodge
+       it, you stepped over it, and a move you step over is the move he was
+       complaining about.
+
+       So a piece overhead promotes when the victim is standing on a square it
+       attacks: on one of its own `dirs`, within its own `reach`. That is not
+       an invented rule, it is the table the burst already reads, which means
+       a rook shoots somebody out of the sky straight up its file, a bishop
+       does it along a diagonal from off to one side, and a knight -- 32
+       pixels of reach -- only gets you if you jumped right over it. Choosing
+       the piece chooses the shape of the answer, which is what the charge was
+       always supposed to be buying.
+
+       OVERHEAD ONLY, deliberately. Somebody level with the piece is somebody
+       resolveCombat should be allowed to handle: that path applies the
+       piece's own damage first and bursts with the shards still sitting on
+       the victim, while anything pushed into `projectiles` from inside the
+       update loop gets a free step before the first collision test. Measured,
+       that difference is about six damage a hit, so the touch stays where it
+       lands hardest and this only covers the case the touch cannot reach. */
+    const here = this.box();
+    const cy = this.y - 4;                  // the piece's own centre
+    for (const f of fighters) {
+      if (f === this.owner || f.eliminated) continue;
+      if (f.invulnerable || f.state === 'ko') continue;
+      const hb = f.hurtbox();
+      const feet = hb.y + hb.h;
+      if (feet > here.y || feet <= here.y - PIECE_FILE) continue;
+      const fx = (hb.x + hb.w / 2) - this.x, fy = (hb.y + hb.h / 2) - cy;
+      for (const d of piece.dirs) {
+        /* How far along this ray they are, and how far off it. The knight's
+           entries are two-leg L's and only the first leg is tested, which is
+           the right approximation: the corner lands two thirds of the way out
+           and nobody is standing past it inside 32 pixels anyway. */
+        const along = fx * d.dx + fy * d.dy;
+        if (along <= 0 || along > piece.reach) continue;
+        const off = fx * d.dy - fy * d.dx;
+        if (off > -PIECE_LINE && off < PIECE_LINE) {
+          this.burst();
+          return;
+        }
+      }
+    }
+
+    /* THE EIGHTH RANK. A pawn that reaches the far end of the board promotes.
+
+       That is the rule the move is named after, and it was the one ending the
+       old version did nothing with: 52% of every pawn measured walked the
+       length of the stage untouched and fell into the blast zone, so a charge
+       spent choosing a piece was a coin flip on whether the opponent happened
+       to be standing in the lane. Promoting here is not a free hit -- the
+       burst goes off against the wall, where its rays only reach somebody
+       camping the ledge -- it just stops the move from ever being nothing.
+
+       Two pixels inside the screen rather than off it, because a burst
+       centred past the edge throws most of its rays at nobody. And not in the
+       first few frames: cast facing outward from the very lip of the stage,
+       the piece is born past that line and would promote on top of him. */
+    if (this.t > 6 && (this.x <= 2 || this.x >= VW - 2)) {
+      this.burst();
+      return;
+    }
+    // Running out of time is the other end of the board.
+    if (this.life <= 0) {
+      this.burst();
+      return;
+    }
+    /* Straight down a hole is still gone, with no burst. A piece that fell off
+       the board never reached anything, and a burst in the pit would reach
+       nobody either. */
+    if (this.y > VH + 30 || this.y < -40) this.dead = true;
   }
 
+  /* Exactly the sprite, which is 7x9 drawn centred on (x, y - 4) -- so it
+     spans x-3..x+3 across and y-8..y down. The old box was a pixel wider on
+     the left and a pixel higher than anything that was ever drawn, and a
+     projectile that claims space it does not occupy is the kind of thing
+     nobody can ever quite explain losing to. */
   box() {
-    return { x: this.x - 4, y: this.y - 9, w: 8, h: 9 };
+    return { x: this.x - 3, y: this.y - 8, w: 7, h: 9 };
   }
 
-  /* Promotion. Called by resolveCombat the moment it connects, because that
-     is the only place that knows it connected -- and it must happen there
-     rather than in update() so the shards exist on the same frame the pawn
-     stops existing, with no gap for somebody to walk through. */
+  /* Promotion, by every way it happens: resolveCombat calls this the moment
+     the piece connects (`burst` is the reserved name that makes that
+     automatic), update() calls it over somebody's head, at the far rim and
+     when the clock runs out, and Trev's own button calls it wherever the
+     piece has got to.
+
+     Contact has to resolve in resolveCombat rather than in update() so the
+     shards exist on the same frame the piece stops existing, with no gap for
+     the victim to step through. */
   burst() {
     const piece = this.piece();
     for (const d of piece.dirs) {
@@ -9740,16 +10810,21 @@ class Pawn {
   }
 
   draw(g) {
-    const left = this.dir < 0;
-    drawArt(g, pixelArt('pawn' + (left ? 'L' : 'R'), PAWN_ART,
-                        { '#': '#efe7d2', E: '#3c2a1e' }, left),
-            this.x, this.y - 4);
-    /* A tick of the piece it is carrying, above it. Without this the pawn on
-       the floor is the same object whichever way the charge went, and the
-       thing you spent the charge choosing is invisible until it lands. */
     const pc = this.piece();
-    g.fillStyle = pc.ink;
-    g.fillRect(Math.round(this.x) - 1, Math.round(this.y) - 12, 2, 2);
+    const left = this.dir < 0;
+    /* The piece, in the piece's own ink -- the same art and the same colour
+       the charge indicator showed over his head, so what you picked is what
+       you see walking.
+
+       The key carries the piece AND the facing. pixelArt caches by key alone
+       and hands back whatever was rasterised first under that name: one key
+       for "the travelling piece" would have meant every rook in the match
+       came out shaped like whichever piece happened to be cast first, for the
+       rest of the session. Distinct from drawCharge's 'piece.<key>', which is
+       never flipped. */
+    drawArt(g, pixelArt('walk.' + pc.key + (left ? 'L' : 'R'), pc.art,
+                        { '#': pc.ink, E: '#3c2a1e' }, left),
+            this.x, this.y - 4);
   }
 }
 
@@ -10836,8 +11911,15 @@ function addEffect(kind, x, y, color, dir, spec) {
   if (netplay.resimulating) return null;
   const e = { kind, x, y, color, dir: dir || 1, spec, t: 0,
               life: kind === 'beam' ? 20 : kind === 'ring' ? 18
-                  : kind === 'wave' ? 13 : 16,
+                  : kind === 'wave' ? 13 : kind === 'burp' ? 18 : 16,
               vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) };
+  /* Sound is AIMED, not thrown. Everything else here drifts on a random
+     vector and that is right for a spark; a wave that did it would arrive
+     somewhere the hitbox is not. Whoever spawns one overwrites the step
+     below with a real direction -- this is only the seed, pointed straight
+     forward so a caller that forgets still gets the old behavior instead of
+     a shout that wanders off. */
+  if (kind === 'wave' || kind === 'burp') { e.vx = e.dir * 2.6; e.vy = 0; }
   effects.push(e);
   // Returned so a caller can aim it. Null while re-simulating, which is the
   // signal that the effect was suppressed rather than created.
@@ -10859,10 +11941,20 @@ function updateEffects() {
     if (e.kind === 'stick') {
       e.x += e.vx; e.y += e.vy; e.vy += 0.16;
     }
-    /* Sound goes forward and only forward: no gravity, no drift, no vy. It
-       covers the length of the hitbox over its life, which is what makes the
-       art and the box the same claim. */
-    if (e.kind === 'wave') e.x += e.dir * 2.6;
+    /* Sound goes where it was aimed and only there: no gravity, no drift.
+       A vector rather than a speed and a sign, because a belch can now be
+       pointed over his head or at the floor -- see the `wave` block on each
+       aim in ROSTER.reese, which is where the numbers live. It still covers
+       exactly the length of the hitbox over its life, which is the whole
+       point of drawing it. */
+    if (e.kind === 'wave') { e.x += e.vx; e.y += e.vy; }
+    /* The word rides the burp out and is then left behind by it. It slows
+       instead of stopping dead, so it reads as thrown, and it drifts upward
+       as it slows, which is the one thing that keeps it off his own head. */
+    if (e.kind === 'burp') {
+      e.x += e.vx; e.y += e.vy;
+      e.vx *= 0.88; e.vy = e.vy * 0.88 - 0.09;
+    }
     if (e.t >= e.life) effects.splice(i, 1);
   }
   for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -11032,20 +12124,79 @@ function drawEffects(g) {
         g.globalAlpha = 1;
         break;
       }
-      /* An open arc facing the way it is going -- a bracket, not a circle.
-         It grows and thins as it goes, which is the cheapest thing that reads
-         as sound spreading rather than a solid object flying. */
+      /* An open bracket facing the way it is going, in chunky dots rather
+         than a stroked arc. Two changes and both are load-bearing. It is
+         fillRect now, because a stroked path on a 320x180 buffer that gets
+         nearest-neighbor scaled lands on half-pixels and comes out as gray
+         fringe on everything else's hard edges -- and because a recording
+         context can capture a fillRect, so this drawing can be rendered to a
+         PNG and looked at. And it ROTATES: a belch can be pointed up or
+         down now, and a bracket that always faced along x would be a shout
+         going one way with its mouth facing another.
+
+         Dotted on purpose. Sound in a cartoon is a row of marks, not a line,
+         and the gaps are what stop three of these overlapping into a blob. */
       case 'wave': {
-        const r = 4 + (1 - k) * 7;
-        g.strokeStyle = e.color;
-        g.globalAlpha = k * 0.95;
-        g.lineWidth = k > 0.6 ? 2 : 1;
-        g.beginPath();
-        // A third of a turn, centred on the direction of travel.
-        const a = e.dir > 0 ? 0 : Math.PI;
-        g.arc(e.x, e.y, r, a - 1.05, a + 1.05);
-        g.stroke();
-        g.lineWidth = 1;
+        // Where it is going, as a unit. sqrt is fine; cos is the banned one.
+        const sp = Math.sqrt(e.vx * e.vx + e.vy * e.vy) || 1;
+        const ux = e.vx / sp, uy = e.vy / sp;
+        // It opens out as it travels, which is what spreading looks like.
+        const r = 3 + (1 - k) * 8;
+        // ...and vibrates, because it is a burp and not a radio signal.
+        const sq = 1 + 0.22 * Math.sin(e.t * 1.3);
+        const th = k > 0.55 ? 2 : 1;
+        g.fillStyle = e.color;
+        /* Fades, but never below a third. The furthest wave is the OLDEST
+           one, and it is the one standing where the hitbox ends -- fade it
+           to nothing and the move's whole claim about its reach becomes
+           invisible exactly where it needed to be read. */
+        g.globalAlpha = Math.min(1, 0.34 + k * 1.1);
+        for (let i = 0; i < WAVE_ARC.length; i++) {
+          // Rotate the arc point onto the direction of travel: this is the
+          // standard (c*ux - s*uy, c*uy + s*ux), with the sine squashed by
+          // the wobble so the bracket breathes rather than sliding.
+          const c = WAVE_ARC[i][0], sn = WAVE_ARC[i][1] * sq;
+          g.fillRect(Math.round(e.x + r * (c * ux - sn * uy)),
+                     Math.round(e.y + r * (c * uy + sn * ux)), th, th);
+        }
+        g.globalAlpha = 1;
+        break;
+      }
+      /* WHAT HE SAID, in letters, flying out with it. This is the joke: the
+         move was three sober red arcs and a man standing perfectly still.
+
+         The letters arrive ONE A FRAME rather than all at once, which is the
+         difference between a burp and a caption -- it spells itself out at
+         the speed the noise is leaving him. Every other letter sits a pixel
+         high and the whole word breathes on a sine, so it never reads as
+         type. Outlined in near-black before it is filled, because a yellow
+         word over a bright stage is otherwise unreadable, and the outline is
+         drawn as a 3x3 under every lit pixel -- one pass, no edge cases. */
+      case 'burp': {
+        const word = typeof e.spec === 'string' ? e.spec : 'BRAAP';
+        const shown = Math.min(word.length, e.t);
+        if (shown <= 0) break;
+        // 3 wide plus a pixel of air, and the last letter needs no air.
+        const bx = Math.round(e.x - (word.length * 4 - 1) / 2);
+        const by = Math.round(e.y) - 2;
+        g.globalAlpha = Math.min(1, k * 2.2);
+        for (let i = 0; i < shown; i++) {
+          const gl = BURP_FONT[word.charAt(i)];
+          if (!gl) continue;
+          const lift = (i % 2 ? -1 : 0) +
+                       Math.round(Math.sin(e.t * 0.55 + i * 1.1) * 1.2);
+          const lx = bx + i * 4, ly = by + lift;
+          for (let pass = 0; pass < 2; pass++) {
+            g.fillStyle = pass ? e.color : '#17111d';
+            for (let r = 0; r < 5; r++) {
+              for (let c = 0; c < 3; c++) {
+                if (!(gl[r] & (4 >> c))) continue;
+                if (pass) g.fillRect(lx + c, ly + r, 1, 1);
+                else g.fillRect(lx + c - 1, ly + r - 1, 3, 3);
+              }
+            }
+          }
+        }
         g.globalAlpha = 1;
         break;
       }
@@ -13609,6 +14760,10 @@ function drawFighter(g, f) {
   drawGuillotine(g, f);
   drawAxe(g, f);
   drawWhip(g, f);
+  /* After the sprite, like the sword and the rod: a swollen cheek is drawn
+     ON him, and drawn under the body it would be a man with a lump behind
+     his face. */
+  drawBelch(g, f);
   drawSleep(g, f);
 
   /* Confused had no tell at all. The only way to find out your controls were
@@ -14184,7 +15339,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '08ed32f768';
+const BUILD_ID = '34b2ef7d4a';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -14195,7 +15350,7 @@ const BUILD_ID = '08ed32f768';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.66';
+const VERSION = '2.67';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
