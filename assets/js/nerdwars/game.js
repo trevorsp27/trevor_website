@@ -3666,6 +3666,28 @@ class Fighter {
     return this.def.specials[want] ? want : 'neutral';
   }
 
+  /* Invulnerable ON PURPOSE, as part of a move, rather than because he has
+     just respawned.
+
+     The difference matters to exactly one place -- drawFighter -- and it
+     matters a lot. Respawn invulnerability BLINKS: the fighter is skipped on
+     alternate groups of four frames so you can see that you cannot yet be
+     hit. That reads correctly for a hundred and ten frames of counting down
+     to nothing.
+
+     A slouch is a different animal. It pins `invuln` at 2 every frame for
+     five seconds so that nothing can run it out, and 2 lands on the half of
+     the blink that is skipped -- floor(2/4) % 2 is 0, always -- so Simon was
+     not flickering during his ult, he was absent. The aura, the shell and
+     the Zs were all being drawn around a man who was never painted. */
+  guardedByMove() {
+    if (this.state !== 'ult') return false;
+    const u = this.def.ult;
+    return !!(u && u.kind === 'slouch' &&
+              this.attackFrame >= u.startup &&
+              this.attackFrame < u.startup + u.active);
+  }
+
   /* Flat out on the floor. Asked by sprite() and by the knockback getter, so
      the picture and the physics cannot disagree about whether he is lying
      down. Returns the MOVE rather than a boolean, because the caller wants
@@ -12620,7 +12642,8 @@ function drawFighter(g, f) {
      It only ever happened online and only sometimes, because it needs a
      rollback correction and a respawn at the same instant: visErr is zero
      offline, so `shifted` is false and the unbalanced save never happens. */
-  if (f.invuln > 0 && Math.floor(f.invuln / 4) % 2 === 0) {
+  if (f.invuln > 0 && !f.guardedByMove() &&
+      Math.floor(f.invuln / 4) % 2 === 0) {
     if (shifted) g.restore();
     return;
   }
@@ -12703,6 +12726,17 @@ function drawFighter(g, f) {
 
   if (f.state === 'roll' || f.state === 'dodge') {
     if (f.invulnerable) g.globalAlpha = 0.45;
+  }
+  /* Asleep and untouchable. A slow breath between mostly-there and all-there
+     rather than the respawn blink's hard on/off -- he is not phasing in and
+     out of existence, he is a solid object nothing can reach, and the
+     difference between those two is entirely in whether the alpha ever hits
+     zero. Off attackFrame, which is snapshotted and hashed, so a rollback
+     replays the identical breath. */
+  if (f.guardedByMove()) {
+    const u = f.def.ult;
+    const t = f.attackFrame - u.startup;
+    g.globalAlpha = 0.82 + 0.18 * ((Math.floor(t / 8) % 2) ? 1 : 0);
   }
   if (f.state === 'break') {
     g.globalAlpha = 0.6 + Math.sin(f.timer * 0.4) * 0.25;
@@ -13308,7 +13342,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '24109d980f';
+const BUILD_ID = '03d668ef41';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13319,7 +13353,7 @@ const BUILD_ID = '24109d980f';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.62';
+const VERSION = '2.63';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
