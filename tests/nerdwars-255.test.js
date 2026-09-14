@@ -934,52 +934,368 @@ test("negative control: frogs that hop away from you fail the frog test", async 
     "with the frogs hopping away the frog test should fail; it passed");
 });
 
-const plague = (run) => run(`(function () {
+/* FOUR AND TWENTY, which replaced THE PLAGUE in 2.60.
+
+   The plague rained frogs out of the sky for ninety frames, and the test for
+   it asked one question -- is more than one of them on the screen at once --
+   because that was the only thing separating the ult from the recovery. The
+   pie asks for more. He sets it down where he is standing and it COOKS: a
+   hundred and ten frames of a thing on the floor that hurts to touch, and
+   then it opens, and everybody near it goes up and ten frogs come out of the
+   crust.
+
+   So there are four separate pieces that can ship half-working -- the hazard,
+   the clock, the burst, and the frogs -- and each of them looks completely
+   fine from the outside if any one of the others is doing its job. A pie
+   that never opens is still a pie on the floor hurting people. A pie that
+   opens at once is still a burst and ten frogs. They are measured one at a
+   time below for exactly that reason.
+
+   The class is called Pie and its burst method is called `open`, not
+   `burst`: resolveCombat fires `shot.burst()` on any projectile that has one
+   the moment it connects, so a pie with a method by that name would go off
+   the first time anybody brushed against it. */
+
+/* One cast, watched from the press to a few frames past the moment the crust
+   comes off. `off` is where the victim is held relative to the pie: 0 is
+   standing on it, a little way out is beside it but inside the blast, and a
+   long way out is clear of the whole business.
+
+   Two things in here are not obvious and both cost time to find.
+
+   `freezeFrames = 0`, because the burst holds the world for six frames and
+   SETUP does not clear that. A second measurement in the same vm spends its
+   press inside the previous one's freeze and never casts at all -- which
+   reads as a pie that failed to appear rather than as a press that was
+   eaten.
+
+   `foe.burn = 0` at the top of every frame, because the pie sets people
+   alight and a burn takes 0.04 off them EVERY frame. Left alone, every
+   reading below arrives as 3.04 rather than 3 and the tidy number is gone.
+   It is snuffed before the step and read back after it, so the fire is still
+   measured -- just not while it is on the scales. */
+const bakeRun = (run, off) => run(`(function () {
   ${SETUP}
-  foe.invuln = 9999;
-  var most = 0, everSeen = 0;
+  /* The middle of the floor. Ten frogs come out of this in a fan, and a pie
+     baked on the ledge loses half of them over the side. */
+  me.x = main.x + main.w / 2;
+  freezeFrames = 0;
+  var spawnAt = -1, goneAt = -1, lastT = -1, alive = 0, most = 0;
+  var ticks = [], gaps = [], last = -1, lit = 0, vy = 0, burst = 0;
+  netplay.active = true;
+  for (var i = 0; i < 220; i++) {
+    me.hitstop = 0; me.mana = 999;
+    var p = projectiles.filter(function (q) {
+      return q.constructor.name === 'Pie';
+    })[0];
+    if (p) {
+      lastT = p.t;
+      foe.x = p.x + ${off}; foe.y = main.y; foe.grounded = true;
+      foe.vx = 0; foe.vy = 0; foe.hitstun = 0; foe.hitstop = 0;
+      foe.invuln = 0; foe.burn = 0;
+    }
+    var before = foe.health;
+    netplay.framePads = [bitsToPad(i === 0 ? ${ULT} : 0), bitsToPad(0)];
+    step();
+    var still = projectiles.filter(function (q) {
+      return q.constructor.name === 'Pie';
+    })[0];
+    if (still) {
+      alive++;
+      if (spawnAt < 0) spawnAt = i;
+      /* Only the cooking hits go in here. What lands on the frame the crust
+         comes off is the burst -- and the frogs, if he is standing in the
+         middle of it -- and that frame is collected on its own below. */
+      if (foe.health < before) {
+        ticks.push(+(before - foe.health).toFixed(3));
+        if (last >= 0) gaps.push(i - last);
+        last = i;
+      }
+    } else if (spawnAt >= 0 && goneAt < 0) {
+      goneAt = i;
+      burst = +(before - foe.health).toFixed(3);
+      // Read here and not a frame later: he is launched, and gravity starts
+      // taking it back on the very next step.
+      vy = +foe.vy.toFixed(4);
+    }
+    if (foe.burn > lit) lit = foe.burn;
+    var n = projectiles.filter(function (q) {
+      return q.constructor.name === 'Frog';
+    }).length;
+    if (n > most) most = n;
+    if (goneAt >= 0 && i > goneAt + 2) break;
+  }
+  netplay.active = false; netplay.framePads = null;
+  return { spawnAt: spawnAt, goneAt: goneAt, lastT: lastT, alive: alive,
+           most: most, lit: lit, vy: vy, burst: burst,
+           ticks: ticks.join(','), gaps: gaps.join(',') };
+})()`);
+
+const PIE = "JSON.stringify(ROSTER.christian.ult)";
+
+function checkHazard(run, r) {
+  const u = JSON.parse(run(PIE));
+  assert.equal(u.label, "FOUR AND TWENTY", "precondition: his ult is the pie");
+  assert.ok(r.spawnAt >= 0, "the pie should have been put down at all");
+
+  const ticks = r.ticks ? r.ticks.split(",").map(Number) : [];
+  assert.ok(ticks.length >= 3,
+    "a man standing on a pie while it cooks should be hurt by it again and " +
+    "again -- that is what makes the bake a piece of the stage taken away " +
+    "rather than a wind-up; it hurt him " + ticks.length + " times in " +
+    r.alive + " frames");
+  /* The re-arm before the damage, and the order is not cosmetic: a pie that
+     hurt on every frame of contact would take a hundred and ten off somebody
+     who walked into it, which is not a hazard, it is a wall -- and it also
+     kills him partway through, so the last touch is whatever was left on his
+     bar rather than 3. Checked in this order the control below fails on the
+     re-arm it broke instead of on the arithmetic of finishing somebody off. */
+  for (const gap of r.gaps.split(",")) {
+    assert.ok(Number(gap) >= u.hot.hitEvery,
+      "and no oftener than `hot.hitEvery` (" + u.hot.hitEvery + " frames); " +
+      "the gaps between touches were " + r.gaps);
+  }
+  for (const took of ticks) {
+    assert.equal(took, u.hot.damage,
+      "and every touch is worth `hot.damage` (" + u.hot.damage + "); one " +
+      "took " + took + " (the run was " + r.ticks + ")");
+  }
+  assert.equal(r.lit, u.hot.burn.frames,
+    "and it is molten, so touching it sets you alight for " +
+    u.hot.burn.frames + " frames; the most burn he ever carried was " + r.lit);
+
+  /* Last on purpose, and it is the length of the hazard rather than a
+     precondition for it. Ordering matters here: a pie that hits on every
+     frame of contact also spends longer on the stage, because every hit
+     hands out hitstop and the cook clock does not run through it -- so with
+     this check first the instant-re-arm control below failed on the wrong
+     assertion and proved nothing about the re-arm. */
+  assert.ok(Math.abs(r.alive - u.bake) <= 2,
+    "and it should sit there cooking for about its own `bake` (" + u.bake +
+    ") frames; it was on the stage for " + r.alive);
+}
+
+test("the pie is a hazard the whole time it cooks", async () => {
+  const run = await arena(CHRISTIAN, REESE);
+  checkHazard(run, bakeRun(run, 0));
+});
+
+test("negative control: a pie that re-arms every frame fails the hazard test", async () => {
+  /* The re-arm lives in resolveCombat rather than in the pie, so this is
+     where it has to be taken out. The spec still SAYS 34, which is the
+     point: the assertion compares what happened against what was promised,
+     and a control that moved the promise too would agree with itself. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "shot.hitAt[f.slot] = shot.spec.hitEvery || 30;",
+    "shot.hitAt[f.slot] = 0;") });
+  const r = bakeRun(run, 0);
+  expectToFail(() => checkHazard(run, r),
+    "with the pie hurting on every frame of contact the hazard test should " +
+    "fail; it passed");
+});
+
+test("negative control: a pie that does not set you alight fails the hazard test", async () => {
+  /* Taken out of applyHit rather than out of the pie's `burn` block, and the
+     first attempt at this control is why. Zeroing `frames: 80` in the ROSTER
+     moved the promise as well as the behavior -- the assertion reads the
+     number out of the same spec the pie does, so both sides went to nought
+     and the control passed while proving nothing whatsoever. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "  if (move.burn) {\n    defender.burn = move.burn.frames;",
+    "  if (false) {\n    defender.burn = move.burn.frames;") });
+  const r = bakeRun(run, 0);
+  expectToFail(() => checkHazard(run, r),
+    "with nothing catching fire the hazard test should fail; it passed");
+});
+
+/* Measured from a step or two out, not from on top of it. The frogs arrive
+   on the same frame the crust comes off and they are hit-tested on that very
+   frame, so a man standing in the middle of it takes the burst AND half a
+   dozen frogs at once -- which is correct, and useless for counting either
+   of them. Thirty pixels out he is still well inside `burst.radius` and
+   already beyond the widest frog. */
+const BESIDE = 30;
+/* And clear of the blast, but still on the floor: the main platform runs a
+   good way past the middle, so this is a man standing on the same ground
+   watching it go off. */
+const CLEAR = 100;
+
+function checkOpening(run, r) {
+  const u = JSON.parse(run(PIE));
+  assert.ok(r.goneAt >= 0,
+    "the pie has to OPEN -- one that cooks forever is a hazard, not an ult; " +
+    "it was still sitting there after " + r.alive + " frames");
+  assert.equal(r.lastT + 1, u.bake,
+    "and open on the frame its own clock reaches `bake` (" + u.bake +
+    "); the last reading off it was t " + r.lastT);
+  /* Against the spec, never against ten. The whole joke is four and twenty
+     blackbirds, the number has already moved once, and a test that writes it
+     down stops being about the move the moment somebody tunes it. */
+  assert.equal(r.most, u.count,
+    "and exactly `count` (" + u.count + ") frogs should come out of the " +
+    "crust; the most on the stage at once was " + r.most);
+}
+
+test("the pie opens on schedule, and four and twenty frogs come out of it", async () => {
+  const run = await arena(CHRISTIAN, REESE);
+  checkOpening(run, bakeRun(run, BESIDE));
+});
+
+test("negative control: a pie that never finishes cooking fails the opening test", async () => {
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "    if (this.t >= s.bake) this.open();",
+    "    if (this.t >= s.bake * 3) this.open();") });
+  const r = bakeRun(run, BESIDE);
+  expectToFail(() => checkOpening(run, r),
+    "with the pie left in the oven the opening test should fail; it passed");
+});
+
+test("negative control: a pie that lets out three frogs fails the opening test", async () => {
+  /* Three is his RECOVERY's number, which is the mistake worth guarding
+     against: the two moves build their frogs out of the same class from
+     nearly the same four lines, and a copy that kept the wrong bound would
+     leave an ult that still works and is simply not the ult. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "    for (let i = 0; i < s.count; i++) {\n      const k = i - (s.count - 1) / 2;",
+    "    for (let i = 0; i < 3; i++) {\n      const k = i - (s.count - 1) / 2;") });
+  const r = bakeRun(run, BESIDE);
+  expectToFail(() => checkOpening(run, r),
+    "with three frogs in the crust instead of ten the opening test should " +
+    "fail; it passed");
+});
+
+function checkPieBurst(run, near, far) {
+  const u = JSON.parse(run(PIE));
+  assert.ok(near.goneAt >= 0 && far.goneAt >= 0,
+    "precondition: both pies should have opened");
+  assert.equal(near.burst, u.burst.damage,
+    "a man standing " + BESIDE + "px from the pie when it opens is inside " +
+    "`burst.radius` (" + u.burst.radius + ") and should lose `burst.damage` " +
+    "(" + u.burst.damage + "); he lost " + near.burst);
+  /* Screen y grows downward, so a launch leaves the victim with NEGATIVE vy.
+     This is the assertion that fails if the angle is ever flipped in the
+     table -- and a pie that planted you in the floor instead of throwing you
+     off it would otherwise pass everything above. */
+  assert.ok(near.vy < 0,
+    "and be thrown up off it; he left with vy " + near.vy +
+    " (negative is up the screen)");
+  assert.equal(far.burst, 0,
+    "and it has an EDGE: a man " + CLEAR + "px away, well outside the " +
+    u.burst.radius + " the spec allows it, should not feel it at all; he " +
+    "lost " + far.burst);
+  assert.equal(far.ticks, "",
+    "precondition: standing that far out he never touched the cooking pie " +
+    "either, so the reading above is about the burst and nothing else; the " +
+    "cooking hits were " + far.ticks);
+}
+
+test("when the pie is opened it throws off everybody close enough", async () => {
+  const run = await arena(CHRISTIAN, REESE);
+  checkPieBurst(run, bakeRun(run, BESIDE), bakeRun(run, CLEAR));
+});
+
+test("negative control: a burst that reaches nobody fails the burst test", async () => {
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "      if (dx * dx + dy * dy <= r2) applyHit(this.owner, f, s.burst, this.x);",
+    "      if (false) applyHit(this.owner, f, s.burst, this.x);") });
+  expectToFail(() => checkPieBurst(run, bakeRun(run, BESIDE), bakeRun(run, CLEAR)),
+    "with the burst touching nobody the burst test should fail; it passed");
+});
+
+test("negative control: a burst with no edge to it fails the burst test", async () => {
+  /* The half that is easy to lose and impossible to see: a radius that is
+     never actually applied looks exactly like a working ult from inside the
+     blast. It only shows from outside it. */
+  const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
+    "    const r2 = s.burst.radius * s.burst.radius;",
+    "    const r2 = 1e9;") });
+  expectToFail(() => checkPieBurst(run, bakeRun(run, BESIDE), bakeRun(run, CLEAR)),
+    "with the blast reaching the whole stage the burst test should fail; it passed");
+});
+
+/* The frogs out of the crust, followed by identity rather than by position
+   in the list. The recovery's three all survive and can be matched up by
+   index; ten fanned out of a pie cannot -- the outside ones go over the edge
+   while the rest are still settling, and after that the nth frog in the
+   array is not the nth frog it was. So the references are held, each one is
+   asked where it is and then where it got to, and the ones that died on the
+   way are dropped rather than allowed to confuse the pairing. */
+const crustFrogs = (run) => run(`(function () {
+  ${SETUP}
+  me.x = main.x + main.w / 2;
+  freezeFrames = 0;
+  /* Untouchable, so a frog that reaches him bounces off instead of dying on
+     him: where they were GOING is the measurement, and a frog that arrives
+     is one that cannot be asked. */
+  foe.invuln = 9999; foe.x = main.x + main.w - 12;
+  var out = -1;
   netplay.active = true;
   for (var i = 0; i < 200; i++) {
-    me.hitstop = 0;
+    me.hitstop = 0; me.mana = 999;
     netplay.framePads = [bitsToPad(i === 0 ? ${ULT} : 0), bitsToPad(0)];
     step();
     var n = projectiles.filter(function (q) {
       return q.constructor.name === 'Frog';
     }).length;
-    if (n > most) most = n;
-    if (n > 0) everSeen++;
+    if (n > 0 && out < 0) out = i;
+    // Forty frames to come down and sit, so where each one is by now is
+    // where it landed rather than where it was thrown.
+    if (out >= 0 && i > out + 40) break;
+  }
+  var kept = projectiles.filter(function (q) {
+    return q.constructor.name === 'Frog';
+  });
+  var before = kept.map(function (f) { return f.x; });
+  for (var i = 0; i < 90; i++) {
+    netplay.framePads = [bitsToPad(0), bitsToPad(0)]; step();
   }
   netplay.active = false; netplay.framePads = null;
-  return { most: most, frames: everSeen };
+  var pairs = [];
+  for (var i = 0; i < kept.length; i++) {
+    if (kept[i].dead) continue;
+    pairs.push(+before[i].toFixed(2) + ':' + +kept[i].x.toFixed(2));
+  }
+  return { pairs: pairs.join(','), settled: kept.length,
+           foeX: +foe.x.toFixed(2) };
 })()`);
 
-function checkPlague(run, r) {
-  const u = JSON.parse(run("JSON.stringify(ROSTER.christian.ult)"));
-  assert.equal(u.label, "THE PLAGUE", "precondition: his ult is the rain of frogs");
-  assert.ok(r.most > 1,
-    "it RAINS: more than one frog on the stage at a time, or it is the " +
-    "recovery again with a longer animation; the most at once was " + r.most);
-  assert.ok(r.most >= 4,
-    "and enough of them to take the floor away from everybody; the most at " +
-    "once was " + r.most);
-  assert.ok(r.frames > u.active,
-    "and they outlast the shower itself -- they hop after you afterwards; " +
-    "there were frogs on " + r.frames + " frames against " + u.active +
-    " frames of rain");
+function checkCrustFrogs(run, r) {
+  const u = JSON.parse(run(PIE));
+  assert.ok(u.frog.hopEvery > 0 && u.frog.speed > 0,
+    "precondition: the crust's frogs are given a hop of their own (" +
+    u.frog.hopEvery + " frames, " + u.frog.speed + "px)");
+  const pairs = r.pairs ? r.pairs.split(",").map((p) => p.split(":").map(Number)) : [];
+  assert.ok(pairs.length >= 3,
+    "enough of the crust's frogs should still be on the stage ninety frames " +
+    "later to say anything about them; " + pairs.length + " of the " +
+    r.settled + " that settled were still alive");
+  /* The same promise as the recovery's, and the same reason for measuring
+     direction rather than movement: a frog hopping the wrong way is still a
+     frog on the screen. They are handed `frog`, which is its own spec here --
+     faster and worth more than the recovery's -- so what they share with his
+     three is code, and code can quietly stop being shared. */
+  for (const [from, to] of pairs) {
+    assert.equal(Math.sign(to - from), Math.sign(r.foeX - from),
+      "a frog out of the crust should hop toward the nearest opponent, at x " +
+      r.foeX + "; this one started at " + from + " and finished at " + to);
+    assert.ok(Math.abs(to - from) > 10,
+      "and cover ground doing it; it moved " + Math.abs(to - from).toFixed(1) +
+      "px in ninety frames");
+  }
 }
 
-test("THE PLAGUE rains frogs, more than one at a time", async () => {
+test("the frogs out of the crust hop after the nearest opponent", async () => {
   const run = await arena(CHRISTIAN, REESE);
-  checkPlague(run, plague(run));
+  checkCrustFrogs(run, crustFrogs(run));
 });
 
-test("negative control: an ult that drops one frog fails the plague test", async () => {
+test("negative control: crust frogs that hop away fail the crust-frog test", async () => {
   const run = await arena(CHRISTIAN, REESE, { engine: sabotage(
-    "    every: 6, lanes: 7,",
-    "    every: 600, lanes: 7,") });
-  const r = plague(run);
-  expectToFail(() => checkPlague(run, r),
-    "with the rain down to a single frog the plague test should fail; it passed");
+    "        const dir = foe ? (foe.x >= this.x ? 1 : -1) : 1;",
+    "        const dir = foe ? (foe.x >= this.x ? -1 : 1) : 1;") });
+  const r = crustFrogs(run);
+  expectToFail(() => checkCrustFrogs(run, r),
+    "with the frogs hopping away the crust-frog test should fail; it passed");
 });
 
 /* THE LOAD-ORDER TRAP.

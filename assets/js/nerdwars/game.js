@@ -1777,53 +1777,64 @@ ROSTER.squalls = {
       manaOverride: 12,
       damage: 0, base: 0, scale: 0,
     },
-    /* SALAMENCE. The dream, and his way home.
+    /* FISHING POLE. Trev's, borrowed whole, and openly a stand-in until
+       something is drawn for this slot.
 
-       It comes in from behind him, he gets a lift off it, and it carries on
-       across the stage through anything in the way. The lift is FIXED -- a
-       recovery that only works when you have been sleeping is not a
-       recovery, it is a way to lose a stock for a mistake you made twenty
-       seconds ago -- so an empty dream still gets him back to the ledge.
-
-       What the dream buys is the dragon. At nothing it is a tired blue thing
-       that flaps past for eight. At a full meter it crosses the whole screen
-       at nearly twice the speed and hits for twenty, and it does not stop at
-       the first person it reaches. Spends the meter either way, all of it:
-       there is no dribbling it out. */
+       Every number below is his -- the same startup, the same hold, the same
+       three throws at the same angles -- because a placeholder that has been
+       quietly retuned is a placeholder nobody can compare to the thing it is
+       standing in for. The ONE difference is `rise`, and it is not a tweak:
+       Trev casts this downward and recovers with something else, while for
+       Squalls it sits in the up slot, and an up special that cannot get him
+       home would cost him a stock every time he was knocked off. -5.2 is
+       under every real recovery on the roster, which is the right place for
+       a move that is also a forty-six pixel grab. */
     up: {
-      kind: 'salamence', label: 'SALAMENCE',
-      startup: 8, active: 1, recovery: 20,
-      rise: -6.0, drift: 0.8,
-      speed: 2.6, life: 150, flap: 7, hitEvery: 34,
-      dreamMax: 100, dreamDamage: 12, dreamSpeed: 1.9, dreamLife: 70,
-      manaOverride: 24,
-      damage: 8, base: 2.8, scale: 5.8, angle: 46,
-      kx: 0.6946583704589973, ky: 0.7193398003386512,
+      kind: 'pole', label: 'FISHING POLE',
+      startup: 9, active: 30, recovery: 16,
+      ox: 4, oy: -12, w: 46, h: 10,
+      rise: -5.2, drift: 0.6,
+      grab: { hold: 32, damage: 0 },
+      damage: 0, base: 0, scale: 0,
+      throwFwd: { damage: 12, base: 4.6, scale: 9.6, angle: 32,
+                  kx: 0.84804809615642596, ky: 0.52991926423320490 },
+      throwUp: { damage: 10, base: 4.4, scale: 10.2, angle: 84,
+                 kx: 0.10452846326765346, ky: 0.99452189536827329 },
+      throwDown: { damage: 14, base: 4.2, scale: 8.0, angle: 12,
+                   kx: 0.97814760073380569, ky: 0.20791169081775934 },
     },
   },
-  /* REM SLEEP. The pun is the move: REM is the sleep you dream in, and it is
-     most of his name.
+  /* SALAMENCE. The dream, and it kills whatever it touches.
 
-     He goes down properly this time -- invulnerable, healing, out for five
-     seconds -- and the dragon arrives at full strength whatever the meter
-     said, three times, from alternating sides. He is not steering it and he
-     is not defending himself; he is asleep, and this is what he is dreaming.
+     One dragon, one pass, and no second chances for either of you: anything
+     it reaches is gone outright, at nought percent, through any amount of
+     health. The `damage` below is not a big number pretending to be a rule,
+     it IS the rule -- health goes to nothing, knockOut runs, and the
+     knockback that comes out of a figure that size throws what is left of
+     them off the screen, which is the correct picture.
 
-     The passes are what makes it an ult rather than a big Salamence. One
-     dragon is a thing you jump over. Three, ninety-six frames apart, from
-     both directions, is a stage you have to keep solving while the person
-     who caused it is lying down. */
+     What pays for that is how slow it is. 2.1 pixels a frame is slower than
+     a walk: you can see it coming from the far edge, and jumping over it or
+     simply stepping off the line is not a hard read, it is the obvious one.
+     An ult that cannot miss would be a button that ends a match; this one is
+     a question you get four seconds to answer.
+
+     And the nap is what makes the question harder. `dreamSpeed` is the only
+     thing the meter buys now -- a full dream is 3.6 rather than 2.1, which
+     is the difference between strolling out of the way and having to commit
+     to a jump. Sleeping is no longer about how hard the dragon hits, because
+     it cannot hit harder than this; it is about how little time you have. */
   ult: {
-    kind: 'remsleep', label: 'REM SLEEP',
-    startup: 20, active: 300, recovery: 18,
-    heal: 30,
-    passes: 3, every: 96,
-    dragon: {
-      speed: 4.4, life: 160, flap: 5, hitEvery: 30,
-      damage: 17, base: 3.6, scale: 7.2, angle: 50,
-      kx: 0.6427876096865394, ky: 0.766044443118978,
-    },
-    damage: 0, base: 0, scale: 0,
+    kind: 'salamence', label: 'SALAMENCE',
+    startup: 14, active: 1, recovery: 26,
+    // A small hop as it goes under him, so he is visibly on it rather than
+    // standing beside it. Nothing like a recovery -- the pole is that now.
+    rise: -3.0, drift: 0.5,
+    speed: 2.1, life: 280, flap: 6, hitEvery: 60,
+    // The meter buys speed and nothing else: see above.
+    dreamMax: 100, dreamDamage: 0, dreamSpeed: 1.5, dreamLife: 0,
+    damage: 999, base: 5.0, scale: 10.0, angle: 46,
+    kx: 0.6946583704589973, ky: 0.7193398003386512,
   },
 };
 
@@ -1954,25 +1965,47 @@ ROSTER.christian = {
       damage: 0, base: 0, scale: 0,
     },
   },
-  /* THE PLAGUE. The army, but it is raining.
+  /* FOUR AND TWENTY. He bakes a pie. The frogs go in it.
 
-     Frogs come down off the top of the screen for a second and a half,
-     across the whole width of it, and then hop after whoever is nearest for
-     as long as they last. It is the same frog and the same hop as the
-     recovery -- deliberately, because the ult should read as more of him
-     rather than as a different character arriving -- and the only things
-     that change are how many and where they come from.
+     Sing a song of sixpence: four and twenty blackbirds baked in a pie, and
+     when the pie was opened the birds began to sing. He does not have
+     blackbirds. He has frogs, and he has an oven, and he has apparently
+     given this some thought.
 
-     It does not hit hard. Fourteen frogs at five apiece is a big number that
-     nobody will ever collect, and that is fine: what it actually does is
-     take the floor away from everybody for ten seconds while he stands in
-     the middle of it with an axe. */
+     He sets it down where he is standing and it COOKS -- a hundred and ten
+     frames of a thing sitting on the floor steaming, which is a long time to
+     leave something in the middle of a fight. While it cooks it is a hazard
+     nobody wants to stand near: it is molten, it burns, and it re-arms every
+     thirty-four frames, so the pie is a piece of the stage taken away before
+     it has done anything at all.
+
+     Then it opens. Everyone inside forty-four pixels takes eighteen and goes
+     up, and ten frogs come out of the crust in a fan and hop off after
+     whoever is nearest, for five seconds, exactly as the ones from his
+     recovery do.
+
+     It replaced THE PLAGUE, which rained frogs from the sky for a second and
+     a half. The frogs were the good part and they are still here; what has
+     changed is that they now arrive from a pie he made, at a moment
+     everybody in the room can see coming and has to decide what to do about.
+     A hazard you can watch cooking is a better ult than a hazard that simply
+     falls on you, and it is considerably funnier. */
   ult: {
-    kind: 'plague', label: 'THE PLAGUE',
-    startup: 18, active: 90, recovery: 20,
-    every: 6, lanes: 7,
+    kind: 'pie', label: 'FOUR AND TWENTY',
+    startup: 26, active: 1, recovery: 26,
+    bake: 110,
+    /* Touching it while it cooks. Small, on a slow re-arm, and it sets you
+       alight -- the point is not the damage, it is that standing next to the
+       pie is a decision. */
+    hot: { damage: 3, hitEvery: 34,
+           burn: { frames: 80, dps: 0.04 },
+           base: 1.4, scale: 2.4, angle: 80,
+           kx: 0.17364817766693041, ky: 0.984807753012208 },
+    burst: { radius: 44, damage: 18, base: 4.0, scale: 8.4, angle: 64,
+             kx: 0.43837114678907746, ky: 0.898794046299167 },
+    count: 10, spread: 1.5,
     frog: {
-      hopEvery: 22, hop: -2.6, speed: 1.6, drop: 0.26, life: 320,
+      hopEvery: 20, hop: -2.8, speed: 1.7, drop: 0.26, life: 300,
       damage: 5, base: 2.6, scale: 5.2, angle: 62,
       kx: 0.46947156278589086, ky: 0.8829475928589269,
     },
@@ -3107,7 +3140,7 @@ class Fighter {
           s.kind === 'hotdog' || s.kind === 'slots' || s.kind === 'slouch' ||
           s.kind === 'cookie' || s.kind === 'frogs' || s.kind === 'plague' ||
           s.kind === 'yawn' || s.kind === 'sleep' || s.kind === 'salamence' ||
-          s.kind === 'remsleep' ||
+          s.kind === 'pie' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
@@ -3633,7 +3666,7 @@ class Fighter {
   napping() {
     if (this.state !== 'special' && this.state !== 'ult') return null;
     const m = this.moveFor(this.state);
-    if (!m || (m.kind !== 'sleep' && m.kind !== 'remsleep')) return null;
+    if (!m || m.kind !== 'sleep') return null;
     return this.attackFrame >= m.startup &&
            this.attackFrame < m.startup + m.active ? m : null;
   }
@@ -4716,6 +4749,17 @@ class Fighter {
            meant holding back to set up a back-throw spun the line away from
            whoever he was aiming at, and it caught nobody. */
         if (this.attackFrame === 1) this.poleDir = this.facing;
+        /* A cast that also lifts. Trev's does not and must not -- his pole is
+           a down special and his recovery is elsewhere -- but Squalls carries
+           the same move in his UP slot, and a character whose up special
+           cannot get him back to the ledge is not a character, he is a stock
+           waiting to be spent. Guarded on `rise` so the move is Trev's exactly
+           as it was for Trev. */
+        if (s.rise && this.attackFrame === s.startup) {
+          this.vy = s.rise;
+          this.vx += this.facing * (s.drift || 0);
+          this.grounded = false;
+        }
         if (this.attackFrame === s.startup) {
           // Where the rod actually is now, though -- he may have walked.
           this.poleX0 = this.x + this.poleDir * s.ox;
@@ -4773,30 +4817,6 @@ class Fighter {
         }
         break;
 
-      case 'remsleep': {
-        const down = this.attackFrame >= s.startup &&
-                     this.attackFrame < s.startup + s.active;
-        this.vx = 0;
-        if (down) {
-          this.invuln = Math.max(this.invuln, 2);
-          // A local, for the reason SLEEP ON IT above gives.
-          const mend = s.heal / s.active;
-          this.health = Math.min(COMBAT.maxHealth, this.health + mend);
-          /* A pass from alternating sides. Spread over the sleep rather than
-             all at once, and off attackFrame rather than a counter of its
-             own, so a rollback replays the same three dragons. */
-          const t = this.attackFrame - s.startup;
-          if (t % s.every === 0 && t / s.every < s.passes) {
-            const n = t / s.every;
-            const dir = n % 2 === 0 ? this.facing : -this.facing;
-            projectiles.push(new Salamence(this, s.dragon, 1, dir, this.y - 22));
-          }
-        } else if (this.attackFrame === s.startup + s.active) {
-          addEffect('ring', this.x, this.y - 8, this.accent);
-        }
-        break;
-      }
-
       case 'cookie':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
@@ -4838,6 +4858,17 @@ class Fighter {
                                       s.toss, i));
           }
           cue('airjump', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'pie':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Pie(this, s));
+          for (let i = 0; i < 6; i++) {
+            addEffect('dust', this.x + rand(-9, 9), this.y, '#d8a860');
+          }
+          cue('throw', { slot: this.slot, x: this.x });
         }
         break;
 
@@ -7516,6 +7547,126 @@ class Cookie {
     } else {
       g.fillStyle = '#c08a46';
       g.fillRect(Math.round(this.x) - 2, y, 4, 4);
+    }
+  }
+}
+
+/* =====================================================================
+   PIE - four and twenty frogs, baked.
+
+   Sits on the floor and cooks. For a hundred and ten frames it is a hazard
+   and nothing else -- molten, on a slow re-arm, setting alight anybody who
+   stands near it -- and then it opens and ten frogs come out of the crust.
+
+   It is the only ult in the game that does nothing for two seconds, which is
+   the whole design: everybody in the room can see it cooking and has that
+   long to decide where they would rather be standing. A hazard you can watch
+   arrive is a better ult than a hazard that simply lands on you.
+
+   Drawn in code rather than off a sheet, for the reason Pellet is: nobody
+   ever drew a pie, and inventing sixteen pixels of one to sit beside the
+   hand-drawn art would look exactly like what it was. Pixels it is.
+   ===================================================================== */
+
+class Pie {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.base = spec;
+    // What applyHit is handed while it cooks. The burst has its own.
+    this.spec = spec.hot;
+    this.x = owner.x;
+    this.y = owner.y;
+    /* Put down on whatever he is standing on, not on whatever happens to be
+       under that point later. A pie that fell through the Battlefield's
+       trapdoor mid-bake would be a funny bug and a bad ult. */
+    this.t = 0;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  update() {
+    const s = this.base;
+    this.t++;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    // Steam, getting more urgent as it comes up to temperature.
+    const every = this.t > s.bake * 0.7 ? 4 : 9;
+    if (this.t % every === 0) {
+      addEffect('spark', this.x + rand(-7, 7), this.y - 8 - rand(0, 5), '#ffe4b0');
+    }
+    if (this.t >= s.bake) this.open();
+  }
+
+  /* NOT called `burst`: resolveCombat fires `shot.burst()` on any projectile
+     that has one the moment it connects, which is how a pawn promotes, and a
+     pie with a method by that name would go off the first time somebody
+     brushed it instead of when it had finished cooking. */
+  open() {
+    if (this.dead) return;
+    const s = this.base;
+    this.dead = true;
+    const r2 = s.burst.radius * s.burst.radius;
+    for (const f of fighters) {
+      if (f === this.owner || f.eliminated) continue;
+      if (f.state === 'ko' || f.invulnerable) continue;
+      const b = f.hurtbox();
+      const nx = clamp(this.x, b.x, b.x + b.w);
+      const ny = clamp(this.y - 6, b.y, b.y + b.h);
+      const dx = nx - this.x, dy = ny - (this.y - 6);
+      if (dx * dx + dy * dy <= r2) applyHit(this.owner, f, s.burst, this.x);
+    }
+    /* And the birds began to sing. Spread from the index rather than drawn,
+       because this runs inside the rollback and both machines have to get
+       the same ten frogs. */
+    for (let i = 0; i < s.count; i++) {
+      const k = i - (s.count - 1) / 2;
+      projectiles.push(new Frog(this.owner, s.frog, this.x + k * 2, this.y - 6,
+                                k * s.spread, -3.4 - (i % 3) * 0.4, i));
+    }
+    for (let i = 0; i < 14; i++) {
+      addEffect('spark', this.x + rand(-14, 14), this.y - rand(0, 14), '#f0c070');
+    }
+    addEffect('ring', this.x, this.y - 6, '#ffd9a0');
+    for (let i = 0; i < 6; i++) addEffect('dust', this.x + rand(-12, 12), this.y, '#c8a06a');
+    freezeFrames = Math.max(freezeFrames, 6);
+    cue('hit-big', { slot: this.owner.slot, x: this.x });
+  }
+
+  box() {
+    return { x: this.x - 9, y: this.y - 9, w: 18, h: 9 };
+  }
+
+  draw(g) {
+    const s = this.base;
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const k = this.t / s.bake;
+    /* It swells. One pixel of lift over the whole bake, which is not much
+       and is plenty: at this size a shape that grows at all reads as a shape
+       about to do something. */
+    const puff = k > 0.55 ? 1 : 0;
+    // The dish.
+    g.fillStyle = '#6b4a2a';
+    g.fillRect(x - 9, y - 3, 18, 3);
+    g.fillStyle = '#8a5f36';
+    g.fillRect(x - 9, y - 4, 18, 1);
+    // The crust, browning as it cooks.
+    const done = Math.min(1, k * 1.2);
+    g.fillStyle = done > 0.66 ? '#d8a860' : done > 0.33 ? '#e2bd82' : '#ecd2a6';
+    g.fillRect(x - 8, y - 8 - puff, 16, 5 + puff);
+    g.fillRect(x - 7, y - 9 - puff, 14, 1);
+    // A lattice, because it is a pie.
+    g.fillStyle = '#b8834a';
+    for (let i = -6; i <= 6; i += 4) g.fillRect(x + i, y - 8 - puff, 1, 4 + puff);
+    /* And near the end, things pushing at it from the inside. This is the
+       tell that says what is about to come out, and it is the whole joke. */
+    if (k > 0.72) {
+      g.fillStyle = '#4c9a3f';
+      const wob = Math.floor(this.t / 4) % 2;
+      g.fillRect(x - 5 + wob, y - 10 - puff, 2, 2);
+      g.fillRect(x + 3 - wob, y - 10 - puff, 2, 2);
+      if (k > 0.88) g.fillRect(x - 1, y - 11 - puff, 2, 2);
     }
   }
 }
@@ -13115,7 +13266,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '0ae189e726';
+const BUILD_ID = '4948b51f76';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13126,7 +13277,7 @@ const BUILD_ID = '0ae189e726';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.59';
+const VERSION = '2.60';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

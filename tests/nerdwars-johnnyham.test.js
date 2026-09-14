@@ -255,13 +255,20 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
      called that a regression. What it must still catch is an ult that moved,
      vanished, or landed on the wrong person, so every pair below is asserted
      by key. Read out of the vm as strings: the engine has its own
-     Array.prototype, so deepStrictEqual rejects identical values. */
+     Array.prototype, so deepStrictEqual rejects identical values.
+
+     Two of these moved in 2.60, and both are deliberate. Squalls's REM SLEEP
+     is gone and SALAMENCE came up out of his up special to take the ult slot;
+     Christian's THE PLAGUE is gone and FOUR AND TWENTY -- the pie -- replaced
+     it. What those two moves now DO is measured in nerdwars-squalls.test.js
+     and nerdwars-255.test.js; this table only insists that the names on the
+     roster screen are the ones the shipped bundle carries. */
   const ults = Object.fromEntries(g.nw.roster.map((c) => [c.key, c.ult]));
   for (const [key, ult] of Object.entries({
     autisnick: "OUT OF THE TREES", johnnyham: "HONEY BAKED", kel: "LEG DAY",
     ladeane: "THE STROKES", reese: "SHIRTS OPTIONAL", trev: "LASER SWORD",
     cobeus: "DESIGNATED DRIVER", simon: "SIMON SLOUCH",
-    squalls: "REM SLEEP", christian: "THE PLAGUE",
+    squalls: "SALAMENCE", christian: "FOUR AND TWENTY",
   })) {
     assert.equal(ults[key], ult, key + "'s ult should be " + ult);
   }
