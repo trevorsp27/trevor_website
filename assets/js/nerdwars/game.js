@@ -2616,9 +2616,20 @@ ROSTER.christian = {
            kx: 0.17364817766693041, ky: 0.984807753012208 },
     burst: { radius: 44, damage: 18, base: 4.0, scale: 8.4, angle: 64,
              kx: 0.43837114678907746, ky: 0.898794046299167 },
-    count: 10, spread: 1.5,
+    /* FIFTEEN, and `spread` comes down with the count for a reason that is
+       arithmetic rather than taste. The fan is built as `k * spread` where k
+       runs from -(count-1)/2 to +(count-1)/2, so the OUTERMOST frog's speed
+       is set by the count as much as by the spread: at ten and 1.5 the edge
+       frog left at 6.75 a frame, and at fifteen the same 1.5 would have
+       launched it at 10.5 -- fast enough to clear a 320-pixel stage in half
+       a second, which is not a frog, it is a bullet.
+
+       0.96 puts the edge frog back at 6.7. Fifteen frogs now fill the same
+       arc ten used to, which is what more frogs should look like: a denser
+       spray, not a wider one. */
+    count: 15, spread: 0.96,
     frog: {
-      /* TEN POISON DART FROGS, ten designs, no two alike.
+      /* FIFTEEN POISON DART FROGS, fifteen designs, no two alike.
 
          This was seven colors over ten frogs and the frogs were otherwise
          identical -- the same drawing tinted seven ways, which is a palette
@@ -2635,6 +2646,17 @@ ROSTER.christian = {
            7  butter yellow, black blotches      the pale pumilio morph
            8  chartreuse with near-black legs    tinctorius "citronella"
            9  scarlet under a black net          Ranitomeya reticulata
+          10  bumblebee yellow, black bands      Dendrobates leucomelas
+          11  pink under a dark net              Oophaga pumilio "Bastimentos"
+          12  mint green under a dark cap        Dendrobates auratus, a pale morph
+          13  indigo with pale legs              a tinctorius morph
+          14  brick red with a pale stripe       Oophaga granulifera
+
+         The list is indexed by hatch order and read modulo its own length, so
+         it has to be at least as long as `count` or the last frogs out of the
+         crust wear the same skins as the first. Five were added with the
+         count rather than letting it wrap, because "each one different" is
+         the whole of what this list is for.
 
          `pattern` names a shape in FROG_PATTERNS, which is drawing code:
          a handful of rectangles painted source-atop the recolored sprite, so
@@ -2665,8 +2687,8 @@ ROSTER.christian = {
          It lives HERE, in the ROSTER literal, rather than being handed to a
          Frog as it is made. simFrozen walks ROSTER, so a spec written down at
          load is an object snapValue keeps by reference; a per-shot one would
-         be deep-copied into every snapshot, ten frogs at a time, sixty times
-         a second, for as long as they are hopping. FROG ARMY's frog has
+         be deep-copied into every snapshot, fifteen frogs at a time, sixty
+         times a second, for as long as they are hopping. FROG ARMY's frog has
          neither `morphs` nor `tint` and stays the green the artist painted. */
       morphs: [
         { skin: '#d8342c', mark: '#2f6fd0', pattern: 'jeans',  gain: 1.28 },
@@ -2679,23 +2701,34 @@ ROSTER.christian = {
         { skin: '#ffd878', mark: '#141018', pattern: 'blotch', gain: 1.62 },
         { skin: '#b6e024', mark: '#101828', pattern: 'jeans',  gain: 1.30 },
         { skin: '#f0392f', mark: '#140a0c', pattern: 'net',    gain: 1.58 },
+        { skin: '#f5d020', mark: '#10100a', pattern: 'band',   gain: 1.25 },
+        { skin: '#ef4f93', mark: '#2a0c1c', pattern: 'net',    gain: 1.42 },
+        { skin: '#74e0a0', mark: '#12241a', pattern: 'crown',  gain: 1.22 },
+        { skin: '#5546c8', mark: '#e8e2ff', pattern: 'jeans',  gain: 1.58 },
+        { skin: '#c2542a', mark: '#f2d8a8', pattern: 'stripe', gain: 1.44 },
       ],
       hopEvery: 20, hop: -2.8, speed: 1.7, drop: 0.26, life: 300,
       /* THREE, down from five, and every one of them can now be killed.
 
-         Both halves are the same decision. Ten frogs that nothing in the
-         game could remove were worth five each because surviving them was
-         the only thing you could do about them; now a jab clears one, so
-         what they are worth has to come down to what a thing you can answer
-         is worth. Thirty damage if all ten connect and nobody swings at
-         them, against fifty before.
+         BACK TO FIVE, and there are fifteen of them now. It was cut to three
+         on the argument that a frog you can kill is worth less than a frog
+         you cannot -- which is true, and was still the wrong trade: it was
+         the only move in the file to take a damage cut and a new counterplay
+         in the same change, and the ult came out noticeably weaker than it
+         went in. `frail` is the half worth keeping, so it stays: a jab still
+         clears one.
 
-         WORTH DECIDING DIFFERENTLY. This makes his ult noticeably weaker --
-         it is the only move in the file that got a damage cut and a new
-         counterplay in the same change. If it turns out to need the
-         difference back, five here is the one number to move, and `frail`
-         below is the part to keep. */
-      damage: 3, frail: true, base: 2.6, scale: 5.2, angle: 62,
+         Seventy-five if all fifteen connect and nobody swings at them, which
+         nobody will -- they arrive in a spray, they die to anything, and the
+         number that matters is how many get through rather than what the
+         theoretical total is. Against fifty before, off a move that has to
+         cook for a hundred and ten frames in front of everybody first.
+
+         FROG ARMY's frogs are a separate number and stay at 3. That move
+         costs three quarters of a mana bar and is also his recovery; this one
+         is free and is his ult, and they have no business being worth the
+         same. */
+      damage: 5, frail: true, base: 2.6, scale: 5.2, angle: 62,
       kx: 0.46947156278589086, ky: 0.8829475928589269,
     },
     damage: 0, base: 0, scale: 0,
@@ -10732,7 +10765,7 @@ class Pie {
     }
     /* And the birds began to sing. Spread from the index rather than drawn,
        because this runs inside the rollback and both machines have to get
-       the same ten frogs. */
+       the same fifteen frogs. */
     for (let i = 0; i < s.count; i++) {
       const k = i - (s.count - 1) / 2;
       projectiles.push(new Frog(this.owner, s.frog, this.x + k * 2, this.y - 6,
@@ -17138,7 +17171,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'd85b46943c';
+const BUILD_ID = 'e0124b03ab';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -17149,7 +17182,7 @@ const BUILD_ID = 'd85b46943c';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.70';
+const VERSION = '2.71';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
