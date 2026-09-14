@@ -1797,7 +1797,11 @@ ROSTER.christian = {
       startup: 7, active: 1, recovery: 18,
       rise: -5.9, drift: 0.7,
       count: 3, spread: 1.25, toss: -2.1,
-      manaOverride: 28,
+      /* Half of the 28 it was. It is his recovery before it is anything
+         else, and a recovery you cannot afford twice in a row is a hole in
+         the character rather than a cost -- the frogs it leaves behind are
+         the bonus, not the thing being paid for. */
+      manaOverride: 14,
       frog: {
         hopEvery: 26, hop: -2.5, speed: 1.45, drop: 0.26, life: 280,
         damage: 4, base: 2.3, scale: 4.8, angle: 62,
@@ -2461,16 +2465,109 @@ function drawButton(key, cxVirtual, cyVirtual, widthVirtual, action) {
 
    Registers with uiButtons exactly as drawButton does, so the one mouse
    handler at the top of the file keeps being the only one. */
+/* The alphabet the drawn buttons are lettered in, near enough.
+
+   Five by seven, one-pixel strokes, which is the proportion BACK, QUIT, HELP
+   and START all use once you scale their 325x128 plates down: letters about
+   half as wide as they are tall, filling the plate top to bottom, in strokes
+   a fifth of a letter thick. Nothing here is traced off the art -- this is a
+   plain block alphabet -- but it sits beside it without looking borrowed,
+   and unlike the art it has a G and an N in it. */
+const PIXEL_FONT = {
+  A: '01110,10001,10001,11111,10001,10001,10001',
+  B: '11110,10001,10001,11110,10001,10001,11110',
+  C: '01110,10001,10000,10000,10000,10001,01110',
+  D: '11110,10001,10001,10001,10001,10001,11110',
+  E: '11111,10000,10000,11110,10000,10000,11111',
+  F: '11111,10000,10000,11110,10000,10000,10000',
+  G: '01110,10001,10000,10111,10001,10001,01111',
+  H: '10001,10001,10001,11111,10001,10001,10001',
+  I: '11111,00100,00100,00100,00100,00100,11111',
+  J: '00111,00010,00010,00010,00010,10010,01100',
+  K: '10001,10010,10100,11000,10100,10010,10001',
+  L: '10000,10000,10000,10000,10000,10000,11111',
+  M: '10001,11011,10101,10101,10001,10001,10001',
+  N: '10001,11001,10101,10011,10001,10001,10001',
+  O: '01110,10001,10001,10001,10001,10001,01110',
+  P: '11110,10001,10001,11110,10000,10000,10000',
+  Q: '01110,10001,10001,10001,10101,10010,01101',
+  R: '11110,10001,10001,11110,10100,10010,10001',
+  S: '01111,10000,10000,01110,00001,00001,11110',
+  T: '11111,00100,00100,00100,00100,00100,00100',
+  U: '10001,10001,10001,10001,10001,10001,01110',
+  V: '10001,10001,10001,10001,10001,01010,00100',
+  W: '10001,10001,10001,10101,10101,11011,10001',
+  X: '10001,10001,01010,00100,01010,10001,10001',
+  Y: '10001,10001,01010,00100,00100,00100,00100',
+  Z: '11111,00001,00010,00100,01000,10000,11111',
+  '0': '01110,10011,10101,10101,10101,11001,01110',
+  '1': '00100,01100,00100,00100,00100,00100,01110',
+  '2': '01110,10001,00001,00110,01000,10000,11111',
+  '3': '11110,00001,00001,01110,00001,00001,11110',
+  '4': '00010,00110,01010,10010,11111,00010,00010',
+  '5': '11111,10000,11110,00001,00001,10001,01110',
+  '6': '00110,01000,10000,11110,10001,10001,01110',
+  '7': '11111,00001,00010,00100,01000,01000,01000',
+  '8': '01110,10001,10001,01110,10001,10001,01110',
+  '9': '01110,10001,10001,01111,00001,00010,01100',
+  '.': '00000,00000,00000,00000,00000,01100,01100',
+  '-': '00000,00000,00000,01110,00000,00000,00000',
+  '?': '01110,10001,00001,00110,00100,00000,00100',
+  '!': '00100,00100,00100,00100,00100,00000,00100',
+};
+
+/* One line of it, in whole pixels, centred on cx. Returns the width it drew,
+   so a caller can decide it did not fit before it commits to a size. */
+function drawPixelText(str, cx, top, cell, color, measureOnly) {
+  const chars = String(str).toUpperCase().split('');
+  const gap = cell;                       // one cell of air between letters
+  let wide = 0;
+  for (const ch of chars) wide += (ch === ' ' ? 3 : 5) * cell + gap;
+  wide -= gap;
+  if (measureOnly) return wide;
+  sctx.fillStyle = color;
+  let penX = Math.round(cx - wide / 2);
+  for (const ch of chars) {
+    const glyph = PIXEL_FONT[ch];
+    if (!glyph) { penX += (ch === ' ' ? 3 : 5) * cell + gap; continue; }
+    const rows = glyph.split(',');
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== '1') continue;
+        sctx.fillRect(penX + c * cell, Math.round(top) + r * cell, cell, cell);
+      }
+    }
+    penX += 5 * cell + gap;
+  }
+  return wide;
+}
+
+/* A button in the drawn buttons' clothes, for labels nobody drew.
+
+   The four plates in UISprites are a cyan-to-blue gradient behind chunky
+   black letters, inside a thick black border with the four corner pixels
+   knocked out. All of that is reproduced here rather than the art being
+   reused, because the art spells four fixed words and this has to be able
+   to say SIGN IN and somebody's name. Colours sampled off startButton.png:
+   #00b3ff to #004dff, and the duller #119bd4 to #0040d0 every one of them
+   shifts to under the cursor.
+
+   The label shrinks to fit rather than overflowing: a long name is a real
+   case, and a name running off the side of its own button is worse than a
+   small one. */
 function drawTextButton(label, cxVirtual, cyVirtual, wVirtual, hVirtual, action, opts) {
   const o = opts || {};
-  const x = px(cxVirtual - wVirtual / 2), y = px(cyVirtual - hVirtual / 2);
-  const w = px(wVirtual), h = px(hVirtual);
+  const x = Math.round(px(cxVirtual - wVirtual / 2));
+  const y = Math.round(px(cyVirtual - hVirtual / 2));
+  const w = Math.round(px(wVirtual)), h = Math.round(px(hVirtual));
   const hot = !o.disabled &&
               mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
-  const grad = sctx.createLinearGradient(x, 0, x + w, 0);
+  const b = Math.max(1, Math.round(SCALE));          // the black border
+  const grad = sctx.createLinearGradient(x + b, 0, x + w - b, 0);
   if (o.disabled) {
-    grad.addColorStop(0, '#3c4256');
-    grad.addColorStop(1, '#2b3044');
+    grad.addColorStop(0, '#46506a');
+    grad.addColorStop(1, '#2b3350');
   } else if (hot) {
     grad.addColorStop(0, '#119bd4');
     grad.addColorStop(1, '#0040d0');
@@ -2478,12 +2575,20 @@ function drawTextButton(label, cxVirtual, cyVirtual, wVirtual, hVirtual, action,
     grad.addColorStop(0, '#00b3ff');
     grad.addColorStop(1, '#004dff');
   }
+  // The plate, with its corners knocked out the way the drawn ones are.
   sctx.fillStyle = '#000000';
-  sctx.fillRect(x - SCALE, y - SCALE, w + SCALE * 2, h + SCALE * 2);
+  sctx.fillRect(x + b, y, w - b * 2, h);
+  sctx.fillRect(x, y + b, w, h - b * 2);
   sctx.fillStyle = grad;
-  sctx.fillRect(x, y, w, h);
-  text(label, cxVirtual, cyVirtual + hVirtual / 2 - hVirtual * 0.28,
-       hVirtual * 0.56, o.disabled ? '#767d94' : '#06132b', 'center', 800);
+  sctx.fillRect(x + b * 2, y + b * 2, w - b * 4, h - b * 4);
+
+  // Letters as tall as the plate allows, then narrowed until they fit.
+  const inner = h - b * 6;
+  let cell = Math.max(1, Math.floor(inner / 7));
+  const room = w - b * 6;
+  while (cell > 1 && drawPixelText(label, 0, 0, cell, '', true) > room) cell--;
+  drawPixelText(label, x + w / 2, y + (h - cell * 7) / 2, cell,
+                o.disabled ? '#6d7690' : '#00122e');
   if (!o.disabled) uiButtons.push({ x: x, y: y, w: w, h: h, action: action });
 }
 
@@ -6698,6 +6803,15 @@ function drawAxe(g, f) {
   if (f.state !== 'special') return;
   const s = f.def.specials && f.def.specials.down;
   if (!s || s.kind !== 'axe') return;
+  /* The move he is ACTUALLY doing, not merely one he owns. Without this he
+     swung the axe over the cookie and over the frogs as well, because the
+     only question being asked was whether an axe existed in his kit.
+
+     moveFor('special') rather than specialSlot === 'down', for the reason
+     the fishing rod gives: specialSlot is assigned in startAttack and is not
+     a constructor field, so restoreSim is entitled to delete it on a rewind
+     past his first special of the match. */
+  if (f.moveFor('special') !== s) return;
   const set = f.facing < 0 ? 'L' : 'R';
   const list = SPRITES.axe && SPRITES.axe[set];
   const n = (list && list.length) || 0;
@@ -10948,19 +11062,24 @@ function drawStageSelect() {
    SCENE: BATTLE
    ===================================================================== */
 
+/* Walking out of a match. Lifted out of updateBattle so the QUIT button in
+   practice and the key that has always done it run the same code -- two
+   ways out that drifted apart would be two ways out, one of which works. */
+function leaveMatch() {
+  if (netplay.active) {
+    if (netplay.send) netplay.send({ t: 'bye' });
+    netStop('you left');
+    return;
+  }
+  scene = 'select';
+  select.locked = new Array(MAX_PLAYERS).fill(false);
+  select.activeSlot = 0;
+}
+
 function updateBattle() {
   // menuBack() reads the live keyboard rather than the frame's input, so on a
   // replayed frame it would fire again and send a second 'bye'.
-  if (!netplay.resimulating && menuBack()) {
-    if (netplay.active) {
-      if (netplay.send) netplay.send({ t: 'bye' });
-      netStop('you left');
-      return;
-    }
-    scene = 'select';
-    select.locked = new Array(MAX_PLAYERS).fill(false);
-    return;
-  }
+  if (!netplay.resimulating && menuBack()) { leaveMatch(); return; }
 
   if (freezeFrames > 0) { freezeFrames--; return; }
 
@@ -11549,6 +11668,21 @@ function drawPinIrons(g, f, strain) {
   g.globalAlpha = 1;
 }
 
+/* Leaving practice, with a mouse.
+
+   Every other match ends itself: somebody runs out of stocks. This one
+   cannot -- the sandbag has no stocks to run out of and you have ninety-nine
+   -- so the only way out was a key nothing on screen mentions. In fullscreen
+   Escape does not even reach the page.
+
+   Top right, clear of the timer, and only in practice: a QUIT button in a
+   real match would be a mis-click that costs somebody else their match too. */
+function drawPracticeExit() {
+  if (!practice || scene !== 'battle') return;
+  drawButton('quit', VW - 26, 12, 40, leaveMatch);
+  text('or ' + backKey(), VW - 26, 22, 4.5, '#5f6884', 'center', 500);
+}
+
 /* The dummy, drawn straight rather than through sprite().
 
    Everything in the sheet pipeline is built on a 16x16 cell and a set of
@@ -12012,17 +12146,28 @@ function drawTitle() {
     drawPortrait(k, cx, 74, 1.9);
   });
 
-  text('NERDWARS', VW / 2, 116, 30, '#ffffff', 'center', 800);
+  text('NERDWARS', VW / 2, 110, 30, '#ffffff', 'center', 800);
   /* Beside the wordmark rather than hidden in a corner, because the whole
      point of showing a version is being able to read it back to somebody --
      and the first place anybody looks is the title, not the bottom edge.
      Raised off the baseline so it reads as a superscript on the name rather
      than as another word in it. */
-  text('v' + VERSION, VW / 2 + 76, 104, 6, '#5f6884', 'left', 700);
+  text('v' + VERSION, VW / 2 + 76, 98, 6, '#5f6884', 'left', 700);
 
+  /* Laid out from the BOTTOM of the list up, not from a fixed top.
+
+     The list is what grows: PRACTICE was added as a fourth entry and the
+     old `127 + i * 9` walked LEADERBOARD straight down onto the START and
+     HELP buttons, which sit at 161 and are 19 tall. Anchoring the last line
+     just above them means a fifth mode pushes the list up into the space
+     under the wordmark, which is empty, instead of down into the buttons,
+     which are not. */
+  const MODE_STEP = 8;
+  const modesEnd = 147;
   MODES.forEach((m, i) => {
     const on = titleChoice === i;
-    text((on ? '> ' : '  ') + m.label, VW / 2, 127 + i * 9, 8,
+    const y = modesEnd - (MODES.length - 1 - i) * MODE_STEP;
+    text((on ? '> ' : '  ') + m.label, VW / 2, y, 8,
          on ? '#ffffff' : '#5f6884', 'center', on ? 800 : 500);
   });
   // The buttons are 325x128 -- two and a half times wider than they are tall
@@ -12051,12 +12196,12 @@ function drawSignInChip() {
   const me = ladderMe();
   const busy = auth.busy && auth.busy();
   const label = busy ? '...' : me ? (me.name || 'SIGNED IN') : 'SIGN IN';
-  drawTextButton(label, VW - 30, 12, 52, 13, () => {
+  drawTextButton(label, VW - 34, 13, 58, 15, () => {
     if (busy) return;
     if (me) auth.signOut();
     else auth.signIn();
   }, { disabled: busy });
-  text(me ? 'tap to sign out' : 'to play rated', VW - 30, 22, 4.5,
+  text(me ? 'tap to sign out' : 'to play rated', VW - 34, 25, 4.5,
        '#5f6884', 'center', 500);
 }
 
@@ -12251,6 +12396,7 @@ function render() {
   sctx.imageSmoothingEnabled = false;
   sctx.drawImage(world, 0, 0, view.width, view.height);
   drawHUD();
+  drawPracticeExit();
 }
 
 /* =====================================================================
@@ -12302,7 +12448,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '1ac44a9ff3';
+const BUILD_ID = '2bd348b33e';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -12313,7 +12459,7 @@ const BUILD_ID = '1ac44a9ff3';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.55';
+const VERSION = '2.56';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
