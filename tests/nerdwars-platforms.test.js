@@ -3810,7 +3810,7 @@ test("Squalls is in the game, with the attack set his sheet came with", async ()
     "swinging should draw the attack art, not the standing art");
 });
 
-test("nine fighters still fit on every screen that lists them", async () => {
+test("every fighter still fits on every screen that lists them", async () => {
   /* Nine is where four columns stopped working: it wraps to a third row, and
      the local select puts that row's names at y 184 on a 180px screen. The
      grid is five wide now, and the title's crew line derives its spacing
@@ -3826,7 +3826,7 @@ test("nine fighters still fit on every screen that lists them", async () => {
     var last = n - 1;
 
     // The character select.
-    var cellW = 60, cellH = 52, originY = 40;
+    var cellW = NerdWars.selectCellW, cellH = 52, originY = 40;
     var originX = VW / 2 - (cols * cellW) / 2 + cellW / 2;
     var sx = originX + (last % cols) * cellW;
     var sy = originY + Math.floor(last / cols) * cellH;

@@ -1633,6 +1633,14 @@ ROSTER.simon = {
        can possibly hurt, because "punches really fast" is a thing you watch,
        not a thing you read off a health bar. */
     soul: {
+      /* The climb out. For this many frames after the eyes close the soul is
+         not his to drive: it lifts out of the chest, fading up out of
+         nothing, and only then do the controls hand over. It is not a cost --
+         the body is already invulnerable and the sleep has 300 frames in it
+         -- it is so that the thing you are about to fly is visibly the thing
+         that just came out of him, rather than a ghost that blinked into
+         existence nearby. */
+      emerge: 28,
       accel: 0.62, drag: 0.84, maxSpeed: 2.8,
       punchEvery: 7, punchActive: 4,
       reach: 7, w: 10, h: 9,
@@ -1772,8 +1780,29 @@ ROSTER.christian = {
        of a stock. */
     down: {
       kind: 'axe', label: 'SPLIT IT',
-      startup: 13, active: 4, recovery: 21,
-      ox: 3, oy: -17, w: 20, h: 23,
+      /* Six active frames, not four. Four was a swing you could be standing
+         in the middle of and not be touched by. */
+      startup: 13, active: 6, recovery: 21,
+      /* The box follows the ARC, and the arc ends at the floor.
+
+         It used to run from -17 to +6, which is head height down to his
+         ankles -- fine standing next to somebody, and useless the moment he
+         left the ground, because in the air his ankles are above their head
+         and the whole swing passed over them. Measured: level with him in the
+         air it hit for 17, and a man thirty pixels below took nothing.
+
+         `oy` is the CENTRE of the box, not its top -- every other move in
+         the file reads that way once you check it (the jab's -9 with height
+         10 is y-14..y-4, chest height) and reading it as a top is what put
+         the first attempt at this fix entirely over his own head: measured,
+         the box came out 64..105 on a man standing at 104.
+
+         Centred two pixels above his feet and 46 tall: y-25 to y+21, which
+         is over his shoulder where the axe starts and a good way below his
+         feet where it finishes. On the ground the bottom half is buried in
+         the platform and touches nobody, which costs nothing. In the air it
+         is the spike the downward knockback always implied. */
+      ox: 3, oy: -2, w: 20, h: 46,
       step: 1.15,
       manaOverride: 30,
       damage: 17, base: 3.4, scale: 7.6, angle: 300,
@@ -1866,6 +1895,156 @@ ROSTER.sandbag = {
   specials: {},
 };
 
+
+/* REMY.
+
+   Three pieces of art arrived: a yawn with Zs coming off it, him lying down
+   asleep, and a Salamence. Taken one at a time they are a debuff, a nap and
+   a projectile, and any character could have them. Taken together they are
+   one idea, and the idea is the character:
+
+       he sleeps on it, and then he dreams something up.
+
+   SLEEP ON IT charges a DREAM. SALAMENCE is what the dream turns out to be.
+   The nap is the only thing that fills the meter and the dragon is the only
+   thing that spends it, so every decision he makes is the same decision --
+   can I afford to lie down right now -- and the answer is the whole game
+   against him. Sleep early and the dragon is worth having; never sleep and
+   his recovery is a tired little hop.
+
+   The YAWN is how he buys the time. It does almost no damage; what it does
+   is make you DROWSY, on the same counter Simon's slouch uses, which slows
+   your walk and then puts you out entirely if you take a second one. A
+   character whose whole kit needs a quiet moment has to be able to make one.
+
+   He is not Simon. Simon's sleep is invulnerable, and that is the point of
+   it -- five seconds nobody can touch. Remy's is not. He lies there, he can
+   be hit, and the knockback is softened only because he is a sack on the
+   floor rather than a man on his feet. What he is buying is not safety. */
+ROSTER.remy = {
+  name: 'REMY',
+  origin: 'fresh',
+  tag: 'SLEEPS ON IT, THEN DREAMS SOMETHING UP',
+  drawn: true,
+  weight: 98, walk: 1.44, jump: 6.4, doubleJump: 5.9,
+  jab: { startup: 6, active: 3, recovery: 11, damage: 5,
+         base: 2.2, scale: 6.0, angle: 42,
+         kx: 0.7431448254773942, ky: 0.6691306063588582,
+         ox: 2, oy: -9, w: 11, h: 10 },
+  specials: {
+    /* YAWN. Three Zs drift out in front of him, growing as they go -- which
+       is not decoration, it is the art: the sheet has one Z at three sizes
+       and it would be a waste to pick one.
+
+       They barely hurt. One damage is a rounding error next to any other
+       projectile in the game and it is meant to be: what they carry is
+       DROWSINESS, on the counter Simon's aura already writes to, so a walk
+       slows under the first one and a second one inside ten seconds puts
+       somebody on the floor asleep.
+
+       They PIERCE, on a slow re-arm, so one yawn drifting through a
+       four-player scramble touches everybody in it. And they are slow --
+       barely faster than a walk -- so against one opponent paying attention
+       they are simply avoided. That is fine. They are not how he wins; they
+       are how he gets thirty frames to lie down. */
+    neutral: {
+      kind: 'yawn', label: 'YAWN',
+      startup: 9, active: 1, recovery: 14, maxAlive: 3,
+      speed: 1.15, lift: -0.22, drop: 0.006, life: 150,
+      grow: 46,                 // frames at each of the three sizes
+      hitEvery: 40,
+      /* Read by applyHit, beside poison and confusion.
+
+         60, not the 46 it started at, and the number is set by the DECAY
+         rather than by how much one yawn ought to be worth. Drowsiness falls
+         a point a frame, and the fastest he can land two yawns on the same
+         person is about thirty frames apart -- the move is 24 frames end to
+         end and the second Z has to fly the same distance as the first, so
+         they never close the gap. At 46 the first dose was down to 16 by the
+         time the second arrived and the total never reached 90: the nap was
+         arithmetically unreachable, which a spec you only read is very happy
+         to hide from you.
+
+         At 60 one yawn is a slow and two inside half a second is a nap. */
+      drowsy: { add: 60, cap: 90, sleep: 46 },
+      manaOverride: 16,
+      damage: 1, base: 0.8, scale: 1.2, angle: 84,
+      kx: 0.10452846326765346, ky: 0.9945218953682733,
+    },
+    /* SLEEP ON IT. He lies down on the spot and the dream starts building.
+
+       Five seconds if he takes all of it, and he can get up early on any
+       input -- the pad is read in updateAttack and remembered, the way the
+       soul's controls are, because runSpecial is not allowed to see one.
+
+       He is NOT invulnerable. Knockback is softened to three fifths because
+       a body on the floor is harder to launch than one standing up, but
+       every point of damage lands, and being hit does not wake him -- so an
+       opponent who finds him asleep gets a free combo on a target that is
+       not going anywhere. That is the price of the dragon.
+
+       `dream` is on the fighter and in the constructor, so a rollback carries
+       it: a meter that came back differently after a rewind would change what
+       the dragon is made of, which is about as visible as a desync gets. */
+    down: {
+      kind: 'sleep', label: 'SLEEP ON IT',
+      startup: 14, active: 300, recovery: 16,
+      heal: 18,
+      dream: 0.42,              // per sleeping frame; the full nap is 126
+      knockbackTakenMul: 0.6,
+      manaOverride: 12,
+      damage: 0, base: 0, scale: 0,
+    },
+    /* SALAMENCE. The dream, and his way home.
+
+       It comes in from behind him, he gets a lift off it, and it carries on
+       across the stage through anything in the way. The lift is FIXED -- a
+       recovery that only works when you have been sleeping is not a
+       recovery, it is a way to lose a stock for a mistake you made twenty
+       seconds ago -- so an empty dream still gets him back to the ledge.
+
+       What the dream buys is the dragon. At nothing it is a tired blue thing
+       that flaps past for eight. At a full meter it crosses the whole screen
+       at nearly twice the speed and hits for twenty, and it does not stop at
+       the first person it reaches. Spends the meter either way, all of it:
+       there is no dribbling it out. */
+    up: {
+      kind: 'salamence', label: 'SALAMENCE',
+      startup: 8, active: 1, recovery: 20,
+      rise: -6.0, drift: 0.8,
+      speed: 2.6, life: 150, flap: 7, hitEvery: 34,
+      dreamMax: 100, dreamDamage: 12, dreamSpeed: 1.9, dreamLife: 70,
+      manaOverride: 24,
+      damage: 8, base: 2.8, scale: 5.8, angle: 46,
+      kx: 0.6946583704589973, ky: 0.7193398003386512,
+    },
+  },
+  /* REM SLEEP. The pun is the move: REM is the sleep you dream in, and it is
+     most of his name.
+
+     He goes down properly this time -- invulnerable, healing, out for five
+     seconds -- and the dragon arrives at full strength whatever the meter
+     said, three times, from alternating sides. He is not steering it and he
+     is not defending himself; he is asleep, and this is what he is dreaming.
+
+     The passes are what makes it an ult rather than a big Salamence. One
+     dragon is a thing you jump over. Three, ninety-six frames apart, from
+     both directions, is a stage you have to keep solving while the person
+     who caused it is lying down. */
+  ult: {
+    kind: 'remsleep', label: 'REM SLEEP',
+    startup: 20, active: 300, recovery: 18,
+    heal: 30,
+    passes: 3, every: 96,
+    dragon: {
+      speed: 4.4, life: 160, flap: 5, hitEvery: 30,
+      damage: 17, base: 3.6, scale: 7.2, angle: 50,
+      kx: 0.6427876096865394, ky: 0.766044443118978,
+    },
+    damage: 0, base: 0, scale: 0,
+  },
+};
+
 const BASIC_GRAB = {
   kind: 'grab', label: 'GRAB', basic: true,
   startup: 7, active: 3, recovery: 18,
@@ -1945,7 +2124,7 @@ for (const key in ROSTER) {
    left a hole in the second row that every screen drawing the roster had to
    not mind. */
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
-               'cobeus', 'simon', 'squalls', 'christian'];
+               'cobeus', 'simon', 'squalls', 'christian', 'remy'];
 
 /* =====================================================================
    CANVAS
@@ -2091,6 +2270,17 @@ function loadAssets(done) {
   SPRITES.slouch.R.forEach((uri, i) => grab('slouch.R.' + i, uri));
   SPRITES.slouch.L.forEach((uri, i) => grab('slouch.L.' + i, uri));
   sandbagFrames().forEach((uri, i) => grab('sandbag.' + i, uri));
+  if (SPRITES.zzz) SPRITES.zzz.forEach((uri, i) => grab('zzz.' + i, uri));
+  if (SPRITES.sleeping) {
+    // Lists of one, not strings: build.py emits both facings as arrays so a
+    // second sleeping pose can be drawn later without changing this shape.
+    grab('sleeping.R', SPRITES.sleeping.R[0]);
+    grab('sleeping.L', SPRITES.sleeping.L[0]);
+  }
+  if (SPRITES.salamence) {
+    SPRITES.salamence.R.forEach((uri, i) => grab('salamence.R.' + i, uri));
+    SPRITES.salamence.L.forEach((uri, i) => grab('salamence.L.' + i, uri));
+  }
   if (SPRITES.cookie) SPRITES.cookie.forEach((uri, i) => grab('cookie.' + i, uri));
   if (SPRITES.frog) SPRITES.frog.forEach((uri, i) => grab('frog.' + i, uri));
   if (SPRITES.axe) {
@@ -2564,23 +2754,37 @@ function drawTextButton(label, cxVirtual, cyVirtual, wVirtual, hVirtual, action,
   const hot = !o.disabled &&
               mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
   const b = Math.max(1, Math.round(SCALE));          // the black border
-  const grad = sctx.createLinearGradient(x + b, 0, x + w - b, 0);
-  if (o.disabled) {
-    grad.addColorStop(0, '#46506a');
-    grad.addColorStop(1, '#2b3350');
-  } else if (hot) {
-    grad.addColorStop(0, '#119bd4');
-    grad.addColorStop(1, '#0040d0');
-  } else {
-    grad.addColorStop(0, '#00b3ff');
-    grad.addColorStop(1, '#004dff');
-  }
+  const ends = o.disabled ? [[0x46, 0x50, 0x6a], [0x2b, 0x33, 0x50]]
+             : hot        ? [[0x11, 0x9b, 0xd4], [0x00, 0x40, 0xd0]]
+                          : [[0x00, 0xb3, 0xff], [0x00, 0x4d, 0xff]];
   // The plate, with its corners knocked out the way the drawn ones are.
   sctx.fillStyle = '#000000';
   sctx.fillRect(x + b, y, w - b * 2, h);
   sctx.fillRect(x, y + b, w, h - b * 2);
-  sctx.fillStyle = grad;
-  sctx.fillRect(x + b * 2, y + b * 2, w - b * 4, h - b * 4);
+
+  /* The ramp in WHOLE PIXELS, one band per virtual pixel, rather than a
+     canvas gradient.
+
+     The drawn plates are pixel art: their cyan-to-blue ramp goes in visible
+     steps, because somebody filled it in a paint program. createLinearGradient
+     interpolates per device pixel and comes out glassy and smooth, which
+     beside four hand-dithered plates reads as a different material even
+     though the two end colours are sampled off one of them.
+
+     Forty-odd fillStyle changes for one button, which is exactly the cost the
+     matrix rain's note warns about -- and fine here for the reason that note
+     gives: this is one rectangle on a menu, not four hundred every frame of a
+     match. */
+  const gx = x + b * 2, gw = w - b * 4;
+  const step = Math.max(1, Math.round(SCALE));
+  for (let i = 0; i < gw; i += step) {
+    const t = gw <= step ? 0 : i / (gw - step);
+    sctx.fillStyle = 'rgb(' +
+      Math.round(ends[0][0] + (ends[1][0] - ends[0][0]) * t) + ',' +
+      Math.round(ends[0][1] + (ends[1][1] - ends[0][1]) * t) + ',' +
+      Math.round(ends[0][2] + (ends[1][2] - ends[0][2]) * t) + ')';
+    sctx.fillRect(gx + i, y + b * 2, Math.min(step, gw - i), h - b * 4);
+  }
 
   // Letters as tall as the plate allows, then narrowed until they fit.
   const inner = h - b * 6;
@@ -2769,6 +2973,13 @@ class Fighter {
     this.rainbowBurst = false;
     // Frames of specials that cost nothing. See the slouch.
     this.manaFree = 0;
+    /* How much Remy has slept, and whether he has been told to get up.
+       Both here rather than assigned on first use, because restoreSim
+       deletes any key a snapshot does not carry -- and a dream meter that
+       came back empty after a rewind would change what his dragon is made
+       of on one machine and not the other. */
+    this.dream = 0;
+    this.wakeUp = false;
     // Frames spent in somebody's slouch. Grows inside the aura, decays out.
     this.drowsy = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
@@ -2844,7 +3055,15 @@ class Fighter {
     return this.buffTimer > 0 && this.buffStats ? this.buffStats.speedMul : 1;
   }
   get kbTakenMul() {
-    return this.buffTimer > 0 && this.buffStats ? this.buffStats.knockbackTakenMul : 1;
+    /* A body flat on the floor is harder to throw than one on its feet.
+       Folded into the ONE getter applyHit reads rather than special-cased
+       at the hit, so every way of launching him -- a jab, a throw, a
+       hazard, a dragon -- agrees about how far he goes. */
+    const nap = this.napping();
+    const lying = nap && nap.knockbackTakenMul ? nap.knockbackTakenMul : 1;
+    const buffed = this.buffTimer > 0 && this.buffStats
+      ? this.buffStats.knockbackTakenMul : 1;
+    return lying * buffed;
   }
   get busy() {
     return this.state === 'attack' || this.state === 'special' ||
@@ -2916,6 +3135,8 @@ class Fighter {
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'hotdog' || s.kind === 'slots' || s.kind === 'slouch' ||
           s.kind === 'cookie' || s.kind === 'frogs' || s.kind === 'plague' ||
+          s.kind === 'yawn' || s.kind === 'sleep' || s.kind === 'salamence' ||
+          s.kind === 'remsleep' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
@@ -3434,6 +3655,18 @@ class Fighter {
     return this.def.specials[want] ? want : 'neutral';
   }
 
+  /* Flat out on the floor. Asked by sprite() and by the knockback getter, so
+     the picture and the physics cannot disagree about whether he is lying
+     down. Returns the MOVE rather than a boolean, because the caller wants
+     what that particular nap says about knockback. */
+  napping() {
+    if (this.state !== 'special' && this.state !== 'ult') return null;
+    const m = this.moveFor(this.state);
+    if (!m || (m.kind !== 'sleep' && m.kind !== 'remsleep')) return null;
+    return this.attackFrame >= m.startup &&
+           this.attackFrame < m.startup + m.active ? m : null;
+  }
+
   moveFor(state) {
     return state === 'grab' ? BASIC_GRAB
          : state === 'attack' ? this.def.jab
@@ -3585,6 +3818,15 @@ class Fighter {
     if (pad && pad.spDown && m.kind === 'slots' && this.specialSpawned &&
         this.reels.indexOf(-1) >= 0) {
       this.reelStops++;
+    }
+
+    /* Getting up. Any direction, any button: a man asleep on the floor
+       should stand up for whatever you press, not for one particular key. */
+    if (m.kind === 'sleep' && pad) {
+      if (pad.left || pad.right || pad.up || pad.down || pad.jump ||
+          pad.attack || pad.shield || pad.grab || pad.special) {
+        this.wakeUp = true;
+      }
     }
 
     /* The soul's controls. runSpecial gets no pad -- that is the rule this
@@ -4497,6 +4739,79 @@ class Fighter {
         }
         break;
 
+      case 'yawn':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Yawn(this, s));
+          cue('throw', { slot: this.slot, x: this.x, gain: 0.4 });
+        }
+        break;
+
+      case 'sleep': {
+        const down = this.attackFrame >= s.startup &&
+                     this.attackFrame < s.startup + s.active;
+        this.vx = 0;
+        if (down) {
+          /* Spelled with a local rather than inline, and that is not a style
+             preference: Simon's slouch heals with the identical expression,
+             and the negative controls that keep his sleep honest sabotage it
+             by string match and assert the string appears exactly once. Two
+             more copies of it quietly disarmed two of his tests. */
+          const mend = s.heal / s.active;
+          this.health = Math.min(COMBAT.maxHealth, this.health + mend);
+          this.dream = Math.min(100, this.dream + s.dream);
+          /* Up early on anything at all. `wakeUp` is written in updateAttack,
+             which is the only place with a pad -- and it is cleared here so a
+             single press cannot wake him twice. */
+          if (this.wakeUp && this.attackFrame > s.startup + 8) {
+            this.wakeUp = false;
+            this.attackFrame = s.startup + s.active;
+          }
+          if (this.attackFrame % 24 === 0) {
+            addEffect('spark', this.x + rand(-4, 8), this.y - rand(6, 14), '#cfe4ff');
+          }
+        }
+        break;
+      }
+
+      case 'salamence':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          // The lift is the same whether he has dreamed or not: see the spec.
+          this.vy = s.rise;
+          this.vx = this.facing * (s.drift || 0);
+          this.grounded = false;
+          projectiles.push(new Salamence(this, s, this.dream / s.dreamMax,
+                                         this.facing, this.y - 10));
+          this.dream = 0;
+          cue('airjump', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'remsleep': {
+        const down = this.attackFrame >= s.startup &&
+                     this.attackFrame < s.startup + s.active;
+        this.vx = 0;
+        if (down) {
+          this.invuln = Math.max(this.invuln, 2);
+          // A local, for the reason SLEEP ON IT above gives.
+          const mend = s.heal / s.active;
+          this.health = Math.min(COMBAT.maxHealth, this.health + mend);
+          /* A pass from alternating sides. Spread over the sleep rather than
+             all at once, and off attackFrame rather than a counter of its
+             own, so a rollback replays the same three dragons. */
+          const t = this.attackFrame - s.startup;
+          if (t % s.every === 0 && t / s.every < s.passes) {
+            const n = t / s.every;
+            const dir = n % 2 === 0 ? this.facing : -this.facing;
+            projectiles.push(new Salamence(this, s.dragon, 1, dir, this.y - 22));
+          }
+        } else if (this.attackFrame === s.startup + s.active) {
+          addEffect('ring', this.x, this.y - 8, this.accent);
+        }
+        break;
+      }
+
       case 'cookie':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
@@ -4845,6 +5160,15 @@ class Fighter {
                          this.state === 'ult')) {
       set = 'attack';
     }
+    /* Asleep on the floor, which is a whole different silhouette -- 15 by 9
+       rather than 10 by 14 -- and so is its own picture rather than a pose
+       in the sheet. */
+    const nap = this.napping();
+    if (nap && SPRITES.sleeping) {
+      const im = IMG['sleeping.' + (this.facing < 0 ? 'L' : 'R')];
+      if (im) return im;
+    }
+
     // Reese's shirtless set is his buff state, exactly as drawn.
     if (entry.shirtless && this.buffTimer > 0) set = 'shirtless';
     /* Kel's buff state is a whole second sheet -- standing, walking, jumping
@@ -6867,6 +7191,165 @@ function drawSleep(g, f) {
 }
 
 /* =====================================================================
+   YAWN - a Z, drifting, getting bigger.
+
+   Almost not a projectile. It moves barely faster than a walk, it carries a
+   single point of damage, and anybody watching for it can step around it.
+   What it does is leave DROWSINESS behind -- the same counter Simon's aura
+   writes to, so the machinery that slows a walk and draws the Zs over a
+   sleeping head was already in the file and none of it had to be invented
+   twice.
+
+   Three sizes, held for `grow` frames each, which is the whole reason it is
+   drawn as three separate Zs rather than one: a yawn spreading out is the
+   picture the sheet is of.
+
+   It PIERCES, on a long re-arm, because the one thing a yawn ought to be is
+   contagious. Drifting through four people in a scramble it touches all of
+   them; drifting through the same person twice it only counts once.
+   ===================================================================== */
+
+class Yawn {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = owner.x + owner.facing * 8;
+    this.y = owner.y - 11;
+    this.vx = owner.facing * spec.speed;
+    this.vy = spec.lift;
+    this.t = 0;
+    this.life = spec.life;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  update() {
+    const s = this.spec;
+    this.t++;
+    this.life--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += s.drop;
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -14 || this.x > VW + 14 || this.y < -14 || this.y > VH + 20) {
+      this.dead = true;
+    }
+  }
+
+  /* Which of the three it is right now. Also its size, which is why the box
+     below asks the same question. */
+  stage() {
+    const n = (SPRITES.zzz && SPRITES.zzz.length) || 3;
+    return Math.min(n - 1, Math.floor(this.t / this.spec.grow));
+  }
+
+  box() {
+    const r = 3 + this.stage() * 2;
+    return { x: this.x - r, y: this.y - r, w: r * 2, h: r * 2 };
+  }
+
+  draw(g) {
+    const im = IMG['zzz.' + this.stage()];
+    if (im) {
+      g.imageSmoothingEnabled = false;
+      g.globalAlpha = Math.min(1, this.life / 40);
+      g.drawImage(im, Math.round(this.x) - im.width / 2,
+                  Math.round(this.y) - im.height / 2);
+      g.globalAlpha = 1;
+    } else {
+      g.fillStyle = '#e8eeff';
+      const r = 2 + this.stage();
+      g.fillRect(Math.round(this.x) - r, Math.round(this.y) - r, r * 2, r * 2);
+    }
+  }
+}
+
+/* =====================================================================
+   SALAMENCE - the dream, flying.
+
+   Comes in from off the edge behind whoever dreamed it and crosses the
+   stage, flapping, hitting everything on the way rather than stopping at the
+   first thing it reaches. That is the one property the whole move needs: a
+   dragon that died on contact would be a slow blue arrow, and the picture on
+   the sheet is not of a slow blue arrow.
+
+   `power` is the dream, nought to one, and it is baked into a SPEC OF ITS
+   OWN at construction rather than consulted per frame. applyHit is handed a
+   spec; making a fresh one here, once, is the only way to scale damage with
+   something as changeable as a meter without either mutating a ROSTER object
+   that every other dragon shares or teaching applyHit to ask about dreams.
+   ===================================================================== */
+
+class Salamence {
+  constructor(owner, spec, power, dir, y) {
+    this.owner = owner;
+    this.base = spec;
+    this.power = Math.max(0, Math.min(1, power || 0));
+    /* Not a ROSTER object, so snapValue shallow-copies it into a snapshot --
+       which is correct and cheap: it is a flat object of numbers, and it has
+       to travel with the dragon because it is what this particular dragon
+       hits for. */
+    this.spec = Object.assign({}, spec, {
+      damage: spec.damage + (spec.dreamDamage || 0) * this.power,
+    });
+    this.dir = dir >= 0 ? 1 : -1;
+    // Off the edge behind him, so it visibly arrives rather than appearing.
+    this.x = this.dir > 0 ? -20 : VW + 20;
+    this.y = y;
+    this.vx = this.dir * (spec.speed + (spec.dreamSpeed || 0) * this.power);
+    this.t = 0;
+    this.life = spec.life + (spec.dreamLife || 0) * this.power;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  update() {
+    this.t++;
+    this.life--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    this.x += this.vx;
+    // A lazy rise and fall, so it flies rather than slides.
+    this.y += Math.floor(this.t / 9) % 2 ? 0.12 : -0.12;
+    if (this.t % 11 === 0) {
+      addEffect('spark', this.x - this.dir * 14, this.y + rand(-3, 3), '#7fb2ff');
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -40 || this.x > VW + 40) this.dead = true;
+  }
+
+  box() {
+    // Narrower than the art: the drawn wings reach well past the body, and a
+    // hitbox the width of a wingspan catches people the picture missed.
+    return { x: this.x - 11, y: this.y - 7, w: 22, h: 15 };
+  }
+
+  draw(g) {
+    const n = (SPRITES.salamence && SPRITES.salamence.L.length) || 0;
+    const set = this.dir < 0 ? 'L' : 'R';
+    const im = n ? IMG['salamence.' + set + '.' +
+                       (Math.floor(this.t / this.base.flap) % n)] : null;
+    if (im) {
+      g.imageSmoothingEnabled = false;
+      g.drawImage(im, Math.round(this.x) - im.width / 2,
+                  Math.round(this.y) - im.height / 2);
+    } else {
+      g.fillStyle = '#2f6fd0';
+      g.fillRect(Math.round(this.x) - 11, Math.round(this.y) - 6, 22, 12);
+      g.fillStyle = '#c8402f';
+      g.fillRect(Math.round(this.x) - 4, Math.round(this.y) - 10, 10, 5);
+    }
+  }
+}
+
+/* =====================================================================
    COOKIE - thrown through the air, and then it is a floor hazard.
 
    Two lives in one object, and the switch between them is the move. In the
@@ -7084,11 +7567,18 @@ class Soul {
     this.cfg = cfg;
     this.spec = cfg.punch;
     this.x = owner.x;
-    this.y = owner.y - 16;
+    // Starts in the chest and climbs to head height over `emerge` frames.
+    this.y = owner.y - 4;
     this.vx = 0;
     this.vy = 0;
     this.facing = owner.facing;
     this.t = 0;
+    /* Counts DOWN through the climb out of the body. While it runs the soul
+       is scenery: no input, no hitbox, drawn faint and still half inside
+       him. See update(). */
+    this.rise = cfg.emerge || 0;
+    this.fromY = owner.y - 4;
+    this.toY = owner.y - 16;
     this.punchT = 0;      // frames the glove is still out
     this.punchCd = 0;     // frames until it can go out again
     this.arm = 0;         // which glove, so a flurry alternates
@@ -7108,6 +7598,8 @@ class Soul {
      the two run at different moments in the frame and only this half is
      allowed to see an input. */
   drive(pad) {
+    // Not yours until it is all the way out.
+    if (this.rise > 0) { this.goX = 0; this.goY = 0; this.swing = false; return; }
     this.goX = (pad.left ? -1 : 0) + (pad.right ? 1 : 0);
     this.goY = (pad.up ? -1 : 0) + (pad.down ? 1 : 0);
     // Every attack button, because at this point he has no others: the jab,
@@ -7134,6 +7626,33 @@ class Soul {
       if (this.hitAt[i] > 0) this.hitAt[i]--;
     }
 
+    /* Climbing out. Pinned to the body rather than flying, so it lifts with
+       him if the floor he is lying on happens to move -- the Battlefield's
+       trapdoor can open under a sleeping man, and a soul that stayed where
+       the chest used to be would be left hanging over the hole.
+
+       Eased rather than linear: quick out of the chest and slowing as it
+       reaches head height, which is the difference between something leaving
+       a body and something being winched. */
+    if (this.rise > 0) {
+      this.rise--;
+      const k = 1 - this.rise / (c.emerge || 1);
+      const ease = 1 - (1 - k) * (1 - k);
+      this.x = this.owner.x;
+      this.y = (this.owner.y - 4) + ((this.owner.y - 16) - (this.owner.y - 4)) * ease;
+      this.vx = 0;
+      this.vy = 0;
+      if (this.t % 4 === 0) {
+        addEffect('spark', this.owner.x + rand(-5, 5), this.owner.y - rand(2, 14),
+                  '#8fd6ff');
+      }
+      if (this.rise === 0) {
+        addEffect('ring', this.x, this.y, '#8fd6ff');
+        cue('airjump', { slot: this.owner.slot, x: this.x, gain: 0.5 });
+      }
+      return;
+    }
+
     // Flight. No gravity and no floor: it goes through the stage, because it
     // is not really there.
     this.vx = clamp((this.vx + this.goX * c.accel) * c.drag, -c.maxSpeed, c.maxSpeed);
@@ -7155,7 +7674,7 @@ class Soul {
   /* Present but harmless between punches. resolveCombat asks this before it
      asks for a box at all. */
   live() {
-    return this.punchT > 0;
+    return this.rise <= 0 && this.punchT > 0;
   }
 
   box() {
@@ -7165,6 +7684,14 @@ class Soul {
   }
 
   draw(g) {
+    /* Fading up out of him on the way out. The alpha is the whole trick: a
+       soul that arrived at full opacity read as a second character spawning,
+       and the one thing this ult has to say in its first half-second is that
+       the ghost and the man on the floor are the same person. */
+    const c = this.cfg;
+    if (this.rise > 0) {
+      g.globalAlpha = 0.15 + 0.85 * (1 - this.rise / (c.emerge || 1));
+    }
     const set = this.facing < 0 ? 'L' : 'R';
     /* Two frames of float and two of punch, and which punch frame is which
        glove -- so a flurry visibly alternates instead of flickering on one
@@ -7188,7 +7715,7 @@ class Soul {
        belongs to is the one thing a four-player game has to make obvious. */
     const o = this.owner;
     if (o) {
-      g.globalAlpha = 0.22;
+      g.globalAlpha = (this.rise > 0 ? 0.10 : 0.22);
       g.fillStyle = '#8fd6ff';
       const steps = 7;
       for (let k = 1; k < steps; k++) {
@@ -7198,6 +7725,7 @@ class Soul {
       }
       g.globalAlpha = 1;
     }
+    g.globalAlpha = 1;
   }
 }
 
@@ -9611,6 +10139,31 @@ function applyHit(attacker, defender, move, sourceX, scale) {
     defender.confused = move.confuse.frames;
   }
 
+  /* Catching a yawn. Beside poison and confusion because it is the same kind
+     of thing and belongs on the same path -- blocked by a shield if they are,
+     applied once per landed hit, and nowhere near the projectile that carried
+     it. The first draft had the Yawn reach into `fighters` itself and work
+     out who it had just touched from its own re-arm clock, which was both
+     wrong (resolveCombat sets that clock AFTER the projectiles update, so it
+     read one frame late) and a second, private copy of a rule this function
+     already owns.
+
+     STACKS, unlike burn, and that is the move: one yawn slows a walk, and a
+     second inside the ten seconds the counter takes to drain puts them on the
+     floor. Capped at `doze` so it can never bank more sleep than that. */
+  if (move.drowsy) {
+    defender.drowsy = Math.min(move.drowsy.cap || 90,
+                               defender.drowsy + move.drowsy.add);
+    if (defender.drowsy >= (move.drowsy.cap || 90) && defender.grounded &&
+        defender.grabbedBy < 0 && defender.state !== 'ko') {
+      if (defender.state !== 'hitstun') {
+        defender.setState('hitstun');
+        defender.vx = 0;
+      }
+      defender.hitstun = Math.max(defender.hitstun, move.drowsy.sleep || 46);
+    }
+  }
+
   /* Mana off the top. No new state: mana is already a fighter field, already
      snapshotted, and already regenerates -- so this is a delay rather than a
      lockout, which is the right weight for one colour of six. Clamped at zero
@@ -9869,7 +10422,7 @@ function aiDecide(me, foe) {
   // Close the gap.
   const s = me.def.specials.neutral;
   const ranged = s.kind === 'projectile' || s.kind === 'pizza' ||
-                 s.kind === 'hotdog' || s.kind === 'cookie';
+                 s.kind === 'hotdog' || s.kind === 'cookie' || s.kind === 'yawn';
   const idealRange = ranged ? AI_TUNE.rangedIdeal : s.kind === 'beam' ? 45 : 13;
 
   const crowded = ranged || s.kind === 'beam' ? AI_TUNE.rangedCrowd : 0;
@@ -10908,8 +11461,13 @@ const SEAT_COLORS = ['#59a5ff', '#ff5f5f', '#5fd46a', '#ffc14d'];
    The cells narrow from 74 to 60 to pay for it: 5 x 60 is 300 across a 320px
    screen, where 5 x 74 would be 370. Ten characters still fit in two rows.
    The eleventh is somebody else's problem, and it will be a real one. */
-const GRID_COLS = 5;
-const CELL_W = 60;
+/* Six across, not five. Eleven fighters on a five-wide grid is three rows,
+   and the third row's names land at y 173 on a 180-pixel screen -- which is
+   not "tight", it is off the bottom. Six columns puts eleven back into two
+   rows with a seat spare, and 52 is the widest cell that fits six of them
+   across 320 with the row still centred. */
+const GRID_COLS = 6;
+const CELL_W = 52;
 
 function moveCursor(slot, dx, dy) {
   let i = select.cursor[slot];
@@ -12195,14 +12753,28 @@ function drawSignInChip() {
   if (!auth) return;
   const me = ladderMe();
   const busy = auth.busy && auth.busy();
-  const label = busy ? '...' : me ? (me.name || 'SIGNED IN') : 'SIGN IN';
-  drawTextButton(label, VW - 34, 13, 58, 15, () => {
-    if (busy) return;
-    if (me) auth.signOut();
-    else auth.signIn();
+  /* Signed in, it stops being a button.
+
+     A button is a thing you press, and once you are in there is nothing left
+     to press it for -- the only thing it could do is sign you out, which is
+     not what anybody is coming to this corner of the screen to do, and is a
+     nasty thing to put one mis-click away from a title screen. So the button
+     is only ever the way IN; after that it is a quiet grey line telling you
+     which account the evening's matches are going to be filed under, in the
+     same grey as every other aside on this screen. Signing out lives on the
+     leaderboard, next to the name-editing that is the other thing you would
+     have gone looking for. */
+  if (me) {
+    text('signed in as ' + (me.name || 'you'), VW - 8, 13, 6,
+         '#8792b0', 'right', 600);
+    text('sign out from the leaderboard', VW - 8, 21, 4.5,
+         '#454c66', 'right', 500);
+    return;
+  }
+  drawTextButton(busy ? '...' : 'SIGN IN', VW - 34, 13, 58, 15, () => {
+    if (!busy) auth.signIn();
   }, { disabled: busy });
-  text(me ? 'tap to sign out' : 'to play rated', VW - 34, 25, 4.5,
-       '#5f6884', 'center', 500);
+  text('to play rated', VW - 34, 25, 4.5, '#5f6884', 'center', 500);
 }
 
 /* The keyboard half of the game has never been written down anywhere the
@@ -12278,7 +12850,12 @@ function drawSelect() {
     // Which seats are pointing at this fighter. More than one gets white,
     // because two rings on one cell at this size is just a thicker ring.
     const on = [];
-    for (let seat = 0; seat < playerCount; seat++) {
+    /* Only seats somebody is actually CHOOSING for. In practice the second
+       seat is a sandbag -- nobody picks it, it is not even in ORDER -- and
+       drawing its cursor put a red box on the screen next to the player's
+       own, for a second player who does not exist. */
+    const choosing = practice ? Math.min(playerCount, humanCount) : playerCount;
+    for (let seat = 0; seat < choosing; seat++) {
       if (select.cursor[seat] === i) on.push(seat);
     }
 
@@ -12448,7 +13025,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '2bd348b33e';
+const BUILD_ID = 'd7f0b91e11';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -12459,7 +13036,7 @@ const BUILD_ID = '2bd348b33e';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.56';
+const VERSION = '2.57';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -13599,6 +14176,11 @@ window.NerdWars = {
      onto the wrong fighter and failed them inside assertions about movesets,
      a long way from the cause. */
   get selectColumns() { return GRID_COLS; },
+  /* Beside the column count, and for the same reason it is there: a test that
+     reads how many columns there are and then hard-codes how wide one is has
+     measured half the grid and guessed the other half, and goes stale the
+     first time the other half moves. */
+  get selectCellW() { return CELL_W; },
   get fighters() {
     return fighters.map((f) => ({
       key: f.key, health: Math.round(f.health), stocks: f.stocks,
