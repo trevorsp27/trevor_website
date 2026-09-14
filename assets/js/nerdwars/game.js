@@ -2310,18 +2310,35 @@ ROSTER.christian = {
              kx: 0.43837114678907746, ky: 0.898794046299167 },
     count: 10, spread: 1.5,
     frog: {
-      /* Baked. Read by Frog.draw for the frogs themselves and by Pie.draw for
+      /* POISON DART FROGS, and the pie opens on a spread of them rather than
+         ten of the same one. Every color here is a real morph: strawberry,
+         the blue azureus, the golden one that is the most poisonous animal
+         alive, green-and-black, the orange pumilio, a violet morph and a
+         turquoise one. Seven over ten frogs, so the batch reads as a
+         COLLECTION -- two repeats is the point, a rainbow of exactly ten
+         distinct colors would read as a palette test rather than as frogs.
+
+         Which frog wears which is its hatch index, not a roll: this runs
+         inside the rollback and both machines have to open the same pie.
+
+         Baked. Read by Frog.draw for the frogs themselves and by Pie.draw for
          the things pushing at the crust just before it opens, so the tell and
-         the payoff are the same red by construction rather than by two people
-         typing the same six characters.
+         the payoff come out of one list rather than two people typing the
+         same six characters.
 
          It lives HERE, in the ROSTER literal, rather than being handed to a
          Frog as it is made. simFrozen walks ROSTER, so a spec written down at
          load is an object snapValue keeps by reference; a per-shot one would
          be deep-copied into every snapshot, ten frogs at a time, sixty times
-         a second, for as long as they are hopping. FROG ARMY's frog has no
-         `tint` and stays the green the artist painted. */
-      tint: '#d8342c',
+         a second, for as long as they are hopping. FROG ARMY's frog has
+         neither `tints` nor `tint` and stays the green the artist painted.
+
+         Every one of these is strongly saturated on purpose. tintedSprite
+         replaces hue and saturation and keeps the artist's BRIGHTNESS, so a
+         washed-out color here would come out as a gray frog rather than a
+         pale one -- there is nothing left to carry it. */
+      tints: ['#d8342c', '#2f6fd0', '#f2c033', '#3fa05a',
+              '#e8621f', '#8e44c8', '#18b8b0'],
       hopEvery: 20, hop: -2.8, speed: 1.7, drop: 0.26, life: 300,
       damage: 5, base: 2.6, scale: 5.2, angle: 62,
       kx: 0.46947156278589086, ky: 0.8829475928589269,
@@ -9371,11 +9388,20 @@ class Pie {
        spawned from rather than typed again here. The tell and the ten things
        that follow it cannot drift apart. */
     if (k > 0.72) {
-      g.fillStyle = s.frog.tint || '#4c9a3f';
+      /* Three lumps, three DIFFERENT frogs, taken off the front of the same
+         list the ten are dyed from. That is the tell doing its whole job: it
+         no longer only says something is coming, it says a spread of
+         something is coming, which is the joke the ult is built on. */
+      const dyes = s.frog.tints || [s.frog.tint || '#4c9a3f'];
       const wob = Math.floor(this.t / 4) % 2;
+      g.fillStyle = dyes[0];
       g.fillRect(x - 5 + wob, y - 10 - puff, 2, 2);
+      g.fillStyle = dyes[1 % dyes.length];
       g.fillRect(x + 3 - wob, y - 10 - puff, 2, 2);
-      if (k > 0.88) g.fillRect(x - 1, y - 11 - puff, 2, 2);
+      if (k > 0.88) {
+        g.fillStyle = dyes[2 % dyes.length];
+        g.fillRect(x - 1, y - 11 - puff, 2, 2);
+      }
     }
   }
 }
@@ -9405,6 +9431,13 @@ class Frog {
        index rather than drawn, because this runs inside the rollback and two
        machines have to produce the same green. */
     this.variant = ((variant || 0) % 3 + 3) % 3;
+    /* And the raw index, kept beside it, because the two mean different
+       things: `variant` is which of the three cells the artist drew, and
+       wraps at three, while this is which frog of the batch this is and
+       chooses its color out of `tints`. Folding them together would tie a
+       frog's color to its pose -- every blue one leaping, every red one
+       sitting -- which is not a thing frogs do. */
+    this.hatch = (variant || 0) | 0;
     this.x = x;
     this.y = y;
     this.vx = vx || 0;
@@ -9462,6 +9495,18 @@ class Frog {
     return { x: this.x - 5, y: this.y - 6, w: 10, h: 6 };
   }
 
+  /* The color this one wears, or null to leave the artist's green alone.
+
+     FROG ARMY's three have no list and stay green; the pie's ten each take
+     their own by the index they hatched in. By index rather than drawn, for
+     the reason the variant is: this is inside the rollback and both machines
+     have to open the same pie. */
+  dye() {
+    const t = this.spec.tints;
+    if (t && t.length) return t[this.hatch % t.length];
+    return this.spec.tint || null;
+  }
+
   draw(g) {
     const n = (SPRITES.frog && SPRITES.frog.length) || 0;
     /* Twelve cells: three colours down, and across them sit-right,
@@ -9479,14 +9524,15 @@ class Frog {
        red and the recovery's three stay green without this class ever being
        told there are two kinds. tintedSprite caches, so after the first frog
        of a color this is a Map lookup and not a recolor. */
+    const dye = this.dye();
     let im = n ? IMG[key] : null;
-    if (im && this.spec.tint) im = tintedSprite(key, im, this.spec.tint);
+    if (im && dye) im = tintedSprite(key, im, dye);
     if (im) {
       g.imageSmoothingEnabled = false;
       g.drawImage(im, Math.round(this.x) - im.width / 2,
                   Math.round(this.y) - im.height);
     } else {
-      g.fillStyle = this.spec.tint || '#4c9a3f';
+      g.fillStyle = dye || '#4c9a3f';
       g.fillRect(Math.round(this.x) - 4, Math.round(this.y) - 5, 8, 5);
     }
   }
@@ -15339,7 +15385,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '34b2ef7d4a';
+const BUILD_ID = '599316ef60';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -15350,7 +15396,7 @@ const BUILD_ID = '34b2ef7d4a';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.67';
+const VERSION = '2.68';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
