@@ -3051,8 +3051,14 @@ function loadAssets(done) {
 
   for (const name of ORDER) {
     const entry = SPRITES[name];
-    // buff / buffAttack: Kel after LEG DAY, from his 2026 sheet.
-    for (const set of ['base', 'attack', 'shirtless', 'buff', 'buffAttack']) {
+    /* buff / buffAttack: Kel after LEG DAY, from his 2026 sheet.
+       jab / grab: every fighter's own arm, built out of his own pixels, and
+       buffGrab is the big Kel's. A set left off this list ships its bytes and
+       is never turned into an Image -- sprite() then hands drawFighter an
+       undefined and the fighter simply vanishes for the length of the move --
+       so a new set added to build.py has to be added here too. */
+    for (const set of ['base', 'attack', 'jab', 'grab',
+                       'shirtless', 'buff', 'buffAttack', 'buffGrab']) {
       if (!entry[set]) continue;
       for (const frame in entry[set]) {
         grab(name + '.' + set + '.' + frame, entry[set][frame]);
@@ -6527,6 +6533,22 @@ class Fighter {
                          this.state === 'ult')) {
       set = 'attack';
     }
+    /* The jab and the grab are drawn per fighter now -- his own arm out of
+       his own pixels -- so on the two states that have art of their own they
+       win over the generic `attack` set above. Specials and ults still take
+       `attack`, and a fighter missing either set falls straight back to
+       whatever the line above already chose for him.
+
+       BOTH ARE HELD FOR THE WHOLE STATE, exactly the way `attack` is, and
+       that is the real limit of this scheme: a set is the same eight
+       canonical frames as `base` -- stand, two walks, jump, each way round --
+       so it is a POSTURE, not a timeline. What changes during a move is which
+       way he faces and whether his feet are down; the pose itself is struck
+       on the first frame and held to the last. Animating inside a move would
+       need frames that were never drawn, and a pose that swapped partway
+       would read as a stutter rather than a swing. */
+    if (entry.jab && this.state === 'attack') set = 'jab';
+    if (entry.grab && this.state === 'grab') set = 'grab';
     /* Mid-yawn, which he was drawn doing. Its own set rather than a pose in
        his attack sheet, so the open mouth belongs to one moment instead of to
        every swing he throws.
@@ -6559,7 +6581,13 @@ class Fighter {
        AND swinging -- so the swing keeps its own art while he is big. Any
        other character with a `buff` set would pick it up the same way. */
     if (entry.buff && this.buffTimer > 0) {
-      set = set === 'attack' && entry.buffAttack ? 'buffAttack' : 'buff';
+      /* His buff sheet's swing doubles as his buff JAB -- it is the same
+         drawing, and there is no separate buffJab -- but the two-handed reach
+         is its own picture, so the grab asks for buffGrab first. Anything the
+         big sheet has no pose for stands there buffed. */
+      set = set === 'grab' && entry.buffGrab ? 'buffGrab'
+          : (set === 'attack' || set === 'jab') && entry.buffAttack ? 'buffAttack'
+          : 'buff';
     }
 
     const d = this.facing > 0 ? 'R' : 'L';
@@ -10074,683 +10102,6 @@ const BELCH_CHEEK = ['#e8b48a', '#e08a6a', '#d4604a', '#c03a2e'];
 // Four corners for the cheek to burst into, forward and out. Not a circle:
 // they come out of the corners of a mouth, which is a flat thing.
 const BELCH_POP = [[1, -1], [1, 1], [0.4, -1.4], [0.4, 1.4]];
-
-/* =====================================================================
-   THE GRAB - two hands, and both of them drawn off the grab's own box
-   ===================================================================== */
-
-/* A grab is the only move in the game that beats a raised shield, it has
-   seven frames of startup and four frames of hitbox, and until now NOTHING
-   WAS DRAWN FOR IT AT ALL. Both halves of that were a problem, and they are
-   opposite problems:
-
-     The man being grabbed had no tell. Seven frames is a long, generous
-     warning -- longer than most jabs are from end to end -- and none of it
-     reached the screen, so the only way to learn a grab was coming was to
-     already be in one.
-
-     The man grabbing had no ruler. Four active frames out of twenty-nine is
-     a narrow window, the reach stops nineteen pixels out, and nothing said
-     so. The move the user has twice called hard to land is hard to land
-     because it was invisible in both directions.
-
-   So: hands. The eye tracks hands, hands are what a grab IS, and a hand can
-   be put exactly where the box ends. THE FINGERTIPS SIT ON THE LAST COLUMN
-   INSIDE THE HITBOX on every live frame, and the two of them sit against its
-   top and bottom rows, so the pair frames the box it is going to hit with.
-   The range is annotated nowhere -- it is simply where the brightest thing
-   on screen is. Watch the move twice and you know how far it goes.
-
-   Every number below is a FRACTION of the box, never a pixel count, and it
-   is multiplied by ox/w/oy/h at draw time. Retune BASIC_GRAB and the hands
-   follow it the same frame; there is no second copy of the range to forget.
-
-   Procedural on purpose. Seven of the ten fighters have no attack pose of
-   any kind, so anything built on sprite frames would have covered three
-   characters and left the other seven exactly as invisible as they were. */
-
-const GRAB_HALO = '#140f1c';   // under the hands, so they read on a pale
-                               // stage and on a dark one
-
-/* Four shades per phase: the arm, the arm's underside, the hand, and the
-   fingers. The arm is deliberately the dullest thing in the drawing. It is
-   there to say whose hands those are and to draw the eye outward along it,
-   and an arm as bright as the hand at the end of it is an arm the eye stops
-   on halfway.
-
-   The live fingers are gold and not white, and that is not a taste call.
-   They are the one part of this that is never given a dark outline -- an
-   outline forward of them would be a pixel drawn outside the hitbox -- so
-   they have to hold their own against whatever is behind them, and white
-   against a pale stage is nothing at all. Gold survives both grounds because
-   it separates by hue as well as by brightness. It is also the color this
-   game already uses for the frames of a move that can hurt you: the whip's
-   sweet spot is within a shade of it. */
-const TONE_COCK = { arm: '#7a5a3c', dim: '#3f2d1c', hand: '#a58058', fin: '#bb9871' };
-const TONE_LIVE = { arm: '#a86f3c', dim: '#5a3617', hand: '#f7b45e', fin: '#ffe066' };
-const TONE_SHUT = { arm: '#8a5c31', dim: '#492c13', hand: '#c98f4f', fin: '#ddab6b' };
-const TONE_DEAD = { arm: '#63594b', dim: '#3a342d', hand: '#8a7d6c', fin: '#9d9083' };
-const GRAB_WASH = '#ffe4b0';   // the breath of light inside the live box
-
-/* The hand, three ways, drawn forward: column 0 is the wrist and the LAST
-   column is the fingertips. '#' is the hand, '+' is the part of it that
-   catches the light, '-' is the knuckle line the fingers come off. Every
-   pose is aligned by that last column, because that is the only alignment
-   that matters -- it is the one that lands on the edge of the hitbox.
-
-   Open, the fork at the front is the whole read: fingers above, thumb below,
-   and a gap between them big enough to put a man in. Nothing here has an
-   enclosed hole in it, and that is not an accident -- at five pixels tall a
-   one-pixel hole closes up the moment anything is drawn behind it. */
-const GRAB_OPEN = [
-  '.##++',
-  '.##-+',
-  '####.',
-  '.##-+',
-  '.##++',
-];
-// Half way there, and the wind-up never gets past this. Narrower, shorter,
-// and already closing, so nobody mistakes it for the live pose.
-const GRAB_HALF = [
-  '.#++',
-  '##+.',
-  '##+.',
-  '.#++',
-];
-// Shut. A fist has no fork, which is the whole read: forked means the grab
-// is still looking for you, shut means it has stopped.
-const GRAB_FIST = [
-  '.#+',
-  '##+',
-  '.#+',
-];
-
-function drawGrabArt(g, ax, ay, facing, k, s, sizeMul) {
-  const total = s.startup + s.active + s.recovery;
-  if (k > total) return;
-  /* There is one frame where the state is set and attackFrame has not been
-     counted yet, and the curves below start at 1. Clamped, so the first
-     frame drawn is the first frame authored rather than an extrapolation off
-     the front of it. `live` stays on the raw k, which is correctly false
-     there. */
-  const kf = k < 1 ? 1 : k;
-
-  /* --- the box, rebuilt exactly the way relBox builds it ----------------
-     Not approximated: a giant's box is NOT simply his box times three. The
-     bottom edge is held down to where a normal man's box would end, because
-     a grab that floats up to giant chest height passes clean over everybody
-     else left in the match. Scale the hands naively and a jackpot Simon
-     reaches for the sky while his hitbox is down at your head. */
-  const u = sizeMul;                         // one authored pixel, on screen
-  const bx = Math.round(s.ox * u);           // near edge, forward of center
-  const bw = Math.round(s.w * u);
-  const far = bx + bw - 1;                   // LAST COLUMN INSIDE THE BOX
-  const bot = Math.round(ay + Math.max(s.oy * u + s.h * u / 2,
-                                       s.oy + s.h / 2));   // exclusive
-  const top = Math.round(Math.min(ay + s.oy * u - s.h * u / 2, bot - s.h * u));
-  const bh = bot - top;
-  const mid = (top + bot) / 2;
-
-  /* The same window hitbox() uses, frame for frame. A drawing that leads or
-     lags the box by one frame tells a lie about the only four frames of this
-     move anybody needs to read. */
-  const live = k >= s.startup && k < s.startup + s.active;
-
-  /* Three numbers describe every frame, and all three run 0..1. `reach` is
-     how far along the box the fingertips have got, `open` is how far the
-     hand has come apart, `spread` is how far the two hands have parted from
-     each other. All three hit exactly 1 on the live frames and nowhere
-     else. */
-  let reach, open, spread, drop, alpha, tone;
-  if (k < s.startup) {
-    /* WIND-UP. Seven frames whose job is to be SEEN and to be visibly
-       harmless, and the seeing is the hard half. Four of this box's fourteen
-       columns are inside the man drawing it -- ox is 1 and a hurtbox is nine
-       wide -- so a wind-up that cocks backward the way a punch does spends
-       most of its length hidden behind his own chest, and the longest tell
-       in the game goes back to being invisible.
-
-       So it loads UPWARD instead of backward: closed fists down at the waist,
-       lifting to the chest and half opening as they come, and never further
-       forward than a third of the box. That third is deliberate. Far enough
-       that the move has plainly started, short enough that when frame 7 puts
-       the fingers on the far edge the jump is the loudest thing here. */
-    const p = s.startup > 2 ? (kf - 1) / (s.startup - 2) : 1;
-    const q = p > 1 ? 1 : p;
-    // Squared, so the hands are nearly still at the halfway mark and most of
-    // the travel is in the last two frames. Spread evenly it reads as the
-    // whole move being slow rather than as a move loading.
-    reach = 0.36 - 0.08 * q + 0.24 * q * q;
-    open = 0.55 * q * q;
-    spread = 0.30 * q * q;
-    drop = 3.2 - 2.4 * q;
-    alpha = 1;
-    tone = TONE_COCK;
-  } else if (live) {
-    /* THE FOUR FRAMES. Everything at its maximum at once: fingertips on the
-       last column of the box, hands out against the top and the bottom of
-       it, gold on the fingers. Nothing else in the move is allowed to be
-       this bright or this far out, and that is the entire reason these four
-       are legible. */
-    reach = 1;
-    open = 1;
-    spread = 1;
-    drop = 0;
-    alpha = 1;
-    tone = TONE_LIVE;
-  } else {
-    const rec = s.recovery > 1 ? s.recovery - 1 : 1;
-    const qq = (k - s.startup - s.active) / rec;
-    const q = qq > 1 ? 1 : qq;
-    if (q <= 0.12) {
-      /* THE SNAP, still out at the far edge. The hands shut on whatever is
-         there -- which on a whiff is nothing, and that is the point: a whiff
-         has to look like a whiff. Closed on air, at arm's length, in a
-         color that has already started cooling. */
-      const r = q / 0.12;
-      /* A pixel short of the far edge, and never anything but. ONLY THE FOUR
-         LIVE FRAMES TOUCH THE LAST COLUMN OF THE BOX -- if the snap held the
-         same column, the drawing would say the move reaches that far for
-         seven frames when it does so for four, and the width of the window
-         is half of what makes a grab hard to land. */
-      reach = 0.94 - 0.06 * r;
-      open = 0;
-      // Closing on each other as well as closing themselves. Two fists
-      // meeting in mid-air with nobody between them is what a whiff looks
-      // like, and a whiff is most of what this move does.
-      spread = 1 - 0.42 * r;
-      drop = 0;
-      alpha = 1;
-      tone = TONE_SHUT;
-    } else if (q <= 0.45) {
-      // Dragged back in. Fists, closing on the chest, dimming as they come.
-      const r = (q - 0.12) / 0.33;
-      reach = 0.88 - 0.52 * r;
-      open = 0;
-      spread = 0.58 * (1 - r);
-      drop = 1.4 * r;
-      alpha = 1 - 0.28 * r;
-      tone = TONE_SHUT;
-    } else {
-      /* SPENT, and this is most of the move: eighteen frames of recovery is
-         the price of a grab and the screen should go on saying so for all of
-         it. The hands hang at the chest, sagging, fading -- not gone.
-         Drawing nothing here would tell the player the move had ended eleven
-         frames before he can move again, which is the exact misunderstanding
-         that gets him punished. */
-      const r = (q - 0.45) / 0.55;
-      reach = 0.34 - 0.06 * r;
-      open = 0;
-      spread = 0;
-      /* Low, but not lower than the box. Everything this function draws
-         stays inside the rectangle the move owns, on every frame of it --
-         including the frames the rectangle is not live -- because a hand
-         hanging a pixel below the box is a pixel of this drawing that no
-         longer means anything. */
-      drop = 2.2 + 0.7 * r;
-      alpha = 0.66 - 0.32 * r;
-      tone = TONE_DEAD;
-    }
-  }
-
-  /* Forward space to screen. `d` is pixels in front of his center, the rect
-     runs `wd` further forward, and mirroring is this one expression -- which
-     is why facing left is the same reach to the left and not a second
-     drawing that can drift out of agreement with the first. Column d maps to
-     ax - 1 - d going left, which is exactly how relBox mirrors the box this
-     is being drawn against. */
-  const bar = (d, y, wd, ht) => {
-    g.fillRect(facing > 0 ? ax + d : ax - d - wd, Math.round(y), wd, ht);
-  };
-
-  const art = open >= 0.75 ? GRAB_OPEN : open >= 0.3 ? GRAB_HALF : GRAB_FIST;
-  const aw = art[0].length, ah = art.length;
-  /* The LAST COLUMN THE HAND OCCUPIES. reach 1 puts it on `far`, the last
-     column the hitbox covers; reach 0 puts it on the near edge. Measured
-     from the front rather than from the wrist because the front is the end
-     that has to agree with the box -- and because a giant's hand is three
-     screen pixels per authored one, so a tip placed from the wrist would
-     hang two pixels past his own hitbox. */
-  const tipEnd = bx + Math.round(reach * (far - bx));
-  /* How far each hand sits from the middle of the box. At full spread the
-     halo above the upper hand is the top row of the box and the halo below
-     the lower one is its bottom row -- the OUTLINE is what is aligned,
-     because the outline is the edge of the drawing, and a drawing whose
-     shadow hangs over the edge is claiming a pixel of reach it does not
-     have. At no spread they are stacked and touching, which is a man with
-     his hands up in front of his chest.
-
-     ONE pixel of inset, not one authored pixel: the halo is a screen pixel
-     wide whatever size the man is, so a giant inset by his own three would
-     hold his hands two pixels clear of the top and bottom of a box he is
-     supposed to be filling. */
-  const sepOut = bh / 2 - ah * u / 2 - 1;
-  const sepIn = ah * u / 2;
-  const sep = sepIn + (sepOut - sepIn) * spread;
-  /* How far below the middle of the box the pair is riding. The middle of
-     this box is a normal fighter's throat, which is no place to hold a pair
-     of fists, so everything that is not a live frame sits lower than that --
-     at the waist to load, at the belly to die. Exactly 0 on the live frames,
-     so nothing here can ever pull one of the four off the box. */
-  const rest = drop * u;
-  const cyUp = mid - sep + rest;
-  const cyLo = mid + sep + rest;
-
-  /* One forearm, stepped along its longer axis the way poleStroke walks the
-     fishing rod, so a steep arm comes out solid instead of dotted. `under`
-     lays a second, darker copy ONE SCREEN PIXEL below it: an arm with a
-     shaded underside reads as round, and one flat color reads as a plank.
-     One pixel rather than one authored pixel, for the reason the halo is
-     one -- a giant whose shading scaled with him would hang three pixels of
-     shadow below the bottom of his own hitbox.
-
-     Started at the box's NEAR EDGE rather than at his shoulder joint, and
-     that buys two things. The arm then spans exactly the hitbox, near edge
-     to far, so the reach is drawn as a LINE and not only as a destination.
-     And it keeps the arm off the chest of the three characters who do have a
-     drawn attack pose, so this sits on top of them instead of fighting
-     them. */
-  const limb = (y0, y1, bow, under) => {
-    const d1 = tipEnd - (aw - 1) * u + 1;    // inside the palm, so no seam
-    const sy = Math.round(y0);
-    const dd = d1 - bx, dy = Math.round(y1) - sy;
-    const adx = dd < 0 ? -dd : dd, ady = dy < 0 ? -dy : dy;
-    const n = adx > ady ? adx : ady;
-    if (n === 0) { bar(bx, sy + under, u, u); return; }
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      const b = bow * 4 * t * (1 - t);
-      if (adx >= ady) {
-        bar(bx + Math.round(dd * t), sy + Math.round(dy * t + b) + under, u, u);
-      } else {
-        bar(bx + Math.round(dd * t + b), sy + Math.round(dy * t) + under, u, u);
-      }
-    }
-  };
-
-  /* One hand, aligned by the last column it occupies. `pad` is the dark
-     pass: a pixel out on the back, the top and the bottom, and NOTHING
-     forward of the fingers. Padding the front too would put a dark pixel
-     past the end of the hitbox on every live frame, and that column is the
-     one pixel in this whole drawing that is not allowed to be wrong. */
-  const hand = (end, cy, pad, cm, cf, cd) => {
-    const y0 = Math.round(cy - ah * u / 2);
-    for (let r = 0; r < ah; r++) {
-      for (let c = 0; c < aw; c++) {
-        const ch = art[r][c];
-        if (ch === '.') continue;
-        g.fillStyle = pad ? GRAB_HALO
-                    : ch === '+' ? cf : ch === '-' ? cd : cm;
-        bar(end - (aw - c) * u + 1 - pad, y0 + r * u - pad,
-            u + pad, u + pad * 2);
-      }
-    }
-  };
-
-  /* Shoulder height on a body that is 14 tall: three or five rows down from
-     the top of the head. The two are split so the arms do not lie on top of
-     each other on the frames the hands are stacked. */
-  const shUp = ay - 11 * u, shLo = ay - 9 * u;
-
-  g.globalAlpha = alpha;
-
-  /* A breath of light inside the box, live frames only, in three bands that
-     get stronger toward the far end. Faint on purpose -- this is not a debug
-     overlay, it is the reason the eye travels outward to the hands instead
-     of stopping at the body. Fading it across the four frames also gives the
-     window a direction: brightest on the frame it opens, nearly gone on the
-     frame it shuts. */
-  if (live) {
-    const decay = 1 - 0.2 * (k - s.startup);
-    const band = Math.round(bw / 3) || 1;
-    g.fillStyle = GRAB_WASH;
-    for (let i = 0; i < 3; i++) {
-      const x0 = bx + i * band;
-      const wd = i === 2 ? bx + bw - x0 : band;
-      if (wd <= 0) continue;
-      g.globalAlpha = alpha * (0.04 + 0.05 * i) * decay;
-      bar(x0, top, wd, bh);
-    }
-    g.globalAlpha = alpha;
-  }
-
-  /* Where the hands were on the way out, on the one frame they arrive.
-     Fourteen pixels of travel in a sixtieth of a second is a jump the eye
-     cannot follow, and without a smear the move looks like the hands were
-     out there all along -- which throws away the very thing the seven frames
-     of wind-up were for. Two ghosts, both well inside the live reach, so
-     nothing faint ever claims range the box does not have. */
-  if (k === s.startup) {
-    for (let i = 0; i < 2; i++) {
-      const back = bx + Math.round((0.40 + 0.26 * i) * (far - bx));
-      const shift = (sepOut - sepIn) * (0.45 + 0.3 * i);
-      g.globalAlpha = alpha * (0.10 + 0.08 * i);
-      hand(back, mid - sepIn - shift, 0, tone.arm, tone.arm, tone.arm);
-      hand(back, mid + sepIn + shift, 0, tone.arm, tone.arm, tone.arm);
-    }
-    g.globalAlpha = alpha;
-  }
-
-  // Arms first and dark side down, then the hands over the top of them, so
-  // the wrist joint is a hand covering an arm rather than a seam.
-  g.fillStyle = tone.dim;
-  limb(shUp, cyUp, -u, 1);
-  limb(shLo, cyLo, u, 1);
-  g.fillStyle = tone.arm;
-  limb(shUp, cyUp, -u, 0);
-  limb(shLo, cyLo, u, 0);
-
-  /* The outline goes on while the hands are solid and comes off once they
-     are see-through. Two translucent passes over each other, one of them
-     black, is not a faded hand -- it is a gray bruise on his chest, and the
-     spent frames are the ones a player should be able to ignore. */
-  if (alpha > 0.75) {
-    hand(tipEnd, cyUp, 1, GRAB_HALO, GRAB_HALO, GRAB_HALO);
-    hand(tipEnd, cyLo, 1, GRAB_HALO, GRAB_HALO, GRAB_HALO);
-  }
-  hand(tipEnd, cyUp, 0, tone.hand, tone.fin, tone.arm);
-  hand(tipEnd, cyLo, 0, tone.hand, tone.fin, tone.arm);
-
-  g.globalAlpha = 1;
-}
-
-/* =====================================================================
-   THE JAB - the drawn half of everybody's fastest button
-   ===================================================================== */
-
-/* Four frames to wind up and four to land, sixty times a second, a hundred
-   times a match. There is no room in that for a pose, so what is drawn here
-   is not an arm: it is the MOTION of an arm, plus the mark it leaves at the
-   far end. That choice is what lets one drawing serve all ten fighters --
-   three of whom have an artist's punch on a sprite sheet and seven of whom
-   have nothing at all. A blur over a drawn swing is that swing going fast;
-   a second drawn arm over a drawn swing is a man with three arms.
-
-   The only numbers in here that are not read off the move are thicknesses.
-   Everything that says WHERE comes from ox, w, oy and h. */
-
-const JAB_DARK  = '#140f1a';   // halo, so a white fist survives a pale stage
-const JAB_HOT   = '#ffd25c';   // the blur -- the whip's sweet-spot gold, on
-                               // purpose: in this game gold already means
-                               // "this part of the picture can hurt you"
-const JAB_SNAP  = '#ffffff';   // the fist and the stop mark: nothing on the
-                               // screen is allowed to be brighter
-/* Recovery: cold, flat, and never white. It is PALER than it looks like it
-   should be, and that is the halo's fault -- a two-pixel bar with a one-pixel
-   black outline is three quarters outline, so a genuinely dark spent color
-   came out as a black nub on a dark stage and the whole retraction was
-   invisible. Paler than the halo by enough to survive being wrapped in it. */
-const JAB_SPENT = '#7f8ca3';
-
-/* How many of the last wind-up frames show the dotted reach. This is the one
-   number in the file that is a taste call rather than a consequence, so it is
-   up here where it can be argued with: 0 removes the preview entirely and
-   costs nothing else, 2 is what the stills were tuned at, and anything above
-   about 3 starts being a ruler a player reads instead of a tell he feels. */
-const JAB_PREVIEW = 2;
-
-function drawJabArt(g, ax, ay, facing, k, s, sizeMul, accent) {
-  const total = s.startup + s.active + s.recovery;
-  if (k > total) return;
-  /* There is one frame where he is attacking and attackFrame is still 0 --
-     the frame the move starts on, before updateAttack has counted it. Draw
-     nothing on it and his hand is empty at the exact moment the player is
-     watching for the tell; read the wind-up table at 0 and it runs off the
-     front. Clamped. `live` stays on the raw k, which is correctly false. */
-  const kf = k < 1 ? 1 : k;
-  /* THE SAME WINDOW hitbox() USES -- attackFrame >= startup and < startup +
-     active. Not one frame either side. A drawing that leads the box hits
-     people it has visibly not reached; a drawing that lags it stands at full
-     stretch on a frame the move is already over. */
-  const live = k >= s.startup && k < s.startup + s.active;
-
-  const m = sizeMul > 0 ? sizeMul : 1;
-  const t = m < 1 ? 1 : Math.round(m);   // one "pixel" at this body's size
-
-  /* THE BOX, rebuilt exactly the way relBox builds it, because the whole
-     point of this drawing is that what you see is where it hits.
-
-     `ox` is the near edge forward of his center and the box runs `w` further
-     forward, so ox + w is the tip and that is the only number that matters.
-     `oy` is the box's CENTRE, not its top.
-
-     The two clamps are relBox's, copied because a jackpot Simon is the one
-     fighter who needs them: tripling oy alone would float his box eight
-     pixels clear of a normal man's head, so relBox holds the bottom edge
-     down and lets the box grow upward instead. Leave them out and the giant's
-     drawing sits eight pixels above the giant's hitbox -- which is precisely
-     the lie this function exists to stop telling. */
-  const near = Math.round(s.ox * m);
-  const tip  = Math.round((s.ox + s.w) * m);
-  const bot  = Math.round(Math.max(s.oy * m + s.h * m / 2, s.oy + s.h / 2));
-  const top  = Math.round(Math.min(s.oy * m - s.h * m / 2, bot - s.h * m));
-  const mid  = (top + bot) >> 1;         // the box's own middle row
-  const span = tip - near;
-
-  /* The fist is a share of the reach and a share of the box, never a fixed
-     size: at sizeMul 3 a four-pixel fist on a thirty-three pixel punch is a
-     speck, and the giant's jab would read as shorter than everyone else's. */
-  const fistW = Math.max(2 * t, Math.round(span * 0.36));
-  /* Three fifths of the box, not half. The hitbox is ten pixels tall and a
-     five-pixel fist left the top and bottom fifths of a live box painted with
-     nothing, so a hit at head height looked like a hit by air. Three fifths
-     leaves a two-pixel margin top and bottom, which the stop mark covers. */
-  const fistH = Math.max(3 * t, Math.round((bot - top) * 0.6));
-  const fistF = tip - fistW;             // so the fist's FAR edge is the tip
-  const fistY = mid - (fistH >> 1);
-  const knee  = near + Math.round((fistF - near) * 0.45);
-
-  const tint = accent || '#cfd6ea';
-
-  /* One rect, in FORWARD space -- measured ahead of him and mirrored once,
-     here, by the same expression relBox mirrors the box with. Nothing above
-     this line knows which way he is facing, so left and right cannot drift.
-
-     `pad` grows the rect a pixel on all four sides for no extra rect, which
-     is how the dark pass gets a full halo at the same cost as the bright one
-     instead of the one-sided shadow an offset copy would give. */
-  const bar = (f0, y0, fw, fh, pad) => {
-    // A pass that owns none of this frame's shapes asks for zero-width rects;
-    // dropping them here is cheaper than guarding every call site.
-    if (fw <= 0 || fh <= 0) return;
-    g.fillRect(facing > 0 ? ax + f0 - pad : ax - f0 - fw - pad,
-               ay + y0 - pad, fw + pad * 2, fh + pad * 2);
-  };
-
-  /* The whole move as one expression, emitted once per color. `tn` picks
-     which pixels this pass owns; -1 takes every pixel that gets a halo,
-     which is everything except the two see-through passes. Recomputing the
-     geometry four times is a dozen adds; keeping it in scratch arrays would
-     be the whip's answer, and the whip needs it because it walks a curve
-     twice. This walks nothing. */
-  const paint = (tn, pad) => {
-    const put = (o, f0, y0, fw, fh) => {
-      if (o === tn || (tn < 0 && o <= 4)) bar(f0, y0, fw, fh, pad);
-    };
-
-    if (!live && k < s.startup) {
-      /* WIND-UP. Two rules, and between them a wind-up cannot be mistaken
-         for a hit: nothing SOLID is drawn forward of the near edge, and
-         nothing at all is drawn in white.
-
-         The fist cocks BACKWARDS across these frames -- about a pixel a
-         frame at normal size -- so the direction of travel reverses on the
-         active frame. That reversal is the anticipation, and it is the only
-         thing four frames is long enough to say. */
-      const su = s.startup < 1 ? 1 : s.startup;
-      const cock = su > 2 ? (kf - 1) / (su - 2) : 1;
-      const cf = near - Math.round(t * (2 + 3 * (cock > 1 ? 1 : cock)));
-      /* The cocked hand, in HIS color, small and low-contrast on purpose --
-         this is the one band of the move where the player has time to ask
-         whose jab this is, so it is the one band that gets an identity.
-
-         Three pixels by four, and it was a hollow bracket until the stills
-         said otherwise: at normal size a bracket is a one-pixel spine inside
-         a one-pixel halo, which is a black smudge with a hint of color in
-         it. Solid, the halo becomes an outline instead of a filling.
-
-         It grows BACKWARD from `cf` rather than forward, which is what keeps
-         its leading edge at cf + 2t -- exactly the near edge of the box on
-         the first wind-up frame, and behind it on every frame after. That is
-         the rule that stops a wind-up ever looking like a hit, and widening
-         the block the other way would have broken it at every size. */
-      put(3, cf - t, mid - 2 * t, 3 * t, 4 * t);
-      /* The ground it has GIVEN UP, dim, growing a pixel a frame. The whole
-         job of four frames of wind-up is to establish a direction of travel
-         that the active frame then reverses, and a hand that has only moved
-         three pixels cannot do that alone -- the trail is what makes those
-         three pixels read as backwards rather than as jitter. */
-      put(6, cf + 2 * t, mid - t, near - cf - 2 * t, t);
-
-      /* THE RANGE, DOTTED, ON THE LAST JAB_PREVIEW WIND-UP FRAMES -- the box's
-         own center line from the near edge to the tip, plus a chip at each far
-         corner. Thirty-three milliseconds is far too short to react to, so
-         this costs nobody a matchup; what it buys is that a player who
-         throws this button a hundred times a match has been shown the exact
-         reach a hundred times, a frame before it arrives, instead of having
-         to infer it from who got hit. Dotted and see-through so it can never
-         be confused with the solid bar that replaces it. */
-      if (JAB_PREVIEW > 0 && kf >= su - JAB_PREVIEW) {
-        for (let f = near; f < tip - t; f += 2 * t) put(6, f, mid, t, t);
-        put(6, tip - 2 * t, top, 2 * t, t);
-        put(6, tip - 2 * t, bot - t, 2 * t, t);
-      }
-      return;
-    }
-
-    if (live) {
-      /* LIVE. Identical on every active frame, deliberately: the hitbox does
-         not move or shrink between the first active frame and the last, so
-         neither does the picture. Four frames of an unchanging white block
-         at exactly the tip is the strongest sentence this move can say.
-
-         Anything that DOES change across these frames would be read as the
-         range changing, so the only thing allowed to decay is the trail
-         below, which is a fact about the frame before, not about the box. */
-
-      /* The blur: a stub out of his body, a solid arm, and two broken speed
-         lines flying off either side of it.
-
-         The speed lines are not decoration. One solid bar into a block is a
-         BEAM -- the first pass drew exactly that and it read as a laser
-         sword, not a punch -- and it also left the top and bottom of a
-         ten-pixel box empty. Two broken lines with a gap between them and
-         the arm say "this is moving" in the one way that survives at three
-         pixels, and they widen the painted part of the box while they do it. */
-      const fly = 3 * t;          // how far off the arm's line the streaks sit
-      const stk = near + 2 * t;   // ...and where they begin, clear of his body
-      put(1, near, mid - t, knee - near, 2 * t);
-      put(1, knee, mid - ((3 * t) >> 1), fistF - knee, 3 * t);
-      put(1, stk, mid - fly, fistF - stk, t);
-      /* The lower streak is the same distance below the arm as the upper one
-         is above it, and it is the ONLY part of a live frame drawn in his
-         color. Everything that carries the read -- how bright, how far, how
-         tall -- is identical on all ten fighters, because a man whose accent
-         is dark navy must not get a jab that looks less dangerous than a man
-         whose accent is lemon. Hue only goes where it cannot compete. */
-      put(3, stk, mid + fly - t + 1, fistF - stk, t);
-
-      // The fist. Its FAR edge is ox + w, which is the whole job.
-      put(2, fistF, fistY, fistW, fistH);
-      /* The stop mark: the last column INSIDE the box, full box height. This
-         is the one place the drawing is allowed to be literal, and it is
-         earned -- a blur that simply stops has no end you can find at speed,
-         and the box is ten pixels tall while a fist is six, so without this
-         the top and bottom thirds of a live hitbox are painted with nothing
-         at all and connect for what looks like no reason. */
-      put(2, tip - t, top, t, bot - top);
-      // Two chips turning that line into a bracket rather than a fence post.
-      put(2, tip - 3 * t, top, 2 * t, t);
-      put(2, tip - 3 * t, bot - t, 2 * t, t);
-
-      /* Where the fist came FROM, on the two frames it is still arriving.
-         The hand crosses most of its reach in one frame; without this the
-         snap is a thing you can only see by pausing. */
-      const age = k - s.startup;
-      if (age <= 1) put(5, near - 6 * t, mid - t, 6 * t, 2 * t);
-      return;
-    }
-
-    /* SPENT. The arm is home long before the recovery is over, which is the
-       honest shape of the move and also the safest thing to draw: the first
-       recovery frame has to be unmistakable from the last active one, and it
-       is, three ways at once -- it is short of the tip, it has no white in
-       it, and it has no bracket.
-
-       Then the hand SINKS to his side over whatever is left. That slow drop
-       is the only clock a player has on how long he is stuck for, and this
-       is a move whose recovery is twice its active window. */
-    const rn = k - s.startup - s.active;
-    const rec = s.recovery < 1 ? 1 : s.recovery;
-    const pull = Math.max(1, Math.round(rec * 0.4));
-    if (rn < pull) {
-      /* Fifty-five percent of the reach on the very first spent frame, not
-         ninety. The frame after the last active one is the single most
-         dangerous frame to draw honestly-but-slowly: leave the arm out and
-         the picture is at its most threatening on a frame that cannot touch
-         anybody, which is the exact mistake the whip used to make. */
-      const front = near + Math.round(span * 0.55 * (1 - rn / pull));
-      put(4, near, mid - t, front - near, 2 * t);
-    } else {
-      const restN = Math.max(1, rec - pull);
-      const sink = Math.round((bot - 2 * t - mid) * (rn - pull) / restN);
-      put(4, near - t, mid + sink - t, 3 * t, 2 * t);
-    }
-  };
-
-  // Halo first and under everything, then back to front, dim to bright.
-  g.fillStyle = JAB_DARK;  paint(-1, t);
-  g.fillStyle = JAB_HOT;   paint(1, 0);
-  g.fillStyle = tint;      paint(3, 0);
-  g.fillStyle = JAB_SPENT; paint(4, 0);
-  g.fillStyle = JAB_SNAP;  paint(2, 0);
-
-  /* The trail gets no halo at all: a ghost with a hard black outline is an
-     object rather than a ghost, and it is drawn over his own body where it
-     has all the contrast it needs. */
-  g.globalAlpha = (k - s.startup) <= 0 ? 0.40 : 0.18;
-  g.fillStyle = JAB_SNAP;  paint(5, 0);
-  /* The range preview gets a SOFT one -- a half-strength shadow under a
-     one-pixel dotted line. Without it the preview was invisible on SUNSET
-     BEACH, which is the one stage with a pale sky: a light accent at half
-     alpha over pale sand is the same color as pale sand. Half strength
-     rather than full, because at a pixel wide a full halo IS the mark. */
-  g.globalAlpha = 0.30;
-  g.fillStyle = JAB_DARK;  paint(6, t);
-  g.globalAlpha = 0.55;
-  g.fillStyle = tint;      paint(6, 0);
-  g.globalAlpha = 1;
-}
-
-/* The two universal moves, for the fighter actually doing one.
-
-   Both are asked which STATE he is in rather than which move he owns, which
-   is the guard drawAxe and drawWhip needed for the same reason: a character
-   owns his jab all match and is only throwing it for about fifteen frames of
-   it.
-
-   The specs are read live -- BASIC_GRAB for everybody, and his own def.jab --
-   and handed straight through, so the drawing takes ox/w/oy/h from the same
-   object hitbox() does. There is no second copy of the reach to forget to
-   update, which is the entire reason these two functions exist: the range is
-   whatever the box says it is, on the frame it says it.
-
-   sizeMul goes through as well. A jackpot Simon's boxes are scaled by relBox
-   and his hands and his fist have to be scaled by exactly the same number, or
-   the giant's drawing tells a different story from the giant's hitbox. */
-function drawGrab(g, f) {
-  if (f.state !== 'grab') return;
-  drawGrabArt(g, Math.round(f.x), Math.round(f.y), f.facing,
-              f.attackFrame, BASIC_GRAB, f.sizeMul);
-}
-
-function drawJab(g, f) {
-  if (f.state !== 'attack') return;
-  const m = f.def.jab;
-  if (!m) return;
-  drawJabArt(g, Math.round(f.x), Math.round(f.y), f.facing,
-             f.attackFrame, m, f.sizeMul, f.accent);
-}
 
 
 /* Eight points evenly round a circle, as unit offsets. Written out rather
@@ -17156,12 +16507,6 @@ function drawFighter(g, f) {
   drawGuillotine(g, f);
   drawAxe(g, f);
   drawWhip(g, f);
-  /* The grab and the jab, after the sprite because both are things he is
-     doing WITH his arms rather than things behind him -- and for the three
-     fighters who have a drawn attack pose, a blur under the artist's arm
-     would be a blur nobody sees. */
-  drawGrab(g, f);
-  drawJab(g, f);
   /* After the sprite, like the sword and the rod: a swollen cheek is drawn
      ON him, and drawn under the body it would be a man with a lump behind
      his face. */
@@ -17855,7 +17200,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'a715a35876';
+const BUILD_ID = '563d56759f';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -17866,7 +17211,7 @@ const BUILD_ID = 'a715a35876';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.72';
+const VERSION = '2.73';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
