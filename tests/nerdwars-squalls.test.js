@@ -1107,3 +1107,650 @@ test("REM SLEEP, the yawn and the nap are gone from the engine entirely", async 
   assert.equal(labels, "SALAMENCE,THE WHIP,SOMEDAY, A BAKERY,STAR OF DAVID",
     "and wear the names the roster screen shows; they are " + labels);
 });
+
+/* =====================================================================
+   THE STAR OF DAVID, AS A PICTURE
+
+   Everything above this line is about what the star DOES. This is about what
+   it looks like, and it is here because looking wrong is the failure this
+   move actually shipped with.
+
+   The art before 2.65 was two SOLID triangles stacked base to base. Every
+   test above passed on it: it flew, it split, the halves climbed and dived
+   and hit for the right numbers. It just did not look like a Star of David.
+   Solid, at eleven pixels, two triangles are a pale rhombus with a stripe
+   across the waist -- there is no middle to see through, and there are no
+   points, because a point is only a point when there is background on both
+   sides of it. Nothing anybody could measure about the move would have
+   caught that, and nothing did; the player did.
+
+   So these read the PIXELS. The canvas this file boots the engine with is a
+   Proxy that answers every method with a no-op and remembers nothing, which
+   means a drawing test run against it passes no matter what is drawn -- or
+   whether anything is drawn at all. Each measurement below therefore builds
+   a recorder of its own: an object whose fillRect keeps the rectangle and
+   the fillStyle it was issued under. drawStarArt emits nothing else; the
+   entire picture is fillStyle and fillRect.
+
+   What is pinned here is the SHAPE, not the artwork. A hexagram has six
+   points around a hollow middle, it stays inside its own hitbox, it is the
+   flag's blue, and it turns. Any pixel may move that keeps those true. */
+
+/* One Star, drawn at each of `spins` in a single trip into the vm, because
+   the turn is a property of the frames TOGETHER and one frame cannot show it.
+
+   Parked on whole numbers on purpose: draw() rounds the position before it
+   lays anything down, so a star at x.5 is the same picture shifted over, and
+   a test that had to allow for the shift could no longer say where the edges
+   of the art are. The owner is a real fighter only because the constructor
+   wants one; drawing never looks at him.
+
+   box() and the three color constants come back alongside the frames so that
+   everything below can be written against what the engine says a star is,
+   rather than against numbers copied out of it into here. */
+const starShots = (run, piece, spins) => JSON.parse(run(`JSON.stringify((function () {
+  var st = new Star(fighters[0], ROSTER.squalls.specials.neutral,
+                    ${JSON.stringify(piece)}, 40, 40, 0, 0);
+  var list = ${JSON.stringify(spins)}, frames = [];
+  for (var i = 0; i < list.length; i++) {
+    st.spin = list[i];
+    var rects = [];
+    var rec = { globalAlpha: 1, fillStyle: '#000',
+      fillRect: function (x, y, w, h) {
+        rects.push({ x: x, y: y, w: w, h: h, c: this.fillStyle });
+      },
+      drawImage: function () {}, beginPath: function () {}, arc: function () {},
+      fill: function () {}, save: function () {}, restore: function () {},
+      translate: function () {}, scale: function () {} };
+    st.draw(rec);
+    frames.push(rects);
+  }
+  return { frames: frames, box: st.box(), cx: Math.round(st.x), cy: Math.round(st.y),
+           blue: STAR_BLUE, field: STAR_FIELD, spark: STAR_SPARK,
+           ids: STAR_POINTS[${JSON.stringify(piece)}].join('') };
+})())`));
+
+/* What a star's own spin counter does while it flies. Every drawing above is
+   handed a spin chosen by the test; this is the only thing that shows the
+   engine ever hands it a DIFFERENT one. */
+const starSpinsInFlight = (run, frames) => run(`(function () {
+  var st = new Star(fighters[0], ROSTER.squalls.specials.neutral, 'whole', 40, 40, 0, 0);
+  var seen = [];
+  for (var i = 0; i < ${frames}; i++) { st.update(); seen.push(st.spin); }
+  return seen.join(',');
+})()`);
+
+/* The recorded rectangles painted flat, keyed "column,row", last write wins --
+   which is what a screen does, and what drawStarArt counts on: the pale field
+   goes down first and the blue goes over the top of it. Everything it emits
+   is one row tall, but nothing here assumes that. */
+function starPixels(frame) {
+  const px = new Map();
+  for (const r of frame) {
+    for (let dy = 0; dy < r.h; dy++) {
+      for (let dx = 0; dx < r.w; dx++) px.set((r.x + dx) + "," + (r.y + dy), r.c);
+    }
+  }
+  return px;
+}
+
+const cellAt = (key) => key.split(",").map(Number);
+
+// Every pixel of one color, and every pixel that is NOT the pale field.
+const colored = (px, c) => [...px].filter((e) => e[1] === c).map((e) => e[0]);
+const inkOf = (shot, px) =>
+  new Set([...px].filter((e) => e[1] !== shot.field).map((e) => e[0]));
+
+/* Where a clump of pixels sits, as a bearing in degrees from the middle of
+   the star. Screen y grows downward, so an angle that INCREASES is a clump
+   moving clockwise, which is the way the star is drawn turning. */
+function bearing(shot, cells) {
+  let sx = 0, sy = 0;
+  for (const k of cells) { const [x, y] = cellAt(k); sx += x; sy += y; }
+  return Math.atan2(sy / cells.length - shot.cy, sx / cells.length - shot.cx) *
+         180 / Math.PI;
+}
+const clockwiseFrom = (a, b) => (((b - a) % 360) + 360) % 360;
+
+/* Every 4-connected run of pale pixels, and whether the star SEALS it.
+   `leaky` means some pixel of the run touches somewhere the star did not draw
+   at all, which matters because a gap in the outline would otherwise read as
+   a hole -- and a hexagram whose points have leaked open is a snowflake. A
+   hole is only a hole if the star closes around it. */
+function paleHoles(px, field) {
+  const seen = new Set(), out = [];
+  for (const [key, c] of px) {
+    if (c !== field || seen.has(key)) continue;
+    const stack = [key], cells = [];
+    let leaky = false;
+    seen.add(key);
+    while (stack.length) {
+      const cur = stack.pop();
+      cells.push(cur);
+      const [x, y] = cellAt(cur);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nk = (x + dx) + "," + (y + dy);
+        if (!px.has(nk)) { leaky = true; continue; }
+        if (px.get(nk) === field && !seen.has(nk)) { seen.add(nk); stack.push(nk); }
+      }
+    }
+    out.push({ size: cells.length, leaky, cells });
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------------
+   SIX POINTS AROUND A HOLLOW MIDDLE
+   --------------------------------------------------------------------- */
+
+function checkHexagram(shot) {
+  const px = starPixels(shot.frames[0]);
+  assert.ok(px.size > 40,
+    "precondition: the star should have been drawn at all; " + px.size +
+    " pixels reached the recorder");
+
+  /* THE ONE PROPERTY THE OLD ART DID NOT HAVE. Two triangle outlines crossing
+     leave the middle empty; two solid triangles fill it in. Read at the exact
+     middle of the star, because that is the pixel both versions own and the
+     only one whose color tells them apart. */
+  const middle = px.get(shot.cx + "," + shot.cy);
+  assert.equal(middle, shot.field,
+    "the middle of the star has to be the pale field showing through -- that " +
+    "is what makes it a hexagram and not a lump; it is " + middle);
+  assert.notEqual(middle, shot.blue,
+    "and specifically not the blue, which is the old solid star coming back");
+
+  const holes = paleHoles(px, shot.field);
+  for (const h of holes) {
+    assert.equal(h.leaky, false,
+      "every pale patch inside the star has to be SEALED by the star; one of " +
+      h.size + " pixels touches open background, which means the outline has " +
+      "a gap in it and the shape is coming undone");
+  }
+
+  /* Seven sealed holes, which is the whole shape stated as one number: six
+     points plus the middle. Five would be a point filled in, eight a point
+     split in two, one the middle alone with nothing around it -- and a point
+     that is not hollow is not a point, because at this size the hole IS the
+     tip. */
+  assert.equal(holes.length, 7,
+    "a hexagram encloses seven pale holes -- six points and the middle; this " +
+    "one encloses " + holes.length + " (sizes " +
+    holes.map((h) => h.size).sort((a, b) => a - b).join(", ") + ")");
+
+  const inner = holes.filter((h) => h.cells.includes(shot.cx + "," + shot.cy));
+  assert.equal(inner.length, 1, "exactly one of them holds the middle");
+  const points = holes.filter((h) => h !== inner[0]);
+  assert.equal(points.length, 6, "leaving six points; there are " + points.length);
+
+  /* And they are AROUND it rather than inside it. A middle that had burst open
+     and swallowed its own points could still be counted as seven patches once,
+     so the arrangement is checked too: every point sits further out than any
+     pixel of the middle reaches. */
+  const reach = (k) => {
+    const [x, y] = cellAt(k);
+    return Math.hypot(x - shot.cx, y - shot.cy);
+  };
+  const innerReach = Math.max(...inner[0].cells.map(reach));
+  for (const p of points) {
+    const near = Math.min(...p.cells.map(reach));
+    assert.ok(near > innerReach,
+      "a point has to sit outside the middle, not inside it; one is " +
+      near.toFixed(2) + "px out and the middle already reaches " +
+      innerReach.toFixed(2) + "px");
+  }
+
+  /* Spread evenly the whole way round, which is the difference between six
+     points and three points drawn twice. Sixty degrees apart is the honest
+     figure; the band is wider than that because each point is three pixels
+     and where three pixels average out wobbles either side of the angle. */
+  const angles = points.map((p) => bearing(shot, p.cells)).sort((a, b) => a - b);
+  let total = 0;
+  for (let i = 0; i < angles.length; i++) {
+    const gap = clockwiseFrom(angles[i], angles[(i + 1) % angles.length]);
+    assert.ok(gap > 40 && gap < 80,
+      "the six points should sit about sixty degrees apart the whole way " +
+      "round; two of them are " + gap.toFixed(1) + " degrees apart");
+    total += gap;
+  }
+  assert.ok(Math.abs(total - 360) < 1,
+    "and between them go round once, not twice; they cover " + total.toFixed(1) +
+    " degrees");
+}
+
+test("the star is a hexagram: six points around a hollow middle", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkHexagram(starShots(run, "whole", [0]));
+});
+
+test("negative control: a star with its middle filled in fails the hexagram test", async () => {
+  /* The old art, brought back the way it would actually come back -- not by
+     anybody redrawing the grid, but by the blue band being told to cover the
+     middle as well. The outline, the six tips and every pixel of the
+     silhouette are untouched, and on screen it is a pale rhombus with a
+     stripe across it again, which is the exact thing the player reported. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "starBand(g, grid, '#=X', STAR_BLUE, ox, oy);",
+    "starBand(g, grid, '#=Xo', STAR_BLUE, ox, oy);") });
+  expectToFail(() => checkHexagram(starShots(run, "whole", [0])),
+    "with the middle filled in the hexagram test should fail; it passed");
+});
+
+test("negative control: a star with five points fails the hexagram test", async () => {
+  /* One point solid and the other five left alone. This is the shape of edit
+     that gets made for a good reason: the top point is a single pale pixel
+     inside a one-pixel tip, and filling it is the obvious way to stop it
+     looking like a speck of dirt on the screen. It also takes the star from
+     six points to five, which nobody counts at eleven pixels across. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "    '.....#.....',\n    '....#+#....',\n    '.===X=X===.',",
+    "    '.....#.....',\n    '....###....',\n    '.===X=X===.',") });
+  expectToFail(() => checkHexagram(starShots(run, "whole", [0])),
+    "with only five hollow points the hexagram test should fail; it passed");
+});
+
+/* ---------------------------------------------------------------------
+   THE HALVES ARE THE STAR'S OWN TRIANGLES
+   --------------------------------------------------------------------- */
+
+function checkHalvesAreTheStar(whole, up, down) {
+  const wInk = inkOf(whole, starPixels(whole.frames[0]));
+  const uInk = inkOf(up, starPixels(up.frames[0]));
+  const dInk = inkOf(down, starPixels(down.frames[0]));
+  assert.ok(wInk.size > 0 && uInk.size > 0 && dInk.size > 0,
+    "precondition: all three pieces should have drawn something");
+
+  /* Where a half sits inside the whole star, found rather than assumed: the
+     halves are drawn centered in their own smaller boxes, so each is offset
+     by a pixel from where its triangle sits in the whole, and which way is a
+     detail of the art an artist is allowed to change.
+
+     Searching also lets the test say something it could not otherwise say. A
+     half that fits the whole in exactly one place is a half that is PART of
+     the whole; one that fits nowhere is a new drawing, and one that fits in
+     several places is a shape too plain to be a triangle. */
+  const shiftedInto = (ink, target) => {
+    const found = [];
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -3; dy <= 3; dy++) {
+        const ok = [...ink].every((k) => {
+          const [x, y] = cellAt(k);
+          return target.has((x + dx) + "," + (y + dy));
+        });
+        if (ok) found.push([dx, dy]);
+      }
+    }
+    return found;
+  };
+  const upAt = shiftedInto(uInk, wInk), downAt = shiftedInto(dInk, wInk);
+  assert.equal(upAt.length, 1,
+    "the climbing half should lie inside the whole star in exactly one place; " +
+    "it fits in " + upAt.length + " (" + JSON.stringify(upAt) + ")");
+  assert.equal(downAt.length, 1,
+    "and so should the diving one; it fits in " + downAt.length + " (" +
+    JSON.stringify(downAt) + ")");
+
+  const move = (ink, off) => new Set([...ink].map((k) => {
+    const [x, y] = cellAt(k);
+    return (x + off[0]) + "," + (y + off[1]);
+  }));
+  const u = move(uInk, upAt[0]), d = move(dInk, downAt[0]);
+
+  /* The point of the move, stated as an equality: the star IS the two halves.
+     Not merely that each half can be found somewhere inside it -- the two of
+     them together have to account for every blue pixel, with none left over.
+     When that stops being true the split stops explaining itself: two pieces
+     fly off that are not the thing that came apart, and a player who watched
+     it happen learns nothing about what he just pressed. */
+  const union = new Set([...u, ...d]);
+  assert.equal(union.size, wInk.size,
+    "the two halves laid back over one another should account for the whole " +
+    "star exactly; together they cover " + union.size + " pixels and the star " +
+    "is " + wInk.size);
+  for (const k of wInk) {
+    assert.ok(union.has(k),
+      "every pixel of the star should belong to one of its halves; " + k +
+      " belongs to neither");
+  }
+
+  /* And they CROSS. Two triangles that merely touched would also add up to
+     the star and would draw a diamond; the overlap is what makes six points
+     out of six edges, and it is the seam the move splits along. */
+  const shared = [...u].filter((k) => d.has(k));
+  assert.ok(shared.length > 0,
+    "the two triangles have to overlap -- that is what makes a hexagram " +
+    "rather than a diamond; they share no pixels at all");
+
+  // Neither is the whole star on its own, or a "split" is one piece renamed.
+  assert.ok(u.size < wInk.size && d.size < wInk.size,
+    "and each half has to be less than the star it came out of; they are " +
+    u.size + " and " + d.size + " pixels against " + wInk.size);
+}
+
+test("each half is drawn as one of the whole star's own triangles", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkHalvesAreTheStar(starShots(run, "whole", [0]), starShots(run, "up", [0]),
+                        starShots(run, "down", [0]));
+});
+
+test("negative control: two halves drawn the same fail the both-triangles test", async () => {
+  /* The diving half handed the climbing half's picture. It still splits, the
+     pieces still go two ways, they still hit for what they are worth -- and
+     what is in the air is the upward triangle twice, so the star that came
+     apart is not the star that was there a moment ago. Between them the two
+     pieces now account for half the blue, which is what the union assertion
+     is there to notice. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "const grid = STAR_ART[piece], pts = STAR_POINTS[piece];",
+    "const grid = STAR_ART[piece === 'down' ? 'up' : piece], pts = STAR_POINTS[piece];") });
+  expectToFail(() => checkHalvesAreTheStar(starShots(run, "whole", [0]),
+                                           starShots(run, "up", [0]),
+                                           starShots(run, "down", [0])),
+    "with both halves drawn as the same triangle the both-triangles test " +
+    "should fail; it passed");
+});
+
+/* ---------------------------------------------------------------------
+   NOTHING DRAWN OUTSIDE THE HITBOX
+   --------------------------------------------------------------------- */
+
+function checkFitsItsHitbox(shot, what) {
+  const px = starPixels(shot.frames[0]);
+  assert.ok(px.size > 0, "precondition: " + what + " should have drawn something");
+
+  /* Read off box() rather than typed in here, because the number that matters
+     is the one the engine hits people with. A whole star and a half have
+     different ones, and a test carrying its own copy of the pair is only
+     right by accident.
+
+     box() is a square 2r across centered on the star, so the pixel columns it
+     covers run from the middle minus r to the middle plus r. Art outside that
+     range is a star that looks bigger than it hits: the player learns a reach
+     from what he can see, and is then not hit at it. */
+  const r = shot.box.w / 2;
+  assert.equal(shot.box.h / 2, r, "precondition: the hitbox is square");
+  assert.equal(shot.box.x + r, shot.cx,
+    "precondition: and centered on the star itself");
+
+  let far = 0;
+  for (const key of px.keys()) {
+    const [x, y] = cellAt(key);
+    assert.ok(Math.abs(x - shot.cx) <= r && Math.abs(y - shot.cy) <= r,
+      what + " draws a pixel at " + key + ", which is outside a hitbox " +
+      (r * 2) + " across centered on " + shot.cx + "," + shot.cy);
+    far = Math.max(far, Math.abs(x - shot.cx), Math.abs(y - shot.cy));
+  }
+
+  /* The other side of the same coin. Everything above is satisfied by a star
+     that draws nothing, and by one drawn at half size in the middle of its
+     own box -- which teaches the reach wrong in the other direction and looks
+     like a mistake besides. It has to reach the edge. */
+  assert.equal(far, r,
+    what + " should fill its hitbox out to the edge rather than sit inside " +
+    "it; the art reaches " + far + "px from the middle and the box is " + r);
+}
+
+test("neither the whole star nor a half draws outside its own hitbox", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkFitsItsHitbox(starShots(run, "whole", [0]), "the whole star");
+  checkFitsItsHitbox(starShots(run, "up", [0]), "the climbing half");
+  checkFitsItsHitbox(starShots(run, "down", [0]), "the diving half");
+});
+
+test("negative control: a half drawn wider than its box fails the hitbox test", async () => {
+  /* The triangle's base run out to the full width of the grid. One character,
+     and it is the character somebody adds to make the base look like it meets
+     the points: a half is drawn in an eleven-wide grid but only ever allowed
+     to use nine of it, which reads like an off-by-one waiting to be tidied
+     away. The half then paints a pixel a whole column outside the box it
+     hits with. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "    '.#########.',",
+    "    '##########.',") });
+  expectToFail(() => {
+    checkFitsItsHitbox(starShots(run, "whole", [0]), "the whole star");
+    checkFitsItsHitbox(starShots(run, "up", [0]), "the climbing half");
+    checkFitsItsHitbox(starShots(run, "down", [0]), "the diving half");
+  }, "with the half drawn a column wider than its box the hitbox test should " +
+     "fail; it passed");
+});
+
+/* ---------------------------------------------------------------------
+   THE FLAG'S BLUE
+   --------------------------------------------------------------------- */
+
+function checkFlagBlue(shot) {
+  /* Written out here on purpose, and it is the one number in this section not
+     read back off the engine. #0038b8 is a fact about a flag rather than
+     about this game: it cannot be derived, it has no tolerance, and the only
+     way it goes wrong is somebody eyeballing a blue they like better. A test
+     that asked the engine which blue it used would agree with whatever it had
+     drifted to. */
+  assert.equal(shot.blue, "#0038b8",
+    "the star is drawn in the Israeli flag's blue; STAR_BLUE is " + shot.blue);
+  assert.notEqual(shot.blue, shot.field,
+    "which has to differ from the pale field it sits on, or there is no star " +
+    "to see");
+  assert.notEqual(shot.spark, shot.blue,
+    "and from the lit point, or the star stops showing which way it is turning");
+
+  const px = starPixels(shot.frames[0]);
+  const body = colored(px, shot.blue).length;
+  const lit = colored(px, shot.spark).length;
+  const pale = colored(px, shot.field).length;
+  assert.equal(body + lit + pale, px.size,
+    "nothing should be drawn in a fourth color; " + (px.size - body - lit - pale) +
+    " pixels are in none of the blue, the field or the highlight");
+
+  /* And the blue is the star, not a trim on it. The highlight is one point out
+     of six and the field is what shows through the gaps, so a drawing where
+     either of them outweighs the blue is not this drawing. */
+  assert.ok(body > lit,
+    "the flag's blue should be most of the star rather than a highlight on " +
+    "it; " + body + " pixels are blue and " + lit + " are the lit point");
+  assert.ok(body > pale,
+    "and more of it than of the field showing through; " + body + " blue " +
+    "against " + pale + " pale");
+}
+
+test("the star is drawn in the flag's blue", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkFlagBlue(starShots(run, "whole", [0]));
+});
+
+test("negative control: a star in some other blue fails the flag-blue test", async () => {
+  /* A blue that is perfectly defensible and is not the flag's. This is the
+     edit that gets made while tuning a stage's palette, from a screenshot, by
+     somebody with no reason to know the number was quoted rather than chosen
+     -- which is why the comment beside it in the engine says so, and why this
+     test is here to say it a second time. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "const STAR_BLUE = '#0038b8';",
+    "const STAR_BLUE = '#2b5bd7';") });
+  expectToFail(() => checkFlagBlue(starShots(run, "whole", [0])),
+    "with the star drawn in a different blue the flag-blue test should fail; " +
+    "it passed");
+});
+
+test("negative control: a star drawn in the highlight blue fails the flag-blue test", async () => {
+  /* The constant left alone and the drawing pointed at the wrong one of the
+     three. Everything a reader greps for is still correct -- STAR_BLUE is
+     still the flag's blue and still sits under a comment saying so -- while
+     the star on screen is the pale highlight from top to bottom, with the lit
+     point now invisible against it. Nothing but the pixels can catch this. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "starBand(g, grid, '#=X', STAR_BLUE, ox, oy);",
+    "starBand(g, grid, '#=X', STAR_SPARK, ox, oy);") });
+  expectToFail(() => checkFlagBlue(starShots(run, "whole", [0])),
+    "with the star drawn in the highlight color the flag-blue test should " +
+    "fail; it passed");
+});
+
+/* ---------------------------------------------------------------------
+   IT TURNS, AND EVERY POSE IS THE SAME STAR
+   --------------------------------------------------------------------- */
+
+function checkItTurns(shot, what, flightSpins) {
+  /* How many points this piece has, counted off the grid that numbers them
+     rather than written down here: six for the star, three for a triangle.
+     Everything below is derived from that one figure, so the same checker
+     says the right thing about a whole star and about a half. */
+  const ids = [...new Set(shot.ids.split("").filter((c) => /[0-9]/.test(c)))];
+  assert.ok(ids.length >= 3,
+    "precondition: " + what + " should have points to light; the grid numbers " +
+    ids.length);
+  const period = ids.length * 5;
+  assert.ok(shot.frames.length > period,
+    "precondition: the frames measured have to cover a full turn (" + period +
+    ") and then some; there are " + shot.frames.length);
+
+  const frames = shot.frames.map(starPixels);
+
+  /* THE REASON THE STAR CAN TURN AT ALL. Sixty degrees leaves a hexagram
+     sitting exactly on top of itself, so the sprite is drawn once, point up,
+     and never redrawn -- which is also why every pose is the pose people
+     recognize instead of a smear. If the silhouette ever starts changing
+     between frames, something has begun drawing poses in between, and those
+     are the poses that do not survive eleven pixels. */
+  const silhouette = (px) => [...px.keys()].sort().join("|");
+  const shape0 = silhouette(frames[0]);
+  for (let i = 1; i < frames.length; i++) {
+    assert.equal(silhouette(frames[i]), shape0,
+      what + " should be exactly the same shape on every frame -- a hexagram " +
+      "turned sixty degrees is itself; frame " + i + " is a different outline");
+  }
+
+  /* What actually moves. The lit point is the only thing that changes, so a
+     frame with nothing lit is a frame on which the star has stopped, and that
+     is what it looks like too: a flat dead sprite for as long as it lasts. */
+  const litSets = frames.map((px) => colored(px, shot.spark).sort().join("|"));
+  for (let i = 0; i < litSets.length; i++) {
+    assert.ok(litSets[i].length > 0,
+      what + " should have a point lit on every frame; frame " + i + " has " +
+      "none, which reads on screen as the star going flat");
+  }
+
+  const distinct = [...new Set(litSets)];
+  assert.equal(distinct.length, ids.length,
+    what + " should light each of its " + ids.length + " points and no others " +
+    "over a turn; it used " + distinct.length + " different poses");
+
+  /* One point clockwise every five frames. Held for five is what makes the
+     turn readable rather than a flicker; moving at all is what makes it a
+     turn. Both are pinned, because a pose held for one frame and a pose held
+     forever fail in opposite directions and look nothing like each other. */
+  for (let i = 0; i < period; i++) {
+    assert.equal(litSets[i], litSets[i - i % 5],
+      what + " should hold each pose for five frames; frame " + i +
+      " does not match frame " + (i - i % 5));
+    if (i % 5 === 0 && i > 0) {
+      assert.notEqual(litSets[i], litSets[i - 5],
+        what + " should move the lit point every five frames; frames " +
+        (i - 5) + " and " + i + " light the same one");
+    }
+  }
+  for (let i = 0; i + period < litSets.length; i++) {
+    assert.equal(litSets[i + period], litSets[i],
+      what + " should come all the way round in " + period + " frames; frame " +
+      i + " and frame " + (i + period) + " light different points");
+  }
+
+  /* And it goes ROUND, one way, rather than hopping about. Each step is a turn
+     of 360 divided by the points it has; the band is loose either side of that
+     because a lit point is three pixels and the middle of three pixels does
+     not land exactly on the angle. */
+  const step = 360 / ids.length;
+  let total = 0;
+  for (let k = 0; k < ids.length; k++) {
+    const here = bearing(shot, distinct[k].split("|"));
+    const next = bearing(shot, distinct[(k + 1) % ids.length].split("|"));
+    const turn = clockwiseFrom(here, next);
+    assert.ok(turn > step * 0.6 && turn < step * 1.4,
+      what + " should turn about " + step + " degrees per step, always the " +
+      "same way round; one step is " + turn.toFixed(1) + " degrees");
+    total += turn;
+  }
+  assert.ok(Math.abs(total - 360) < 1,
+    what + " should go round exactly once per turn; it covers " +
+    total.toFixed(1) + " degrees");
+
+  /* And the counter the drawing reads has to be moving. Everything above hands
+     the art a spin of the test's own choosing, so on its own it would pass
+     just as happily on a star that crosses the stage frozen. */
+  const spins = flightSpins.split(",").map(Number);
+  for (let i = 0; i < spins.length; i++) {
+    assert.equal(spins[i], i + 1,
+      "a star in flight should advance its spin once a frame, or the art is " +
+      "handed the same pose forever; after " + (i + 1) + " frames it read " +
+      spins[i]);
+  }
+}
+
+// A whole turn of the star (thirty frames) with a few frames past it, so the
+// checks that compare a frame with the one a revolution later have somewhere
+// to look.
+const TURN_FRAMES = [];
+for (let i = 0; i < 35; i++) TURN_FRAMES.push(i);
+
+test("the star turns, and every pose is the same hexagram", async () => {
+  const run = await arena(SQUALLS, REESE);
+  const flight = starSpinsInFlight(run, 12);
+  checkItTurns(starShots(run, "whole", TURN_FRAMES), "the whole star", flight);
+
+  /* A half turns TWICE AS FAST, and the reason is the shape rather than a
+     number somebody picked: a triangle only lands back on itself every 120
+     degrees, so each of its steps is two of the star's and a revolution is
+     half as long. It is also the right thing to say about a lighter piece
+     that has just been flung off something. */
+  checkItTurns(starShots(run, "up", TURN_FRAMES), "the climbing half", flight);
+  checkItTurns(starShots(run, "down", TURN_FRAMES), "the diving half", flight);
+  const pointsOn = (piece) => new Set(
+    run("STAR_POINTS." + piece + ".join('')").split("")
+      .filter((c) => /[0-9]/.test(c))).size;
+  assert.equal(pointsOn("whole"), pointsOn("up") * 2,
+    "a half should come round twice for every once the star does; the star " +
+    "has " + pointsOn("whole") + " points and the half " + pointsOn("up"));
+});
+
+test("negative control: a star whose lit point never moves fails the turning test", async () => {
+  /* The star still drawn every frame, still flying, still counting its own
+     spin -- and the highlight nailed to the top point. On screen that is a
+     sprite sliding across the stage without rotating, which is exactly what a
+     hexagram drawn once and never re-posed looks like the moment the one
+     thing that showed the turn stops moving. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "const step = Math.floor(spin / 5);",
+    "const step = Math.floor(spin / 5) * 0;") });
+  expectToFail(() => checkItTurns(starShots(run, "whole", TURN_FRAMES),
+                                  "the whole star", starSpinsInFlight(run, 12)),
+    "with the lit point nailed in place the turning test should fail; it passed");
+});
+
+test("negative control: a half turning at the star's rate fails the turning test", async () => {
+  /* The halves given the star's six-step cadence over the three points a
+     triangle actually has. It is the tidy-up anybody would make -- one number
+     instead of a conditional -- and it does not stop the half turning. What it
+     does is spend half of every revolution pointing at points the triangle
+     does not have, and a step that lights nothing is a frame where the piece
+     goes flat and dead in the air. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "const n = piece === 'whole' ? 6 : 3;",
+    "const n = 6;") });
+  expectToFail(() => checkItTurns(starShots(run, "up", TURN_FRAMES),
+                                  "the climbing half", starSpinsInFlight(run, 12)),
+    "with a half turning at the star's rate the turning test should fail; " +
+    "it passed");
+});
+
+test("negative control: a star that never spins fails the turning test", async () => {
+  /* The counter itself taken out of update(). The art is untouched and every
+     pose it can strike is still correct -- it is simply handed nought on every
+     frame of the star's life, so the thing that turns beautifully in a test
+     harness sits dead still in an actual match. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "    this.spin++;\n    this.life--;\n    this.x += this.vx;",
+    "    this.life--;\n    this.x += this.vx;") });
+  expectToFail(() => checkItTurns(starShots(run, "whole", TURN_FRAMES),
+                                  "the whole star", starSpinsInFlight(run, 12)),
+    "with the spin counter gone the turning test should fail; it passed");
+});

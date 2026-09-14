@@ -1199,8 +1199,11 @@ const ROSTER = {
            ahead of you and follow up on -- but 0.85 is under two thirds of a
            walk, so it never arrived anywhere its target had not comfortably
            left, and the charge you spent choosing a piece was spent on
-           something nobody had to respect. At 1.5 it is still slower than
-           everybody's walk and now it actually closes. */
+           something nobody had to respect. At 1.5 it actually closes -- and
+           it is worth being honest that this now edges past a couple of
+           walks rather than staying under all of them: Trev's own is 1.46.
+           It is still slow enough to see coming and walk away from, which is
+           the property that matters; it is no longer slow enough to ignore. */
         pawnSpeed: 1.5, life: 320,
         /* What one ray of the burst is. `damage` is filled in per piece when
            the shard is built -- see PieceShard -- so the number here is only
@@ -1754,7 +1757,7 @@ ROSTER.simon = {
 ROSTER.squalls = {
   name: 'SQUALLS',
   origin: 'sprites',
-  tag: 'SLEEPS ON IT, THEN DREAMS SOMETHING UP',
+  tag: 'DREAMS OF A BAKERY, WAKES UP A DRAGON',
   drawn: true,
   /* Unchanged from the placeholder years: he was already the heavy, slow one
      and the kit that arrived suits that -- a man who has to find a quiet
@@ -1821,7 +1824,13 @@ ROSTER.squalls = {
        does not stop him -- it just means somebody else is eating. */
     down: {
       kind: 'bakery', label: 'SOMEDAY, A BAKERY',
-      startup: 12, active: 240, recovery: 14,
+      /* 245 rather than 240, and the five frames are load-bearing. A loaf
+         drops when `t % every === 0` and `t / every <= loaves`, so the fourth
+         one needs t to REACH 240 -- and a 240-frame window only ever counts
+         0..239. The move advertised four loaves and baked three, every time,
+         which is the sort of off-by-one that never announces itself because
+         three loaves looks perfectly deliberate. */
+      startup: 12, active: 245, recovery: 14,
       dream: 0.52,              // per dreaming frame; a full stand fills it
       every: 60, loaves: 4,
       loaf: { heal: 11, life: 420, w: 9, h: 6 },
@@ -1882,11 +1891,22 @@ ROSTER.squalls = {
     // standing beside it. Nothing like a recovery -- the pole is that now.
     rise: -3.0, drift: 0.5,
     speed: 2.1, life: 280, flap: 6, hitEvery: 60,
-    /* And it does not fly in a straight line. `wander` is how hard it can
-       climb and dive as it crosses, `veer` how often it changes its mind.
-       See Salamence.update: the path is a hash of its own age, so it is
-       unpredictable to a player and identical on both machines. */
-    wander: 1.15, veer: 17,
+    /* And it does not fly in a straight line. `wander` is how far above or
+       below its launch height it is allowed to get, `veer` how often it picks
+       a new height inside that, `ease` how fast it slides there. See
+       Salamence.update: the path is a hash of its own age, so it is
+       unpredictable to a player and identical on both machines.
+
+       ELEVEN is not a free parameter. A fighter's hurtbox is fourteen tall
+       and the dragon's is fifteen, so the dragon's centre has to be within
+       about fifteen pixels of a grounded man's to touch him at all. A band
+       of eleven weaves visibly and still lands; the free random walk this
+       replaces strayed forty to fifty, which put it over people's heads and
+       sometimes under the floor -- it missed a man standing still in its lane
+       five times in twelve. An ult you cannot aim and cannot rely on is not
+       an unpredictable ult, it is a broken one; the dodge is supposed to be
+       the other player's job. */
+    wander: 11, veer: 17, ease: 0.9,
     // The meter buys speed and nothing else: see above.
     dreamMax: 100, dreamDamage: 0, dreamSpeed: 1.5, dreamLife: 0,
     damage: 999, base: 5.0, scale: 10.0, angle: 46,
@@ -3789,14 +3809,22 @@ class Fighter {
               this.attackFrame < u.startup + u.active);
   }
 
-  /* Flat out on the floor. Asked by sprite() and by the knockback getter, so
-     the picture and the physics cannot disagree about whether he is lying
-     down. Returns the MOVE rather than a boolean, because the caller wants
-     what that particular nap says about knockback. */
+  /* Off in a daydream, which is a whole posture rather than a state. Asked by
+     sprite() and by the knockback getter, so the picture and the physics
+     cannot disagree about whether he is standing there dreaming. Returns the
+     MOVE rather than a boolean, because the caller wants what that particular
+     dream says about knockback.
+
+     It reads `bakery`, not `sleep`. It used to say `sleep`, which was the nap
+     the bakery replaced -- and a kind check against a kind no ROSTER entry
+     has any more is a silent no-op: the move went on advertising a
+     `knockbackTakenMul` that never reached the physics, and the sleeping pose
+     below could never draw. That is the whole failure mode of dispatching on
+     a string, and it costs nothing at the point it happens. */
   napping() {
     if (this.state !== 'special' && this.state !== 'ult') return null;
     const m = this.moveFor(this.state);
-    if (!m || m.kind !== 'sleep') return null;
+    if (!m || m.kind !== 'bakery') return null;
     return this.attackFrame >= m.startup &&
            this.attackFrame < m.startup + m.active ? m : null;
   }
@@ -5310,11 +5338,17 @@ class Fighter {
       set = 'attack';
     }
     /* Mid-yawn, which he was drawn doing. Its own set rather than a pose in
-       his attack sheet, so the open mouth belongs to the one move that is a
-       yawn instead of to every swing he throws. */
+       his attack sheet, so the open mouth belongs to one moment instead of to
+       every swing he throws.
+
+       That moment is the START of the daydream -- he yawns, and then he is
+       gone, which is the sleeping pose below. Two drawings, one move,
+       in the order a person actually drifts off in. It used to belong to a
+       YAWN move that no longer exists, which left eight frames of art in the
+       build that nothing on earth could draw. */
     if (this.state === 'special' && SPRITES.yawning) {
       const m = this.moveFor('special');
-      if (m && m.kind === 'yawn') {
+      if (m && m.kind === 'bakery' && this.attackFrame < m.startup) {
         const im = IMG['yawning.' + (this.facing < 0 ? 'L' : 'R')];
         if (im) return im;
       }
@@ -7410,6 +7444,349 @@ function drawAxe(g, f) {
   }
 }
 
+/* =====================================================================
+   THE WHIP - the drawn half of Squalls' up special
+   ===================================================================== */
+
+/* A bullwhip is not a stick, and the difference is one number.
+
+   What a whip does is send a FOLD of itself down its own length. Everything
+   behind the fold has already been delivered and lies straight; everything
+   past it is still trailing backwards; and the tip, which is on the far side
+   of the fold, closes on the end at twice the fold's speed, because it is
+   traveling forward and the fold is coming to meet it. When the fold runs
+   out of whip the tip is carrying all of that with nothing left to spend it
+   on. That is the crack, and the crack is the entire move.
+
+   So there is one curve here and one number, `fold`, for how far along it
+   the turn has got: 1.00 is a whip laid out straight, 0.86 means the last
+   seventh of it is doubled back under the rest, which is what draws a loop.
+   Wind-up, cast and the slack it collapses into are that same curve with
+   different control points, which is why they melt into each other frame by
+   frame instead of snapping between poses. */
+
+const WHIP_DARK = '#1a1420';   // the halo under all of it
+const WHIP_HIDE = '#6b3f22';   // plaited leather, down at the handle
+const WHIP_MID  = '#9c6231';   // ...thinning out
+const WHIP_LIT  = '#c98f4f';   // the lit top of the thick end
+const WHIP_FALL = '#e6d4ac';   // the fall and cracker, which are not leather
+const WHIP_HOT  = '#ffd25c';   // the sweet spot, on the frames it can hurt you
+const WHIP_SNAP = '#ffffff';   // ...and the one frame it cracks on
+
+/* The move, four control points at a time: a cubic from his fist out to
+   `ex, ey` by way of `c1` and `c2`, in FORWARD space -- measured ahead of
+   him and mirrored once at the end, the way the rod is -- plus how far the
+   fold has got, how deep the loop hangs off the line, and how much whip is
+   still coiled in his hand.
+
+   Written out rather than swung, for the reason the knockback triples and
+   SHELL_ORBIT are: the build refuses a file containing runtime trigonometry
+   at all, so that a shape can never come out different on the two machines
+   playing the match.
+
+   `ex, ey` is the NOSE of the lay, not the tip. While a fold is out the tip
+   is somewhere back down the curve behind it -- that is what a fold IS --
+   so pointing the table at the nose is the only way the far end of the whip
+   lands where the table says. Aim these at the tip instead and every frame
+   with a loop in it silently comes up short.
+
+   `gap` is which side the trailing half hangs on, and it changes sign at the
+   throw. Positive is down, which is where slack hangs while the whip is in
+   the air; once it is on the floor the same positive number buries the loop
+   under the stage, so the falling frames lift it instead.
+
+   The six live frames are 13-18 and they are the whole point. 12 is the whip
+   coming over the top with the loop still rolling down it, 13 is the loop
+   arriving at the far end with the tip still caught inside it, and 14 is the
+   frame it runs out of whip. Everything either side of those is telegraph or
+   punish and is drawn to look like it -- nothing on those frames is allowed
+   to be bright. */
+const WHIP_POSE = [
+  //  k    c1x  c1y   c2x  c2y    ex   ey   fold  gap  coil
+  [  1,     6,  -8,     8,  -5,    7,  -2, 1.00,   0, 1.00 ],
+  [  4,     8,  -9,    11,  -6,   11,  -4, 0.94,   2, 0.88 ],
+  [  6,     8,  -5,     5,  -1,   -3,  -1, 0.92,   2, 0.66 ],
+  [  8,     3, -10,    -6, -13,  -14, -10, 0.86,   3, 0.36 ],
+  [ 10,    -2, -18,   -14, -23,  -22, -16, 0.76,   4, 0.10 ],
+  [ 11,    -6, -20,    -2, -31,   13, -29, 0.80,   4, 0.04 ],
+  [ 12,     2, -25,    13, -30,   28, -25, 0.78,   4, 0.00 ],
+  [ 13,    16, -21,    33, -20,   45, -13, 0.86,   5, 0.00 ],
+  [ 14,    11, -20,    31, -18,   44,  -9, 1.00,   3, 0.00 ],
+  [ 15,    13, -18,    46, -15,   43, -18, 1.00,   3, 0.00 ],
+  [ 16,    13, -16,    46, -12,   44,  -6, 1.00,   3, 0.00 ],
+  [ 17,    13, -15,    34, -15,   44, -13, 1.00,   3, 0.00 ],
+  [ 18,    12, -12,    33,  -9,   42,  -8, 0.96,   2, 0.00 ],
+  [ 19,    13, -12,    32,  -8,   41,  -7, 0.95,  -2, 0.00 ],
+  [ 21,    14,  -7,    30,  -3,   38,  -3, 0.93,  -3, 0.00 ],
+  [ 24,    15,  -3,    29,   0,   34,  -1, 0.90,  -3, 0.00 ],
+  [ 27,    14,  -1,    25,   0,   27,   0, 0.90,  -3, 0.04 ],
+  [ 31,    11,  -2,    18,   0,   17,   0, 0.90,  -3, 0.24 ],
+  [ 35,     8,  -4,    10,  -1,    5,  -1, 0.92,  -2, 0.58 ],
+  [ 40,     6,  -8,     8,  -5,    7,  -2, 1.00,   0, 1.00 ],
+];
+
+/* How bright the last twelve pixels are on each of the six live frames.
+   Above 0.97 is the crack and is deliberately one frame wide: a flash that
+   lasts two frames stops being a flash and starts being a color. */
+const WHIP_HEAT = [0.55, 1.00, 0.92, 0.84, 0.72, 0.58];
+
+/* Two or three samples per pixel of a curve that is never more than about
+   fifty long. Fewer and a steep stretch comes out as a dotted line; the
+   duplicates cost nothing, because samples landing on a pixel already taken
+   are dropped on the way into the arrays below. */
+const WHIP_STEPS = 160;
+
+/* Module scratch rather than four arrays a frame -- and not for the garbage,
+   which is one draw per fighter per frame and nothing. The crack frame walks
+   the curve TWICE, once for the ghost of the frame before it, and two sets
+   of arrays for one whip is one set too many. */
+/* Plain arrays rather than the Int16Array/Int8Array this wants to be. The
+   engine runs in three places -- a browser, the standalone HTML, and a
+   node:vm sandbox that each test file builds by hand -- and that sandbox
+   only has the globals somebody listed. Uint8Array and the float arrays are
+   on the list; the integer ones are not, so typing these would have thrown
+   at LOAD time in every test in the suite, nowhere near the whip. Ninety-six
+   elements once per fighter per frame is not where this file's time goes. */
+const WPX = new Array(96).fill(0);
+const WPY = new Array(96).fill(0);
+const WPW = new Array(96).fill(0);
+const WPK = new Array(96).fill(0);
+
+function drawWhipArt(g, ax, ay, facing, k, s) {
+  const total = s.startup + s.active + s.recovery;
+  if (k > total) return;
+  /* There is exactly one frame where he is in `special` and attackFrame is
+     still 0 -- the frame the move starts on, before updateAttack has counted
+     it -- and the pose table starts at 1. Returning early on it leaves him
+     holding nothing for a frame at the one moment the player is looking
+     straight at his hand, and reading the table at 0 extrapolates backwards
+     off the front of it. Clamped, so the first frame drawn is the first
+     frame authored. `live` and `heat` below stay on the raw k, which is
+     correctly nothing at all on that frame. */
+  const kf = k < 1 ? 1 : k;
+
+  /* The SAME window hitbox() uses -- attackFrame >= startup and < startup +
+     active -- rather than one a frame later, and the pose table is read a
+     frame ahead below for the same reason.
+
+     It used to run one frame behind the box, and both ends of that were a
+     lie about the move. On the first active frame the box reached the full
+     forty-four pixels while the whip was drawn twenty-nine out, so it hit
+     people it had visibly not reached. On the frame after the last one the
+     whip stood at full stretch with the tip lit in the sweet-spot gold and
+     could not touch anybody -- the picture at its most dangerous on the one
+     frame the move was already over. On a move whose entire point is
+     standing at exactly tip range, the drawing has to agree with the box
+     about when the tip is out. */
+  const live = k >= s.startup && k < s.startup + s.active;
+  const heat = live ? WHIP_HEAT[k - s.startup] : 0;
+
+  /* Walks one frame's curve into the scratch arrays and hands back how many
+     whole pixels it came to. `sweet` is off for the ghost pass: a ghost of a
+     frame that was not dangerous must not be painted in the color that means
+     dangerous. */
+  let coil = 0;
+  const build = (kk, sweet) => {
+    let i = 0;
+    while (i < WHIP_POSE.length - 1 && WHIP_POSE[i + 1][0] < kk) i++;
+    const a = WHIP_POSE[i], b = WHIP_POSE[Math.min(i + 1, WHIP_POSE.length - 1)];
+    const span = b[0] - a[0];
+    const q = span > 0 ? (kk - a[0]) / span : 0;
+    const c1x = a[1] + (b[1] - a[1]) * q, c1y = a[2] + (b[2] - a[2]) * q;
+    const c2x = a[3] + (b[3] - a[3]) * q, c2y = a[4] + (b[4] - a[4]) * q;
+    const ex = a[5] + (b[5] - a[5]) * q, ey = a[6] + (b[6] - a[6]) * q;
+    const fold = a[7] + (b[7] - a[7]) * q;
+    const gap = a[8] + (b[8] - a[8]) * q;
+    coil = a[9] + (b[9] - a[9]) * q;
+
+    let n = 0;
+    for (let j = 0; j <= WHIP_STEPS; j++) {
+      /* `u` is how far along the WHIP this is; `t` is how far along the LAY.
+         Past the fold they stop agreeing and run backwards -- that one
+         reflection is the whole loop, and it is why the tip ends up in front
+         of the fold on a straight frame and behind it on a folded one. */
+      const u = j / WHIP_STEPS;
+      let t = (u <= fold ? u : 2 * fold - u) / fold;
+      if (t < 0) t = 0;
+      const m = 1 - t, m2 = m * m, t2 = t * t;
+      // His fist, which is where the laser sword hangs off too.
+      const px = m2 * m * 3 + 3 * m2 * t * c1x + 3 * m * t2 * c2x + t2 * t * ex;
+      let py = m2 * m * -9 + 3 * m2 * t * c1y + 3 * m * t2 * c2y + t2 * t * ey;
+      /* The returning half is pushed off the lay so that the loop has an
+         inside. It closes over the last tenth so the turn comes to a point
+         instead of a bracket -- a fold drawn with parallel sides reads as
+         two whips rather than one whip bent double. */
+      if (u > fold) {
+        const d = (u - fold) / 0.11;
+        py += gap * (d < 1 ? d : 1);
+      }
+      /* Held to the box rather than trusted to the table: the tip is the
+         whole move, and a pose nudged two pixels further out because it
+         looked better teaches a range that is not there. */
+      let fwd = Math.round(px);
+      if (fwd > s.reach) fwd = s.reach;
+      const X = ax + facing * fwd, Y = ay + Math.round(py);
+      /* Three pixels for about the first two, two for the next four, one for
+         the remaining forty. The taper is that lopsided on purpose: spread
+         evenly over the length it reads as a tapered ROD, and the thing that
+         says whip is a fat little handle with a hair coming off it. */
+      const W = u < 0.035 ? 3 : u < 0.10 ? 2 : 1;
+      /* The sweet spot is colored by where the pixel is in front of HIM, not
+         by how far along the whip it is, because that is what the hitbox
+         asks: `sweet.from` is a distance from a.x. Color it by `u` and the
+         bright part slides around as the whip bends, which teaches the
+         player a range that moves.
+
+         Only the delivered half lights up. On 13 that leaves the loop's
+         underside brown, so the frame reads as a loop arriving rather than
+         as a second, dimmer sweet spot. */
+      const K = u > 0.90 ? 2
+              : (sweet && u <= fold && fwd >= s.sweetFrom) ? 1
+              : u > 0.55 ? 3 : 0;
+      if (n > 0 && X === WPX[n - 1] && Y === WPY[n - 1]) {
+        if (W < WPW[n - 1]) WPW[n - 1] = W;
+        WPK[n - 1] = K;
+        continue;
+      }
+      WPX[n] = X; WPY[n] = Y; WPW[n] = W; WPK[n] = K; n++;
+      if (n >= 96) break;
+    }
+    return n;
+  };
+
+  /* One rect per step, along whichever axis that step is longer on, with the
+     short axis bridged -- the rod's rasterizer, for the rod's reason. `pad`
+     grows every rect a pixel on all four sides, which buys the dark pass a
+     full halo for no extra rects; `rise` lays a second row a pixel higher,
+     which is how the crack frame gets a two-pixel lash without a second
+     thickness to tune. */
+  const pass = (n, kind, pad, rise) => {
+    for (let j = 1; j < n; j++) {
+      if (kind >= 0 && WPK[j] !== kind) continue;
+      const w = WPW[j];
+      const lo = (w > 1 ? 1 : 0) + pad, d = w + pad * 2;
+      const x = WPX[j], y = WPY[j] - (rise || 0);
+      const qx = WPX[j - 1], qy = WPY[j - 1] - (rise || 0);
+      const dx = x > qx ? x - qx : qx - x, dy = y > qy ? y - qy : qy - y;
+      if (dx >= dy) g.fillRect(x - lo, (y < qy ? y : qy) - lo, d, dy + d);
+      else g.fillRect((x < qx ? x : qx) - lo, y - lo, dx + d, d);
+    }
+  };
+
+  /* Where it was last frame, faintly, on the frames it is moving fastest.
+     Six active frames at sixty is a tenth of a second, and without this the
+     crack is a thing you can only see by pausing -- the tip covers about a
+     dozen pixels between 13 and 14 and nothing on the screen says so. */
+  if (heat > 0.8) {
+    // The pose one frame ago, which is build(kf) now the table is read at kf+1.
+    const gn = build(kf, false);
+    g.globalAlpha = heat > 0.97 ? 0.40 : 0.18;
+    g.fillStyle = WHIP_SNAP;
+    pass(gn, -1, 0);
+    g.globalAlpha = 1;
+  }
+
+  /* A frame ahead, which is what lines the lash up with the box. Clamped to
+     the end of the move so the last frame reads the last authored pose
+     rather than extrapolating off the end of the table. */
+  const n = build(kf + 1 > total ? total : kf + 1, live);
+  const tx = WPX[n - 1], ty = WPY[n - 1];
+
+  // The coil at his hip, as two loops of a thing that is mostly put away.
+  const cl = ax + (facing > 0 ? 1 : -6), cy = ay - 8;
+  const loop = (row) => {
+    g.fillRect(cl + 1, cy + row, 4, 1);
+    g.fillRect(cl + 1, cy + row + 3, 4, 1);
+    g.fillRect(cl, cy + row + 1, 1, 2);
+    g.fillRect(cl + 5, cy + row + 1, 1, 2);
+  };
+
+  g.fillStyle = WHIP_DARK;
+  pass(n, -1, 1);
+  /* A knot of halo at the end, and a bigger one on the crack. This is the
+     only part of the drawing whose job is teaching: the move is worth double
+     at the last twelve pixels, so a player has to be able to find the end of
+     it at a glance, and a line that simply stops does not have an end you
+     can see. The halo runs BACKWARDS from the tip on the crack frame rather
+     than around it -- centered, it would put two more pixels of shadow in
+     front of the tip on one facing and four on the other. */
+  if (heat > 0.97) {
+    g.fillRect(tx + (facing > 0 ? -4 : -2), ty - 2, 7, 5);
+    g.fillRect(tx + (facing > 0 ? -3 : -1), ty - 3, 5, 7);
+  } else {
+    g.fillRect(tx - 2, ty - 1, 5, 3);
+    g.fillRect(tx - 1, ty - 2, 3, 5);
+  }
+  if (coil >= 0.62) g.fillRect(cl - 1, cy - 1, 8, 10);
+  else if (coil >= 0.22) g.fillRect(cl - 1, cy - 1, 8, 6);
+
+  /* The crack itself: for one frame the whole whip goes white, not just the
+     part that hurts. Everything tried before this was something extra put
+     NEAR the tip -- rays, a ring, a bar of light -- and every one of them
+     read as a floating object rather than as a whip cracking, because at
+     this size a detached shape is a shape and not a flash. The whip going
+     off like a struck match is the only version that reads. */
+  g.fillStyle = heat > 0.97 ? WHIP_SNAP : WHIP_HIDE;
+  pass(n, 0, 0);
+  if (coil >= 0.22) loop(0);
+  if (coil >= 0.62) loop(4);
+
+  g.fillStyle = heat > 0.97 ? WHIP_SNAP : WHIP_MID;
+  pass(n, 3, 0);
+
+  if (heat > 0) {
+    g.fillStyle = heat > 0.8 ? WHIP_SNAP : WHIP_HOT;
+    pass(n, 1, 0);
+    if (heat > 0.97) pass(n, 1, 0, 1);
+  }
+
+  g.fillStyle = heat > 0.97 ? WHIP_SNAP : WHIP_LIT;
+  for (let j = 1; j < n; j++) {
+    if (WPW[j] < 2 || WPK[j] !== 0) continue;
+    g.fillRect(WPX[j] - 1, WPY[j] - 1, 1, 1);
+  }
+  if (coil >= 0.22) g.fillRect(cl + 1, cy, 4, 1);
+
+  g.fillStyle = heat >= 0.5 ? WHIP_SNAP : WHIP_FALL;
+  pass(n, 2, 0);
+  if (heat > 0.97) {
+    g.fillRect(tx + (facing > 0 ? -3 : -1), ty, 5, 1);
+    g.fillRect(tx - 1, ty - 1, 3, 3);
+    g.fillRect(tx, ty - 2, 1, 5);
+  } else {
+    g.fillRect(tx - 1, ty, 3, 1);
+    g.fillRect(tx, ty - 1, 1, 3);
+  }
+}
+
+/* The whip, for the man actually swinging one.
+
+   Same two guards the axe above uses and for the same reasons: it is asked
+   whether he is DOING the move rather than whether he owns it -- otherwise
+   the whip came out over the star and the bakery as well -- and it asks
+   moveFor rather than reading specialSlot, because specialSlot is assigned
+   in startAttack and is not one of the constructor's fields, so restoreSim
+   is entitled to delete it on a rewind past his first special of the match.
+
+   The numbers the drawing needs are READ OFF THE MOVE, not written down
+   here. `ox` is the near edge of the hitbox and `w` is how much further it
+   reaches, so ox + w is the tip; `sweet.from` is where the double damage
+   starts. Copy them and the art teaches a range the hitbox does not have
+   the day somebody retunes one and not the other -- and this is the move
+   whose whole point is standing at exactly the right distance. */
+function drawWhip(g, f) {
+  if (f.state !== 'special') return;
+  const s = f.def.specials && f.def.specials.up;
+  if (!s || s.kind !== 'whip') return;
+  if (f.moveFor('special') !== s) return;
+  drawWhipArt(g, Math.round(f.x), Math.round(f.y), f.facing, f.attackFrame, {
+    startup: s.startup, active: s.active, recovery: s.recovery,
+    near: s.ox, reach: s.ox + s.w, midY: s.oy,
+    sweetFrom: (s.sweet && s.sweet.from) || s.ox + s.w,
+  });
+}
+
+
 /* Eight points evenly round a circle, as unit offsets. Written out rather
    than computed for the reason the knockback triples are: the build refuses
    a file containing Math.cos or Math.tan at all, so that angles can never
@@ -7514,6 +7891,163 @@ function drawSleep(g, f) {
    you look at it; this just stops pretending otherwise on demand.
    ===================================================================== */
 
+const STAR_BLUE = '#0038b8';    // the flag's blue, not a guess at it
+/* The flag's white field, carried along with the star instead of assumed.
+   Flat #0038b8 on the night stages is a hole in the screen; this is what
+   keeps six points visible on a dark background and invisible on a pale
+   one, which is exactly what the white of a flag does. */
+const STAR_FIELD = '#eaf1ff';
+/* The lit point, and it is a MIDDLE blue on purpose. A pale highlight is
+   brighter than a dark stage and dimmer than a pale one, so it flickers in
+   and out depending on where the fight is; this sits between the two and
+   reads against both, and against the flag blue it is drawn on top of. */
+const STAR_SPARK = '#3fa9e8';
+
+/* THE STAR OF DAVID, drawn the way the flag draws it: two triangle OUTLINES
+   crossing, hollow points, hollow middle. The version before this was two
+   solid triangles stacked, which at this size is a pale rhombus with a
+   stripe across it and never once read as a star.
+
+   Hand-placed rather than walked out of a line routine, because at eleven
+   pixels the rounding IS the art -- every radius that gave a clean one-pixel
+   top point gave a two-pixel smear on the left one. Both triangles have
+   edges of slope one half, a hair steeper than an equilateral's, because
+   that is the only nearby slope whose stair is even: the honest angle
+   rasterizes to a run of two, a run of two, then a run of ONE, and the eye
+   reads that stutter as a dent in the star.
+
+   '#' is the upward triangle, '=' the downward one, 'X' where the two cross,
+   '+' the white inside a point, 'o' the white in the middle, '.' nothing.
+   The whole is 9x11 inside an 11x11 hitbox and each half is 9x9 inside a
+   9x9 one, so neither ever claims reach it does not have. */
+const STAR_ART = {
+  whole: [
+    '.....#.....',
+    '....#+#....',
+    '.===X=X===.',
+    '.=+#ooo#+=.',
+    '..=#ooo#=..',
+    '..XoooooX..',
+    '..#=ooo=#..',
+    '.#+=ooo=+#.',
+    '.###X#X###.',
+    '....=+=....',
+    '.....=.....',
+  ],
+  /* Each half is its own triangle at the size it had inside the whole --
+     same slope, same nine pixels across -- so a split reads as the star
+     coming apart rather than as two new things appearing. */
+  up: [
+    '...........',
+    '.....#.....',
+    '....#+#....',
+    '....#+#....',
+    '...#+++#...',
+    '...#+++#...',
+    '..#+++++#..',
+    '..#+++++#..',
+    '.#+++++++#.',
+    '.#########.',
+    '...........',
+  ],
+  down: [
+    '...........',
+    '.=========.',
+    '.=+++++++=.',
+    '..=+++++=..',
+    '..=+++++=..',
+    '...=+++=...',
+    '...=+++=...',
+    '....=+=....',
+    '....=+=....',
+    '.....=.....',
+    '...........',
+  ],
+};
+
+/* Which point each tip pixel belongs to, numbered clockwise from the one
+   nearest twelve o'clock. Nothing else in the grid is numbered, so lighting
+   a point costs one more scan and no more thinking about where points are. */
+const STAR_POINTS = {
+  whole: [
+    '.....0.....',
+    '....0.0....',
+    '.55.....11.',
+    '.5.......1.',
+    '...........',
+    '...........',
+    '...........',
+    '.4.......2.',
+    '.44.....22.',
+    '....3.3....',
+    '.....3.....',
+  ],
+  up: [
+    '...........',
+    '.....0.....',
+    '....0.0....',
+    '...........',
+    '...........',
+    '...........',
+    '...........',
+    '...........',
+    '.2.......1.',
+    '.22.....11.',
+    '...........',
+  ],
+  down: [
+    '...........',
+    '.22.....00.',
+    '.2.......0.',
+    '...........',
+    '...........',
+    '...........',
+    '...........',
+    '...........',
+    '....1.1....',
+    '.....1.....',
+    '...........',
+  ],
+};
+
+/* One pass over a grid, emitting a rect per RUN of matching cells rather
+   than per cell. A whole star is ninety-odd lit pixels and there can be four
+   of them in the air; by runs it is thirty-six rects. */
+function starBand(g, rows, chars, col, ox, oy) {
+  g.fillStyle = col;
+  for (let r = 0; r < 11; r++) {
+    const row = rows[r];
+    let s = -1;
+    for (let c = 0; c <= 11; c++) {
+      const on = c < 11 && chars.indexOf(row[c]) >= 0;
+      if (on && s < 0) s = c;
+      else if (!on && s >= 0) { g.fillRect(ox + s, oy + r, c - s, 1); s = -1; }
+    }
+  }
+}
+
+function drawStarArt(g, x, y, piece, spin) {
+  const grid = STAR_ART[piece], pts = STAR_POINTS[piece];
+  const n = piece === 'whole' ? 6 : 3;
+  /* Sixty degrees of turn leaves a hexagram exactly on top of itself, so the
+     star can spin without a second grid and without ever mushing -- every
+     pose is the pose people recognize. What makes the turn VISIBLE is the
+     lit point, one place clockwise every five frames, a full revolution in
+     thirty. Anything smaller than sixty degrees needs poses that do not
+     survive eleven pixels; this is the whole reason the sprite is drawn
+     point-up and left there.
+
+     A triangle only lands on itself every 120 degrees, so a half advances
+     twice as far per step and visibly spins faster than the star it came
+     out of -- which is the right thing to say about a lighter piece that
+     was just flung off one. */
+  const step = Math.floor(spin / 5);
+  const ox = x - 5, oy = y - 5;
+  starBand(g, grid, '+o', STAR_FIELD, ox, oy);
+  starBand(g, grid, '#=X', STAR_BLUE, ox, oy);
+  starBand(g, pts, String(step % n), STAR_SPARK, ox, oy);
+}
+
 class Star {
   constructor(owner, spec, piece, x, y, vx, vy) {
     this.owner = owner;
@@ -7566,31 +8100,13 @@ class Star {
     return { x: this.x - r, y: this.y - r, w: r * 2, h: r * 2 };
   }
 
-  /* Drawn rather than blitted: nobody drew a Star of David, and two crossed
-     triangles are six lines. A half draws only its own triangle, which is
-     the entire point of the move being visible. */
+  /* Drawn rather than blitted: nobody drew a Star of David, so it is grids
+     of characters up in STAR_ART, which is where the shape and the argument
+     for it both live. A half draws only its own triangle, which is the
+     entire point of the move being visible. */
   draw(g) {
-    const x = Math.round(this.x), y = Math.round(this.y);
-    const r = this.piece === 'whole' ? 5 : 4;
-    // A slow turn, in four steps -- at six pixels across, smooth rotation is
-    // a blur and four poses read as spin.
-    const wob = Math.floor(this.spin / this.base.spin) % 4;
-    const k = (wob === 1 || wob === 3) ? 1 : 0;
-    g.fillStyle = this.piece === 'down' ? '#9fd0ff' : '#cfe8ff';
-    const tri = (up) => {
-      for (let i = 0; i < r; i++) {
-        const wdt = up ? (i + 1) : (r - i);
-        const yy = up ? y - r + i + k : y + i - k;
-        g.fillRect(x - wdt, yy, wdt * 2, 1);
-      }
-    };
-    if (this.piece !== 'down') tri(true);
-    if (this.piece !== 'up') tri(false);
-    // The seam, so a whole one reads as two overlapping shapes.
-    if (this.piece === 'whole') {
-      g.fillStyle = '#6fa8dc';
-      g.fillRect(x - r, y - 1, r * 2, 1);
-    }
+    drawStarArt(g, Math.round(this.x), Math.round(this.y),
+                this.piece, this.spin);
   }
 }
 
@@ -7713,7 +8229,11 @@ class Salamence {
        clock, so two dragons in the same match fly differently and the same
        dragon replays identically through a rollback. */
     this.seed = ((Math.round(owner.x) * 2654435761) ^ (battleFrames * 40503)) >>> 0;
-    this.drift = 0;
+    /* The height it was launched at, and the height it is currently sliding
+       towards. It never strays further from `home` than the spec's `wander`,
+       which is what keeps it a threat rather than a coin flip. */
+    this.home = y;
+    this.aim = y;
     this.pierce = true;
     this.hitAt = new Array(MAX_PLAYERS).fill(0);
     this.dead = false;
@@ -7727,9 +8247,18 @@ class Salamence {
     }
     this.x += this.vx;
 
-    /* It wanders. Every `veer` frames it picks a new vertical drift out of a
-       hash of its own age, so the path across the screen is a different
-       ragged line every time and there is no lane to stand out of.
+    /* It weaves. Every `veer` frames it picks a new height to make for out of
+       a hash of its own age, always within `wander` of the height it was
+       launched at, and eases towards it -- so the line it draws across the
+       screen is a different ragged one every time and there is no lane you
+       can learn to stand out of.
+
+       A BAND rather than a free walk, and that is the whole design. An
+       unbounded drift is more random and much worse: it wandered off over
+       people's heads and under the floor and missed a stationary man two
+       times in five, which does not make the move unpredictable, it makes it
+       unreliable. The path is what varies. Whether it arrives is the other
+       player's problem to solve, by moving.
 
        A hash rather than Math.random for the reason nothing in this
        simulation rolls dice: two machines have to fly the identical dragon,
@@ -7748,9 +8277,10 @@ class Salamence {
         h = Math.imul(h, 0x85ebca6b) >>> 0;
         h ^= h >>> 13;
         // -1..1, off the top bits, which are the well-mixed ones.
-        this.drift = ((h >>> 22) / 512 - 1) * w;
+        this.aim = this.home + ((h >>> 22) / 512 - 1) * w;
       }
-      this.y += this.drift;
+      const ease = this.base.ease || 0.9;
+      this.y += clamp(this.aim - this.y, -ease, ease);
       // Never so high or low that it leaves the stage it is crossing.
       this.y = clamp(this.y, 16, VH - 14);
     } else {
@@ -13078,6 +13608,7 @@ function drawFighter(g, f) {
   drawSlots(g, f);
   drawGuillotine(g, f);
   drawAxe(g, f);
+  drawWhip(g, f);
   drawSleep(g, f);
 
   /* Confused had no tell at all. The only way to find out your controls were
@@ -13653,7 +14184,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'e7ec37db2f';
+const BUILD_ID = '08ed32f768';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -13664,7 +14195,7 @@ const BUILD_ID = 'e7ec37db2f';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.65';
+const VERSION = '2.66';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
