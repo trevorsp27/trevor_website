@@ -555,24 +555,47 @@ const ROSTER = {
          except the drain -- five hooks and a shirt, rather than six new
          systems.
 
-         Damage is 10, and reading the number alone understates the move. It
+         Damage is 9, and reading the number alone understates the move. It
          was 15 flat when this was a lobbed dot with nothing else to it, then
-         11 when the six colors became the payload, and this is the pass after
-         that. One press does not land 10: ORANGE is 12 rather than the flat
-         value, and any color caught inside a burst is that color times 1.2,
-         so the hardest single thing a rainbow can do is ORANGE-in-a-burst at
-         14.4, down from 15.6. Nothing was taken off the colors themselves --
-         the burn, the stun, the poison, the confusion and the drain are the
-         reason to throw this and are untouched.
+         11 when the six colors became the payload, then 10, and this is the
+         pass after that. One press does not land 9: ORANGE is 11 rather than
+         the flat value, and any color caught inside a burst is that color
+         times 1.2, so the hardest single thing a rainbow can do is
+         ORANGE-in-a-burst at 13.2, down from 14.4. Nothing was taken off the
+         colors themselves -- the burn, the stun, the poison, the confusion
+         and the drain are the reason to throw this and are untouched.
 
-         DELIBERATELY SMALL, because this is a nerf to the weakest character
-         in the game. He measured 15.5% in the last CPU-vs-CPU balance run,
-         dead last on the roster, and the rainbow is most of his reason to be
-         at range. Counting the damage-over-time in, the whole cut is about 7%
-         off the move's average payload (13.6 to 12.6) and 8.8% off a plain
-         connect (11.3 to 10.3). `manaOverride` pins the cost at 30, so unlike
-         the pizza nerf above nothing comes back cheaper to soften it: what he
-         loses here he simply loses, and he could not afford much.
+         TWO numbers, not one, and the pair is the point. What was asked for
+         was less damage on the rainbow, and the rainbow's damage is not a
+         single figure: it is a flat value plus one color that overrides it.
+         Cutting only the flat value would have quietly made ORANGE a bigger
+         outlier than it has ever been -- the gap has been +2 through every
+         version of this move -- so both came down by one and the shape is
+         the shape it was. ORANGE keeps its knockback: `base` and `scale` are
+         what make it the one color that kills, and killing from range is the
+         entire argument for a lobbed shot in the hands of the lightest
+         hitter on the roster. Damage was asked for; damage is what came off.
+
+         DELIBERATELY SMALL, AGAIN, and this time with the bill attached. He
+         measured 15.5% in the last CPU-vs-CPU balance run, dead last on a
+         ten-character roster, and that was already AFTER a nerf (11 -> 10
+         here, 13 -> 12 on ORANGE, 34 -> 24 on the burst). Counting the
+         damage-over-time in, this pass takes another 7.9% off the move's
+         average payload (12.6 to 11.6) and 9.7% off a plain connect (10.3 to
+         9.3). `manaOverride` pins the cost at 30, so nothing comes back
+         cheaper to soften it: what he loses here he simply loses.
+
+         Measured over 3888 CPU matches a side, three seeds, this cut and the
+         burst radius above together move him from 15.3% to 15.4% -- which is
+         nothing, and WHY it is nothing matters more than the number. Over
+         216 instrumented matches the CPU threw 1.6 rainbows a match, landed
+         0.2, detonated one twelve times in the whole run and hit nobody with
+         a burst, not once. The rainbow is half a percent of his connections.
+         So the balance run is blind to this change, and nobody should read
+         "15.3 to 15.4" as evidence that the nerf is free: what it costs is
+         what the payload above says it costs, and it is a person -- who
+         throws this constantly, because at range it is all he has -- who
+         will pay it. He is dead last before and dead last after.
 
          The arc is untouched. Tuned against the stage, not by feel -- apex is
          lift^2/(2*drop) at speed*lift/drop away: ~40px up, ~78px out. The
@@ -584,7 +607,7 @@ const ROSTER = {
         speed: 3.0, lift: -3.1, drop: 0.12, life: 200,
         // Frames per colour. Six of these is 42 frames for the full wheel.
         cycle: 7,
-        damage: 10, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
+        damage: 9, base: 3.4, scale: 6.8, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
         /* moveCost prices what a move does on paper and cannot see six
            payloads reached through an array. 30 is a little over a quarter of
            the bar: he is the lightest-hitting character on the roster and
@@ -616,8 +639,26 @@ const ROSTER = {
              going" stopped being an answer -- being anywhere near the arc
              was enough. 24 is about a body and a half wide in total, which
              still punishes standing next to it and no longer punishes being
-             in the same postcode. */
-          radius: 24, damageMul: 1.2,
+             in the same postcode.
+
+             20 now, asked for a second time a day later. The line above is
+             loose about what this number is, so: 24 was a RADIUS, not a
+             width, and the reach is not even the radius. The ball catches a
+             fighter whose HURTBOX comes within `radius` of it, and a hurtbox
+             is 9 wide and 14 tall, so across flat ground it reaches
+             radius + HURT_W/2 from the shot to the far fighter's CENTER.
+             Measured, that is 28.5px each side before and 24.5px after --
+             most of half a body off each end -- and the disc it threatens
+             loses 31% of its area. Straight up it falls from 24px of
+             clearance over the ball to 20px, which is where it matters most:
+             the whole point of jumping the arc is that it should then be
+             possible to be over it.
+
+             The multiplier below is deliberately left alone. The burst is
+             being cut here and the shot it comes from is being cut above;
+             taking the multiplier as well would be nerfing one press three
+             times in a single pass. */
+          radius: 20, damageMul: 1.2,
           base: 4.2, scale: 7.6, angle: 68,
           kx: 0.37460659341591196, ky: 0.9271838545667874,
         },
@@ -626,7 +667,7 @@ const ROSTER = {
            knockback as well as add a status. */
         colors: [
           { tint: 'RED', css: '#ff2d55', burn: { frames: 110, dps: 0.055 } },
-          { tint: 'ORANGE', css: '#ff9500', damage: 12, base: 5.6, scale: 9.4 },
+          { tint: 'ORANGE', css: '#ff9500', damage: 11, base: 5.6, scale: 9.4 },
           { tint: 'YELLOW', css: '#ffd60a', stun: 26 },
           { tint: 'GREEN', css: '#34c759', poison: { frames: 150, dps: 0.05 } },
           { tint: 'BLUE', css: '#0a84ff', confuse: { frames: 140 } },
@@ -1162,7 +1203,62 @@ const ROSTER = {
          rather than opening an attack. */
       down: {
         kind: 'cloud', label: 'CROP DUST',
-        startup: 5, active: 4, recovery: 13,
+        /* 5/4/13 before, and the total is still 22 -- the frame came off the
+           front and went onto the back on purpose.
+
+           A charged cloud has to resolve one frame AFTER startup (the pin
+           holds attackFrame AT startup, so a cloud spawned there would be out
+           of him before the charge could run: see the case in runSpecial).
+           Left at 5 that pushed the gas from frame 5 to frame 6 for everyone,
+           including a CPU that never holds a button -- one frame that changes
+           nothing about the move and yet reshuffles every match after it, so
+           the balance run could no longer tell the dash change from the
+           weather. At 4/4/14 the cloud comes out on frame 5 exactly as it
+           always did and the move is exactly as long as it always was, so an
+           uncharged CROP DUST is byte-for-byte the move that was measured.
+
+           Verified rather than assumed -- see the control run in the commit:
+           with the turn switched off, this engine reproduces the old numbers
+           instead of a re-rolled version of them. */
+        startup: 4, active: 4, recovery: 14,
+        /* HOLD IT AND IT GETS WORSE. The generic charge in updateAttack pins
+           him at the end of startup for as long as the down-special button is
+           physically down and counts the frames; `stink` below turns that
+           count into which of three clouds comes out. Same machinery Cobeus
+           drinks his bottle with -- `hold` counts ONCE to the cap and then
+           stops pinning, so a full charge resolves itself rather than asking
+           anybody to let go on the right frame.
+
+           WHAT IT COSTS, because he is the strongest character on the roster
+           and a charge that only adds power is a buff with a delay in front
+           of it. Two prices, and both are paid standing over the spot:
+
+             hold 72   1.2 seconds rooted at the end of startup. The fart's
+                       whole identity is "drop it and walk away"; charging
+                       inverts that and makes him stand in the piece of stage
+                       he is trying to deny, in front of somebody who can see
+                       the gas swelling behind him the entire time.
+             drain 0.5 the mana bar runs BACKWARDS at exactly the rate it
+                       normally runs forwards. The refill lives in updateFree
+                       and a man in the middle of a special never reaches it,
+                       so the bar is flat while he charges and this tips it
+                       into reverse at COMBAT.manaRegen's own 0.5 a frame.
+                       Measured: a full charge is 36 mana on top of the 19 the
+                       cast costs, 55 of a 100 bar, and 36 is nearly two more
+                       farts he does not get. An empty bar ends the charge
+                       where it stands rather than pinning him there for
+                       free -- so how far he can take this is bounded by the
+                       meter and not by his patience, and a Reese who has been
+                       throwing burps cannot afford a RANCID at all.
+
+           NOT MEASURED BY THE TOURNAMENT, and that has to be said out loud
+           rather than discovered later. aiPad never sets holdDown -- the CPU
+           has never held a button for a charge in its life, which is the same
+           reason the belch's three aims rode in unpriced -- so a CPU-vs-CPU
+           run sees a tap and only a tap. A tap is byte-for-byte the move that
+           measured 68.5%, which is the point: the balance number does not
+           move, and everything the charge buys is bought twice. */
+        charge: { hold: 72, drain: 0.5 },
         speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,
         life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
         hitEvery: 45, cue: 'belch',
@@ -1191,6 +1287,44 @@ const ROSTER = {
            above already includes that, which is why the nerf is worth less
            than the arithmetic suggests. */
         poison: { frames: 150, dps: 0.05 },
+        /* HOW STINKY, in three steps, finished into three whole specs at load
+           by the loop under ROSTER -- the same shape as the belch's three
+           aims and for the same reason: applyHit and Cloud are each handed
+           ONE spec and neither should be doing arithmetic on a patch.
+
+           The first step is the spec ITSELF with nothing changed but a name.
+           That is deliberate and it is the thing that keeps this honest: a
+           tap gets exactly the cloud it has always got, and moveCost -- which
+           prices the base -- prices exactly what a tap does. Nothing about
+           the move the balance run measured has moved.
+
+           What the charge buys is CONCENTRATION and COVERAGE, not duration.
+           `frames` is 150 at every step on purpose: how long you are poisoned
+           is a contract with the player -- it is how long the bubbles are
+           over your head and how long you have to play around it -- and a
+           charge that quietly stretched it would be a charge nobody could
+           read. A bigger, darker cloud that hurts faster you can read from
+           the other side of the stage.
+
+             tap      r1 12   7.5 poison over 150f    what it has always been
+             RIPE     r1 16  10.5                     +40%
+             RANCID   r1 19  13.5                     +80%
+
+           13.5 is deliberately UNDER the 16.5 this move did before it was
+           halved, and that 16.5 was free. This one costs 72 frames rooted in
+           the spot plus a bar running backwards -- see `charge` above.
+
+           The tints darken and go acid as it ripens, so which one landed is
+           legible from the cloud alone without counting damage ticks. */
+        stink: [
+          { stinkName: 'CROP DUST' },
+          { stinkName: 'RIPE', r0: 5, r1: 16,
+            tints: ['#86b53a', '#a9d15e', '#66902c'],
+            poison: { frames: 150, dps: 0.07 } },
+          { stinkName: 'RANCID', r0: 6, r1: 19,
+            tints: ['#7fae14', '#a8d62c', '#55780a'],
+            poison: { frames: 150, dps: 0.09 } },
+        ],
         damage: 2, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
       },
       /* JITTERS keeps its name and moves to `up`, because BOUNCE was his
@@ -1201,6 +1335,41 @@ const ROSTER = {
         kind: 'dash', label: 'JITTERS',
         startup: 3, active: 9, recovery: 10, speed: 5.4,
         airRise: 4.4,
+        /* How many times ONE dash may turn itself around at a ledge instead
+           of stopping. The turn itself is in runSpecial's 'dash' case, which
+           is also where the reasoning is; the number is here because numbers
+           live in the roster and this is the one worth turning.
+
+           Two, because nine active frames at 5.4 is 48 pixels of travel and
+           the small platforms on Battlefield are 58 wide: two is both ends of
+           one of those once each, and three would let him rattle. Set it to 0
+           and JITTERS goes back to stopping dead at the edge, which is what
+           it did before and is still what happens once the budget is gone. */
+        edgeTurns: 2,
+        /* 17 before, which is what moveCost derives from six damage and this
+           much knockback. The turn is not damage and not knockback, so the
+           formula cannot see it at all -- what it buys is that the move never
+           strands him at a ledge again, and keeps a live hitbox pointed back
+           at whoever was chasing him. moveCost has no term for "and it no
+           longer wastes itself", so this is an admission the formula missed
+           something, written down as one rather than smuggled in by inflating
+           a damage number.
+
+           MEASURED, at the same size as every other number in this file:
+           three seeds, all six stages, both spawn sides, 9,720 CPU matches a
+           side. Against a control that is this exact engine with `edgeTurns`
+           set to 0, the turn takes Reese from 69.5% to 71.4% and widens the
+           roster spread from 53.7 to 54.5. Four more mana puts it back:
+           71.4 -> 69.7 and the spread to 53.3. Eight more (25) buys almost
+           nothing further -- 69.5 -- so 21 is where the curve flattens and
+           paying more would be nerfing the recovery for no measured return.
+
+           And that is the reason it is only four. JITTERS is Reese's ONLY way
+           home now that BOUNCE is gone, so its price is also the price of not
+           dying: four mana is eight frames of regen, an eighth of a second
+           between being able to recover and not. Twenty-five was on the table
+           and was rejected for exactly that. */
+        manaOverride: 21,
         /* He can vent mid-dash: pressing the down special during JITTERS
            lays CROP DUST behind him WITHOUT ending the dash. A fart that
            cancelled his own dash would be the opposite of the ask -- the
@@ -1703,28 +1872,82 @@ ROSTER.simon = {
     /* HOTDOG. A projectile with a decision in it.
 
        Thrown whole in a flat arc, and it bounces once. Press the button
-       again while it is in the air and it SPLITS: the top -- bun and sausage
-       -- keeps going, faster and flatter, and hits harder; the bottom bun
-       drops straight down and hits whoever is under it. One throw covers two
-       lanes, and WHEN you split is the skill: early is a long low shot and a
-       close drop, late is the reverse. The split costs nothing and is read
-       in updateFree, ahead of the cast, the way the pawn's detonation is.
+       again while it is in the air and THE DOG COMES OUT OF THE BUN: the
+       sausage is squeezed forward, faster and flatter and hotter, and the
+       bun it came out of drops away behind it. One throw covers two lanes,
+       and WHEN you split is the skill: early is a long low shot and a close
+       drop, late is the reverse. The split costs nothing and is read in
+       updateFree, ahead of the cast, the way the pawn's detonation is.
 
-       A boomerang was considered and turned down: Kel's bone already comes
-       back. `top` and `bottom` are PATCHES over this spec -- see `parts`,
-       built after the pricing loop -- so each half is a complete spec that
-       applyHit can be handed. */
+       Two things happen on that press that are the reason to make it, and
+       neither of them is anything else on this roster.
+
+       THE DOG IS HOT. In the bun it is a thrown object; out of it, it is
+       bare grilled meat, and it SETS YOU ALIGHT -- the only projectile in
+       the game that does. That is the reward for splitting rather than
+       letting the whole thing fly, and the excuse is physics: the bun was
+       what stood between you and it.
+
+       THE BUN CATCHES THE AIR. Bread is light, so it does not fall like a
+       stone. It planes -- shed backwards off the launch, tipping one way and
+       then the other and sliding whichever way it is tipped. Measured before
+       this change, a bun split at throwing height over the main platform
+       existed for FIVE FRAMES before it hit the floor, which is not a second
+       lane, it is a puff of dust. It now takes about four times as long to
+       come down, drifts while it does, and has to be walked around.
+
+       A boomerang was considered and turned down, and so was a sausage that
+       chases people: Kel's bone already comes back and John already has a
+       dog that runs somebody down. `top` and `bottom` are PATCHES over this
+       spec -- see `parts`, built after the pricing loop -- so each half is a
+       complete spec that applyHit can be handed. */
     neutral: {
       kind: 'hotdog', label: 'HOTDOG',
       startup: 7, active: 1, recovery: 12, maxAlive: 2,
       speed: 3.4, lift: -1.2, drop: 0.09, life: 220, bounce: 0.35,
+      /* How many frames the dog takes to come out of the bun, which both
+         halves read. The split used to happen entirely between two frames --
+         one baked sprite swapped for another, four and a half pixels of
+         travel later -- and players could not tell what had happened to the
+         thing they had thrown. Six frames is long enough for the eye to
+         catch the sausage growing out of a bun that stays behind, and short
+         enough that it is still a snap decision rather than an animation you
+         have to sit through. */
+      slide: 6,
       damage: 9, base: 3.0, scale: 6.0, angle: 38, kx: 0.7880107536067219, ky: 0.61566147532565829,
       // moveCost cannot see two halves reached through an array.
       manaOverride: 22,
       top: { damage: 12, base: 3.3, scale: 6.4, angle: 20, kx: 0.93969262078590843, ky: 0.34202014332566871,
-             speedMul: 1.35, lift: -0.9, life: 120 },
+             speedMul: 1.35, lift: -0.9, life: 120,
+             /* Bare meat off a grill. Five damage over a second and two
+                thirds -- less than half of what one hit of the sausage
+                itself does -- so the fire is a reason to split and not a
+                second move. Priced nowhere: `parts` is built after the
+                pricing loop and this move's mana is overridden anyway, which
+                is exactly why the number here has to be modest by hand. */
+             burn: { frames: 100, dps: 5 / 100 },
+             /* Coming out of the bun costs it its speed for a moment. It
+                leaves at `kick` of what the whole dog was doing and closes
+                `launch` of the gap back up to full speed every frame, which
+                over the slide gives up about ten pixels of the five hundred
+                the sausage flies. That is what buys the launch: at full
+                speed from frame one the two pieces are nine pixels apart
+                before the screen has drawn either of them once. */
+             kick: 0.25, launch: 0.30 },
       bottom: { damage: 7, base: 2.6, scale: 5.0, angle: 75, kx: 0.25881904510252074, ky: 0.96592582628906831,
-                fall: 3.2, life: 60 },
+                /* The glide, and every number in it is about being readable
+                   as bread. `pop` is the flick it gets as the dog leaves and
+                   `shed` how far back it is thrown, as a fraction of the
+                   sausage's launch speed, decaying by `shedDecay` a frame.
+                   `fall` is the speed it settles to -- a bit over a third of
+                   the 3.2 it used to drop at -- and `settle` is how quickly
+                   it gets there. `rock` is the period of its tipping and
+                   `sway` how hard being tipped shoves it sideways; a falling
+                   leaf does those two together, and doing them together is
+                   the whole difference between bread and a slow rock. */
+                pop: -0.7, shed: 0.16, shedDecay: 0.86,
+                fall: 1.25, settle: 0.18, rock: 28, sway: 0.9,
+                life: 150 },
     },
     /* SLOTS. He pulls the lever and three reels spin above his head; each
        press after the first stops the next reel, and a reel nobody stops
@@ -1748,11 +1971,52 @@ ROSTER.simon = {
       reelEvery: 4, autoStop: [30, 48, 66],
       /* The payouts, by symbol: 7 blue green spade. Three of a kind pays in
          full and a pair pays half; anything else is a bust. */
-      jackpot: { damage: 22, radius: 44, mana: 100,
-                 base: 4.4, scale: 8.0, angle: 60, kx: 0.50000000000000011, ky: 0.8660254037844386 },
+      /* SEVENS pay in two completely different currencies now, and which
+         one you get is the whole gamble. THREE is the transformation and
+         NOTHING else -- no damage, no mana -- because a payout that also
+         hands you a blast and a full bar is three rewards wearing one hat,
+         and the one worth having is the one everybody can see on him. A PAIR
+         is the damage, which is what that ring has always been.
+
+         `damage` is therefore only ever read at k = 0.5. It is left written
+         as 22 rather than folded down to 11 so a pair stays legibly HALF of
+         something, the way every other pair on this reel is. */
+      jackpot: { damage: 22, radius: 44,
+                 base: 4.4, scale: 8.0, angle: 60, kx: 0.50000000000000011, ky: 0.8660254037844386,
+                 /* THREE SEVENS TURN HIM INTO A GIANT, and these two numbers
+                    are the whole of it.
+
+                    They live HERE, in the ROSTER literal, because simFrozen
+                    walks ROSTER and keeps what it finds by reference: a spec
+                    written out here costs a snapshot one pointer, where the
+                    same object built per spin would be deep-copied into every
+                    snapshot on every frame of every rollback.
+
+                    Taken literally, as asked: three times the damage on every
+                    attack he owns, and three times the size in the drawing,
+                    in his hurtbox and in his own hitboxes alike. It ends when
+                    he loses a stock -- see payout(), and the hold in
+                    update(), which is what makes an otherwise timed buff
+                    untimed.
+
+                    A PAIR of sevens does NOT transform him. Every other
+                    payout halves cleanly at k = 0.5 and this one cannot: half
+                    a transformation is not a thing, and a jackpot a near miss
+                    mostly delivers is not a jackpot. A pair pays the ring --
+                    eleven damage to everyone standing close -- and that is
+                    now the ONLY thing this symbol pays besides the
+                    transformation itself. */
+                 damageMul: 3, sizeMul: 3 },
       chips: { mana: 100 },
-      heal: { health: 24 },
-      house: { ult: 40 },
+      /* 50, so three of a kind is half a health bar and a pair is 25. A lot,
+         and meant to be: green is the symbol you chase when you are losing,
+         and the pull still costs 14 mana, a rooted second and better than a
+         one in three chance of paying 3 health for the privilege. */
+      heal: { health: 50 },
+      /* The PAIR's number, not half the triple's. Three spades fills the bar
+         outright however empty it was -- the house always wins -- so the
+         triple does not multiply this and payout() special-cases it. */
+      house: { ult: 50 },
       bust: { damage: 3 },
       damage: 0, base: 0, scale: 0,
     },
@@ -2218,13 +2482,17 @@ ROSTER.christian = {
        twenty seconds later.
 
        Where the frogs land they hop after the nearest opponent, and they do
-       not stop for a shield or a ledge. TWO damage each -- halved from four
-       -- and they still die on contact, so all three of them landing is six,
-       which is exactly one jab, for a cast that also got him home and left
-       three things working for him for the next twenty seconds. At four it
-       was twelve, or two jabs, on top of the trip. That is the whole argument
-       for the change: they are not supposed to be the kill, they are supposed
-       to be the reason you cannot stand still and think.
+       not stop for a shield or a ledge. THREE damage each -- it was four,
+       then two, and it is three now -- and they still die on contact, so all
+       three of them landing is nine, for a cast that also got him home and
+       left three things working for him for the next twenty seconds.
+
+       The nine is why the two went back up. They are also FRAIL now: any
+       attack that touches a frog destroys it, which is a counterplay they
+       simply did not have before, and a move you can now answer with a jab
+       can afford to be worth more when you do not. They are still not
+       supposed to be the kill; they are supposed to be the reason you cannot
+       stand still and think.
 
        THE PRICE DOES NOT MOVE WITH THE DAMAGE, which is worth knowing before
        anybody goes looking for a refund. `manaOverride` below pins this at
@@ -2234,10 +2502,12 @@ ROSTER.christian = {
        at all. Half-price frogs at full price is the real weight of this
        change -- the move is half as good and still three quarters of the bar.
 
-       The ult's frogs are a separate spec and are NOT halved; they are still
-       5 each. Ten of them once a match off an ult that has to cook for two
-       seconds in front of everybody is a different question from three of
-       them on a recovery he can cast all game. */
+       The ult's frogs are a separate spec that happens to have landed on the
+       same number from the other direction: they came DOWN to three from
+       five, because ten of them once a match off an ult that has to cook for
+       two seconds in front of everybody was a different question from three
+       of them on a recovery he can cast all game -- and because ten frogs a
+       jab can clear are not worth what ten unkillable ones were. */
     up: {
       kind: 'frogs', label: 'FROG ARMY',
       startup: 7, active: 1, recovery: 18,
@@ -2261,7 +2531,9 @@ ROSTER.christian = {
       manaOverride: 75,
       frog: {
         hopEvery: 26, hop: -2.5, speed: 1.45, drop: 0.26, life: 280,
-        damage: 2, base: 2.3, scale: 4.8, angle: 62,
+        /* Frail: see sweepFrail. A frog in anybody's swing dies, and dies
+           before it gets to land this. */
+        damage: 3, frail: true, base: 2.3, scale: 4.8, angle: 62,
         kx: 0.46947156278589086, ky: 0.8829475928589269,
       },
       damage: 0, base: 0, scale: 0,
@@ -2310,37 +2582,84 @@ ROSTER.christian = {
              kx: 0.43837114678907746, ky: 0.898794046299167 },
     count: 10, spread: 1.5,
     frog: {
-      /* POISON DART FROGS, and the pie opens on a spread of them rather than
-         ten of the same one. Every color here is a real morph: strawberry,
-         the blue azureus, the golden one that is the most poisonous animal
-         alive, green-and-black, the orange pumilio, a violet morph and a
-         turquoise one. Seven over ten frogs, so the batch reads as a
-         COLLECTION -- two repeats is the point, a rainbow of exactly ten
-         distinct colors would read as a palette test rather than as frogs.
+      /* TEN POISON DART FROGS, ten designs, no two alike.
+
+         This was seven colors over ten frogs and the frogs were otherwise
+         identical -- the same drawing tinted seven ways, which is a palette
+         and not a collection. A real dart frog is told apart by its PATTERN
+         at least as much as by its hue, so each of these carries one:
+
+           0  strawberry red with blue legs      Oophaga pumilio "blue jeans"
+           1  deep blue under black blotches     Dendrobates tinctorius azureus
+           2  plain gold, no markings at all     Phyllobates terribilis
+           3  green under a black net            Dendrobates auratus
+           4  orange crossed by two dark bands   a harlequin
+           5  violet with a pale dorsal stripe   after Phyllobates vittatus
+           6  turquoise under a dark cap         tinctorius "turquoise"
+           7  butter yellow, black blotches      the pale pumilio morph
+           8  chartreuse with near-black legs    tinctorius "citronella"
+           9  scarlet under a black net          Ranitomeya reticulata
+
+         `pattern` names a shape in FROG_PATTERNS, which is drawing code:
+         a handful of rectangles painted source-atop the recolored sprite, so
+         nothing can land outside the frog's own outline. `mark` is what those
+         rectangles are painted in.
+
+         `gain` is the answer to "they look dull", and it is not a matter of
+         taste -- see the row note in Frog.draw. tintedSprite replaces hue and
+         saturation and keeps the artist's VALUE, and the artist's frog is a
+         dark woodland green; a strongly saturated tint over it still comes
+         out muddy because there is nothing left to carry the brightness.
+         `gain` multiplies that value rather than adding to it, which keeps
+         the ratio between the back and the outline exactly where the artist
+         put it -- an offset would wash the outline out first and leave an
+         eleven-pixel frog with no edge. The blues and the violet carry the
+         biggest gains because blue is intrinsically the darkest thing the eye
+         can be shown: at equal value a blue frog measures a third the
+         luminance of a yellow one.
 
          Which frog wears which is its hatch index, not a roll: this runs
          inside the rollback and both machines have to open the same pie.
 
-         Baked. Read by Frog.draw for the frogs themselves and by Pie.draw for
-         the things pushing at the crust just before it opens, so the tell and
-         the payoff come out of one list rather than two people typing the
-         same six characters.
+         Read by Frog.draw for the frogs themselves and by Pie.draw for the
+         things pushing at the crust just before it opens, so the tell and the
+         payoff come out of one list rather than two people typing the same
+         six characters.
 
          It lives HERE, in the ROSTER literal, rather than being handed to a
          Frog as it is made. simFrozen walks ROSTER, so a spec written down at
          load is an object snapValue keeps by reference; a per-shot one would
          be deep-copied into every snapshot, ten frogs at a time, sixty times
          a second, for as long as they are hopping. FROG ARMY's frog has
-         neither `tints` nor `tint` and stays the green the artist painted.
-
-         Every one of these is strongly saturated on purpose. tintedSprite
-         replaces hue and saturation and keeps the artist's BRIGHTNESS, so a
-         washed-out color here would come out as a gray frog rather than a
-         pale one -- there is nothing left to carry it. */
-      tints: ['#d8342c', '#2f6fd0', '#f2c033', '#3fa05a',
-              '#e8621f', '#8e44c8', '#18b8b0'],
+         neither `morphs` nor `tint` and stays the green the artist painted. */
+      morphs: [
+        { skin: '#d8342c', mark: '#2f6fd0', pattern: 'jeans',  gain: 1.28 },
+        { skin: '#2f6fd0', mark: '#080a10', pattern: 'blotch', gain: 1.55 },
+        { skin: '#f2c033', mark: '#000000', pattern: 'plain',  gain: 1.32 },
+        { skin: '#3fa05a', mark: '#0d1210', pattern: 'net',    gain: 1.40 },
+        { skin: '#e8621f', mark: '#26120a', pattern: 'band',   gain: 1.45 },
+        { skin: '#8e44c8', mark: '#f6e27a', pattern: 'stripe', gain: 1.48 },
+        { skin: '#18b8b0', mark: '#123038', pattern: 'crown',  gain: 1.26 },
+        { skin: '#ffd878', mark: '#141018', pattern: 'blotch', gain: 1.62 },
+        { skin: '#b6e024', mark: '#101828', pattern: 'jeans',  gain: 1.30 },
+        { skin: '#f0392f', mark: '#140a0c', pattern: 'net',    gain: 1.58 },
+      ],
       hopEvery: 20, hop: -2.8, speed: 1.7, drop: 0.26, life: 300,
-      damage: 5, base: 2.6, scale: 5.2, angle: 62,
+      /* THREE, down from five, and every one of them can now be killed.
+
+         Both halves are the same decision. Ten frogs that nothing in the
+         game could remove were worth five each because surviving them was
+         the only thing you could do about them; now a jab clears one, so
+         what they are worth has to come down to what a thing you can answer
+         is worth. Thirty damage if all ten connect and nobody swings at
+         them, against fifty before.
+
+         WORTH DECIDING DIFFERENTLY. This makes his ult noticeably weaker --
+         it is the only move in the file that got a damage cut and a new
+         counterplay in the same change. If it turns out to need the
+         difference back, five here is the one number to move, and `frail`
+         below is the part to keep. */
+      damage: 3, frail: true, base: 2.6, scale: 5.2, angle: 62,
       kx: 0.46947156278589086, ky: 0.8829475928589269,
     },
     damage: 0, base: 0, scale: 0,
@@ -2515,6 +2834,23 @@ for (const key in ROSTER) {
   n.parts = { level: Object.assign({}, n),
               up: Object.assign({}, n, n.up),
               down: Object.assign({}, n, n.down) };
+}
+
+/* And the fart's three strengths -- same place, same reason, same shape.
+
+   After the pricing loop on purpose, exactly like the belch aims above: every
+   step then carries the single price the cast actually pays, because updateFree
+   spends `specials.down.mana` and never a step's. A step that priced itself
+   differently would be a lie on the mana bar.
+
+   The first step is the spec copied whole, so the uncharged fart is the base
+   spec and the code that picks a step never needs a special case for "he did
+   not hold it". simFrozen walks ROSTER and therefore walks these, which is
+   what stops every snapshot deep-copying one of them per cloud in flight. */
+for (const key in ROSTER) {
+  const d = ROSTER[key].specials.down;
+  if (!d || !d.stink) continue;
+  d.stinkTiers = d.stink.map((step) => Object.assign({}, d, step));
 }
 
 /* Appended rather than slotted in alphabetically, and that is deliberate:
@@ -3267,6 +3603,15 @@ function overlap(a, b) {
 const HURT_W = 9;
 const HURT_H = 14;
 
+/* How long the jackpot takes to swell Simon from a man into a giant. Ten
+   frames, a sixth of a second: long enough to read as something GROWING
+   rather than as a sprite being swapped for a bigger one, short enough that
+   nobody spends a meaningful exchange fighting a size he was never meant to
+   be. One number, read by the sizeMul getter, which the drawing and the
+   hurtbox and his own hitboxes all go through -- so there is no frame on
+   which he is drawn one size and hit at another. */
+const JACKPOT_GROW = 10;
+
 class Fighter {
   constructor(key, slot, cpu, count, scheme) {
     this.key = key;
@@ -3466,6 +3811,13 @@ class Fighter {
        everything else the simulation owns. */
     this.dashStopped = false;
     this.dashGassed = false;
+    /* How many times THIS dash has turned itself around at a ledge. Declared
+       here for the same reason the two above are: restoreSim deletes any
+       Fighter key a snapshot does not have, so a counter that first appears
+       mid-dash is a counter the netcode is entitled to make vanish -- and
+       this one is read every active frame to decide whether he may turn
+       again, so a vanished one is a dash that ping-pongs forever. */
+    this.dashTurns = 0;
     this.walkAnim = 0;
     // Trev's ult hands him a sword for ten seconds. While swordTimer is
     // running the ult button swings it instead of casting anything.
@@ -3482,6 +3834,29 @@ class Fighter {
 
   get damageMul() {
     return this.buffTimer > 0 && this.buffStats ? this.buffStats.damageMul : 1;
+  }
+  /* How many times life size he is drawn AND hit at.
+
+     It rides on buffStats beside damageMul and speedMul rather than on a
+     field of its own, so one object says everything a buff does to a fighter
+     and restoreSim -- which replaces buffStats wholesale -- can never put
+     half of a buff back.
+
+     It RAMPS. buffStats.since is the battleFrame the buff landed on, and
+     battleFrames is snapshotted, so a rollback recomputes the same swell
+     instead of restarting it. Everything that cares about his size reads
+     THIS, which is the only reason growing him is honest: the drawing, the
+     hurtbox and relBox cannot disagree about how big he is. */
+  get sizeMul() {
+    const b = this.buffTimer > 0 ? this.buffStats : null;
+    if (!b || !b.sizeMul) return 1;
+    /* A snapshot taken before since existed, or a buff that never set one:
+       treat him as fully grown rather than dividing by undefined and painting
+       a man NaN pixels wide, which draws nothing at all. */
+    if (!(b.since >= 0)) return b.sizeMul;
+    const t = battleFrames - b.since;
+    if (t >= JACKPOT_GROW) return b.sizeMul;
+    return 1 + (b.sizeMul - 1) * (t > 0 ? t / JACKPOT_GROW : 0);
   }
   get speedMul() {
     return this.buffTimer > 0 && this.buffStats ? this.buffStats.speedMul : 1;
@@ -3514,7 +3889,19 @@ class Fighter {
   }
 
   hurtbox() {
-    return { x: this.x - HURT_W / 2, y: this.y - HURT_H, w: HURT_W, h: HURT_H };
+    /* Scaled, so a giant is a giant-sized TARGET. Everything the engine can
+       hit him with -- a jab, a bone, a car, a hazard -- goes through this one
+       rectangle, so this line is the whole of "he is easier to hit", and
+       leaving it out is the whole of shipping a giant who is hit like a
+       small man.
+
+       Built UPWARD from this.y, which is his feet, and centered on this.x.
+       That is the only reason making him bigger does not also drop him
+       through the floor or shove him off a ledge: the anchor is the one
+       point the physics already owns. */
+    const k = this.sizeMul;
+    return { x: this.x - HURT_W * k / 2, y: this.y - HURT_H * k,
+             w: HURT_W * k, h: HURT_H * k };
   }
 
   /* ---- the active hitbox this frame, or null ---- */
@@ -3602,11 +3989,21 @@ class Fighter {
     // separate left/right definitions. A negative `ox` reaches behind the
     // fighter, which is how the symmetric moves (shockwave, uppercut) are
     // centered on him.
+    /* All four numbers scale with the body. A giant whose fists stayed the
+       size of a small man's would reach nothing like as far as his drawn arm
+       does -- the same lie the hurtbox above refuses to tell, told in the
+       other direction.
+
+       sizeMul is exactly 1 for everybody who is not currently three times
+       life size, and multiplying by exactly 1 is exact in floating point, so
+       this changes no box in the game except a jackpot Simon's. */
+    const k = this.sizeMul;
+    const ox = m.ox * k, w = m.w * k, h = m.h * k;
     return {
-      x: this.facing > 0 ? this.x + m.ox : this.x - m.ox - m.w,
-      y: this.y + m.oy - m.h / 2,
-      w: m.w,
-      h: m.h,
+      x: this.facing > 0 ? this.x + ox : this.x - ox - w,
+      y: this.y + m.oy * k - h / 2,
+      w: w,
+      h: h,
     };
   }
 
@@ -3684,7 +4081,19 @@ class Fighter {
     if (this.manaFree > 0) { this.manaFree--; this.mana = COMBAT.manaMax; }
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
-    if (this.buffTimer > 0) this.buffTimer--;
+    /* A HELD buff does not tick. Reese's ult is a DURATION and counts down;
+       the jackpot is "until he dies" and must not, so buffStats.hold pins the
+       timer and respawn() -- which zeroes buffTimer and buffStats after a
+       lost stock -- becomes the only thing that can end it. Every way of
+       losing a stock funnels through respawn(), a blast zone included, so
+       "until he dies" is literally what this does.
+
+       The hold is a property of the BUFF rather than a field on the fighter
+       on purpose: a later buff assigns a whole new buffStats object, so it
+       cannot inherit a hold something else set and quietly become permanent.
+       It is also why no new Fighter field was needed here -- and a new field
+       is exactly what restoreSim deletes off a rollback. */
+    if (this.buffTimer > 0 && !(this.buffStats && this.buffStats.hold)) this.buffTimer--;
     if (this.drowsy > 0) this.drowsy--;
     // Landing means he got home on his own; the window is spent either way.
     if (this.dashWrap > 0) { if (this.grounded) this.dashWrap = 0; else this.dashWrap--; }
@@ -4186,8 +4595,11 @@ class Fighter {
     const k = n === 3 ? 1 : 0.5;
     switch (best) {
       case 0: {   // sevens
+        /* A PAIR is the blast; THREE is the transformation and does no
+           damage at all, so this loop is skipped outright on a jackpot
+           rather than run at k = 1. */
         const r2 = s.jackpot.radius * s.jackpot.radius;
-        for (const other of fighters) {
+        for (const other of (n === 3 ? [] : fighters)) {
           if (other === this || other.eliminated) continue;
           /* The same two skips resolveCombat makes for every other hit. A
              fighter in KO flight has already paid the stock; applyHit on him
@@ -4197,12 +4609,57 @@ class Fighter {
           const dx = other.x - this.x, dy = other.y - this.y;
           if (dx * dx + dy * dy <= r2) applyHit(this, other, s.jackpot, this.x, k);
         }
-        this.mana = Math.min(COMBAT.manaMax, this.mana + s.jackpot.mana * k);
+        /* No mana from this reel on either result. Blue is the mana symbol,
+           and sevens paying a full bar as well made blue the one symbol
+           nobody ever had a reason to chase. */
         for (let i = 0; i < 16; i++) {
           addEffect('spark', this.x + rand(-20, 20), this.y - rand(6, 30), '#ffd60a');
         }
         addEffect('ring', this.x, this.y - 8, '#ffd60a');
-        if (n === 3) announce('JACKPOT', '#ffd60a');
+        if (n === 3) {
+          announce('JACKPOT', '#ffd60a');
+          /* THE TRANSFORMATION, and it is deliberately the LAST thing in this
+             branch. applyHit reads attacker.damageMul at the moment of the
+             hit, so setting the buff above the loop would have tripled the
+             jackpot's own blast from 22 to 66 -- the ring that comes with the
+             payout is not one of the attacks the payout triples.
+
+             This is the engine's existing buff and nothing new: buffTimer and
+             buffStats, the pair Reese's ult uses, read by the damageMul
+             getter every hit in the game already goes through. The only new
+             idea is hold, which stops update() counting the timer down -- see
+             there. buffTimer is 1 rather than some enormous number because
+             with hold set it is never decremented and only its SIGN is read.
+
+             since is the frame it landed on. The sizeMul getter swells him
+             from it and drawBling drops the chain from it, and battleFrames
+             is snapshotted, so a rollback replays the identical growth and
+             the identical fall rather than starting them over.
+
+             A SECOND jackpot on a man who is already a giant does not stack
+             and does not restart anything. Nothing about the buff is
+             cumulative -- three times is three times -- and keeping the
+             original `since` is what stops the second win shrinking him back
+             to a man for ten frames and dropping a second chain on him while
+             the first one is still there. He still gets the blast and the
+             mana; he simply does not get taller. */
+          const already = this.buffTimer > 0 && this.buffStats &&
+                          this.buffStats.since >= 0 && this.buffStats.sizeMul > 1;
+          const began = already ? this.buffStats.since : battleFrames;
+          this.buffTimer = 1;
+          this.buffStats = {
+            damageMul: s.jackpot.damageMul,
+            speedMul: 1,
+            knockbackTakenMul: 1,
+            sizeMul: s.jackpot.sizeMul,
+            // Gold, so the aura that already draws around a buffed fighter
+            // says JACKPOT rather than saying Simon.
+            glow: '#ffd60a',
+            bling: 1,
+            hold: 1,
+            since: began,
+          };
+        }
         break;
       }
       case 1:     // blue: chips
@@ -4214,7 +4671,12 @@ class Fighter {
         for (let i = 0; i < 6; i++) addEffect('spark', this.x, this.y - 22, '#34c759');
         break;
       case 3:     // spades: the house
-        this.ultMeter = Math.min(COMBAT.ultMax, this.ultMeter + s.house.ult * k);
+        /* Three spades fills it outright rather than adding to it: "you may
+           use your ult now" is a cleaner thing for a symbol to mean than a
+           number you have to read off the bar. A pair adds `ult` FLAT rather
+           than half of it, which is why this one does not go through k. */
+        this.ultMeter = n === 3 ? COMBAT.ultMax
+                                : Math.min(COMBAT.ultMax, this.ultMeter + s.house.ult);
         for (let i = 0; i < 6; i++) addEffect('spark', this.x, this.y - 22, '#c8cee6');
         break;
     }
@@ -4372,7 +4834,14 @@ class Fighter {
       if (gas && this.mana >= gas.mana) {
         this.dashGassed = true;
         this.mana -= gas.mana;
-        projectiles.push(new Cloud(this, gas));
+        /* The weakest of the three, always. A vent is one tap of the button
+           during a dash -- there is nowhere in nine active frames to hold
+           anything, and a vent that came out ripe would be a full charge for
+           free on top of a move he is already using to cross the stage.
+           stinkOf with a zero clock is the uncharged cloud, which is also
+           what a spec with no steps returns, so John's smoke would be safe
+           here too if it ever gained a trail. */
+        projectiles.push(new Cloud(this, stinkOf(gas, 0)));
         // Behind him, not in front: `ahead` on the spec is already negative,
         // and the puff is placed to match so the art and the hitbox agree
         // about which end of him it came out of.
@@ -4453,9 +4922,26 @@ class Fighter {
        chargeTimer that has reached the threshold. */
     if (m.charge && !this.specialSpawned && this.attackFrame >= m.startup &&
         pad && pad[HOLD_FOR_SLOT[this.chargeKey] || 'holdNeutral'] &&
-        !(m.charge.hold && this.chargeTimer >= m.charge.hold)) {
+        !(m.charge.hold && this.chargeTimer >= m.charge.hold) &&
+        !(m.charge.drain && this.mana <= 0)) {
       this.attackFrame = m.startup;
       this.chargeTimer++;
+      /* A charge that also costs meter while it runs. Optional, and only the
+         fart uses it: the pieces and the bottle are paid for in standing
+         still and nothing else, and adding a drain to those would be
+         re-pricing two moves nobody asked about.
+
+         Note what this is competing with, which is nothing: the refill is in
+         updateFree and a fighter in the middle of a special never gets there,
+         so a drain of COMBAT.manaRegen tips a flat bar into falling at
+         exactly the rate it usually rises rather than merely slowing it.
+
+         Drained AFTER the pin so the frame that spends the mana is the frame
+         that counts, and clamped at zero so the bar cannot go negative and
+         strand him. Running out is not an error -- the condition above stops
+         pinning him, attackFrame advances, and the move fires at whatever
+         step he had managed to pay for. */
+      if (m.charge.drain) this.mana = Math.max(0, this.mana - m.charge.drain);
       if (m.charge.swapEvery && this.chargeTimer >= m.charge.swapEvery) {
         this.chargeTimer = 0;
         this.chargePiece = (this.chargePiece + 1) % CHESS_PIECES.length;
@@ -4606,7 +5092,7 @@ class Fighter {
             if (this.reels[i] >= 0) continue;
             // Reels stop in order: the first press is the first reel.
             if (this.reelStops > i || this.reelT >= s.autoStop[i]) {
-              this.reels[i] = reelSymbol(this.reelSeed, i, this.reelT, s);
+              this.reels[i] = reelLand(this.reelSeed, i, this.reelT, s, this.reels);
               cue('swap', { slot: this.slot, x: this.x });
               if (this.reels.indexOf(-1) < 0) this.payout(s);
             }
@@ -4734,9 +5220,28 @@ class Fighter {
       // A cloud of it, hanging where it was thrown. Both gas moves are this
       // case; whether it confuses or poisons is entirely in the spec.
       case 'cloud':
-        if (this.attackFrame === s.startup && !this.specialSpawned) {
+        /* The charge clock starts from zero, and it has to be zeroed HERE.
+           updateAttack only ever counts it up, and the counter is shared with
+           every other charge on the fighter, so a fart cast after a pawn
+           would otherwise inherit the pawn's count and come out fully ripe
+           for nothing. Frame 1 rather than frame 0 because frame 1 is the
+           first one runSpecial sees, which is the convention the bottle's
+           own charge already uses. */
+        if (s.charge && this.attackFrame === 1) this.chargeTimer = 0;
+        /* A CHARGED cloud resolves one frame after startup, the way the pawn
+           does; an uncharged one still resolves ON startup. The pin holds
+           attackFrame AT startup for as long as the button is down, so a
+           cloud spawned on that frame would be out of him before the charge
+           had a single frame to run and holding the button would do precisely
+           nothing. John's SMOKESCREEN has no `charge` and is untouched. */
+        if (this.attackFrame === s.startup + (s.charge ? 1 : 0) &&
+            !this.specialSpawned) {
           this.specialSpawned = true;
-          projectiles.push(new Cloud(this, s));
+          // Which of the three he paid for. One function, so the cloud that
+          // comes out and the gas drawn swelling behind him cannot disagree
+          // about what he was holding.
+          const gas = stinkOf(s, this.chargeTimer);
+          projectiles.push(new Cloud(this, gas));
           /* This is where the fart used to shove its owner upward, off a
              `liftSelf` on the spec. Both halves are gone. It was funny and it
              was also a second recovery, and the second recovery is the part
@@ -4751,7 +5256,7 @@ class Fighter {
              always did -- canSpecial has never looked at `grounded` -- so the
              only difference off the ground is that he keeps falling. */
           addEffect('puff', this.x + this.facing * 10, this.y - 10,
-                    (s.tints && s.tints[0]) || '#9aa0a6');
+                    (gas.tints && gas.tints[0]) || '#9aa0a6');
           cue(s.cue || 'hit', { slot: this.slot, x: this.x });
         }
         break;
@@ -5149,6 +5654,8 @@ class Fighter {
       case 'dash':
         if (this.attackFrame === s.startup) {
           this.dashStopped = false;
+          // And the turn budget, spent at ledges. See the active block below.
+          this.dashTurns = 0;
           // One vent per dash, re-armed here rather than on the press.
           this.dashGassed = false;
           /* A vertical kick on the first frame only, and only off the ground.
@@ -5187,10 +5694,59 @@ class Fighter {
              Short-circuited on the latch: once the dash has decided to stop
              there is nothing left to ask, and the projected fall is not
              walked again for the rest of the move. */
+          /* And what happens when the answer is no: he TURNS AROUND and
+             keeps dashing the other way. He stopped dead here before, which
+             was safe and looked like the move breaking -- a man called
+             JITTERS does not stand politely at the edge and think about it.
+
+             Four decisions are baked into this and every one of them is
+             arguable, so they are written down rather than left in the
+             diff:
+
+             HE FLIPS HIS FACING. A dash is not in hitbox()'s exclusion list,
+             so its box comes from ox/oy/w/h projected forward from `facing`
+             -- flipping it moves the part that hurts onto the side he is now
+             travelling towards, which is the only honest place for it. The
+             sprite mirrors with it, so what you see and what hits you agree.
+
+             IT DOES NOT RE-ARM `hasHit`. A dash still connects exactly once
+             per cast. The reversed half is movement and positioning, not a
+             free second hit handed to the strongest character on the roster
+             for pointing him at a ledge.
+
+             IT IS BOUNDED. Nine active frames at 5.4 a frame is 48 pixels of
+             travel and Battlefield's small platforms are 58 wide, so with no
+             limit he would rattle between two edges like a fly in a jar --
+             funny exactly once, unreadable every time after, and impossible
+             to see which way he will leave. `edgeTurns` is the budget; spend
+             it and the OLD behavior is what is left, so the worst case is
+             still a dash that stops safely rather than a dash that kills
+             him. Two is enough to bounce off both ends of a small platform
+             once each and not enough to vibrate.
+
+             IT NEVER FIRES OFF-STAGE. The whole test is gated on `grounded`,
+             which is what it always was -- so a dash thrown as a RECOVERY,
+             which is what JITTERS is now that BOUNCE is gone, is untouched.
+             There is no ledge out there to bounce off, and a recovery that
+             turned around would be a recovery that flew home and left again.
+
+             Note what this does NOT change: the question. dashLandingAhead
+             still walks the projected fall, so dropping off one of
+             Battlefield's floating platforms onto the island below is a
+             landing and he still sails off it. He only turns where he would
+             genuinely have died, which is where he used to stop. */
           if (!this.dashStopped && this.grounded &&
               !this.dashLandingAhead(18, s.speed,
                                      s.startup + s.active - this.attackFrame)) {
-            this.dashStopped = true;
+            if (this.dashTurns < (s.edgeTurns == null ? 2 : s.edgeTurns)) {
+              this.dashTurns++;
+              this.facing = -this.facing;
+              // A scuff where he changed his mind, so the turn has a frame of
+              // its own instead of the sprite silently facing the other way.
+              addEffect('trail', this.x, this.y - 7, this.accent);
+            } else {
+              this.dashStopped = true;
+            }
           }
           if (this.dashStopped) {
             this.vx *= 0.5;
@@ -5646,6 +6202,15 @@ class Fighter {
   collideCeiling() {
     // Enclosed stages have a solid lid, so there are no upward KOs on them.
     if (STAGE.ceilingY === null) return;
+    /* HURT_H, not the scaled height, and that is a decision rather than an
+       oversight. A jackpot Simon is 42 tall; the matrix has its top platform
+       at y 48 under a lid at 16, which is 32 of headroom, and the swamp has
+       36. Clamping a giant's real head would shove him DOWN off the platform
+       he was standing on, every frame, on two of the six stages -- so the
+       honest 3x here costs more than it buys. What it costs instead is that
+       a giant launched into an enclosed stage's lid clips his head through it
+       for the frames he is up there. A cosmetic overlap on two stages beats a
+       platform he cannot stand on. */
     const head = this.y - HURT_H;
     if (head < STAGE.ceilingY) {
       this.y = STAGE.ceilingY + HURT_H;
@@ -5991,8 +6556,18 @@ function drawArtBig(g, art, x, y, s) {
    so a color wheel done with angles could not ship even if it were clearer. */
 const tintCache = new Map();
 
-function tintedSprite(key, im, css) {
-  const id = key + '|' + css;
+function tintedSprite(key, im, css, gain) {
+  /* And `gain` MULTIPLIES the value the artist put there, which is the one
+     knob this has for "brighter". Multiplying rather than adding is the
+     whole of why the frog survives it: the ratio between the back and the
+     outline is untouched, so a frog at gain 1.5 is the same drawing with the
+     lights on rather than a drawing whose outline has been washed away.
+     Clamped at 255, so a strong gain flattens the highlight into white
+     before it does anything to the shape. Part of the cache key, or two
+     frogs asking for the same color at two brightnesses would get whichever
+     one was painted first. */
+  const lift = gain || 1;
+  const id = key + '|' + css + '|' + lift;
   const hit = tintCache.get(id);
   if (hit) return hit;
   const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
@@ -6037,8 +6612,9 @@ function tintedSprite(key, im, css) {
   for (let i = 0; i < d.length; i += 4) {
     if (!d[i + 3]) continue;
     const r = d[i], gr = d[i + 1], b = d[i + 2];
-    const v = Math.max(r, gr, b);
-    if (v === Math.min(r, gr, b)) continue;   // gray: no hue to replace
+    const raw = Math.max(r, gr, b);
+    if (raw === Math.min(r, gr, b)) continue;   // gray: no hue to replace
+    const v = lift === 1 ? raw : Math.min(255, raw * lift);
     const p = v * (1 - sat);
     const q = v * (1 - sat * frac);
     const t = v * (1 - sat * (1 - frac));
@@ -6051,6 +6627,143 @@ function tintedSprite(key, im, css) {
   }
   g.putImageData(img, 0, 0);
   tintCache.set(id, c);
+  return c;
+}
+
+/* =====================================================================
+   DART FROG MARKINGS
+
+   Ten frogs in ten colors are still ten of the same frog. What tells one
+   dart frog from another in life is its PATTERN -- azureus is blotched,
+   auratus is netted, the strawberry one has blue legs -- so each of the
+   pie's ten carries one of these on top of its color.
+
+   Painted rather than drawn. The artist's twelve cells are a PNG and nothing
+   here can repaint a PNG by hand, but a handful of fillRects laid over the
+   blitted sprite is exactly how the rest of this file draws detail onto
+   something, and it is laid down with `source-atop` so a rectangle can only
+   color pixels the frog already occupies. That is what lets a pattern be
+   four numbers instead of a traced silhouette: `crown` says "the top two
+   rows of the head end", and the frog's own outline decides where that
+   stops.
+
+   Coordinates are in sprite pixels, 11 wide by 6 tall, authored for a
+   RIGHT-facing frog. The artist drew both facings as exact mirrors -- x maps
+   to 10 - x, checked pixel for pixel -- so the left-facing cells reuse these
+   flipped rather than being authored twice and drifting apart.
+
+   `alpha` is per pattern and not per frog. A marking that is meant to be
+   black is painted opaque, because a black marking on a real frog IS flat;
+   one that is meant to be another color of skin is painted a little
+   transparent so the artist's shading still comes through it and the leg
+   keeps its darker edge.
+   ===================================================================== */
+
+/* The net over the two reticulated ones, as diagonal lines rather than a
+   checkerboard. A checker is fifty percent coverage and at eleven by six it
+   reads as static rather than as a frog; every third pixel on a diagonal
+   reads as a net and still leaves the frog its color. Built by a loop
+   because twenty-two one-pixel rectangles typed out is twenty-two chances to
+   get one wrong. */
+const FROG_NET = (function () {
+  const out = [];
+  for (let y = 0; y < 6; y++) {
+    for (let x = 0; x < 11; x++) {
+      if ((x + 2 * y) % 3 === 0) out.push([x, y, 1, 1]);
+    }
+  }
+  return out;
+})();
+
+const FROG_PATTERNS = {
+  // Phyllobates terribilis wears nothing at all, and that is its design.
+  plain:  { alpha: 1,    sit: [], leap: [] },
+  // Everything below the belly line in the other color: "blue jeans".
+  jeans:  { alpha: 0.9,  sit: [[1, 3, 6, 3]],
+                         leap: [[0, 3, 5, 1], [0, 4, 11, 2]] },
+  // One large blotch on the back and two smaller ones, azureus fashion.
+  blotch: { alpha: 1,    sit: [[4, 2, 2, 2], [1, 4, 2, 1], [7, 0, 2, 1]],
+                         leap: [[5, 2, 2, 2], [1, 3, 2, 1], [8, 0, 2, 1]] },
+  net:    { alpha: 1,    sit: FROG_NET, leap: FROG_NET },
+  /* Two bars a single pixel wide. Two pixels wide swallowed the frog: the
+     silhouette runs diagonally, so a full-height band covers far more of it
+     than its width suggests. */
+  band:   { alpha: 1,    sit: [[3, 0, 1, 6], [6, 0, 1, 6]],
+                         leap: [[2, 0, 1, 6], [5, 0, 1, 6]] },
+  /* A stripe from behind the eye to the rump. Sitting, the back runs
+     diagonally and the stripe is a staircase; leaping, it is one straight
+     line, which is the same stripe on a stretched-out frog. */
+  stripe: { alpha: 0.85, sit: [[5, 1, 2, 1], [3, 2, 2, 1], [1, 3, 2, 1]],
+                         leap: [[2, 2, 7, 1]] },
+  // A dark cap over the head, which takes the eye with it into the mask.
+  crown:  { alpha: 0.85, sit: [[5, 0, 5, 2]], leap: [[5, 0, 6, 2]] },
+};
+
+/* Where a popped frog throws its seven pixels when something kills it: up
+   and outward from a body six pixels tall, which is the shape a small wet
+   thing makes when it stops existing. Fixed rather than scattered, for the
+   reason Frog.struck gives. addEffect still gives each one its own drift. */
+const FROG_POP = [[-4, -2], [-2, -6], [0, -7], [2, -6], [4, -2],
+                  [-2, -1], [2, -1]];
+
+/* WHICH OF THE ARTIST'S THREE ROWS a repainted frog is built on. See the
+   note in Frog.draw: the three rows are the same drawing in three greens and
+   differ only in brightness, and this is the one of them that is bright
+   without having lost its outline. */
+const FROG_LIT_ROW = 1;
+
+const frogMorphCache = new Map();
+
+/* One cell of the sheet, recolored AND marked, as a finished image.
+
+   The pattern goes into the cached canvas rather than being drawn over the
+   frog every frame, and that is not only speed. A frog is blitted at a half
+   pixel -- the sprite is eleven wide and it is centered -- so rectangles
+   painted at the draw site would have to be placed against a grid that is
+   half a pixel off the one they are meant to line up with. Inside the image
+   there is no such question: the marking is at pixel (4, 2) of the frog, and
+   wherever the frog lands the marking lands with it.
+
+   Keyed by cell AND morph, so the ten share one entry per design rather than
+   one per frog, and the whole of a match's frogs cost forty paints. */
+function frogMorphSprite(key, im, m, pose) {
+  const id = key + '|' + m.skin + '|' + m.mark + '|' + m.pattern + '|' + m.gain;
+  const hit = frogMorphCache.get(id);
+  if (hit) return hit;
+  const base = tintedSprite(key, im, m.skin, m.gain);
+  const pat = FROG_PATTERNS[m.pattern];
+  const w = base.naturalWidth || base.width;
+  const h = base.naturalHeight || base.height;
+  const rects = !pat ? null : (pose === 0 || pose === 3) ? pat.sit : pat.leap;
+  /* Nothing to paint, or nothing to paint ON. An image that has not decoded
+     yet has no size, and caching an empty canvas for it would leave that
+     design blank for the rest of the match -- so a frog with no size is
+     handed back untouched and asked again next frame. */
+  if (!w || !h) return base;
+  if (!rects || !rects.length) {
+    frogMorphCache.set(id, base);
+    return base;
+  }
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(base, 0, 0);
+  /* The whole trick. Every rectangle from here on is clipped to the pixels
+     the frog already covers, so a marking can be written as a rectangle
+     across the head without any of it landing in the air beside the head. */
+  g.globalCompositeOperation = 'source-atop';
+  g.globalAlpha = pat.alpha;
+  g.fillStyle = m.mark;
+  const flip = pose >= 2;
+  for (let i = 0; i < rects.length; i++) {
+    const q = rects[i];
+    g.fillRect(flip ? w - q[0] - q[2] : q[0], q[1], q[2], q[3]);
+  }
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  frogMorphCache.set(id, c);
   return c;
 }
 
@@ -7208,6 +7921,127 @@ function drawDrink(g, f) {
   }
 }
 
+/* WHICH STEP OF A CHARGE A MOVE IS ON, as an index, from the clock alone.
+
+   Split from stinkOf below because the drawing wants the NUMBER -- it counts
+   stink lines with it -- and the simulation wants the SPEC, and a renderer
+   that recomputed the number its own way is exactly how an animation and a
+   payload come to disagree about what you are holding.
+
+   Pure arithmetic on a snapshotted counter: no clock, no random, and it
+   writes nothing. -1 means this move has no steps at all. */
+function stinkStep(spec, timer) {
+  const tiers = spec.stinkTiers;
+  if (!tiers || !tiers.length) return -1;
+  const hold = (spec.charge && spec.charge.hold) || 1;
+  const t = timer > 0 ? timer : 0;
+  const i = Math.floor((t / hold) * tiers.length);
+  return Math.max(0, Math.min(tiers.length - 1, i));
+}
+
+/* And the finished spec for that step.
+
+   A spec with no steps gets ITSELF back, which is what lets every caller
+   treat a charged fart and John's uncharged SMOKESCREEN the same way. The
+   objects come out of the load-time loop under ROSTER, so simFrozen has
+   walked them and a snapshot keeps one by reference instead of deep-copying
+   it into every frame for as long as the cloud is alive. */
+function stinkOf(spec, timer) {
+  const i = stinkStep(spec, timer);
+  return i < 0 ? spec : spec.stinkTiers[i];
+}
+
+/* Reese filling up, for as long as he is holding the button down.
+
+   A charge is a decision made by watching -- the same contract drawCharge
+   keeps for the chess pieces and drawDrink for the bottle -- so with nothing
+   on screen, holding the button is just a delay you have to have been told
+   about.
+
+   What grows is the GAS, behind him and low, because that is where it is
+   coming out: a ball of it swelling from nothing, going from the pale olive
+   of a tap to the acid green of a full one, with stink lines rising off the
+   top. One line at the first step, two at the second, three at the third --
+   so the step is COUNTABLE rather than merely "bigger than it was", which is
+   the difference between a meter and a vague impression.
+
+   The ball swells to the radius the cloud will START at and not the one it
+   grows into: promising twenty pixels here and then spawning a six-pixel blob
+   would be the animation writing a cheque the payload does not honor.
+
+   Reads chargeTimer, attackFrame, state, chargeKey and facing, and writes
+   nothing at all. The wobble is a sine of the charge counter, which is
+   snapshotted simulation state, so a rollback replays the identical frame of
+   it rather than re-rolling one. */
+function drawFartCharge(g, f) {
+  const s = f.def.specials && f.def.specials.down;
+  if (!s || s.kind !== 'cloud' || !s.charge || !s.stinkTiers) return;
+  /* Derived the way the engine derives it -- still in `special`, opened by
+     the DOWN button, nothing spawned yet, past the startup the pin holds him
+     at -- rather than from a flag a renderer could get wrong. chargeKey is
+     what stops a fart drawing itself over somebody else's held special. */
+  if (f.state !== 'special' || f.chargeKey !== 'down') return;
+  if (f.specialSpawned || f.attackFrame < s.startup) return;
+  if (f.chargeTimer <= 0) return;
+
+  const prog = Math.min(1, f.chargeTimer / s.charge.hold);
+  const step = stinkStep(s, f.chargeTimer);
+  const gas = s.stinkTiers[step];
+  const tints = gas.tints || s.tints || ['#9dc25a'];
+  // Behind him and at hip height, which is where `ahead` and `high` put the
+  // real cloud. Reading them rather than repeating them is what stops the
+  // swelling ball and the thing it becomes appearing in two different places.
+  const bx = f.x + f.facing * (s.ahead == null ? -8 : s.ahead);
+  const by = f.y - (s.high == null ? 5 : s.high);
+  const r = 1 + prog * (gas.r0 == null ? 4 : gas.r0);
+  // One pixel of breathing, off the counter rather than off a wall clock.
+  const puff = r + Math.sin(f.chargeTimer * 0.45) * 0.6;
+
+  /* Capped just under Cloud.draw's own 0.56, and for the same reason it is
+     capped there: this is drawn OVER the sprite, beside the bottle and the
+     sword, and gas thick enough to hide which character is standing in it
+     hides the one thing the player needs. */
+  g.globalAlpha = 0.3 + prog * 0.26;
+  // Two offset blobs, the same trick Cloud.draw uses to stop a square reading
+  // as a box: fixed offsets, never random, because this is drawn from
+  // snapshotted state and has to look the same on both machines.
+  for (let i = 0; i < 2; i++) {
+    g.fillStyle = tints[i % tints.length];
+    const pr = Math.max(1, puff * (i ? 0.6 : 1));
+    g.fillRect(Math.round(bx - pr + i * 2), Math.round(by - pr - i),
+               Math.max(1, Math.round(pr * 2)), Math.max(1, Math.round(pr * 2)));
+  }
+
+  /* The stink lines. One per step reached, each a four-pixel column that
+     leans left and right on its own phase, so what is on screen is a number
+     you can count while somebody is running at you. */
+  g.fillStyle = tints[tints.length - 1];
+  g.globalAlpha = 0.5 + prog * 0.5;
+  for (let i = 0; i <= step; i++) {
+    const lx = Math.round(bx) - 3 + i * 3;
+    for (let k = 0; k < 4; k++) {
+      /* 0.8 a step, not 1.1: adjacent pixels usually agree about which way
+         they lean, so a column reads as one wavy line rather than four loose
+         dots. It is the difference between three lines you can count and a
+         field of specks. */
+      const lean = Math.sin(f.chargeTimer * 0.22 + k * 0.8 + i * 2.2) > 0 ? 1 : 0;
+      g.fillRect(lx + lean, Math.round(by - puff) - 2 - k * 2, 1, 1);
+    }
+  }
+
+  /* Full, and it fires on the next frame whether he lets go or not -- `hold`
+     releases the pin at the cap. A rim around the ball so the release reads
+     as an event rather than the animation simply stopping. */
+  if (prog >= 1) {
+    g.globalAlpha = 1;
+    g.fillStyle = '#d8ff8a';
+    const rr = Math.round(puff);
+    g.fillRect(Math.round(bx) - rr - 1, Math.round(by) - rr - 1, rr * 2 + 2, 1);
+    g.fillRect(Math.round(bx) - rr - 1, Math.round(by) + rr, rr * 2 + 2, 1);
+  }
+  g.globalAlpha = 1;
+}
+
 /* Which slot a move sits in, as the code tickGrab stores. The two of them
    are the only places that know this encoding and they are written next to
    each other on purpose: a grab is caught in one function and paid out in
@@ -7852,6 +8686,79 @@ class Rainbow {
    carry them past the 2^53 where doubles stop being exact -- which would put
    a rounding difference between two machines inside the one thing in this
    move that has to be identical on both. */
+/* HOW OFTEN THE MACHINE PAYS, which is a separate question from what each
+   reel shows, and has to be because of arithmetic.
+
+   Three independent reels over four symbols pay three of a kind 6.25% of the
+   time, a pair 56.25% and a bust 37.5%. Those three numbers are not free
+   parameters -- they are forced by the four symbols. He asked for 15 / 50 /
+   35, and searching every possible weighting of four independent reels, the
+   best that holds bust at 35% pays triples 7.79%: barely half. Triples and
+   busts pull against each other, because anything that makes two reels agree
+   more often also makes all three differ less often. Eight symbols would
+   reach 15 / 50 / 35 -- and eight symbols means four more payouts nobody
+   asked for.
+
+   So the machine picks the CLASS of the result up front, the way a real slot
+   machine does, and the player picks WHICH SYMBOL it lands on. Reel one is
+   always exactly what he stopped it on, and a pair is always a pair OF that
+   symbol -- so chasing the sevens is still a thing you do with your thumb,
+   and 15% is the chance that this particular pull was a generous one.
+
+   What is honestly lost: stopping reels two and three no longer rescues a
+   bad pull. They still choose what the non-matching reel shows.
+
+   Measured over 40,000 spins with the stop frames varied: 14.99 / 50.35 /
+   34.65, reel one matched the player's stop on every single spin, and no
+   pair ever came up in a symbol he had not stopped reel one on. */
+const REEL_TRIPLE = 15;          // percent
+const REEL_PAIR = 50;            // percent; the rest is a bust
+
+/* Which of the three the seed has decided on. Off the seed ALONE -- not the
+   stop frames -- so a player cannot feel out a generous spin and then take
+   his time over it. */
+function reelClass(seed) {
+  let h = Math.imul((seed ^ 0x5bf03635) >>> 0, 0x9e3779b1) >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b) >>> 0;
+  h ^= h >>> 13;
+  const r = (h >>> 8) % 100;
+  return r < REEL_TRIPLE ? 0 : r < REEL_TRIPLE + REEL_PAIR ? 1 : 2;
+}
+
+/* Which reel fails to match on a pair -- never the first one, so the pair is
+   always OF the symbol he stopped reel one on. */
+function reelOdd(seed) {
+  let h = Math.imul((seed ^ 0x2545f491) >>> 0, 0x27d4eb2f) >>> 0;
+  h ^= h >>> 15;
+  return 1 + ((h >>> 9) & 1);
+}
+
+/* Where a reel actually stops. Reel one is the player's, untouched; the
+   other two are bent to the class. `reels` holds what has landed so far --
+   they land in order, so reel one is always known by the time two is asked
+   and both are known by the time three is. */
+function reelLand(seed, reel, t, s, reels) {
+  const pick = reelSymbol(seed, reel, t, s);
+  if (reel === 0) return pick;
+  const first = reels[0];
+  const cls = reelClass(seed);
+  if (cls === 0) return first;                       // three of a kind
+  if (cls === 1) {
+    // A pair: the odd reel shows anything BUT the pair's symbol.
+    return reel === reelOdd(seed) ? (first + 1 + (pick % 3)) % 4 : first;
+  }
+  // A bust: all three different.
+  if (reel === 1) return (first + 1 + (pick % 3)) % 4;
+  const a = reels[0], b = reels[1];
+  for (let k = 0; k < 4; k++) {
+    const c = (b + 1 + ((pick + k) % 3)) % 4;
+    if (c !== a && c !== b) return c;
+  }
+  for (let k = 0; k < 4; k++) if (k !== a && k !== b) return k;
+  return first;
+}
+
 function reelSymbol(seed, reel, t, s) {
   let h = seed >>> 0;
   h = Math.imul(h ^ ((reel * 0x9e3779b1) >>> 0), 0x85ebca6b) >>> 0;
@@ -7860,6 +8767,133 @@ function reelSymbol(seed, reel, t, s) {
   h = Math.imul(h, 0x846ca68b) >>> 0;
   h ^= h >>> 16;
   return h >>> 30;
+}
+
+/* THE HOTDOG, DRAWN.
+
+   Three baked sprites used to do this: an eight-pixel diagonal smear for the
+   whole dog and two ten-pixel ones for the halves, all three in the same few
+   yellows and reds, and the split swapped one for the others between two
+   frames. At the speed this thing travels that is not an animation, it is a
+   flicker, and the move whose entire point is the split read on screen as
+   the projectile briefly glitching. Drawn out of grids instead, the way the
+   Star of David and the chess pieces are, because a grid can have POSES --
+   and a dog halfway out of its bun is a pose nothing can bake for you.
+
+   Authored facing right and mirrored for the other way. Eleven pixels long,
+   against a man who is nine wide. The sausage is four rows and the whole dog
+   is six, so the instant it comes out the thing on screen is visibly shorter
+   as well as a different color, and at this size a change of silhouette
+   carries further than a change of hue.
+
+   The baked pieces are still cut by build.py and still loaded into IMG, and
+   nothing draws them any more. Left in place deliberately: they are cut off
+   the same sheet as the reels and the guillotine, and the loader around them
+   is not this move's to tidy. */
+const HOTDOG_ART = {
+  /* A whole one. Mustard on top, the sausage's ends poking out past a bun an
+     inset narrower a side, and the bun's lit cut face running the full length
+     under it, so the sausage reads as sitting IN the bun rather than balanced
+     on top of it. */
+  whole: [
+    '...m..m..m.',
+    '.TTTTTTTTT.',
+    'SSSSSSSSSSS',
+    'LLLLLLLLLLL',
+    '.BBBBBBBBB.',
+    '..bbbbbbb..',
+  ],
+  /* The sausage, at the three lengths of coming out. These are anchored by
+     their NOSE when they are drawn, not their middle, so the front end keeps
+     travelling at the speed the projectile is travelling while the tail hangs
+     back at the bun -- which is what sliding out of something looks like, and
+     is not something a centered sprite can show. */
+  dog0: [
+    '.TTTTT.',
+    'SSSSSSS',
+    'SSSSSSS',
+    '.sssss.',
+  ],
+  dog1: [
+    '.TTTTTTT.',
+    'SSSSSSSSS',
+    'SSSSSSSSS',
+    '.sssssss.',
+  ],
+  dog2: [
+    '.TTTTTTTTT.',
+    'SSSSSSSSSSS',
+    'SSSSSSSSSSS',
+    '.sssssssss.',
+  ],
+  // The bun the moment it is empty: lips flung apart, and the hollow the
+  // sausage was lying in left in shadow where anybody can see it.
+  bunOpen: [
+    '.L.......L.',
+    'LLgggggggLL',
+    'LBBBBBBBBBL',
+    '.BBBBBBBBB.',
+    '..bbbbbbb..',
+  ],
+  // And the bun once it is only falling.
+  bun: [
+    '..LLLLLLL..',
+    '.LgggggggL.',
+    'LBBBBBBBBBL',
+    '.BBBBBBBBB.',
+    '..bbbbbbb..',
+  ],
+};
+
+/* What each character in those grids is painted with. The five colors the
+   baked sprites used, so this is recognisably the same hotdog somebody drew,
+   plus two the sprites had no room for: a dark underside, without which the
+   bun has no bottom edge and reads as a smudge, and the hollow. */
+const HOTDOG_PAL = [
+  ['m', '#ffd66e'],   // mustard
+  ['T', '#df7373'],   // sausage, lit
+  ['S', '#c86161'],   // sausage
+  ['s', '#aa5656'],   // sausage, underside
+  ['L', '#ffea91'],   // bun, cut face
+  ['B', '#d6c169'],   // bun
+  ['b', '#a88b4a'],   // bun, underside
+  ['g', '#6f5b33'],   // the hollow the sausage came out of
+];
+
+/* One pass over a grid, emitting a rect per RUN of matching cells rather than
+   per cell -- starBand's trick, which is up with the Star of David and worth
+   reading -- with the two things a hotdog needs that a star does not.
+
+   FLIP mirrors the grid, because a dog thrown left is the same drawing
+   backwards. LEAN shears it: every column is pushed down by `lean` times how
+   far that column sits from the middle, so one flat grid becomes every
+   attitude between nose-up and nose-down without a hand-drawn pose for each.
+   Keep lean inside about a quarter. Past that neighbouring columns step by
+   more than a pixel and the shape stops being a hotdog and becomes a
+   staircase, which is a thing that was tried and looked at. */
+function hotdogBand(g, rows, chars, col, ox, oy, flip, lean) {
+  g.fillStyle = col;
+  const h = rows.length, w = rows[0].length, mid = (w - 1) / 2;
+  for (let r = 0; r < h; r++) {
+    const row = rows[r];
+    let start = -1, off = 0;
+    for (let c = 0; c <= w; c++) {
+      const on = c < w && chars.indexOf(row[flip ? w - 1 - c : c]) >= 0;
+      // A run has to end where the shear steps, not just where the color does.
+      const step = on ? Math.round(lean * (c - mid)) : 0;
+      if (start >= 0 && (!on || step !== off)) {
+        g.fillRect(ox + start, oy + r + off, c - start, 1);
+        start = -1;
+      }
+      if (on && start < 0) { start = c; off = step; }
+    }
+  }
+}
+
+/** One whole grid, every color in it, top left at (ox, oy). */
+function hotdogArt(g, key, ox, oy, flip, lean) {
+  const rows = HOTDOG_ART[key];
+  for (const p of HOTDOG_PAL) hotdogBand(g, rows, p[0], p[1], ox, oy, flip, lean);
 }
 
 class Hotdog {
@@ -7874,27 +8908,73 @@ class Hotdog {
     this.vy = spec.lift;
     this.life = spec.life;
     this.bounces = 0;
+    this.t = 0;
+    /* How many frames are left of the dog coming out of the bun, and the
+       speed the sausage is easing up to while it does. Both are zero until
+       split() sets them, and both are declared HERE rather than there
+       because restoreSim deletes any key the snapshot it is restoring does
+       not have: a field first assigned in split() would vanish out from
+       under any rollback that crossed the split, mid-slide, and leave the
+       sausage easing towards undefined. */
+    this.slide = 0;
+    this.launchVx = 0;
     this.dead = false;
   }
 
-  /* The second press. The top keeps going, faster and flatter and harder;
-     the bottom bun drops from wherever the split happened. Both halves are
-     specs built at load, so applyHit reads each one straight off `spec`. */
+  /* The second press: the dog comes out of the bun. The sausage keeps going,
+     faster and flatter and on fire; the bun is shed backwards and planes down
+     from wherever the split happened. Both halves are specs built at load, so
+     applyHit reads each one straight off `spec`.
+
+     It does not simply take its new speed. It leaves at `kick` of what it was
+     doing and spends the slide climbing back up, so the sausage peels out of
+     a bun that stays put -- and the bun is thrown back by the same launch it
+     is being left behind by, which is the equal and opposite half of the same
+     picture. Both halves of that are readable; the instant swap this replaced
+     was not. */
   split() {
     if (this.piece !== 'whole' || this.dead) return false;
     const parts = this.base.parts;
+    const top = parts.top;
     this.piece = 'top';
-    this.spec = parts.top;
-    this.vx *= parts.top.speedMul;
-    this.vy = parts.top.lift;
-    this.life = parts.top.life;
-    projectiles.push(new HotdogHalf(this.owner, parts.bottom, this.x, this.y));
+    this.spec = top;
+    this.launchVx = this.vx * top.speedMul;
+    this.vx *= top.kick;
+    this.vy = top.lift;
+    this.life = top.life;
+    this.slide = this.base.slide;
+    projectiles.push(new HotdogHalf(this.owner, parts.bottom, this.x, this.y,
+                                    -this.launchVx * parts.bottom.shed));
     addEffect('puff', this.x, this.y, '#ffd66e');
+    /* Crumbs, thrown back down the way the bun went so the eye is pointed at
+       the thing it is supposed to notice. Fixed offsets rather than the usual
+       scatter: addEffect seeds its drift from Math.random, and four sparks
+       that also START somewhere random read as a small explosion instead of
+       as something coming apart along its length. */
+    for (let i = 0; i < 4; i++) {
+      addEffect('spark', this.x - (i - 1) * 3 * Math.sign(this.launchVx),
+                this.y + (i & 1 ? 1 : -1), i & 1 ? '#ffd66e' : '#d6c169');
+    }
+    /* The split used to be SILENT, which is a good deal of why it could not
+       be read. Trev's send is the right sound already: a flat knock, which is
+       what a dog being shot out of a bun is. */
+    cue('shoot', { slot: this.owner.slot, x: this.x });
     return true;
   }
 
   update() {
     const prevY = this.y;
+    this.t++;
+    /* Easing up to the launch speed instead of starting there -- see split().
+       Snapped exactly onto the target on the last frame of the slide, so what
+       the sausage flies at afterwards is a fixed number rather than however
+       far a geometric series happened to get: two machines agreeing to the
+       bit is easier to keep if the number they have to agree on is stated. */
+    if (this.slide > 0) {
+      this.slide--;
+      this.vx += this.slide > 0 ? (this.launchVx - this.vx) * this.spec.launch
+                                : this.launchVx - this.vx;
+    }
     this.x += this.vx;
     this.y += this.vy;
     this.vy += this.base.drop;
@@ -7922,44 +9002,118 @@ class Hotdog {
     if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
   }
 
+  /* The box is the drawing, which the old one was not: a whole dog was an
+     eight-by-eight SQUARE, which is neither the shape of a hotdog nor the
+     shape of the sprite that was on screen. Eleven long either way; six deep
+     in the bun against five out of it, the sausage being the thinner thing
+     with a pixel of slack over and under it. */
   box() {
     return this.piece === 'whole'
-      ? { x: this.x - 4, y: this.y - 4, w: 8, h: 8 }
-      : { x: this.x - 5, y: this.y - 3, w: 10, h: 6 };
+      ? { x: this.x - 5, y: this.y - 3, w: 11, h: 6 }
+      : { x: this.x - 5, y: this.y - 3, w: 11, h: 5 };
   }
 
   draw(g) {
-    const im = IMG['hotdog.' + this.piece];
-    if (!im) return;
-    // The art faces right; thrown left it is mirrored.
-    if (this.vx < 0) {
-      g.save();
-      g.translate(Math.round(this.x), Math.round(this.y));
-      g.scale(-1, 1);
-      g.drawImage(im, -Math.round(im.width / 2), -Math.round(im.height / 2));
-      g.restore();
-    } else {
-      g.drawImage(im, Math.round(this.x - im.width / 2), Math.round(this.y - im.height / 2));
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const flip = this.vx < 0;
+    /* Nose along the arc. Clamped to a quarter for the reason hotdogBand
+       gives, and it is the ratio rather than an angle on purpose: the build
+       will not have a cosine in this file, and a rise over a run is what the
+       shear wants anyway. */
+    const lean = Math.max(-0.25, Math.min(0.25, this.vy / this.vx));
+    if (this.piece === 'whole') {
+      hotdogArt(g, 'whole', x - 5, y - 3, flip, lean);
+      return;
+    }
+    /* Out of the bun, and growing: 7 pixels long, then 9, then 11, anchored
+       by the nose so the tail is what moves. Taken as a FRACTION of the
+       slide, so the three poses stay evenly spread if the slide is retuned. */
+    const k = this.slide / this.base.slide;
+    const key = k > 0.6 ? 'dog0' : k > 0.3 ? 'dog1' : 'dog2';
+    const w = HOTDOG_ART[key][0].length;
+    hotdogArt(g, key, flip ? x - 5 : x + 5 - (w - 1), y - 2, flip, lean);
+    /* It is bare grilled meat now, so it smokes: three specks over the top,
+       each on its own rise, which is the only thing on screen that says a hit
+       from here on sets you alight. Off the projectile's own age rather than
+       a random, because two machines replaying the same frame have to draw
+       the same thing -- and because a rollback would re-roll it every replay
+       and the smoke would strobe. */
+    g.fillStyle = '#ffa94a';
+    for (let i = 0; i < 3; i++) {
+      const rise = (this.t + i * 5) % 4;
+      // Bright, and never faint: a stage can be nearly black behind this and
+      // the smoke is the only thing saying the projectile changed its rules.
+      g.globalAlpha = 0.7 - rise * 0.13;
+      g.fillRect(x - 4 + i * 4, y - 3 - rise, 1, 1);
+    }
+    g.globalAlpha = 1;
+    // And once it is up to speed, a streak off the back end saying so.
+    if (this.slide === 0) {
+      g.globalAlpha = 0.3;
+      g.fillStyle = '#c86161';
+      g.fillRect(flip ? x + 6 : x - 10, y - 1, 5, 2);
+      g.globalAlpha = 1;
     }
   }
 }
 
-/* The bottom bun, dropping straight down from the split. Constant speed, no
-   gravity: it is a thing let go of, not a thing thrown. */
+/* The bun, once the dog has gone.
+
+   It used to drop: 3.2 pixels a frame, straight down, no gravity, no drift,
+   dead on the first thing it touched. Thrown at the height Simon throws at,
+   over the platform everybody is standing on, that is FIVE FRAMES of bun --
+   measured -- and half the move was a thing nobody ever saw happen.
+
+   Bread is light and this shape falling flat has air under it, so it planes
+   instead. It is shed backwards by the same launch that threw the sausage
+   forwards, pops as it comes free, tips one way and then the other, slides
+   whichever way it is tipped, and settles to a fall a bit over a third of
+   what it was. It is the same seven damage it always did; what is new is
+   that it is in the air long enough to be somebody's problem. */
 class HotdogHalf {
-  constructor(owner, spec, x, y) {
+  constructor(owner, spec, x, y, vx) {
     this.owner = owner;
     this.spec = spec;
     this.x = x;
     this.y = y;
-    this.vx = 0;
-    this.vy = spec.fall;
+    this.vx = vx || 0;
+    this.vy = spec.pop;
+    /* What is left of the backward kick, and which way it is tipped right
+       now. update() rewrites both every frame; they are declared here anyway
+       because restoreSim deletes keys a snapshot lacks, and a bun in the
+       middle of a rollback would otherwise come back untipped and drifting
+       at whatever undefined arithmetic produces. */
+    this.shed = this.vx;
+    this.lean = 0;
+    this.t = 0;
     this.life = spec.life;
     this.dead = false;
   }
 
   update() {
     const prevY = this.y;
+    const s = this.spec;
+    this.t++;
+    /* The tip, as a triangle wave off its own age: level, over one way, back
+       through level, over the other, every `rock` frames. A sine would look
+       the same and is even a legal call in this file -- but this is
+       simulation, it MOVES the bun, and two machines in a rollback match have
+       to agree about it to the last bit. Integers guarantee that; a
+       transcendental only usually does.
+
+       Started a quarter of a cycle in so that a bun leaves the split LEVEL.
+       Starting at zero starts it fully tipped, which throws it sideways on
+       the one frame the eye is trying to work out what just came apart. */
+    const half = s.rock >> 1, quarter = half >> 1;
+    const ph = (this.t + quarter) % s.rock;
+    this.lean = ((ph < half ? ph : s.rock - ph) - quarter) / quarter;
+    // Sideways: whatever is left of the shed, plus the slide a tipped thing
+    // does. Decayed rather than cut off, so it eases into the flutter.
+    this.shed *= s.shedDecay;
+    this.vx = this.shed + this.lean * s.sway;
+    // Downward: eased towards the speed it planes at, and never past it.
+    this.vy += (s.fall - this.vy) * s.settle;
+    this.x += this.vx;
     this.y += this.vy;
     this.life--;
     for (const p of platformsNow()) {
@@ -7971,15 +9125,24 @@ class HotdogHalf {
       }
     }
     if (this.life <= 0 || this.y > VH + 40) this.dead = true;
+    // It drifts now, so it can leave sideways, which it never could before.
+    if (this.x < -20 || this.x > VW + 20) this.dead = true;
   }
 
   box() {
-    return { x: this.x - 5, y: this.y - 2, w: 10, h: 4 };
+    return { x: this.x - 5, y: this.y - 2, w: 11, h: 5 };
   }
 
   draw(g) {
-    const im = IMG['hotdog.bottom'];
-    if (im) g.drawImage(im, Math.round(this.x - im.width / 2), Math.round(this.y - im.height / 2));
+    const x = Math.round(this.x), y = Math.round(this.y);
+    /* Wide open for exactly as long as the sausage is still coming out of it
+       -- the same `slide` frames the dog counts down -- so the two drawings
+       are halves of one event rather than two things that happen to be near
+       each other. */
+    const key = this.t <= this.spec.slide ? 'bunOpen' : 'bun';
+    // Tipped a quarter at the ends of its rock. The grids are symmetric, so
+    // there is nothing to mirror: a bun has no facing once it is empty.
+    hotdogArt(g, key, x - 5, y - 2, false, this.lean * 0.25);
   }
 }
 
@@ -8026,6 +9189,163 @@ class GuillotineDrop {
   }
 }
 
+/* THE JACKPOT'S CHAIN AND SUNGLASSES.
+
+   Row strings, the way DUCK_ROWS is, so the shape is visible in the source
+   and can be edited without a paint program.
+
+   Both are authored in SPRITE CELL coordinates. A character sheet cell is
+   16x16, its bottom edge is his feet and its left edge is eight pixels left
+   of his center, so a mark at column 4 of row 6 lands on the same part of him
+   at any size -- which is what lets one set of strings dress a man and a
+   giant. drawBling multiplies by sizeMul, so a giant's chain has giant links
+   rather than looking like a real chain photographed from too far away.
+
+   Simon's right-facing frames occupy columns 0..11 of that cell and his
+   left-facing ones columns 2..13 -- the sheet is not symmetric about the cell
+   -- so the mirror is 13 - c, not 15 - c. Two pixels wrong is six pixels
+   wrong at three times size, and six pixels at this resolution is a man
+   wearing somebody else's glasses.
+
+   Read off the sheet rather than guessed. His eyes are the white pixels at
+   columns 4-5 and 7-8 of row 6 on every grounded frame, and of row 4 on the
+   jump frames, which are drawn two rows higher in the cell -- which is what
+   air below corrects for. And the reason the chain starts as high as row 10
+   is that his BEARD reaches nearly to his waist: rows 8-11 of him are beard
+   and the shirt is only rows 12-14, so a necklace hung on the shirt hangs at
+   the waist and reads, unmistakably, as a belt. It was drawn that way first
+   and looked like one. Over the beard it reads as a chain, and the dark beard
+   is the best background gold has on him. */
+const BLING_SHADES = [
+  '#########',
+  '#WLL#LLL#',
+];
+const BLING_CHAIN = [
+  'Y.......Y',
+  '.Y.....Y.',
+  '..Y...Y..',
+  '...Y.Y...',
+  '....Y....',
+];
+const BLING_INK = {
+  // Near-black rather than black: the frame sits partly over his beard, which
+  // is already the darkest thing on him, and pure black loses its edge there.
+  '#': '#15171f',
+  L: '#2b3550',     // lens, a cold blue-black
+  W: '#cfe4ff',     // the shine across the near lens, always lit
+  // Gold -- the jackpot's own color, the one the sparks, the ring and the
+  // aura already use. ONE gold, deliberately: a shaded second gold was drawn
+  // and disappeared, because the beard it lies on is darker than any shadow
+  // a gold link could cast.
+  Y: '#ffd60a',
+};
+/* Where each one sits and how long it spends falling.
+
+   The chain lands first and the shades last, because the shades going on is
+   the better last beat: he swells, he gets chained, and then the sunglasses
+   drop onto his face and he is finished. BLING_SKY is above the top of the
+   world buffer, so both genuinely arrive from off screen.
+
+   air is the row offset for the jump frames, in which his whole upper body
+   is drawn two rows higher in the cell. */
+const BLING_SKY = -14;
+const BLING_WEAR = [
+  { key: 'chain',  art: BLING_CHAIN,  col: 2, row: 10, from: 0, fall: 18, air: -2 },
+  { key: 'shades', art: BLING_SHADES, col: 2, row: 5,  from: 8, fall: 22, air: -2 },
+];
+
+/* One art block, in cell coordinates, at an arbitrary screen position:
+   drawDuck's loop with a scale on it. flash overrides every color, which is
+   how the landing and the medallion's pulse are drawn without a second copy
+   of the shape. */
+function blingArt(g, rows, x, y, cw, facing, flash, alpha) {
+  g.globalAlpha = alpha === undefined ? 1 : alpha;
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    for (let c = 0; c < row.length; c++) {
+      const ch = row.charAt(c);
+      if (ch === '.') continue;
+      g.fillStyle = flash || BLING_INK[ch];
+      /* Mirrored within the block; the block itself is placed mirrored by the
+         caller. Both halves of that are needed, or the shine ends up outside
+         the lens on one facing. */
+      const col = facing > 0 ? c : row.length - 1 - c;
+      g.fillRect(x + col * cw, y + r * cw, cw, cw);
+    }
+  }
+  g.globalAlpha = 1;
+}
+
+/* The chain and the shades falling out of the sky, and then staying on him.
+
+   They are the tell. Three times the size is visible from anywhere, but it is
+   also the sort of thing a player can talk themselves into having imagined;
+   gold on a man who is otherwise cream and dark red is not. They stay for
+   exactly as long as the buff does, which makes them how you know it is over
+   as well as how you know it started.
+
+   Every number below is a pure function of battleFrames - buffStats.since,
+   both of which are snapshotted, so a rollback redraws the identical fall
+   rather than starting it again. Nothing here writes to the fighter and
+   nothing here calls random. */
+function drawBling(g, f) {
+  const b = f.buffTimer > 0 ? f.buffStats : null;
+  if (!b || !b.bling || !(b.since >= 0)) return;
+  const t = battleFrames - b.since;
+  if (t < 0) return;
+  const k = b.sizeMul || 1;
+  /* The cell, in screen pixels, exactly as drawFighter blitted it -- same
+     rounding, same anchor. Anything else and the chain shivers against the
+     body by a pixel as he walks. */
+  const d = Math.round(16 * k);
+  const cw = d / 16;
+  const left = Math.round(f.x) - (d >> 1);
+  const top = Math.round(f.y) - d;
+  // The same condition sprite() picks the jump frame on.
+  const airborne = !f.grounded || f.state === 'ko' || f.state === 'break';
+
+  for (const p of BLING_WEAR) {
+    const age = t - p.from;
+    if (age < 0) continue;
+    const w = p.art[0].length;
+    // The block's left column, mirrored about the sheet's own 0..13 body.
+    const cx = f.facing > 0 ? p.col : 14 - p.col - w;
+    const restY = top + (p.row + (airborne ? p.air : 0)) * cw;
+
+    if (age < p.fall) {
+      /* Falling. Quadratic, so it accelerates the way a dropped thing does
+         and arrives fast enough to look like it HIT him -- a linear fall
+         reads as an object being lowered on a string. It tracks his x, so it
+         lands on him wherever he has walked to, with a sway that has decayed
+         to nothing by the time it arrives. */
+      const q = age / p.fall;
+      const y = BLING_SKY + (restY - BLING_SKY) * q * q;
+      const x = left + cx * cw + (1 - q) * Math.sin(age * 0.5) * 3 * cw;
+      // One dim ghost above it once it is genuinely moving: at eleven pixels
+      // a frame, a solid object with no trail reads as teleporting.
+      if (q > 0.35) blingArt(g, p.art, x, y - 5 * cw, cw, f.facing, null, 0.22);
+      blingArt(g, p.art, x, y, cw, f.facing);
+      continue;
+    }
+
+    const x = left + cx * cw;
+    blingArt(g, p.art, x, restY, cw, f.facing);
+    /* The clink. Three frames of the thing flashing white on the spot it
+       landed. There is no room at this size for an impact animation, and a
+       gold object hitting a man silently simply appears. */
+    const since = age - p.fall;
+    if (since < 3) {
+      blingArt(g, p.art, x, restY, cw, f.facing, '#fffbe0', 0.8 - since * 0.25);
+    } else if (p.key === 'chain' && since % 64 < 3) {
+      /* And then it lives. The bottom of the chain catches the light about
+         once a second -- the only moving thing on him while he stands still,
+         and the reason it never settles into being part of the sprite. */
+      const last = p.art.length - 1;
+      blingArt(g, [p.art[last]], x, restY + last * cw, cw, f.facing, '#fffbe0', 0.9);
+    }
+  }
+}
+
 /* The three reels over his head while SLOTS runs. Reads reels, reelT and the
    move and writes nothing, like every draw in this file. A reel still
    spinning shows the blur frames; a stopped one shows what it landed on. */
@@ -8033,7 +9353,11 @@ function drawSlots(g, f) {
   if (f.state !== 'special' || !f.specialSpawned) return;
   const m = f.moveFor('special');
   if (!m || m.kind !== 'slots') return;
-  const x0 = Math.round(f.x) - 9, y0 = Math.round(f.y) - 30;
+  /* Sixteen above his head. He can pull the lever again while he is already
+     a giant -- for the mana, or for a heal -- and at a flat 30 above his FEET
+     the three reels were drawn across a giant's chest, which is a slot
+     machine that appears to be inside him. */
+  const x0 = Math.round(f.x) - 9, y0 = Math.round(f.y - HURT_H * f.sizeMul) - 16;
   g.fillStyle = 'rgba(0,0,0,0.55)';
   g.fillRect(x0 - 2, y0 - 1, 21, 8);
   for (let i = 0; i < 3; i++) {
@@ -9392,7 +10716,9 @@ class Pie {
          list the ten are dyed from. That is the tell doing its whole job: it
          no longer only says something is coming, it says a spread of
          something is coming, which is the joke the ult is built on. */
-      const dyes = s.frog.tints || [s.frog.tint || '#4c9a3f'];
+      const ms = s.frog.morphs;
+      const dyes = ms ? [ms[0].skin, ms[1 % ms.length].skin, ms[2 % ms.length].skin]
+                      : [s.frog.tint || '#4c9a3f'];
       const wob = Math.floor(this.t / 4) % 2;
       g.fillStyle = dyes[0];
       g.fillRect(x - 5 + wob, y - 10 - puff, 2, 2);
@@ -9432,11 +10758,14 @@ class Frog {
        machines have to produce the same green. */
     this.variant = ((variant || 0) % 3 + 3) % 3;
     /* And the raw index, kept beside it, because the two mean different
-       things: `variant` is which of the three cells the artist drew, and
-       wraps at three, while this is which frog of the batch this is and
-       chooses its color out of `tints`. Folding them together would tie a
-       frog's color to its pose -- every blue one leaping, every red one
-       sitting -- which is not a thing frogs do. */
+       things: `variant` is which of the artist's three rows this one is
+       painted from and wraps at three, while this is WHICH FROG OF THE BATCH
+       it is and picks its design out of `morphs`. The pie's ten pass through
+       here with a morph and never consult `variant` at all -- see the row
+       note in draw() -- but FROG ARMY's three have no morph and it is still
+       the whole of their variety. Folding the two together would tie a
+       frog's design to its pose: every blue one leaping, every red one
+       sitting, which is not a thing frogs do. */
     this.hatch = (variant || 0) | 0;
     this.x = x;
     this.y = y;
@@ -9446,6 +10775,13 @@ class Frog {
     this.t = 0;
     this.rest = 0;        // frames until the next hop
     this.life = spec.life;
+    /* Shot down, not only run down. sweepFrail destroys any projectile
+       carrying this the moment an opposing hitbox touches it. Read off the
+       spec so it stays a property of the MOVE rather than of this class, and
+       assigned here in the constructor because restoreSim deletes keys a
+       snapshot lacks -- a field written anywhere else would quietly vanish
+       on the first rollback. */
+    this.frail = !!spec.frail;
     this.dead = false;
   }
 
@@ -9495,15 +10831,26 @@ class Frog {
     return { x: this.x - 5, y: this.y - 6, w: 10, h: 6 };
   }
 
-  /* The color this one wears, or null to leave the artist's green alone.
+  /* WHICH of the ten dart frogs this one is -- its color and its markings
+     together -- or null for a frog the artist's own green is right for.
 
      FROG ARMY's three have no list and stay green; the pie's ten each take
      their own by the index they hatched in. By index rather than drawn, for
      the reason the variant is: this is inside the rollback and both machines
      have to open the same pie. */
+  morph() {
+    const m = this.spec.morphs;
+    if (m && m.length) return m[this.hatch % m.length];
+    return null;
+  }
+
+  /* The color this one wears, or null to leave the artist's green alone.
+     Its SKIN, not its markings: this is what Pie.draw paints the lumps in
+     the crust with, and what it bursts into when something kills it, and
+     both of those want the color you would name the frog by. */
   dye() {
-    const t = this.spec.tints;
-    if (t && t.length) return t[this.hatch % t.length];
+    const m = this.morph();
+    if (m) return m.skin;
     return this.spec.tint || null;
   }
 
@@ -9518,15 +10865,38 @@ class Frog {
        hop is the whole of what a frog does. */
     const right = this.vx >= 0;
     const col = this.grounded ? (right ? 0 : 3) : (right ? 1 : 2);
-    const key = 'frog.' + Math.min(n - 1, this.variant * 4 + col);
-    /* A frog in a color the artist did not paint. The pie's frogs carry
-       `tint` on their spec and FROG ARMY's do not, so the ult's ten come out
-       red and the recovery's three stay green without this class ever being
-       told there are two kinds. tintedSprite caches, so after the first frog
-       of a color this is a Map lookup and not a recolor. */
+    const m = this.morph();
+    /* WHICH ROW, and it is the answer to "they look dull".
+
+       The artist's three rows are the SAME twelve drawings three times over
+       in three greens -- identical alpha, pixel for pixel -- so `variant`
+       never chose a pose, it only ever chose a brightness. Measured over the
+       colored pixels of one cell, the three rows come out at mean value 79,
+       131 and 150, with a back-to-outline contrast of 2.09, 2.10 and 1.30.
+       The FIRST row (cells 0-3) is mud; the LAST (cells 8-11) is bright but
+       has almost no outline left, which at eleven pixels wide is a frog with
+       no edge.
+
+       So a frog that is going to be repainted anyway always takes the MIDDLE
+       row -- as bright as the artist got while still drawing an outline --
+       and how bright it ends up is its morph's `gain` instead. Four of the
+       pie's ten used to land on that first row and came out muddy whatever
+       color they were handed; that, and not the palette, is what was dull.
+
+       FROG ARMY's three have no morph and go on using `variant`, because
+       with nothing repainting them those three rows ARE their only variety. */
+    const row = m ? FROG_LIT_ROW : this.variant;
+    const key = 'frog.' + Math.min(n - 1, row * 4 + col);
+    /* A frog in a color the artist did not paint, with markings he did not
+       paint either. The pie's frogs carry `morphs` on their spec and FROG
+       ARMY's do not, so the ult's ten come out as ten different dart frogs
+       and the recovery's three stay green without this class ever being told
+       there are two kinds. Both caches are keyed by cell and design, so
+       after the first frog of a kind this is a Map lookup and not a repaint. */
     const dye = this.dye();
     let im = n ? IMG[key] : null;
-    if (im && dye) im = tintedSprite(key, im, dye);
+    if (im && m) im = frogMorphSprite(key, im, m, col);
+    else if (im && dye) im = tintedSprite(key, im, dye);
     if (im) {
       g.imageSmoothingEnabled = false;
       g.drawImage(im, Math.round(this.x) - im.width / 2,
@@ -9535,6 +10905,30 @@ class Frog {
       g.fillStyle = dye || '#4c9a3f';
       g.fillRect(Math.round(this.x) - 4, Math.round(this.y) - 5, 8, 5);
     }
+  }
+
+  /* Killed by somebody's attack rather than by its own clock.
+
+     Called by sweepFrail on the frame the hitbox reaches it, before it is
+     cleared. It exists so a frog does not simply blink out: at this size a
+     thing that vanishes between two frames reads as a bug, and the player
+     who just swung needs to be told that the swing did something.
+
+     Painted in the frog's OWN skin, so ten different frogs pop ten different
+     colors and you can see which of them you got rid of.
+
+     Fixed offsets, no rand(). Everything here is cosmetic -- addEffect
+     refuses to spawn at all while the netcode is re-simulating -- but rand()
+     inside these arguments would still be evaluated on a replayed frame and
+     would pull draws out of Math.random that the first pass through the
+     frame did not. Nothing cosmetic is allowed to move that stream. */
+  struck() {
+    const c = this.dye() || '#4c9a3f';
+    for (let i = 0; i < FROG_POP.length; i++) {
+      addEffect('spark', this.x + FROG_POP[i][0], this.y + FROG_POP[i][1], c);
+    }
+    addEffect('puff', this.x, this.y - 3, '#ffffff');
+    cue('hit', { slot: this.owner ? this.owner.slot : -1, x: this.x, gain: 0.5 });
   }
 }
 
@@ -12579,7 +13973,78 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   for (let i = 0; i < 4; i++) addEffect('spark', defender.x, defender.y - 7, attacker.accent);
 }
 
+/* ANYTHING THAT CAN BE SHOT DOWN, SHOT DOWN.
+
+   Until Christian's frogs, nothing in this game could be destroyed by being
+   hit: every projectile in the file either ran out of clock, flew off the
+   stage, or reached somebody. So this is written as a general capability
+   rather than as a rule about frogs. A projectile opts in by setting `frail`
+   in its constructor -- it has to be the constructor, because restoreSim
+   deletes keys a snapshot lacks -- and may add a `struck` method if it wants
+   to leave something behind on the way out, the way `burst` and `shatter`
+   already work for a projectile that connects.
+
+   FIRST, before either pass in resolveCombat. A frog inside a swing and a
+   man inside the same swing are settled in the order a player expects: the
+   swing kills the frog, and the frog does not land its three damage on the
+   way out. Doing this afterwards instead meant every frog you killed still
+   hit you, which reads as the game ignoring you.
+
+   THE ATTACK IS NOT CONSUMED. A jab that clears three frogs keeps going and
+   still reaches the man standing behind them, and `hasHit` is deliberately
+   not consulted -- a swing that already connected goes on clearing frogs for
+   the rest of its active frames. The alternative is worse than it sounds:
+   ten frogs that each ate an attack would be the best shield in the game,
+   and the move that made them is a RECOVERY he can cast all match.
+
+   A projectile can do the shooting too, and that is the half that matters
+   for the characters who never come close enough to swing. Without it a
+   zoner's only answer to ten hopping frogs is to walk into them. Frail
+   things are excluded from being the shooter, so two Christians' frogs hop
+   through each other instead of annihilating on contact. */
+function sweepFrail(fighters) {
+  /* Nothing frail on the stage is the overwhelmingly common case -- one
+     character in the file makes any -- so this walks the list once and
+     leaves rather than asking every projectile for a box every frame. */
+  let any = false;
+  for (let i = 0; i < projectiles.length; i++) {
+    if (projectiles[i].frail && !projectiles[i].dead) { any = true; break; }
+  }
+  if (!any) return;
+  for (const a of fighters) {
+    if (a.eliminated || a.hitstop > 0) continue;
+    const h = a.hitbox();
+    if (!h) continue;
+    for (let n = projectiles.length, i = 0; i < n; i++) {
+      const shot = projectiles[i];
+      if (shot.dead || !shot.frail || shot.owner === a) continue;
+      if (!overlap(h.box, shot.box())) continue;
+      if (shot.struck) shot.struck();
+      shot.dead = true;
+    }
+  }
+  for (let n = projectiles.length, i = 0; i < n; i++) {
+    const atk = projectiles[i];
+    /* A shot that is itself frail does not get to be the shooter, and a shot
+       that is only sometimes a hitbox -- Simon's soul, which is out for five
+       seconds and dangerous for four frames of each punch -- only counts
+       while it says it is live. */
+    if (atk.dead || atk.frail) continue;
+    if (atk.live && !atk.live()) continue;
+    const box = atk.box();
+    for (let j = 0; j < n; j++) {
+      const shot = projectiles[j];
+      if (shot === atk || shot.dead || !shot.frail) continue;
+      if (shot.owner === atk.owner) continue;
+      if (!overlap(box, shot.box())) continue;
+      if (shot.struck) shot.struck();
+      shot.dead = true;
+    }
+  }
+}
+
 function resolveCombat(fighters) {
+  sweepFrail(fighters);
   for (const a of fighters) {
     if (a.eliminated || a.hitstop > 0) continue;
     const h = a.hitbox();
@@ -13383,9 +14848,9 @@ function drawRoom() {
     const def = ROSTER[seat.char];
     const label = (seat.you ? 'YOU  ' : 'P' + (seat.slot + 1) + '   ') +
                   (def ? def.name : '...') + (seat.ready ? '' : '  ...');
-    text(label, VW - 10, 28 + i * 9, 6.5,
-         seat.ready ? (seat.you ? '#ffffff' : '#c8cee6') : '#6b7392',
-         'right', seat.you ? 800 : 500);
+    nameText(label, VW - 10, 28 + i * 9, 6.5,
+             seat.ready ? (seat.you ? '#ffffff' : '#c8cee6') : '#6b7392',
+             'right', seat.you ? 800 : 500);
   });
 
   // The grid, which is the point: pick from the screen, in the room.
@@ -13429,7 +14894,7 @@ function drawRoom() {
       sctx.globalAlpha = 1;
     });
     drawPortrait(k, cx, cy + 22, 1.3);
-    text(ROSTER[k].name, cx, cy + 29, 5.5, SPRITES[k].accent, 'center', 700);
+    nameText(ROSTER[k].name, cx, cy + 29, 5.5, SPRITES[k].accent, 'center', 700);
   });
 
   if (snap.status) {
@@ -14657,7 +16122,12 @@ function drawFighter(g, f) {
   // character. Left off at two players, where the game has never needed it.
   if (fighters.length > 2) {
     const mx = Math.round(f.x);
-    const my = Math.round(f.y) - 24;
+    /* Ten above his head, wherever his head has got to. It used to be a flat
+       24 above his feet, which is ten clear of a standing man and buried in
+       the chest of a giant -- and in a four-way this arrow is the only thing
+       that says which of these is you. Math.round(f.y - 14) is Math.round(f.y)
+       - 14 for an integer 14, so nothing moves by a pixel at normal size. */
+    const my = Math.round(f.y - HURT_H * f.sizeMul) - 10;
     g.fillStyle = SEAT_COLORS[f.slot] || '#ffffff';
     // A little downward arrow, widest at the top.
     g.fillRect(mx - 3, my, 7, 1);
@@ -14689,14 +16159,87 @@ function drawFighter(g, f) {
   const x = Math.round(f.x - 8);
   const y = Math.round(f.y - 16);
 
+  /* POISONED. It is not a heart any more.
+
+     It was a five-pixel pink lozenge over the head -- the exact three
+     rectangles the KISS paints where it lands, in the exact same pink, which
+     you can still read twenty lines into drawEffects under 'lips'. That made
+     sense while the kiss was the only thing in the game that poisoned you. It
+     stopped making sense the day a man could be farted on: a heart floating
+     over somebody standing in a cloud of gas reads as a different status
+     entirely, and it read as the wrong one.
+
+     So: gas coming off him. Four bubbles rising out of his sides and popping
+     at about head height, in an acid green nothing else on screen is.
+
+     The four things it must not be mistaken for, and what keeps it apart from
+     each -- checked by rendering a fighter under every status side by side
+     and looking at them, which is the only way to know:
+
+       burn      warm colors, and the flames are CONTIGUOUS: fifteen rects
+                 packed into five tongues rooted at his feet, pulsing in
+                 place. These are two pixels each with air between them, and
+                 they travel and leave.
+       confused  three cream ducks on a fixed orbit above the head. Nothing
+                 here orbits, and nothing here stays.
+       the kiss  pink, one glyph, stationary, over the head.
+       the cloud that causes it is a muted olive (#9dc25a and friends). These
+                 are deliberately brighter and more acid, so a poisoned man
+                 standing inside a fart is still legible as poisoned rather
+                 than disappearing into the thing poisoning him.
+
+     Everything is derived from `f.poison`, which is simulation state and is
+     snapshotted, so a rollback replays the identical bubble instead of
+     re-rolling one -- and nothing here writes back. Drawn before the sprite,
+     like the flames and for the same reason: gas coming off his outline, not
+     gas covering the one thing you need to see. */
   if (f.poison > 0) {
-    const lx = Math.round(f.x);
-    const ly = Math.round(f.y - 20 + Math.sin(f.poison * 0.18) * 1.2);
-    g.globalAlpha = 0.55 + Math.sin(f.poison * 0.3) * 0.35;
-    g.fillStyle = '#ff5f8f';
-    g.fillRect(lx - 2, ly, 5, 1);
-    g.fillRect(lx - 1, ly - 1, 3, 1);
-    g.fillRect(lx - 1, ly + 1, 3, 1);
+    const cx = Math.round(f.x);
+    // Thin out over the last half second. Knowing a status is about to end is
+    // worth more than knowing it began -- you can plan the next input.
+    const fade = Math.min(1, f.poison / 30);
+    for (let i = 0; i < 4; i++) {
+      /* Each bubble a quarter cycle apart so they never leave together and
+         read as one pulsing block. `poison` counts DOWN, so the height is 24
+         MINUS the phase: that subtraction is the whole reason they rise
+         instead of raining. */
+      const rise = 24 - ((f.poison + i * 6) % 24);
+      const side = (i % 2) ? 1 : -1;
+      /* Launched off his sides rather than his middle. A standing hurtbox is
+         14 wide, so five and seven out sit at the edge of him and stay clear
+         of the sprite that is about to be drawn over them -- a bubble born
+         at his center would spend its whole life hidden behind his chest. */
+      /* Scaled by sizeMul, unlike the readout above it. A status GLYPH is the
+         same size on a giant because it is a label; gas coming off a body is
+         part of the body, and at sizeMul 3 a bubble born five pixels out is
+         born somewhere inside his chest and never seen at all. */
+      const bx = cx + side * ((5 + (i >> 1) * 2) * f.sizeMul +
+                              Math.sin(rise * 0.26) * 3);
+      /* 0.72 a frame tops out at f.y-20, which is under the seat arrow's
+         y-24..y-21. In a four-way that arrow is the one mark that says which
+         of these is you, and gas crossing it is worth less than it is. */
+      const by = f.y - 3 * f.sizeMul - rise * 0.72;
+      g.globalAlpha = fade * (rise > 21 ? 0.45 : 0.85);
+      /* Alternating on purpose, and the pair is chosen to bracket every
+         ground this can be drawn on rather than to look nice together. The
+         acid one survives a dark stage and the muted olive of his own cloud;
+         the deep one survives a pale stage and the sand. Half the bubbles are
+         always the readable half, which is cheaper than outlining a 2x2
+         square and does not double its size. */
+      g.fillStyle = (i % 2) ? '#d4ff3a' : '#66b812';
+      if (rise > 21) {
+        // Popping: an open ring. It is what says the thing was a bubble and
+        // not a dot that quietly faded out.
+        const rx = Math.round(bx), ry = Math.round(by);
+        g.fillRect(rx - 1, ry, 1, 1);
+        g.fillRect(rx + 1, ry, 1, 1);
+        g.fillRect(rx, ry - 1, 1, 1);
+      } else {
+        // One pixel while it is still forming, two once it is away.
+        const sz = rise < 4 ? 1 : 2;
+        g.fillRect(Math.round(bx), Math.round(by), sz, sz);
+      }
+    }
     g.globalAlpha = 1;
   }
 
@@ -14722,7 +16265,11 @@ function drawFighter(g, f) {
     const FIRE = ['#ff3c14', '#ff8a2a', '#ffd76a'];
     const fade = Math.min(1, f.burn / 30);
     const base = Math.round(f.y);
-    const left = Math.round(f.x) - 7;
+    /* The fire is drawn ON him and so is drawn at his size. A man three times
+       life size burning with life-size flames is a man standing in a small
+       campfire, which is a different picture entirely. */
+    const bk = f.sizeMul;
+    const left = Math.round(f.x) - 7 * bk;
     for (let layer = 0; layer < 3; layer++) {
       g.globalAlpha = fade * (0.85 - layer * 0.18);
       g.fillStyle = FIRE[layer];
@@ -14732,7 +16279,11 @@ function drawFighter(g, f) {
         const mid = 2 - Math.abs(i - 2);
         const h = 4 + mid * 2 + wob * 2 - layer * 2;
         if (h <= 0) continue;
-        g.fillRect(left + i * 3, base - 14 - h + layer, 2, h);
+        // Each term scaled separately rather than the sum scaled once: at
+        // sizeMul 1 that is the identical arithmetic in the identical order,
+        // so not one tongue of anybody else's fire moves by a subpixel.
+        g.fillRect(left + i * 3 * bk, base - 14 * bk - h * bk + layer * bk,
+                   2 * bk, h * bk);
       }
     }
     g.globalAlpha = 1;
@@ -14742,22 +16293,32 @@ function drawFighter(g, f) {
   // than boxing them in.
   if (f.buffTimer > 0) {
     const pulse = 0.5 + Math.sin(f.timer * 0.22) * 0.5;
+    // Around the body he actually has. A halo sized for a small man sits
+    // inside a giant's shins and reads as a bug rather than as a buff.
+    const ak = f.sizeMul;
+    // A buff may name its own color; most do not and his accent is the
+    // default. The jackpot names gold.
+    const glow = (f.buffStats && f.buffStats.glow) || f.accent;
     for (let i = 3; i >= 1; i--) {
       g.globalAlpha = 0.05 + 0.05 * pulse * i;
-      g.fillStyle = f.accent;
+      g.fillStyle = glow;
       g.beginPath();
-      g.arc(f.x, f.y - 8, 7 + i * 2.2 + pulse * 1.5, 0, Math.PI * 2);
+      g.arc(f.x, f.y - 8 * ak, (7 + i * 2.2 + pulse * 1.5) * ak, 0, Math.PI * 2);
       g.fill();
     }
     g.globalAlpha = 1;
   }
 
   if (f.state === 'shield') {
-    const r = 8 + (f.shield / COMBAT.shieldMax) * 5;
+    // Scaled with him: a bubble covering only a giant's knees would say his
+    // shield was somewhere it is not. The shield blocks by STATE, not by this
+    // circle, so this is the picture catching up with the rule.
+    const sk = f.sizeMul;
+    const r = (8 + (f.shield / COMBAT.shieldMax) * 5) * sk;
     g.globalAlpha = 0.30 + (f.shield / COMBAT.shieldMax) * 0.35;
     g.fillStyle = '#8fd6ff';
     g.beginPath();
-    g.arc(f.x, f.y - 8, r, 0, Math.PI * 2);
+    g.arc(f.x, f.y - 8 * sk, r, 0, Math.PI * 2);
     g.fill();
     g.globalAlpha = 1;
   }
@@ -14780,7 +16341,17 @@ function drawFighter(g, f) {
     g.globalAlpha = 0.6 + Math.sin(f.timer * 0.4) * 0.25;
   }
 
-  g.drawImage(im, x, y);
+  /* Drawn at his size, anchored on his FEET and his center -- the same two
+     points hurtbox() builds from, which is what keeps the picture and the
+     target the same shape. d is the cell size in screen pixels; at sizeMul 1
+     it is 16 and both expressions below reduce to x and y exactly, so every
+     other fighter in the game is blitted on the identical pixel they always
+     were. */
+  const d = Math.round(16 * f.sizeMul);
+  // Nearest-neighbor, or a 48-pixel Simon arrives blurred in a game whose
+  // whole look is that the pixels are square.
+  if (d !== 16) g.imageSmoothingEnabled = false;
+  g.drawImage(im, x + 8 - (d >> 1), y + 16 - d, d, d);
   g.globalAlpha = 1;
 
   /* The irons go on straight after the body and before the sword and the rod,
@@ -14802,7 +16373,9 @@ function drawFighter(g, f) {
   drawPole(g, f);
   drawCharge(g, f);
   drawDrink(g, f);
+  drawFartCharge(g, f);
   drawSlots(g, f);
+  drawBling(g, f);
   drawGuillotine(g, f);
   drawAxe(g, f);
   drawWhip(g, f);
@@ -14835,7 +16408,10 @@ function drawFighter(g, f) {
     // two fighters, and a duck crossing it hides the one mark that says which
     // one of these is you. In a four-way that matters more than the ducks do,
     // so the orbit climbs above it rather than sharing the space.
-    const cy = f.y - (fighters.length > 2 ? 31 : 23);
+    // Nine above his head, or seventeen when the seat arrow is there to be
+    // cleared -- measured from the head rather than the feet, so the birds do
+    // not end up circling a giant's chest.
+    const cy = f.y - (HURT_H * f.sizeMul + (fighters.length > 2 ? 17 : 9));
     // Thin out over the last two thirds of a second. Knowing it is about to
     // end is worth more than knowing it began -- you can plan the next input.
     const fade = Math.min(1, f.confused / 40);
@@ -14883,6 +16459,107 @@ function text(str, x, y, size, color, align, weight) {
   sctx.textBaseline = 'alphabetic';
   sctx.fillStyle = color;
   sctx.fillText(str, px(x), px(y));
+}
+
+/* ---- a name that is drawn in its own colors ------------------------
+
+   AutisNick's rainbow is six colors, and his name is now those six
+   colors, one per letter. They are READ OFF THE MOVE rather than typed
+   again here: his name on the HUD, his ult meter and the shot in the air
+   are one palette by construction, and a color edited in the ROSTER moves
+   all three at once. There is no second copy of the list to forget.
+
+   Keyed by the drawn NAME rather than by the roster key, because the name
+   is what the draw calls have in hand -- drawHUD holds f.def.name, the
+   results screen holds def.name + ' WINS', the banner holds whatever
+   announce() was given. Nobody else has an entry, so nameText below is a
+   free swap for text() anywhere a fighter's name can turn up. */
+const NAME_PALETTES = {};
+if (ROSTER.autisnick && ROSTER.autisnick.specials.up.colors) {
+  NAME_PALETTES[ROSTER.autisnick.name] =
+    ROSTER.autisnick.specials.up.colors.map((c) => c.css);
+}
+
+/* Where a palette name sits inside a string, or null. A substring search
+   rather than an equality test, so the strings that WRAP a name get it too:
+   'AUTISNICK WINS', 'AUTISNICK KO!', 'P2   AUTISNICK' in a lobby row. */
+function paletteIn(str) {
+  for (const name in NAME_PALETTES) {
+    const at = str.indexOf(name);
+    if (at >= 0) return { at: at, end: at + name.length, cols: NAME_PALETTES[name] };
+  }
+  return null;
+}
+
+/* text(), except that a name with a palette is drawn one letter at a time.
+
+   ALIGNMENT is the whole difficulty, and getting it wrong would be obvious:
+   text() hands the finished string to fillText and lets the canvas place it
+   for 'center' and 'right', and a per-letter loop has to do that placement
+   itself or his name sits where no other name sits. So the string is
+   measured once -- with the font already set, since measureText answers for
+   whatever font is current -- the left edge is worked out from the alignment
+   exactly as the canvas would have, and the letters run from there. Whatever
+   is not part of the name is drawn in the flat color by the same walk, so
+   the line stays one measured unit and nothing around it moves.
+
+   The running x is a float and only the fillText position is rounded, so
+   nine letters cannot accumulate nine roundings of drift.
+
+   Each letter is measured rather than dividing the total by the length. The
+   font is monospace, so the shortcut would be right today and silently wrong
+   the day any of this is drawn in a proportional face. */
+function nameText(str, x, y, size, color, align, weight) {
+  const p = paletteIn(str);
+  if (!p) { text(str, x, y, size, color, align, weight); return; }
+  sctx.font = (weight || 600) + ' ' + Math.round(size * SCALE) + 'px Consolas, monospace';
+  sctx.textBaseline = 'alphabetic';
+  // Every letter is placed by hand, so the canvas must not also place it.
+  sctx.textAlign = 'left';
+  const a = align || 'left';
+  const w = sctx.measureText(str).width;
+  let cx = px(x) - (a === 'center' ? w / 2 : a === 'right' ? w : 0);
+  const yy = px(y);
+  for (let i = 0; i < str.length; i++) {
+    sctx.fillStyle = (i >= p.at && i < p.end)
+      ? p.cols[(i - p.at) % p.cols.length]
+      : color;
+    sctx.fillText(str.charAt(i), Math.round(cx), yy);
+    cx += sctx.measureText(str.charAt(i)).width;
+  }
+}
+
+/* The ult meter as six bands instead of one color.
+
+   The bands are pinned to the BAR, not to the fill. Colour i owns the same
+   sixth of the 62 pixels whether the meter is empty or full, and only the
+   part of it that is filled gets drawn -- so the bar is still a length
+   against a dark track, which is the entire job of a meter. Squeezing all
+   six colors into the filled part instead would show a whole rainbow at
+   every charge, and a bar that looks finished at 20% is a broken bar.
+   Pinned, the color at the leading edge says how full it is a second time:
+   red is nothing yet, purple is nearly there.
+
+   Each band runs from one rounded device-pixel edge to the next rather than
+   being drawn as a rounded width, so neighbors share an edge exactly.
+   Rounding widths leaves a one-pixel seam of dark track between bands at
+   some scales, and five seams in a two-pixel bar read as a dashed line
+   rather than as a meter.
+
+   globalAlpha is deliberately not touched: drawHUD has already set the pulse
+   for a meter that is ready to spend, so the rainbow pulses with it. */
+function ultRainbow(bx, y, barW, frac, cols) {
+  const lit = barW * frac;
+  const band = barW / cols.length;
+  for (let i = 0; i < cols.length; i++) {
+    const from = i * band;
+    if (from >= lit) break;
+    const x0 = px(bx + from);
+    const x1 = px(bx + Math.min(from + band, lit));
+    if (x1 <= x0) continue;
+    sctx.fillStyle = cols[i];
+    sctx.fillRect(x0, px(y), x1 - x0, px(2));
+  }
 }
 
 function drawHUD() {
@@ -14941,7 +16618,7 @@ function drawHUD() {
       : '#ff5f5f';
 
     const seatCol = n > 2 ? (SEAT_COLORS[i] || f.accent) : f.accent;
-    text(f.def.name, bx, nameY, 6, seatCol, 'left', 700);
+    nameText(f.def.name, bx, nameY, 6, seatCol, 'left', 700);
     text(f.eliminated ? 'OUT' : String(Math.max(0, Math.ceil(f.health))),
          bx + barW, nameY, 7, hue, 'right', 800);
 
@@ -15009,7 +16686,17 @@ function drawHUD() {
       }
       const frac = armed ? f.swordTimer / f.def.ult.duration
                          : clamp(f.ultMeter / COMBAT.ultMax, 0, 1);
-      sctx.fillRect(px(bx), px(ultY), px(barW * frac), px(2));
+      /* His meter is his move. Same length, same track, same flash when it
+         is ready to spend -- only the fill is his six colors instead of the
+         one accent, which is the same trade his name makes at the top of
+         the block.
+         Skipped while a weapon is in hand, where the bar has stopped being a
+         charge and become a countdown and the blade's own color is what
+         says so. Nothing in the roster is both today: his ult is a man on a
+         vine, not a weapon, so `armed` is never true for him. */
+      const bandCols = armed ? null : NAME_PALETTES[f.def.name];
+      if (bandCols) ultRainbow(bx, ultY, barW, frac, bandCols);
+      else sctx.fillRect(px(bx), px(ultY), px(barW * frac), px(2));
       sctx.globalAlpha = 1;
     }
   }
@@ -15024,10 +16711,10 @@ function drawHUD() {
       const who = (sl >= 0 && fighters[sl]) ? fighters[sl].def.name : 'THE OTHER PLAYER';
       if (netplay.stalling) {
         sctx.globalAlpha = 0.7 + Math.sin(battleFrames * 0.25) * 0.3;
-        text('WAITING FOR ' + who, VW / 2, 13, 8, '#ff8a5f', 'center', 800);
+        nameText('WAITING FOR ' + who, VW / 2, 13, 8, '#ff8a5f', 'center', 800);
         sctx.globalAlpha = 1;
       } else {
-        text(who + "'S MACHINE IS BEHIND", VW / 2, 13, 6, '#c8a05a', 'center', 600);
+        nameText(who + "'S MACHINE IS BEHIND", VW / 2, 13, 6, '#c8a05a', 'center', 600);
       }
     }
   }
@@ -15035,7 +16722,7 @@ function drawHUD() {
   if (banner) {
     const k = banner.t < 10 ? banner.t / 10 : Math.min(1, (banner.life - banner.t) / 18);
     sctx.globalAlpha = clamp(k, 0, 1);
-    text(banner.text, VW / 2, 44, 16, banner.color, 'center', 800);
+    nameText(banner.text, VW / 2, 44, 16, banner.color, 'center', 800);
     sctx.globalAlpha = 1;
   }
 }
@@ -15229,7 +16916,7 @@ function drawSelect() {
     }
 
     drawPortrait(k, cx, cy + 32, 1.7);
-    text(def.name, cx, cy + 40, 6, SPRITES[k].accent, 'center', 700);
+    nameText(def.name, cx, cy + 40, 6, SPRITES[k].accent, 'center', 700);
   });
 
   // Detail panel for whichever character the active cursor is on.
@@ -15294,7 +16981,7 @@ function drawResults() {
   if (winnerKey) {
     const def = ROSTER[winnerKey];
     drawPortrait(winnerKey, VW / 2, 88, 4.2);
-    text(def.name + ' WINS', VW / 2, 116, 20, SPRITES[winnerKey].accent, 'center', 800);
+    nameText(def.name + ' WINS', VW / 2, 116, 20, SPRITES[winnerKey].accent, 'center', 800);
   } else {
     text('DRAW', VW / 2, 100, 20, '#ffffff', 'center', 800);
   }
@@ -15385,7 +17072,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '599316ef60';
+const BUILD_ID = 'cc8e35da7e';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -15396,7 +17083,7 @@ const BUILD_ID = '599316ef60';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.68';
+const VERSION = '2.69';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
