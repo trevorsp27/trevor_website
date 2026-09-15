@@ -469,7 +469,15 @@ function checkGroundedOnly(air, ground) {
   assert.equal(ground.meter, 0, "and spend the whole meter; it read " + ground.meter);
 }
 
-const GROUND_ONLY_FLAG = ["    groundOnly: true,\n", "    groundOnly: false,\n"];
+/* Anchored on the line AFTER it as well, because `groundOnly: true` is no
+   longer Simon's alone -- Houston's road carries it too, for the same reason
+   and since the same release. `heal: 25` is the slouch's and nothing else's,
+   so the pair is unique again and this control still undoes the flag on the
+   ult it is about. The uniqueness check in sabotaged() is what caught it. */
+const GROUND_ONLY_FLAG = [
+  "    groundOnly: true,\n    heal: 25,\n",
+  "    groundOnly: false,\n    heal: 25,\n",
+];
 const GROUND_ONLY_GATE = [
   "          (this.grounded || !this.def.ult.groundOnly)) {\n",
   "          true) {\n",

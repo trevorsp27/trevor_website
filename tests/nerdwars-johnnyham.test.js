@@ -270,10 +270,12 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
     cobeus: "DESIGNATED DRIVER", simon: "SIMON SLOUCH",
     squalls: "SALAMENCE", christian: "FOUR AND TWENTY",
     /* Houston arrived in 2.74 with a character sheet, a lawnmower and a
-       carton of milk, and nothing whatsoever for an ult. His is a working
-       placeholder and says so on the select screen; see the exception
-       below, which is what keeps that fact from going quiet. */
-    houston: "PLACEHOLDER",
+       carton of milk, and a placeholder where his ult should be. He has one
+       now: a road he paves on the spot, and the three cars it gets him. What
+       it DOES is measured in nerdwars-houston-newdeal.test.js; this table
+       only insists the name on the roster screen is the one the shipped
+       bundle carries. */
+    houston: "FDR'S NEW DEAL",
   })) {
     assert.equal(ults[key], ult, key + "'s ult should be " + ult);
   }
@@ -283,17 +285,18 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
      drawn for him, and this is the assertion that stops the next one being
      shipped quietly and left there.
 
-     An empty string was the right answer right up until an eleventh fighter
-     arrived with two moves drawn for him and no ult, so it is a named list
-     now rather than a count or a "not more than": a twelfth placeholder
-     fails this, and so does Houston's ult quietly becoming something real
-     without this line being read again. The list is the promise, and it has
-     one name on it. */
+     A named list rather than a count or a "not more than", so it fails in
+     BOTH directions: a twelfth fighter shipped with a placeholder ult fails
+     it, and so does a placeholder quietly becoming something real without
+     this line being read again. It has been empty, then "houston" for the
+     one release he had a lawnmower and no ult, and it is empty again now
+     that FDR'S NEW DEAL exists. Every one of those three changes was caught
+     here first, which is the whole reason it is written this way. */
   const placeholders = g.nw.roster
     .filter((c) => /PLACEHOLDER/i.test(c.ult || ""))
     .map((c) => c.key).join(", ");
-  assert.equal(placeholders, "houston",
-    "the placeholder ults should be exactly houston; they are: " +
+  assert.equal(placeholders, "",
+    "no ult should still be a placeholder; these are: " +
     (placeholders || "none"));
 
   // And nobody is left without one: an ult read off a fighter who has none is

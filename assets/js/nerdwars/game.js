@@ -1686,6 +1686,12 @@ function moveCost(m) {
   // Worth more per frame than `punish`: that one has to catch somebody
   // mid-swing, this one only has to land.
   if (m.stun) power += m.stun * 0.25;
+  /* Levelling two health bars, priced at TWICE the cap. The cap is how much
+     health changes hands; the scoreline moves by twice it, because every
+     point the attacker gains is a point the defender lost. Pricing it at
+     `cap` once would have charged half what the move does, which is the
+     mistake the grab branch above documents in the other direction. */
+  if (m.share) power += m.share.cap * 2;
   if (m.shieldBreak) power += 8;
   if (m.quake) power += m.quake.damage * 2;   // it lands twice, one each way
 
@@ -2777,7 +2783,11 @@ ROSTER.christian = {
 ROSTER.houston = {
   name: 'HOUSTON',
   origin: 'fresh',
-  tag: 'MILK & A LAWNMOWER',
+  /* Was 'MILK & A LAWNMOWER', which named every move he had on the day two
+     of his four existed. He paves a highway for his ult and swings a hammer
+     to get home now, so the tag names the two halves of the man rather than
+     the two moves that happened to be finished first. */
+  tag: 'PUBLIC WORKS & SPILT MILK',
   drawn: true,
   /* 94 is under everybody -- the lightest on the roster, where the field
      runs 96 to 106 -- because he is a boy and because the kit above wants
@@ -2935,35 +2945,292 @@ ROSTER.houston = {
          move that clears the screen and walks him fifty pixels. */
       manaOverride: 32,
     },
-    /* PLACEHOLDER, but a working recovery, exactly like Cobeus's and
-       Simon's: every other character's `up` is how they get home, and a
-       fighter who cannot is not playable. `uppercut` on purpose -- it is
-       the best-understood mover in the file and the only one whose failure
-       modes are written down, and a placeholder should be boring rather
-       than a new source of bugs. Nothing about it is his. */
+    /* HAMMER & SICKLE. He swings the emblem up over his head, and whoever
+       it lands on ends the swing with the same health he has.
+
+       THE MOVE IS REDISTRIBUTION. Four damage, which is less than his jab,
+       and then the two health bars are levelled: up to `share.cap` points
+       move from whichever of them has more to whichever has less. Nothing
+       else on this roster equalizes anything -- every other move in the
+       file takes health off somebody and that is the end of it -- and this
+       is the one that asks what the DIFFERENCE between the two bars is.
+
+       IT POLICES ITSELF, which is the reason to build it this way rather
+       than as a drain. Behind, it is the best comeback tool in the game.
+       Ahead, it is a gift to the man he is beating, and he cannot help
+       casting it, because -- see below -- it is also the only way he gets
+       back on stage. A move that is a mistake exactly when you are winning
+       needs no nerf written for it; it comes with one.
+
+       It can never take a stock and it can never save one. Health only
+       moves TOWARD the midpoint, so the richer man is left at the midpoint
+       at worst, which is at least what the poorer one had, which is above
+       zero -- there is no arithmetic here that ends at a KO. The other
+       direction is a deliberate guard in applyHit: if the four damage was
+       lethal, the sharing does not run at all, because a recovery that
+       heals a man out of the KO he just took reads as the game glitching
+       rather than as a joke landing.
+
+       THE CAP IS THE WHOLE SAFETY VALVE. Fifteen points change hands, so
+       the gap between the two bars closes by THIRTY -- already the biggest
+       single swing any non-ult move in the file can produce, and that is
+       with the cap on. Uncapped it is an average, and an average decides a
+       match the first time it connects: 12 against 100 becomes 56 and 56,
+       and the man who spent a stock earning that lead has it taken back by
+       one button. Capped, erasing a full bar's deficit takes three landed
+       swings and three mana bars, which is a comeback somebody has to
+       actually play out.
+
+       AND IT IS THE RECOVERY, because `up` is the recovery slot and a
+       fighter who cannot get home is not playable. That is why the hammer
+       swings UPWARD and carries him with it: one move, both jobs, and no
+       second special asked to do the work. `kind: 'uppercut'` is not
+       laziness about it -- it is the only kind the CPU knows how to use as
+       a recovery (see aiDecide, which reaches for an up special by kind
+       when it is falling with no jumps left) and the only one the recovery
+       test in the suite recognizes by kind rather than by a stray `rise`.
+       A bespoke kind here would have shipped a character the computer
+       never brings home and a test that quietly stopped covering him.
+
+       Weaker than the placeholder it replaces on every number that is not
+       the sharing -- 6 damage down to 4, a gentler launch, three more
+       frames of recovery -- because the placeholder was priced as a hit and
+       this is priced as a hit plus half a health bar's worth of swing. */
     up: {
-      kind: 'uppercut', label: 'PLACEHOLDER',
-      startup: 5, active: 13, recovery: 18,
-      rise: -6.4, drift: 0.8,
-      damage: 6, base: 2.2, scale: 5.2, angle: 84,
+      kind: 'uppercut', label: 'HAMMER & SICKLE',
+      startup: 6, active: 12, recovery: 21,
+      rise: -6.2, drift: 0.8,
+      /* Draws the emblem over his head for the whole swing -- see the
+         `uppercut` case in runSpecial, which spawns it beside the barbell
+         and the chess piece, and HAMMER_SICKLE_ART, which is the shape. */
+      emblem: true,
+      /* The angle triple is the placeholder's, unchanged and deliberately
+         so: build.py verifies angle against kx/ky to 1e-12 and a hand-typed
+         cosine is exactly the kind of thing that passes review and fails the
+         build. 84 degrees is very nearly straight up, which is what a hammer
+         swung overhead does and also what this move wants -- popped up
+         rather than sent away, so the man he just levelled with is still
+         standing next to him. */
+      damage: 4, base: 2.0, scale: 3.6, angle: 84,
       kx: 0.10452846326765346, ky: 0.99452189536827329,
-      ox: -6, oy: -19, w: 13, h: 23,
+      /* `ox` is the near edge and `oy` the box's CENTRE, so this runs from
+         8 above his feet to 32 above them: his own head and the whole arc
+         over it, which is where a two-handed swing actually is. */
+      ox: -7, oy: -20, w: 15, h: 24,
+      /* Read in applyHit, priced in moveCost. Fifteen is the argument at
+         the top of this comment; nothing else in here reads it. */
+      share: { cap: 15 },
+      /* moveCost prices the sharing at twice the cap, because twice the cap
+         is what it does to the scoreline, and lands on 49. That is an honest
+         number for the best case and the wrong number for the move, because
+         the best case is the one where he is losing and the common case is
+         the one where the CPU fires his recovery at whatever health he
+         happens to be on. It is also his ONLY way home: a recovery he cannot
+         afford is not an expensive move, it is a stock.
+
+         40 is the compromise. Four bars' worth of sharing is still a whole
+         health bar, so the comeback is intact; it just costs him the milk
+         and the mower for as long as he is paying for it.
+
+         AND THE HONEST PART, because the usual yardstick did not settle
+         this and should not be quoted as though it had. Over 80 CPU-vs-CPU
+         matches his overall win rate went 36.1% to 36.9% -- a wash, and a
+         wash for a reason that has nothing to do with the number above:
+         THE CPU NEVER LANDS AN UP SPECIAL WITH HIM. It cast this one 104
+         times and connected 3, against 104 casts and 6 connections for the
+         placeholder it replaces. The cause is in aiDecide and is older than
+         this move: the range gate for reaching for a special at all is read
+         off the character's NEUTRAL, which for Houston is a carton thrown
+         30 to 110 pixels, and the slot is then chosen separately -- so it
+         picks `up` almost exclusively at ranges a fifteen-pixel box cannot
+         reach. Whatever this move is worth, CPU win rates cannot see it,
+         and a future tuning pass should measure it by hand or fix the gate
+         rather than trust a number this blind. */
+      manaOverride: 40,
     },
   },
-  /* PLACEHOLDER. A burst around him and nothing else.
+  /* FDR'S NEW DEAL.
 
-     `shockwave` rather than the `uppercut` the placeholder specials use,
-     and for one reason: an ult that launches him is an ult that puts the
-     lightest fighter on the roster in the air every time the meter fills,
-     and the CPU fires an ult the moment it has one. This does two things,
-     both of them in runSpecial and both of them two lines long, and leaves
-     him standing where he was. Dull is the requirement. */
+     HE DOES NOT SUMMON CARS. He breaks ground, and a stretch of highway
+     paves itself in where he is standing -- wide at his feet, narrowing away
+     to a vanishing point in the sky. Then it opens to traffic, and three
+     cars come down it out of the distance, each of them shorter than he is
+     when it appears and three times his height by the time it arrives. The
+     road is the public work; the traffic is what a road gets you. That is the
+     joke, and it is also the whole mechanic: he builds a PLACE, and the
+     place stays dangerous for three seconds after he has walked away.
+
+     THE PERSPECTIVE IS THE POINT. Everything else in this game is drawn flat
+     side-on. This is the one thing in it drawn down the barrel, with a
+     vanishing point and objects that SCALE UP as they come out of it, and
+     that register is the reason to spend the art on an ult rather than on
+     anything else -- nothing on the roster looks remotely like it.
+
+     HOW IT IS NOT COBEUS'S CAR, which has to be said, because he has one:
+
+       His is side-on and crosses the WHOLE stage the way he is facing. One
+       press, arrives immediately, nowhere to be that it does not reach, and
+       he is inside it -- he does not move because he IS the move.
+
+       This is a PLACE. It covers 123 pixels of a 320-pixel stage and not one
+       more, it is over two seconds before the first car touches anything,
+       and Houston is free to keep playing the moment his recovery ends.
+       Nothing here hits you that you did not watch coming for a second and
+       a half.
+
+     WHERE TO STAND IS PAINTED ON THE ROAD. Kel drew two lanes, a dashed
+     white line between them and a yellow line down each edge, so the safe
+     ground is not a number in this file that a player has to learn by dying
+     -- it is a white stripe on the floor. The cars run in the two lanes; the
+     line down the middle and the shoulders outside are clear.
+
+     And that white line is exactly where HOUSTON is standing, because the
+     road is centred on him. So the outs are: walk sixty pixels and hand him
+     the middle of the stage for three seconds, or stand next to the man with
+     a jab and a lawnmower. That is a real question, and the answer changes
+     with how much health you have left.
+
+     IT IS THE REST OF HIS KIT AT ULT SIZE. He is the one fighter who takes
+     GROUND rather than health -- a puddle that costs you traction for five
+     and a half seconds, a mower that walks a lane and eats what is in it --
+     and a road is that move made enormous. They stack, too: milk laid on the
+     shoulder makes the way off the road the way you slide back onto it.
+     Nothing else on the roster can set that up.
+
+     `groundOnly`, which the ult button already understands: you cannot pave
+     the sky. Same rule canSpecial puts on the mower and for the same reason,
+     and a refused press costs him nothing.
+
+     WHAT IT DID TO HIM, on the house yardstick. Ninety CPU-vs-CPU matches
+     against each of the other ten, all six stages, seats alternated, one
+     seed, the same fights run twice with only this move swapped: 38.8% of
+     680 finished matches with the 2.74 placeholder, 43.5% of 674 with this.
+     Still under even, which is where the lightest fighter on the roster with
+     a jab of five belongs, and it is an UPPER bound rather than a reading --
+     the CPU dodges nothing, so it walks into all three cars, and a move whose
+     counterplay is a white stripe on the floor cannot help but measure
+     stronger than it plays. 13 a car is under what it feels like it is
+     worth, deliberately, and that is the reason.
+
+     Every number below with a pixel in it is in the same units as
+     SPRITES.newdeal.near, the measured width of the drawing's near edge:
+     `laneX` and `carW` are widths AT THE NEAR EDGE and shrink with the road,
+     so a car is never drawn at a size the road has no lane for. */
   ult: {
-    kind: 'shockwave', label: 'PLACEHOLDER',
-    startup: 14, active: 4, recovery: 26,
-    damage: 18, base: 3.8, scale: 8.4, angle: 50,
-    kx: 0.6427876096865394, ky: 0.766044443118978,
-    ox: -20, oy: -12, w: 40, h: 24,
+    kind: 'newdeal', label: "FDR'S NEW DEAL",
+    groundOnly: true,
+    /* Short, because the road outlives it by three seconds. He is only
+       locked up for the groundbreaking; the move carries on without him. */
+    startup: 20, active: 6, recovery: 24,
+    /* The road paints itself in from his feet AWAY, over 26 frames. It is a
+       construction project and you watch it get built -- 26 rather than 0
+       because a road that was simply always there is a texture, not an
+       event, and the event is half of what the move is selling. */
+    pave: 26,
+    travel: 84,           // frames from the vanishing point down to his feet
+    gap: 34,              // and between one car being let on and the next
+    /* Nine frames past the near edge before it is gone, so the last thing a
+       car does is get BIGGER and drop off the bottom of the road rather than
+       blink out at the moment it arrives.
+
+       Nine is near the ceiling and `maxSize` is why that is safe rather than
+       a hope: size is one over the distance, distance reaches zero at 1.43
+       of a travel, and a car there would be infinitely large. The clamp makes
+       that unreachable instead of leaving it for somebody to find. */
+    past: 9, maxSize: 1.6,
+    /* And 14 frames of the road being lifted afterwards. It fades rather than
+       blinking out, because the last car's dust is still settling on it and a
+       floor that disappeared underneath that reads as a bug rather than as
+       the end of a move. */
+    fade: 14,
+    /* WHICH LANE EACH CAR TAKES, times his facing -- so the lane that gets
+       two of the three is the one he is LOOKING at. The road is centred on
+       him and he is usually looking at the other fighter, which makes this
+       the one aiming decision in the move, and it is worth something: parked
+       in the doubled lane and left alone you take 26, parked in the other
+       one you take 13.
+
+       28 is a lane's middle, and it is the DRAWING'S number rather than one
+       of mine: Kel's asphalt runs to 56 either side of the white line, so the
+       centre of a lane is half of that.
+
+       It was 30 for a while, on the theory that nudging the traffic outward
+       would widen the stripe down the middle that a player can see and stand
+       on. MEASURED -- a target parked at every second pixel of offset with
+       the whole ult run at each one -- it does not. Standing on the floor the
+       untouched window is -8 to +8 at BOTH 28 and 30; it is -6 to +6 at 26
+       and -10 to +10 at 32, so the stripe does move, just not between those
+       two. What 30 actually cost was two pixels of shoulder: the far edge of
+       the road stops being safe at 60 with lanes at 28 and at 62 with lanes
+       at 30. So the drawing wins, having measured the same and given more
+       back. A fighter is 9 wide.
+
+       The same sweep 46 pixels up in the air says -2 to +2, and that is the
+       move working rather than a wrinkle: a car's lane offset is a fraction
+       of the road's width at its row, so up where the road is narrow the two
+       lanes are nearly on top of each other. Jumping does not get you out of
+       traffic. Walking does. */
+    laneX: 28, lanes: [1, -1, 1],
+    /* How wide a car is drawn when it arrives. 34 of a 123-wide road is
+       about what a car is of a two-lane road, and it is also as big as this
+       should get: the drawing is much taller than it is wide, so 34 across
+       is 44 tall, which is already most of three fighters stacked up. */
+    carW: 34,
+    /* A car is SCENERY until it is half size. Half is not arbitrary: at half
+       size its wheels are 60 pixels above the floor it is heading for, and
+       that is under the top platform of every stage in this file -- 68
+       against 52 on the swamp, 74 against 54 in space, 62 against 58 on the
+       battlefield -- so a car in the distance can never clip somebody
+       standing up there. Under `bite` it is also drawn BEHIND the stage,
+       which is the same sentence written in paint.
+
+       The consequence is deliberate and should be said out loud: THE TOP
+       PLATFORM IS OUT OF THE TRAFFIC. The side platforms are not -- they sit
+       thirty to forty pixels up and the sweep starts at sixty -- so the one
+       place the road cannot reach is the one place you are cornered, with no
+       ledge, having given Houston the entire floor for three seconds. That is
+       a trade, not a hole. */
+    bite: 0.5,
+    /* The box is a FRACTION of the drawn car rather than a rectangle, because
+       the drawn car is a different size every frame. 0.82 of the width keeps
+       the wing mirrors out of it and 0.86 of the height keeps the roof out
+       -- the same courtesy Cobeus's box does his bumper. */
+    boxW: 0.82, boxH: 0.86,
+    /* What a car does when it reaches you. Its own spec, inside the ROSTER
+       literal, for the reason the milk's puddle is: simFrozen keeps what it
+       finds here by reference, and a payload built per car would be
+       deep-copied into every snapshot sixty times a second.
+
+       Thirteen apiece and three of them. `hitEvery` is 40, which is longer
+       than a car has left by the time it is close enough to touch anybody,
+       so one car is one hit per person.
+
+       WHAT THAT ACTUALLY COMES TO, measured rather than multiplied out. Stand
+       still and it is 13 or 26 depending on which lane you picked. All three
+       -- 39, against the 44 Cobeus's car can take off a body it catches twice
+       -- needs a car to throw you out of one lane and into the other, which
+       is what the launch below is for and which did happen on its own the
+       first time the road was built near a ledge. So the ceiling is real and
+       it is not the number anyone should be reading this as.
+
+       THE LAUNCH IS SIDEWAYS and that is the whole reason this kills. 34
+       degrees is flat, and applyHit takes its direction from which side of
+       the victim the CAR is, so a car throws you away from itself -- measured
+       at vx +4.25 on the right of a car and -4.25 on the left, off the same
+       hit. The middle of the road throws you at a shoulder, and a shoulder
+       throws you off the stage. Build it beside a ledge and a car can take a
+       stock at nought percent off somebody who does not recover; build it in
+       the middle and it is three seconds of floor nobody can use.
+
+       `shreds`, which is the second time this character has had it. A car
+       deletes the shots it drives through exactly the way his mower deletes
+       the ones it walks over -- sweepFrail needs no new code for it -- and
+       only while it is close enough to be a hitbox at all. */
+    traffic: {
+      damage: 13, base: 3.2, scale: 7.0, angle: 34,
+      kx: 0.8290375725550417, ky: 0.5591929034707469,
+      hitEvery: 40,
+    },
   },
 };
 
@@ -3312,6 +3579,9 @@ function loadAssets(done) {
   SPRITES.bottle.forEach((uri, i) => grab('bottle.' + i, uri));
   grab('glass', SPRITES.glass);
   grab('car', SPRITES.car);
+  // Houston's ult: one road and the three cars that come down it.
+  grab('newdeal.road', SPRITES.newdeal.road);
+  SPRITES.newdeal.cars.forEach((uri, i) => grab('newdeal.car.' + i, uri));
   grab('ak', SPRITES.ak);
   // Simon's four moves. Named here for the reason in the comment above.
   for (const k in SPRITES.hotdog) grab('hotdog.' + k, SPRITES.hotdog[k]);
@@ -4332,7 +4602,13 @@ class Fighter {
              deck is a projectile that outlives the frame, so neither move
              has a melee box -- and a mower that ALSO grew one on his chest
              would be a second, invisible hitbox nobody authored. */
-          s.kind === 'milk' || s.kind === 'mower') return null;
+          /* And his ult, for the same reason: FDR'S NEW DEAL puts a road
+             on the stage and the road puts cars on itself. Nothing about
+             the move is a rectangle in front of him, and a melee box grown
+             on his chest while he breaks ground would hit people the
+             traffic was meant for, a second and a half early. */
+          s.kind === 'milk' || s.kind === 'mower' ||
+          s.kind === 'newdeal') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -5888,6 +6164,24 @@ class Fighter {
         }
         break;
 
+      /* GROUNDBREAKING. He puts a road down where he is standing and that is
+         the whole of what he does -- the Roadway paves itself in, lets its
+         three cars on and lifts, all on its own clock, and it outlives this
+         move by about three seconds. Nothing below reads attackFrame again. */
+      case 'newdeal':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Roadway(this, s));
+          cue('deadlift', { slot: this.slot, x: this.x });
+          // Six shovelfuls, thrown the width of a road that does not exist
+          // yet, which is what breaking ground for one looks like.
+          for (let i = 0; i < 6; i++) {
+            addEffect('dust', this.x + rand(-1, 1) * (ROAD_NEAR / 2),
+                      this.y, '#c9c6c2');
+          }
+        }
+        break;
+
       case 'knight':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
@@ -6223,6 +6517,28 @@ class Fighter {
         if (s.overhead && this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active) {
           addEffect('bar', this.x, this.y - 24, s.overhead);
+        }
+        /* The emblem, swung up with him and held there for the whole of the
+           hitbox -- beside the barbell above, for the same reason and by the
+           same mechanism: respawned every frame at life 2 rather than kept
+           as fighter state, so it is cosmetic all the way down and a rollback
+           has nothing of it to rewind.
+
+           Drawn 22 above his feet, which puts its seventeen pixels between 13
+           and 30 up: inside the 8-to-32 the hitbox covers, so what is painted
+           is inside what can hit you rather than waving about somewhere else. */
+        if (s.emblem && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active) {
+          const e = addEffect('emblem', this.x, this.y - 22, EMBLEM_GOLD);
+          /* LIFE 2, the rifle's number, and the first render is why. The
+             default is 16, and sixteen frames of a fading emblem respawned
+             once a frame while he climbs forty pixels is not an object held
+             overhead -- it is a gold ladder up the screen, twelve emblems
+             tall, and the shape nobody can read twelve of at once is the one
+             this move is about. At 2 the oldest copy on screen is one frame
+             behind the newest, which is a held object with a faint smear
+             rather than a stack. */
+          if (e) { e.vx = 0; e.vy = 0; e.life = 2; }
         }
         // A geyser throws its own contents about. Droplets come off the
         // column the whole way up, not just at the start, so the move reads
@@ -7591,6 +7907,53 @@ const DUMBBELL_V_ART = [
   '..b..',
   'wwwww',
   'wwwww',
+];
+
+/* THE HAMMER AND THE SICKLE, for Houston's recovery, drawn rather than
+   blitted because nobody drew one -- the same answer the Star of David and
+   the chess pieces got, and for the same reason.
+
+   HAND-PLACED, not walked out of a curve routine, and the first four
+   attempts at the curve are why. A crescent generated from two circles at
+   this size is a fat comma that merges into whatever is next to it; every
+   radius that gave a readable blade gave a blade touching the hammer. What
+   reads at seventeen pixels is a thin C with a hook at the top, a mallet
+   head sitting on a NECK narrower than itself, and the two handles crossing
+   in a clean X low down -- which is also, as it happens, how the real
+   emblem is laid out, so getting it legible and getting it right turned out
+   to be the same job.
+
+   THE OUTLINE IS LOAD-BEARING, twice over. Every hammer pixel is ringed in
+   'o' before the hammer is painted, which is what keeps the handle reading
+   as a stick lying ACROSS the blade instead of fusing with it where they
+   cross. And the same ring round the whole emblem is what the Star of David
+   carries its white field for: flat gold is invisible on the sand stage and
+   the dark ring is invisible on the night ones, and a shape wearing both is
+   visible on either.
+
+   Deliberately NOT mirrored when he faces left. Every other held object in
+   the file flips with its owner; this one is an emblem rather than a prop,
+   and a backwards hammer and sickle is not a hammer and sickle. */
+const EMBLEM_GOLD = '#e8b43c';
+const EMBLEM_EDGE = '#3a2212';
+const HAMMER_SICKLE_ART = [
+  '.....ooooo.......',
+  '...ooo###oooooooo',
+  '..oo###oooo#####o',
+  '.oo###oo..o#####o',
+  'oo###oo...o#####o',
+  'o###oo....o#####o',
+  'o###o.....oo##ooo',
+  'o###oo....oo##o..',
+  'oo###oo..oo##oo..',
+  '.ooo##oooo##oo...',
+  '...oo##oo##oo....',
+  '....oooo##oo.....',
+  '.....oo##oo......',
+  '....oo##oooo.....',
+  '....o##oo##oo....',
+  '....oooooo##o....',
+  '.........oooo....',
 ];
 
 /* Gym equipment. A dumbbell is two weights and a short bar; a barbell
@@ -13398,6 +13761,281 @@ class Mower {
   draw() {}
 }
 
+/* =====================================================================
+   FDR'S NEW DEAL - a road, and the traffic a road gets you.
+
+   See ROSTER.houston.ult for what the move is and why it is not the other
+   car in this file. What is here is the perspective, which is the only part
+   of it that is unusual as CODE.
+
+   THE ROAD'S OWN GEOMETRY, measured by build.py off the drawing and shipped
+   beside the picture so nothing here carries a second copy of it to drift.
+   `near` is how wide the trapezoid is at its bottom row, `far` at its top,
+   `rows` how tall it is. Everything else follows from those three, because
+   the taper is a straight line -- which build.py checks, and refuses to ship
+   a road that fails.
+
+   NUMBERS rather than IMG['newdeal.road'].width and .height, and that is not
+   fussiness. These feed hitboxes; an Image that has not finished decoding
+   answers with zeroes; and a car whose box came out zero-sized on one machine
+   and full-sized on the other is a desync, in the one part of this game that
+   may never have one.
+   ===================================================================== */
+
+const ROAD_NEAR = SPRITES.newdeal.near;
+const ROAD_FAR = SPRITES.newdeal.far;
+const ROAD_ROWS = SPRITES.newdeal.rows;
+/* The drawn car is taller than it is wide; this is how much. It means the
+   ROSTER carries ONE size number for a car -- the width a lane allows it --
+   and the height is the artist's, at every scale, forever. */
+const ROAD_CAR_TALL = SPRITES.newdeal.ch / SPRITES.newdeal.cw;
+
+/* THE ROAD. A public work: he breaks ground and it paves itself in, from his
+   feet away toward the vanishing point, and then it lets cars onto itself
+   until it is done and lifts.
+
+   It is a projectile because it is a thing in the world with a position and a
+   clock, and because that is what the rollback already knows how to rewind.
+   It is not a hitbox, and nothing can destroy it -- see `shreds` below. */
+class Roadway {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    /* Latched, and this is the move. The road does NOT follow him: he builds
+       it and walks away, which is the whole reason it outlives his recovery
+       by three seconds and the whole reason WHERE he stands to cast it is a
+       decision worth making. */
+    this.x = owner.x;
+    this.y = owner.y;
+    /* Which way he was looking when he broke ground. Two of the three cars
+       come down the lane on that side; see `lanes` in the ROSTER. Latched
+       for the reason the mower's direction is: turning round afterwards must
+       not re-aim something he committed to twenty frames ago. */
+    this.dir = owner.facing;
+    this.t = 0;
+    this.sent = 0;          // how many cars have been let onto it
+    /* Never a hitbox, and nothing deletes it.
+
+       `live` returning false keeps it out of resolveCombat altogether, and
+       out of sweepFrail's shredding pass as the attacker. `shreds` is the
+       only flag that pass reads on the VICTIM side, and it is here to say the
+       one thing that needs saying out loud: a lawnmower does not destroy a
+       road. Between the two it neither hits nor is hit, which for a piece of
+       ground is exactly the right amount of participation.
+
+       It is drawn BEHIND the stage, always -- see drawWorld. A road that
+       painted over the platforms would be a road in front of them, and the
+       entire point of it is that it goes away into the distance. */
+    this.shreds = true;
+    this.behind = true;
+    this.dead = false;
+  }
+
+  // Ground, not a hitbox.
+  live() { return false; }
+
+  /* How long the whole public work lasts. DERIVED rather than stored: the
+     last car is let on at pave + (n-1) * gap and needs travel + past frames
+     to finish, and `fade` is the road being lifted afterwards. One
+     expression, so raising `gap` can never leave the last car driving on a
+     road that has already gone. */
+  life() {
+    const s = this.spec;
+    return s.pave + (s.lanes.length - 1) * s.gap + s.travel + s.past + s.fade;
+  }
+
+  // How much of it is laid, 0 to 1. It paints in from his feet AWAY.
+  built() {
+    const s = this.spec;
+    return this.t >= s.pave ? 1 : this.t / s.pave;
+  }
+
+  update() {
+    const s = this.spec;
+    this.t++;
+    /* Let the next car on the moment its slot comes up. A `while` rather than
+       an `if`, so if this were ever ticked more than one frame at a time the
+       queue would catch up instead of quietly losing a car. */
+    while (this.sent < s.lanes.length &&
+           this.t >= s.pave + this.sent * s.gap) {
+      projectiles.push(new Oncoming(this, this.sent));
+      this.sent++;
+      cue('mower', { slot: this.owner.slot, x: this.x, gain: 0.5 });
+    }
+    /* Dust off the far end of what has been laid, so the paving reads as work
+       being done rather than a rectangle growing. It is thrown across a road
+       that is only as wide as the part that exists yet, which is why both
+       numbers are multiplied by how much is built. */
+    if (this.t < s.pave && this.t % 3 === 0) {
+      const k = this.built();
+      addEffect('dust', this.x + rand(-1, 1) * (ROAD_NEAR / 2) * k,
+                this.y - (ROAD_ROWS - 1) * k, '#b9b6b2');
+    }
+    if (this.t >= this.life()) this.dead = true;
+  }
+
+  /* The near end, on the floor. Nothing ever tests it, because `live` is
+     false -- but every projectile in this file is asked for a box, and one
+     that answered with nothing would be a crash lying in wait for the next
+     person to add a pass over the list. */
+  box() {
+    return { x: this.x - ROAD_NEAR / 2, y: this.y - 1, w: ROAD_NEAR, h: 1 };
+  }
+
+  draw(g) {
+    const im = IMG['newdeal.road'];
+    if (!im) return;
+    const s = this.spec;
+    const rows = Math.max(1, Math.round((ROAD_ROWS - 1) * this.built()) + 1);
+    /* Lifted rather than switched off: a road that vanished on one frame
+       would take the last car's dust with it and read as a bug. */
+    const left = this.life() - this.t;
+    const a = left < s.fade ? Math.max(0, left) / s.fade : 1;
+    if (a < 1) g.globalAlpha = a;
+    /* Only the rows that have been laid, and always the ones nearest him --
+       the near edge is pinned to the floor he broke ground on and the far end
+       grows away from it. Source rectangle rather than a clip, because the
+       part that does not exist yet must not be drawn at all. */
+    g.drawImage(im, 0, ROAD_ROWS - rows, ROAD_NEAR, rows,
+                Math.round(this.x) - (ROAD_NEAR >> 1),
+                Math.round(this.y) - rows, ROAD_NEAR, rows);
+    if (a < 1) g.globalAlpha = 1;
+  }
+}
+
+/* ONE CAR, coming down the road he built.
+
+   It has no velocity. What it has is a DISTANCE, and everything you can see
+   about it -- how big it is drawn, which row of the road its wheels are on,
+   how far off the white line it sits -- is that one number read three ways.
+   That is what makes it look like perspective instead of like a sprite being
+   enlarged: a car at half size is automatically standing on the row where the
+   road is half as wide, in a lane half as far from the middle, and it is not
+   possible for those three to disagree.
+
+   `sizeAt` is one over the distance, which is what a perspective projection
+   is, so a straight line in distance comes out as the curve you actually see:
+   it creeps for a second near the vanishing point and then rushes the last
+   twenty frames. The creeping is the telegraph and the rush is the
+   spectacle, and they are the same expression -- neither was authored.
+
+   IT CARRIES THE ROAD'S POSITION AS TWO NUMBERS rather than a pointer to the
+   Roadway, and that is load-bearing. saveSim copies a projectile field by
+   field and shallow-copies any object it does not recognise, so a pointer to
+   another projectile would come back from a rollback pointing at a COPY of
+   the road instead of at the road -- and nothing would notice until the copy
+   and the original disagreed about where it was. */
+class Oncoming {
+  constructor(road, index) {
+    this.owner = road.owner;
+    /* The ult spec for the geometry, the payload spec for the hit. Both are
+       inside the ROSTER literal, so simFrozen keeps them by reference rather
+       than deep-copying them into every snapshot. */
+    this.ult = road.spec;
+    this.spec = road.spec.traffic;
+    this.x0 = road.x;
+    this.y0 = road.y;
+    // Which lane, in near-edge pixels off the white line, and which paint.
+    this.lane = road.spec.lanes[index] * road.spec.laneX * road.dir;
+    this.tint = index % SPRITES.newdeal.cars.length;
+    this.t = 0;
+    /* `pierce` with `hitAt`, like the mower and the vine, so it drives
+       THROUGH people rather than stopping on the first one it reaches -- and
+       `hitEvery` is longer than it has left by then, so one car is one hit
+       per person. `shreds` is the second half of what his mower does: a car
+       deletes the shots it drives through. */
+    this.pierce = true;
+    this.shreds = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    /* Every field the rest of this class reads, set here, because restoreSim
+       deletes anything a snapshot did not have. place() assigns s, x, y and
+       behind -- x in particular is what resolveCombat hands applyHit as the
+       source of the knockback, which is how a car throws you away from
+       itself rather than away from Houston. */
+    this.s = 0;
+    this.x = road.x;
+    this.y = road.y;
+    this.behind = true;
+    this.dead = false;
+    this.place();
+  }
+
+  /* How big it is, with 1 the moment it arrives at his feet. The far edge of
+     the road is near/far times further away than the near edge, so it starts
+     at that distance and closes it at a constant rate.
+
+     The clamp is on the DISTANCE, not on the size, and that is the safe way
+     round: distance reaches zero at 1.43 of a travel and a car there would be
+     infinitely large, so clamping the size would leave a division by zero one
+     edit away. Clamped here it cannot happen at all. */
+  sizeAt(t) {
+    const d0 = ROAD_NEAR / ROAD_FAR;
+    const u = t / this.ult.travel;
+    return 1 / Math.max(1 / this.ult.maxSize, d0 + (1 - d0) * u);
+  }
+
+  /* Which row of the road its wheels are on, as a screen y. A row's width is
+     its share of the near edge's width, so the size it is drawn at IS the row
+     it stands on -- there is one number here, not two that have to agree. */
+  rowY(s) {
+    const row = (s * ROAD_NEAR - ROAD_FAR) / (ROAD_NEAR - ROAD_FAR);
+    return this.y0 - (1 - row) * (ROAD_ROWS - 1);
+  }
+
+  place() {
+    const s = this.sizeAt(this.t);
+    this.s = s;
+    this.x = this.x0 + this.lane * s;
+    this.y = this.rowY(s);
+    // Far away is also far BACK: see drawWorld.
+    this.behind = s < this.ult.bite;
+  }
+
+  /* Scenery until it is close. Under `bite` it is small, it is high up over
+     everybody's heads, and it is drawn behind the stage -- three ways of
+     saying the same thing, and this is the one resolveCombat asks. */
+  live() { return this.s >= this.ult.bite; }
+
+  update() {
+    this.t++;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    const before = this.s;
+    this.place();
+    // It reaches the floor exactly once, and that is the frame worth a noise.
+    if (before < 1 && this.s >= 1) {
+      cue('deadlift', { slot: this.owner.slot, x: this.x });
+      for (let i = 0; i < 5; i++) {
+        addEffect('dust', this.x + rand(-1, 1) * this.ult.carW * 0.5,
+                  this.y, '#b9b6b2');
+      }
+    }
+    if (this.t >= this.ult.travel + this.ult.past) this.dead = true;
+  }
+
+  box() {
+    const w = this.ult.carW * this.s;
+    const bw = w * this.ult.boxW;
+    const bh = w * ROAD_CAR_TALL * this.ult.boxH;
+    // Bottom-aligned on its row: its wheels are where the road is, which is
+    // the only anchor that stays right at every size.
+    return { x: this.x - bw / 2, y: this.y - bh, w: bw, h: bh };
+  }
+
+  draw(g) {
+    const im = IMG['newdeal.car.' + this.tint];
+    if (!im) return;
+    /* Scaled with a destination size, the way the jackpot Simon is. Nearest
+       neighbour is already on for this context, so a 44x57 drawing at a third
+       of its size stays pixels rather than turning to soup. */
+    const w = Math.max(1, Math.round(this.ult.carW * this.s));
+    const h = Math.max(1, Math.round(w * ROAD_CAR_TALL));
+    g.drawImage(im, Math.round(this.x) - (w >> 1), Math.round(this.y) - h,
+                w, h);
+  }
+}
+
 /* The car.
 
    Comes in off the edge behind him and crosses the whole stage the way he is
@@ -14367,6 +15005,21 @@ function drawEffects(g) {
         break;
       }
 
+      /* The hammer and the sickle over his head, for the same reason the
+         barbell above it is drawn: a move whose entire idea is the object
+         has to show the object.
+
+         No flip argument to pixelArt, and no second cache key for a mirrored
+         one. See HAMMER_SICKLE_ART -- it is an emblem, not a prop, and the
+         mirror image of it is not it. */
+      case 'emblem': {
+        g.globalAlpha = Math.min(1, k * 1.8);
+        drawArt(g, pixelArt('hammersickle', HAMMER_SICKLE_ART,
+                            { '#': EMBLEM_GOLD, o: EMBLEM_EDGE }), e.x, e.y);
+        g.globalAlpha = 1;
+        break;
+      }
+
       // The chess piece itself, held over his head for the whole hop, so
       // that a move whose entire idea is "this is a knight" looks like one.
       case 'piece': {
@@ -14751,6 +15404,57 @@ function applyHit(attacker, defender, move, sourceX, scale) {
      could ever justify. */
   if (move.drain) {
     defender.mana = Math.max(0, defender.mana - move.drain);
+  }
+
+  /* REDISTRIBUTION -- Houston's HAMMER & SICKLE, and nothing else in the
+     file. Health moves from whichever of the two has more of it to
+     whichever has less, until they are level or `cap` has changed hands,
+     whichever comes first.
+
+     HERE, beside the poison and the drain, for the two reasons those are
+     here: it is a thing a landed move does on top of its damage, and it is
+     BELOW the shield branch, so raising a shield stops the sharing exactly
+     the way it stops the burn. A move that levelled two health bars through
+     a block would be unanswerable.
+
+     No new state. `health` is already a Fighter field, already snapshotted,
+     already hashed by the desync check -- so a rollback rewinds a swap for
+     free, which is more than a bespoke counter would have got. And it is
+     pure arithmetic on two floats: no dice, so two machines replaying the
+     same frame produce the same two bars.
+
+     Neither clamp you would expect is needed, and both are worth saying out
+     loud because their absence looks like an oversight:
+
+       Nobody overshoots maxHealth. `moved` is capped at half the gap, so
+       the attacker lands at or below the midpoint of two numbers that are
+       each already at or below the maximum.
+
+       Nobody is killed by it. Same reason from the other side: the richer
+       man is taken to the midpoint at worst, and the midpoint is at least
+       what the poorer man had, which this branch has already checked is
+       above zero.
+
+     The `defender.health > 0` test is the one that IS load-bearing, and it
+     is the KO case. Four damage that takes the last of somebody would
+     otherwise be followed by a heal that puts them back up on -- a
+     recovery special that refuses to finish anyone off, and looks from the
+     outside exactly like the game failing to register a kill. The blow
+     lands or it shares; it does not do both. */
+  if (move.share && defender.health > 0 && attacker.health > 0 &&
+      !defender.eliminated && !attacker.eliminated) {
+    const gap = defender.health - attacker.health;
+    const moved = Math.min(Math.abs(gap) / 2, move.share.cap) * Math.sign(gap);
+    if (moved !== 0) {
+      attacker.health += moved;
+      defender.health -= moved;
+      // One ring on each of them, the same color the emblem is drawn in, so
+      // what happened reads as an exchange between two people rather than as
+      // a number quietly changing on the HUD.
+      addEffect('ring', attacker.x, attacker.y - 8, EMBLEM_GOLD);
+      addEffect('ring', defender.x, defender.y - 8, EMBLEM_GOLD);
+      cue('promote', { slot: attacker.slot, x: attacker.x, gain: 0.5 });
+    }
   }
 
   // Pushback, not knockback. It no longer kills anyone, so it no longer
@@ -17423,8 +18127,23 @@ function drawWorld() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, VW, VH);
   drawBackground(ctx);
+  /* Anything FAR AWAY goes down before the stage rather than after it.
+
+     Houston's road recedes to a vanishing point and his cars come down it out
+     of the distance, so the platforms have to be in FRONT of them or the
+     depth is a lie -- a six-pixel car painted over the top platform is a
+     six-pixel car sitting on it. Drawn here, a distant car passes behind the
+     stage and then arrives in front of it, which is the only part of the
+     perspective anybody has to read to understand.
+
+     A flag on the projectile rather than a list of classes here, so the two
+     halves of it -- when a car counts as far away, and where far away is
+     drawn -- do not have to be kept in step in two files. Nothing else in the
+     game sets it, and everything that does not have it draws where it always
+     did. */
+  for (const b of projectiles) if (b.behind) b.draw(ctx);
   drawStage(ctx);
-  for (const b of projectiles) b.draw(ctx);
+  for (const b of projectiles) if (!b.behind) b.draw(ctx);
   for (const f of fighters) drawFighter(ctx, f);
   drawEffects(ctx);
 }
@@ -18054,7 +18773,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'e811d5de56';
+const BUILD_ID = '29c80899a3';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -18065,7 +18784,7 @@ const BUILD_ID = 'e811d5de56';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.74';
+const VERSION = '2.75';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
