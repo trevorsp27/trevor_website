@@ -7936,24 +7936,54 @@ const DUMBBELL_V_ART = [
    and a backwards hammer and sickle is not a hammer and sickle. */
 const EMBLEM_GOLD = '#e8b43c';
 const EMBLEM_EDGE = '#3a2212';
+/* The field behind it. Gold alone on a stage that is already green or sandy
+   is a yellow squiggle; gold on red is a flag, and a flag is the thing this
+   move is a joke about. */
+const EMBLEM_RED = '#c41c20';
+/* THE HAMMER AND SICKLE, traced from the real thing rather than remembered.
+
+   Six attempts were drawn by hand and generated from circles before this one,
+   and every single one came out as a lollipop or as two parallel bananas. The
+   reason is that the arrangement is not what it looks like from memory: the
+   blade sweeps from the TOP LEFT round to the right and down, and the hammer
+   sits high on the LEFT with its handle running down to the RIGHT. Rendering
+   U+262D at 260 points out of a font that has it, downsampling to nineteen
+   pixels and dropping the pixels with fewer than two neighbours settles the
+   argument -- what is below is the glyph's own silhouette, not an impression
+   of it.
+
+   On a red disc with a dark rim, because gold on its own is a yellow squiggle
+   over a green stage and the whole point of the move is that you can tell at
+   a glance what it is.
+
+   '#' gold, 'r' the field, 'o' the edge. */
 const HAMMER_SICKLE_ART = [
-  '.....ooooo.......',
-  '...ooo###oooooooo',
-  '..oo###oooo#####o',
-  '.oo###oo..o#####o',
-  'oo###oo...o#####o',
-  'o###oo....o#####o',
-  'o###o.....oo##ooo',
-  'o###oo....oo##o..',
-  'oo###oo..oo##oo..',
-  '.ooo##oooo##oo...',
-  '...oo##oo##oo....',
-  '....oooo##oo.....',
-  '.....oo##oo......',
-  '....oo##oooo.....',
-  '....o##oo##oo....',
-  '....oooooo##o....',
-  '.........oooo....',
+  '........ooooooooo........',
+  '......ooorrrrrrrooo......',
+  '....ooooooooooorrrooo....',
+  '...oorro######ooorrroo...',
+  '..oorrro#ooo####oorrroo..',
+  '.oorrrrooorooo###oorrroo.',
+  '.orrrrrrrrrrrooo##oorrro.',
+  'oorrrrrrrrrooooo###orrroo',
+  'orrrrrrrrroo##ooo##orrrro',
+  'orrrrrrrroo###oro##orrrro',
+  'orrrrrrrro####oro##orrrro',
+  'orrrrrrrro####ooo##orrrro',
+  'orrrrrrrro#########orrrro',
+  'orrrrrrrro##oo#####orrrro',
+  'orrrrrrrroooooo####oorrro',
+  'orrrrroooooooo######oooro',
+  'orrrroo##########o####oro',
+  'orrroo#########ooooo##oro',
+  'oorro###oooooooorrroooooo',
+  '.oroo##oorrrrrrrrrrrrrro.',
+  '.ooo###orrrrrrrrrrrrrroo.',
+  '..oo##oorrrrrrrrrrrrroo..',
+  '...oooorrrrrrrrrrrrroo...',
+  '....ooorrrrrrrrrrrooo....',
+  '......ooorrrrrrrooo......',
+  '........ooooooooo........',
 ];
 
 /* Gym equipment. A dumbbell is two weights and a short bar; a barbell
@@ -15015,7 +15045,8 @@ function drawEffects(g) {
       case 'emblem': {
         g.globalAlpha = Math.min(1, k * 1.8);
         drawArt(g, pixelArt('hammersickle', HAMMER_SICKLE_ART,
-                            { '#': EMBLEM_GOLD, o: EMBLEM_EDGE }), e.x, e.y);
+                            { '#': EMBLEM_GOLD, r: EMBLEM_RED,
+                              o: EMBLEM_EDGE }), e.x, e.y);
         g.globalAlpha = 1;
         break;
       }
@@ -18773,7 +18804,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '29c80899a3';
+const BUILD_ID = 'b7590d3474';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -18784,7 +18815,7 @@ const BUILD_ID = '29c80899a3';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.75';
+const VERSION = '2.76';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
