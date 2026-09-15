@@ -32,6 +32,30 @@ const PHYS = {
   airDriftMax: 1.9,
   airJumps: 2,
   landLag: 3,
+  /* THE FLOOR WITH MILK ON IT. See Fighter.slick and Houston's MILK.
+
+     Two numbers, because losing your footing is two separate failures and
+     fixing one of them alone does not read as a slip at all:
+
+       slickGrip      how much of the speed you ASKED for you get this frame.
+                      On dry ground it is 1 -- walking in this game is
+                      instant, `vx = dir * walk` -- and at 0.09 a standing
+                      start reaches two thirds of a walk in twelve frames
+                      and covers 17.6 pixels in twenty where dry ground
+                      covers 30.8. Turning round from a walk takes nineteen
+                      frames against one, because the whole of the climb
+                      above has to be paid again through zero.
+       slickFriction  how much of what you already had survives letting go.
+                      groundFriction is 0.55 and stops you inside four
+                      frames, in under two pixels; 0.985 carries a walk 38
+                      pixels, which is more than the width of the spill.
+
+     Measured against the width of the puddle rather than tuned by feel: a
+     fighter who walks into a 30px spill and lets go of the stick at the near
+     edge comes to rest nine pixels PAST the far edge of it. Arriving
+     somewhere you did not choose is the whole of what the move does. */
+  slickGrip: 0.09,
+  slickFriction: 0.985,
   // Blast zones are per-stage; see STAGES below.
 };
 
@@ -2735,6 +2759,214 @@ ROSTER.christian = {
   },
 };
 
+/* HOUSTON. The eleventh, and the first fighter built around taking
+   somebody's FOOTING away rather than their health.
+
+   Three drawings arrived for him: a character sheet, six frames of him
+   pushing a red lawnmower, and a carton of milk. Two of those are moves and
+   they are the two below; the up special and the ult are placeholders and
+   say so.
+
+   What he is FOR, because a kit of two real moves has to be about
+   something. Everybody else on this roster answers a problem by hitting
+   it. He answers it by changing the floor: milk where you wanted to stand,
+   and a machine that walks forward eating whatever is in front of it. He
+   is the lightest fighter in the game and his jab is short, so being near
+   him is not supposed to be his plan -- being somewhere you cannot
+   comfortably follow him to is. */
+ROSTER.houston = {
+  name: 'HOUSTON',
+  origin: 'fresh',
+  tag: 'MILK & A LAWNMOWER',
+  drawn: true,
+  /* 94 is under everybody -- the lightest on the roster, where the field
+     runs 96 to 106 -- because he is a boy and because the kit above wants
+     him punished for being caught. Light means he dies early, which is the
+     price of two moves that work at a distance from him. */
+  weight: 94, walk: 1.54, jump: 6.7, doubleJump: 6.1,
+  /* Short. `w` is 10 where most of the roster is 11, which is a pixel of
+     reach, and it is the pixel that says he is a child among adults --
+     he has a drawn punch and it is a small boy's arm. */
+  jab: { startup: 4, active: 3, recovery: 10, damage: 5,
+         base: 2.1, scale: 5.6, angle: 44, kx: 0.7193398003386512, ky: 0.6946583704589973,
+         ox: 2, oy: -9, w: 10, h: 9 },
+  specials: {
+    /* MILK, which is only interesting because it SPILLS.
+
+       The carton is almost not the move: five damage if it hits somebody on
+       the way, which is less than his jab. What he is throwing is the
+       puddle -- thirty pixels of floor that stops answering the stick.
+       Walk into it and you keep going; let go and you keep going; try to
+       turn round and you spend most of a second coming back through zero.
+       Nothing else in the file does this, and it is the one thing on the
+       roster that beats a person rather than a health bar.
+
+       AND THEN IT GOES OFF. Left alone it curdles at 190 frames, a little
+       over half its life, and from then on it also bites: four damage and a
+       poison tick every forty-two frames, and it is still just as
+       slippery. That is the cookie's trick -- a thing that lands and then
+       has a second life -- pointed at the one move that otherwise does no
+       damage at all. The reason it is on a clock rather than on contact is
+       that a puddle nobody stepped in should still have been worth
+       throwing; this way ignoring it is a decision with a bill at the end
+       of it.
+
+       The bite is `graze`, which is the flag broken glass already uses:
+       health and nothing else, no launch and no hitstun. A floor hazard
+       that puts people in hitstun stops being a floor and starts being a
+       combo, and this one is out for five and a half seconds.
+
+       ONE AT A TIME, capped in Carton.shatter by killing whichever one he
+       already has out. `maxAlive` cannot do that job: it counts projectiles
+       whose spec IS this move, and a puddle's spec is the payload below
+       rather than the move -- so the carton in the air and the spill on the
+       floor are deliberately on separate budgets.
+
+       It was TWO, and what is worth writing down is what the measurement
+       actually said, because it is not what the change was made for.
+
+       At 30 mana a cast comes back every sixty frames and a spill lasts
+       three hundred and thirty, so "two at a time" was not a cap, it was a
+       promise: sixty pixels of a two-hundred-pixel floor, permanently. His
+       CPU-vs-CPU fights ran long -- 73 to 167 seconds a match against
+       Christian's 61 to 123, with 29% of 120 not finishing inside four
+       minutes against his 14% -- and the milk was the obvious suspect.
+
+       IT WAS NOT THE MILK. Cutting the cap to one changed the timeout rate
+       by nothing worth reporting (32 of 120 against 35) and moved his win
+       rate 45.9% to 42.0%, which over 88 counted matches is inside the
+       noise. Both fighters had been logging roughly equal time on the
+       spill, which should have been the clue: it was never an advantage he
+       was getting. His fights are long because his kit does not do much
+       damage -- a jab of five, a carton of five, and a mower he has to walk
+       into somebody -- and that is the character rather than a bug in him.
+
+       One stays anyway, on its own terms and not on that evidence: one
+       spill is a seventh of the floor, it is somewhere instead of
+       everywhere, and putting it in the right place is the move. */
+    neutral: {
+      kind: 'milk', label: 'SPILT MILK',
+      startup: 9, active: 1, recovery: 14, maxAlive: 1,
+      puddles: 1,
+      speed: 3.1, lift: -1.5, drop: 0.16, life: 150, spin: 5,
+      damage: 5, base: 2.0, scale: 3.4, angle: 62,
+      kx: 0.46947156278589086, ky: 0.8829475928589269,
+      /* moveCost prices the CARTON -- five damage and a gentle pop -- and
+         values the whole move at 15, because everything it is actually for
+         is in an object the formula never opens. 30 is the honest figure:
+         half a bar for a five-and-a-half-second hole in the floor, which
+         is one spill up at any time and a real decision about when to
+         spend the second. */
+      manaOverride: 30,
+      /* The spill. `slick` is how many frames of lost traction a body
+         standing in it is given, re-armed every frame, so it decays about
+         five frames after they leave -- that tail is the skid off the far
+         edge and it is why a 30px puddle is worth more than 30px.
+
+         `curdle` is when it turns. `hitEvery` is the re-arm on the bite
+         afterwards: 42 frames is deliberately slower than anybody's escape,
+         so standing in curdled milk costs you once and then costs you again
+         only if you are still there, which is a choice rather than a trap.
+
+         It lives HERE, inside the ROSTER literal, for the reason the pie's
+         frog list does: simFrozen walks ROSTER and keeps what it finds by
+         reference, and a payload built per shot would be deep-copied into
+         every snapshot sixty times a second for as long as it lasted. */
+      puddle: {
+        w: 30, h: 3, life: 330, curdle: 190, slick: 5,
+        hitEvery: 42, damage: 4, graze: true,
+        poison: { frames: 110, dps: 0.045 },
+        base: 0, scale: 0, angle: 80,
+        kx: 0.17364817766693041, ky: 0.984807753012208,
+      },
+    },
+    /* THE LAWNMOWER. He starts it and walks it forward.
+
+       The art is six frames of him PUSHING the thing, so it had to be
+       something that travels in front of him rather than something he
+       swings, and a mower does one thing: it goes over what is in its way
+       repeatedly rather than once. Four bites of four over forty-two
+       frames, at a knockback low and flat enough that it shoves people
+       along the ground ahead of the deck instead of popping them off it.
+
+       AND IT SHREDS. `shreds` is the half nobody else on this roster has:
+       any enemy projectile the deck touches is destroyed. Until now the
+       only answer to a screen full of shots was to be somewhere else --
+       the one thing in the file that could be shot down was a frog, and
+       only because frogs carry `frail`. This is that capability turned
+       around: instead of the shot opting in to being fragile, the mower
+       opts in to breaking things. See sweepFrail, which already owned the
+       loop and needed one clause.
+
+       Yes, that includes a pie. Christian's ult sits on the floor for a
+       hundred and ten frames announcing itself, and a man who walks into
+       it behind a lawnmower has spent a special, a third of a mana bar and
+       about a second of standing still in the open to do it. That is a
+       counter, and the roster should have one.
+
+       GROUNDED ONLY -- see canSpecial. A mower has wheels; there is no
+       frame of this art off the floor, and a hitbox that also eats every
+       projectile on the stage has no business being available mid-jump.
+       Refused rather than cast, so the mana is not spent either.
+
+       `roots` because the push IS the movement: runSpecial drives his vx
+       and nothing else may. He cannot turn round once it is running, which
+       is the cost -- forty-two frames pointed one way, on the lightest
+       fighter in the game, is a long time to be predictable, and he can
+       absolutely walk himself off a ledge behind it. */
+    down: {
+      kind: 'mower', label: 'LAWNMOWER',
+      startup: 12, active: 42, recovery: 18,
+      roots: true, shreds: true,
+      push: 1.25,             // how fast he walks it forward
+      reach: 13,              // the deck's centre, forward of his own
+      boxW: 15, boxH: 12,     // and how big the deck is
+      /* NOT `ox`/`oy`/`w`/`h`. Those four names mean a melee box to
+         relBox, and this move's box is not a melee box -- it belongs to a
+         projectile that outlives the frame. Naming them apart is what
+         stops a future edit that drops `mower` from hitbox()'s list from
+         silently growing a second, wrongly-placed hitbox on his chest. */
+      hitEvery: 13,
+      damage: 4, base: 1.5, scale: 2.4, angle: 20,
+      kx: 0.9396926207859084, ky: 0.3420201433256687,
+      /* moveCost sees one four-damage hit and prices it at 10. It cannot
+         see that it lands four times, and it certainly cannot see that the
+         thing also deletes projectiles. 32 is a third of the bar for a
+         move that clears the screen and walks him fifty pixels. */
+      manaOverride: 32,
+    },
+    /* PLACEHOLDER, but a working recovery, exactly like Cobeus's and
+       Simon's: every other character's `up` is how they get home, and a
+       fighter who cannot is not playable. `uppercut` on purpose -- it is
+       the best-understood mover in the file and the only one whose failure
+       modes are written down, and a placeholder should be boring rather
+       than a new source of bugs. Nothing about it is his. */
+    up: {
+      kind: 'uppercut', label: 'PLACEHOLDER',
+      startup: 5, active: 13, recovery: 18,
+      rise: -6.4, drift: 0.8,
+      damage: 6, base: 2.2, scale: 5.2, angle: 84,
+      kx: 0.10452846326765346, ky: 0.99452189536827329,
+      ox: -6, oy: -19, w: 13, h: 23,
+    },
+  },
+  /* PLACEHOLDER. A burst around him and nothing else.
+
+     `shockwave` rather than the `uppercut` the placeholder specials use,
+     and for one reason: an ult that launches him is an ult that puts the
+     lightest fighter on the roster in the air every time the meter fills,
+     and the CPU fires an ult the moment it has one. This does two things,
+     both of them in runSpecial and both of them two lines long, and leaves
+     him standing where he was. Dull is the requirement. */
+  ult: {
+    kind: 'shockwave', label: 'PLACEHOLDER',
+    startup: 14, active: 4, recovery: 26,
+    damage: 18, base: 3.8, scale: 8.4, angle: 50,
+    kx: 0.6427876096865394, ky: 0.766044443118978,
+    ox: -20, oy: -12, w: 40, h: 24,
+  },
+};
+
 /* THE SANDBAG.
 
    A Fighter, which is the entire trick. Everything that makes a training
@@ -2930,8 +3162,14 @@ for (const key in ROSTER) {
 /* Ten fills the 5-wide grid exactly, which is the first time it has: nine
    left a hole in the second row that every screen drawing the roster had to
    not mind. */
+/* And then Houston made eleven, which is what the note over GRID_COLS spent
+   two revisions warning about: eleven on a five-wide grid is three rows, and
+   the third row's names land off the bottom of a 180-pixel screen. The grid
+   is six wide now and the cells are narrower to pay for it; see GRID_COLS.
+   Appended, like everyone before him, for the reason above: the tests
+   address characters by their index in this array. */
 const ORDER = ['autisnick', 'johnnyham', 'kel', 'ladeane', 'reese', 'trev',
-               'cobeus', 'simon', 'squalls', 'christian'];
+               'cobeus', 'simon', 'squalls', 'christian', 'houston'];
 
 /* =====================================================================
    CANVAS
@@ -3108,6 +3346,15 @@ function loadAssets(done) {
     SPRITES.soul.R.forEach((uri, i) => grab('soul.R.' + i, uri));
     SPRITES.soul.L.forEach((uri, i) => grab('soul.L.' + i, uri));
   }
+  /* Houston's two. The mower is six frames a side of him pushing it, drawn
+     on a 36x17 cell CENTERED on his own 16x16 character cell -- see the note
+     in build.py -- so drawMower blits it where his sprite would have gone
+     and needs no per-facing offset. */
+  if (SPRITES.mower) {
+    SPRITES.mower.R.forEach((uri, i) => grab('mower.R.' + i, uri));
+    SPRITES.mower.L.forEach((uri, i) => grab('mower.L.' + i, uri));
+  }
+  if (SPRITES.milk) grab('milk', SPRITES.milk);
 
   for (const theme in TILES) {
     for (const role in TILES[theme]) grab('tile.' + theme + '.' + role, TILES[theme][role]);
@@ -3855,6 +4102,26 @@ class Fighter {
     // saveSim's reflective sweep snapshots it and restoreSim puts it back
     // with no registration anywhere -- the same contract poison relies on.
     this.confused = 0;
+    /* NO TRACTION. Frames left standing in something spilt.
+
+       The only status in the file that takes nothing off you. Poison, burn
+       and the rest all end in health; this one only decides how the floor
+       answers a stick, and it is Houston's whole neutral special -- see
+       MILK and the Puddle class.
+
+       Re-armed every frame a hurtbox is in the spill rather than set once
+       and counted down from a length, so it is genuinely "where your feet
+       are" and not "how long ago you touched it". The handful of frames it
+       carries past the edge of the puddle is the skid off the end, which is
+       the half of the move that makes it hurt: you do not stop at the edge
+       of a spill, you arrive somewhere past it.
+
+       In the constructor because restoreSim deletes any Fighter key a
+       snapshot does not carry, so a field first assigned the moment somebody
+       stepped in milk would work all through local play and vanish on the
+       first online rollback -- and vanish on ONE machine, which is a desync
+       rather than a bug you can see. */
+    this.slick = 0;
 
     this.shield = COMBAT.shieldMax;
     this.shieldBroken = 0;
@@ -3979,6 +4246,17 @@ class Fighter {
              w: HURT_W * k, h: HURT_H * k };
   }
 
+  /* ---- how the floor answers, this frame ----
+
+     `grip` is what fraction of the speed he is asking for he actually gets,
+     and `stopping` is what fraction of the speed he already has survives
+     letting go of the stick. On dry ground they are 1 and groundFriction,
+     which is exactly what the movement code did before there was anything
+     to slip in -- `vx += (target - vx) * 1` is `vx = target` -- so the two
+     calls below cost nothing anywhere except in milk. */
+  grip() { return this.slick > 0 ? PHYS.slickGrip : 1; }
+  stopping() { return this.slick > 0 ? PHYS.slickFriction : PHYS.groundFriction; }
+
   /* ---- the active hitbox this frame, or null ---- */
   hitbox() {
     if (this.state === 'grab') {
@@ -4049,7 +4327,12 @@ class Fighter {
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
           s.kind === 'cloud' || s.kind === 'gun' || s.kind === 'dog' ||
-          s.kind === 'ak' || s.kind === 'deadlift') return null;
+          s.kind === 'ak' || s.kind === 'deadlift' ||
+          /* Both of Houston's. The carton is a thrown object and the mower's
+             deck is a projectile that outlives the frame, so neither move
+             has a melee box -- and a mower that ALSO grew one on his chest
+             would be a second, invisible hitbox nobody authored. */
+          s.kind === 'milk' || s.kind === 'mower') return null;
       if (this.attackFrame < s.startup) return null;
       if (this.attackFrame >= s.startup + s.active) return null;
       return { box: this.relBox(s), move: s };
@@ -4189,6 +4472,10 @@ class Fighter {
        is exactly what restoreSim deletes off a rollback. */
     if (this.buffTimer > 0 && !(this.buffStats && this.buffStats.hold)) this.buffTimer--;
     if (this.drowsy > 0) this.drowsy--;
+    /* Milk under his feet, counting down. Whatever he is standing in re-arms
+       it every frame (Puddle.update), so this only ever runs out once he is
+       clear of it -- and the few frames it takes to are the skid. */
+    if (this.slick > 0) this.slick--;
     // Landing means he got home on his own; the window is spent either way.
     if (this.dashWrap > 0) { if (this.grounded) this.dashWrap = 0; else this.dashWrap--; }
     /* The choke, ticked wherever the grabber happens to be.
@@ -4516,7 +4803,9 @@ class Fighter {
       const dir = pad.left ? -1 : 1;
       this.facing = dir;
       if (this.grounded) {
-        this.vx = dir * speed;
+        // A step toward the speed he wants rather than an assignment, which
+        // on dry ground (grip 1) is the same assignment it always was.
+        this.vx += (dir * speed - this.vx) * this.grip();
         this.walkAnim += 0.16;
       } else {
         this.vx += dir * PHYS.airAccel;
@@ -4524,7 +4813,7 @@ class Fighter {
         this.vx = clamp(this.vx, -cap, cap);
       }
     } else if (this.grounded) {
-      this.vx *= PHYS.groundFriction;
+      this.vx *= this.stopping();
       if (Math.abs(this.vx) < 0.05) this.vx = 0;
     }
 
@@ -4588,6 +4877,13 @@ class Fighter {
         s.maxAlive;
     }
     if (s.kind === 'buff') return this.buffTimer <= 0;
+    /* A mower has wheels. There is no frame of that art off the floor, and a
+       forty-two-frame hitbox that also deletes every projectile it touches
+       has no business being available out of a jump. Refused here rather
+       than cast and ignored, so the mana is not spent either -- the whole
+       point of this gate being in canSpecial is that the caller checks it
+       BEFORE the subtraction. */
+    if (s.kind === 'mower') return this.grounded;
     /* No gambling while he IS the jackpot. Nothing stopped him pulling again
        mid-transformation, and every outcome of doing so was wrong: another
        three sevens re-armed the growth from scratch and snapped a settled
@@ -5064,7 +5360,9 @@ class Fighter {
       if (pad.left || pad.right) {
         const dir = pad.left ? -1 : 1;
         this.facing = dir;
-        if (this.grounded) this.vx = dir * this.def.walk * this.speedMul;
+        if (this.grounded) {
+          this.vx += (dir * this.def.walk * this.speedMul - this.vx) * this.grip();
+        }
       } else if (this.grounded) {
         /* Let go and he stops, the same as letting go while walking.
 
@@ -5075,7 +5373,7 @@ class Fighter {
            nothing held, vx pinned at 0.584 the entire time. That is not
            "you may move while casting", it is "you may not stop", and it
            slid him clean past whoever he was aiming at. */
-        this.vx *= PHYS.groundFriction;
+        this.vx *= this.stopping();
       }
       if (pad.jump) {
         if (this.grounded) {
@@ -5095,7 +5393,7 @@ class Fighter {
       ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut' ||
        m.kind === 'knightmove' || m.kind === 'slouch');
     if (!rooted && !m.mobile) {
-      if (this.grounded) this.vx *= PHYS.groundFriction;
+      if (this.grounded) this.vx *= this.stopping();
       else if (pad && (pad.left || pad.right)) {
         this.vx += (pad.left ? -1 : 1) * PHYS.airAccel * 0.5;
         this.vx = clamp(this.vx, -PHYS.airDriftMax, PHYS.airDriftMax);
@@ -6110,6 +6408,38 @@ class Fighter {
         }
         break;
 
+      /* ---- HOUSTON ---- */
+
+      case 'milk':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Carton(this, s));
+          cue('throw', { slot: this.slot, x: this.x });
+        }
+        break;
+
+      case 'mower':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Mower(this, s));
+          cue('mower', { slot: this.slot, x: this.x });
+        }
+        /* THE PUSH, and this line is the whole of his movement for the
+           length of it. `roots` is what makes that true: with it set, the
+           friction branch in updateAttack leaves vx alone entirely, so
+           nothing else writes it and there is one number for how fast a
+           mower travels instead of two that have to agree.
+
+           `facing` rather than the deck's latched `dir`, and they are the
+           same thing -- he cannot turn while rooted -- but this is the man
+           and that is the machine, and the machine is the one that must not
+           be allowed to swing round under somebody. */
+        if (this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active && this.grounded) {
+          this.vx = this.facing * s.push;
+        }
+        break;
+
       case 'axe':
         /* A step into it. He is not mobile during the swing -- the wind-up
            has to be a commitment or the length of it means nothing -- but a
@@ -6498,6 +6828,8 @@ class Fighter {
     this.poison = 0;
     this.burn = 0;
     this.confused = 0;
+    // A fresh stock does not arrive skidding.
+    this.slick = 0;
     this.evadeCd = 0;
     this.mana = COMBAT.manaMax;
     this.hitstun = 0;
@@ -9579,6 +9911,51 @@ function drawAxe(g, f) {
   }
 }
 
+/* The lawnmower, over Houston, for the frames he is behind it.
+
+   An overlay rather than a set in his sheet, for the reason the axe is one:
+   the drawing is him AND the machine, thirty-six pixels wide against his
+   sixteen, and folding it into his character sheet would make every other
+   frame of him carry the space a mower needs.
+
+   The cell is centred on his own 16x16 character cell -- build.py pads it
+   that way on purpose and checks it -- so this blits it exactly where his
+   sprite would have gone and needs no per-facing offset. The one number
+   here is the `- 16`: the cell is seventeen rows tall because the artist
+   drew a row of shoe below the man, so the top of it is sixteen above his
+   feet rather than seventeen. */
+function drawMower(g, f) {
+  if (f.state !== 'special') return;
+  const s = f.def.specials && f.def.specials.down;
+  if (!s || s.kind !== 'mower') return;
+  /* The move he is ACTUALLY doing, not merely one he owns, and asked of the
+     engine rather than read off specialSlot -- which is not a constructor
+     field and which restoreSim is entitled to delete on a rewind past his
+     first special of the match. Without this he would push a lawnmower
+     through his milk throw as well. */
+  if (f.moveFor('special') !== s) return;
+  const list = SPRITES.mower && SPRITES.mower[f.facing < 0 ? 'L' : 'R'];
+  const n = (list && list.length) || 0;
+  if (!n) return;
+  /* Six frames: three leg poses crossed with two wheel phases, laid out so
+     one step of this index turns the wheels and two steps move his legs.
+     Five frames a step is about seven steps over the length of the move,
+     which is a walking pace rather than a sprint.
+
+     Driven off attackFrame, which is snapshotted, so a rollback replays the
+     identical frame of it instead of an animation that jumps. The wind-up
+     holds frame 0 -- he is starting it, not pushing it yet -- and the cycle
+     runs from the moment the deck comes out. */
+  const k = Math.max(0, f.attackFrame - s.startup);
+  const im = IMG['mower.' + (f.facing < 0 ? 'L' : 'R') + '.' +
+                 (Math.floor(k / 5) % n)];
+  if (im) {
+    g.imageSmoothingEnabled = false;
+    g.drawImage(im, Math.round(f.x) - (im.width >> 1),
+                Math.round(f.y) - 16);
+  }
+}
+
 /* =====================================================================
    THE WHIP - the drawn half of Squalls' up special
    ===================================================================== */
@@ -12656,6 +13033,371 @@ class Glass {
   }
 }
 
+/* =====================================================================
+   HOUSTON'S MILK - the carton, and what is left of it afterwards.
+
+   Two classes for one move, the same split the bottle and the glass use and
+   for the same reason: the thing in the air and the thing on the floor have
+   nothing in common except where one ends and the other starts.
+   ===================================================================== */
+
+/* Whatever this point is standing on, or null.
+
+   The carton has to be able to burst on a BODY and still leave its spill on
+   the floor -- a puddle of milk hanging in mid-air where somebody's chest
+   was is the one way this move can look broken -- so the spill looks down
+   for a surface rather than using the height it broke at.
+
+   `platformsNow` rather than STAGE.platforms, so milk thrown over the
+   Battlefield's open trapdoor falls through the hole like everything else
+   instead of pooling on a door that is not there. */
+function floorUnder(x, y, reach) {
+  let best = null;
+  for (const p of platformsNow()) {
+    if (x < p.x || x > p.x + p.w) continue;
+    if (p.y < y - 1) continue;              // above the break: not underfoot
+    if (p.y - y > reach) continue;          // too far down to be this spill
+    if (best === null || p.y < best) best = p.y;
+  }
+  return best;
+}
+
+class Carton {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.dir = owner.facing;
+    this.x = owner.x + this.dir * 8;
+    this.y = owner.y - 11;
+    // A third of his own speed, like the bottle: a carton thrown by a boy who
+    // is already running goes further, which is the only thing that makes
+    // throwing it on the move different from throwing it standing still.
+    this.vx = this.dir * spec.speed + owner.vx * 0.3;
+    this.vy = spec.lift;
+    this.life = spec.life;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.t++;
+    this.life--;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+
+    // Landing on the floor is the NORMAL case. Most cartons are thrown at a
+    // piece of ground rather than at a person -- the spill is the move.
+    if (this.vy > 0) {
+      for (const p of platformsNow()) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.y = p.y;
+          this.shatter();
+          return;
+        }
+      }
+    }
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  /* Burst where it is. Called by update() on the floor and by resolveCombat
+     on a body, which is why `shatter` is the name -- resolveCombat fires
+     exactly this method on any shot that connects and has one -- and why it
+     sets `dead` itself rather than leaving that to either caller. */
+  shatter() {
+    if (this.dead) return;
+    this.dead = true;
+    const s = this.spec;
+
+    /* Down to the floor, however high up it broke. 40 pixels is about two
+       body-heights: a carton caught by somebody standing on the top platform
+       spills onto that platform, and one swatted out of the sky over the gap
+       between platforms spills nowhere at all, which is correct -- it went
+       in the water. */
+    const floor = floorUnder(this.x, this.y, 40);
+
+    for (let i = 0; i < 7; i++) {
+      addEffect('milk', this.x + rand(-3, 3), this.y - rand(0, 5), '#eef4f2');
+    }
+    addEffect('ring', this.x, this.y - 2, '#dff0ee');
+    cue('throw', { slot: this.owner.slot, x: this.x });
+    if (floor === null) return;
+
+    /* ONE SPILL AT A TIME (`puddles`), and the next one takes its place.
+
+       `maxAlive` cannot do this job: it counts projectiles whose spec IS the
+       move, and a puddle's spec is the payload rather than the move, so the
+       carton in the air and the spill on the floor are deliberately on
+       separate budgets. Oldest first, because `projectiles` is in spawn
+       order -- the spill about to be replaced should be the one that has
+       already had its five seconds, and the rule holds if the cap is ever
+       raised again. See the note on `puddles` in the roster for why it is
+       one -- and for what the measurement that prompted the change actually
+       turned out to say, which was that the milk was not the problem. */
+    let mine = 0;
+    for (const p of projectiles) {
+      if (!p.dead && p.owner === this.owner && p.spec === s.puddle) mine++;
+    }
+    if (mine >= (s.puddles || 1)) {
+      for (const p of projectiles) {
+        if (!p.dead && p.owner === this.owner && p.spec === s.puddle) {
+          p.dead = true;
+          break;
+        }
+      }
+    }
+    projectiles.push(new Puddle(this.owner, s.puddle, this.x, floor));
+  }
+
+  /* Centred on `this.y`, like the bottle's, because that is what this class
+     means by y: the drawing is centred there and the floor test below asks
+     whether that point has crossed a platform. A box measured from the
+     carton's bottom instead would be six pixels away from the picture. */
+  box() {
+    return { x: this.x - 3, y: this.y - 6, w: 7, h: 12 };
+  }
+
+  draw(g) {
+    const im = IMG.milk;
+    if (im) {
+      /* It TUMBLES rather than spinning: a gable-top carton has no axis to
+         spin about and drawing one rotating would look like a wheel. Two
+         frames -- upright, and flipped -- off the same eight pixels, which is
+         all the art there is and all this needs. */
+      const flip = Math.floor(this.t / (this.spec.spin || 5)) % 2 === 1;
+      if (flip) {
+        g.save();
+        g.translate(Math.round(this.x), Math.round(this.y));
+        g.scale(1, -1);
+        g.drawImage(im, -(im.width >> 1), -(im.height >> 1));
+        g.restore();
+      } else {
+        drawArt(g, im, this.x, this.y);
+      }
+    } else {
+      g.fillStyle = '#eef4f2';
+      g.fillRect(Math.round(this.x) - 3, Math.round(this.y) - 6, 7, 12);
+    }
+  }
+}
+
+/* THE SPILL.
+
+   A flat patch of floor that stops answering the stick. It is the only thing
+   in the game whose first half does no damage at all: for a hundred and
+   ninety frames it is pure control -- see Fighter.slick and PHYS.slickGrip --
+   and then it curdles and starts costing health as well.
+
+   Built on the three fields the glass and the smoke already use -- `pierce`,
+   `hitAt` and `hitEvery` -- so resolveCombat needs no new code, plus `live`,
+   which is how it says "not a hitbox yet" for the half of its life when it
+   is only slippery. The box is thin and sits ON the platform, which is what
+   makes it something you STEP in: a fighter's hurtbox reaches from their feet
+   to fourteen above, so anyone on the ground in it overlaps and anyone
+   jumping over it does not.
+
+   Drawn in code rather than off a sheet. Nobody drew a puddle, and eight
+   invented pixels of one sitting next to the hand-drawn carton would look
+   exactly like what they were. */
+class Puddle {
+  constructor(owner, spec, x, y) {
+    this.owner = owner;
+    this.spec = spec;
+    this.x = x;
+    this.y = y;
+    this.t = 0;
+    this.life = spec.life;
+    this.born = spec.life;
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+    /* Where the lumps sit once it turns, derived from where it was spilt so
+       both machines draw the same milk. The glass does this for the same
+       reason: Math.random is the AI's, and the simulation may not touch it. */
+    this.seed = Math.floor(Math.abs(x) * 11 + Math.abs(y) * 7) % 97;
+  }
+
+  curdled() { return this.t >= this.spec.curdle; }
+
+  /* Fresh milk is not a hitbox. The box is still the right box -- it is what
+     people slip in, and update() tests it every frame -- it simply does no
+     damage until it has gone off, which resolveCombat asks about here rather
+     than having box() lie about where the thing is for half its life. */
+  live() { return this.curdled(); }
+
+  update() {
+    const s = this.spec;
+    const wasCurdled = this.curdled();
+    this.t++;
+    this.life--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+
+    /* THE SLIP, and it is its own pass rather than something resolveCombat
+       could be made to do, for two reasons that both matter.
+
+       It is not a hit: it applies while fresh milk is doing no damage at
+       all, it costs no health, and it is not blocked by a shield -- a shield
+       is not footwear.
+
+       And it lands on the OWNER. Houston slips in his own milk exactly like
+       everybody else, which is deliberate: a floor hazard you can stand in
+       safely is a wall, and this move is supposed to cost him the ground as
+       well. resolveCombat skips `shot.owner` on principle and should.
+
+       Re-armed to the spec's value rather than counted down from it, so what
+       the number means is "frames of skid after you leave" rather than "how
+       long it lasts", which is the thing that makes the far edge of a puddle
+       worth more than the puddle. */
+    const b = this.box();
+    for (const f of fighters) {
+      if (f.eliminated || f.state === 'ko') continue;
+      if (!overlap(b, f.hurtbox())) continue;
+      if (f.slick < s.slick) f.slick = s.slick;
+    }
+
+    // It turns. One ring so the moment is legible -- a hazard that changes
+    // what it does without saying so is a hazard nobody learns.
+    if (!wasCurdled && this.curdled()) {
+      addEffect('ring', this.x, this.y - 2, '#c9c07a');
+      for (let i = 0; i < 4; i++) {
+        addEffect('spark', this.x + rand(-8, 8), this.y - rand(0, 3), '#b8ae5e');
+      }
+    }
+    if (this.life <= 0) this.dead = true;
+  }
+
+  box() {
+    const s = this.spec;
+    return { x: this.x - s.w / 2, y: this.y - s.h, w: s.w, h: s.h };
+  }
+
+  draw(g) {
+    const s = this.spec;
+    const left = this.life / this.born;
+    // The last third of a second blinks, so nobody is caught out by milk
+    // that was about to dry up anyway. Same courtesy the glass extends.
+    if (left < 0.18 && (this.life >> 2) % 2 === 0) return;
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const half = s.w >> 1;
+    const bad = this.curdled();
+    /* Three rows, each shorter than the one under it, which is the whole of
+       what makes a rectangle read as a spill rather than as a plank. Colours
+       chosen so the two states are not two shades of one thing: fresh is a
+       cold near-white, curdled is a warm ochre, and at 320x180 that is the
+       difference a player can actually see. */
+    g.fillStyle = bad ? '#b9ad63' : '#e8f2f0';
+    g.fillRect(x - half, y - 1, s.w, 1);
+    g.fillStyle = bad ? '#cdc07a' : '#cbe6e4';
+    g.fillRect(x - half + 3, y - 2, s.w - 6, 1);
+    g.fillStyle = bad ? '#9d9149' : '#a9d6d4';
+    g.fillRect(x - half + 8, y - 3, s.w - 16, 1);
+    if (bad) {
+      // Lumps. Four of them, in fixed places, because curdled milk is not a
+      // flat colour and a flat colour is exactly what it looked like.
+      g.fillStyle = '#7d7338';
+      for (let i = 0; i < 4; i++) {
+        const k = (this.seed + i * 23) % 29;
+        g.fillRect(x - half + 3 + (k * (s.w - 8)) / 29, y - 1 - (k % 2), 1, 1);
+      }
+    } else {
+      // And a highlight on fresh milk, for the same reason: it is wet.
+      g.fillStyle = '#ffffff';
+      g.fillRect(x - half + 4, y - 2, 2, 1);
+      g.fillRect(x + half - 7, y - 1, 2, 1);
+    }
+  }
+}
+
+/* =====================================================================
+   THE LAWNMOWER.
+
+   Welded to the man pushing it rather than flying on its own: he walks, it
+   goes where he is, and the move ends when he stops. That is what the art
+   says -- six frames of him behind the handle -- and it is why this is a
+   projectile at all rather than a hitbox on the fighter. Two things need it
+   to be an object in `projectiles`:
+
+     `pierce` and `hitAt`, so it grinds people instead of hitting them once,
+     which is the whole difference between a mower and a kick; and
+
+     `shreds`, which sweepFrail reads, and which is the reason he exists --
+     it destroys any enemy projectile the deck touches. Nothing else on this
+     roster can delete a shot that did not volunteer to be deletable.
+   ===================================================================== */
+class Mower {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    /* Latched at the start and never re-read. Reading owner.facing every
+       frame would let him turn the deck round under somebody by tapping the
+       other way -- and he is `roots`ed precisely so that the direction is a
+       decision he made twelve frames ago and has to live with. */
+    this.dir = owner.facing;
+    this.x = owner.x + this.dir * spec.reach;
+    this.y = owner.y;
+    this.t = 0;
+    this.life = spec.active;
+    this.pierce = true;
+    this.shreds = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    this.dead = false;
+  }
+
+  update() {
+    const s = this.spec;
+    this.t++;
+    this.life--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+    }
+    // Wherever he has got to, in front of him. No velocity of its own: the
+    // push is his, in runSpecial, and there is one place that says how fast
+    // this thing travels rather than two that have to agree.
+    this.x = this.owner.x + this.dir * s.reach;
+    this.y = this.owner.y;
+
+    /* It has wheels, and three ways to end.
+
+       Off the floor -- knocked into the air, or walked off a ledge behind it
+       -- and it is gone, which is the same rule canSpecial applies on the way
+       in. Out of the move, for any reason at all including being hit out of
+       it, and it is gone with him: an enemy projectile-eater that outlived
+       the man pushing it would be a free screen-clear off any trade.
+
+       `moveFor` rather than `specialSlot === 'down'`, for the reason the axe
+       and the fishing rod both give: specialSlot is assigned in startAttack
+       and is not a constructor field, so restoreSim is entitled to delete it
+       on a rewind past his first special of the match. */
+    if (!this.owner.grounded) this.dead = true;
+    if (this.owner.state !== 'special' ||
+        this.owner.moveFor('special') !== s) this.dead = true;
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -24 || this.x > VW + 24) this.dead = true;
+
+    // Cut grass and dust off the front edge, so it reads as a machine doing
+    // something to the floor rather than a box being carried along.
+    if (this.t % 5 === 0) {
+      addEffect('dust', this.x + this.dir * (s.boxW / 2), this.y, '#9ec46a');
+    }
+  }
+
+  box() {
+    const s = this.spec;
+    return { x: this.x - s.boxW / 2, y: this.y - s.boxH, w: s.boxW, h: s.boxH };
+  }
+
+  /* NOTHING. The mower is drawn as part of the man -- the art is one picture
+     of both of them -- by drawMower, over his sprite, the way the axe is.
+     Drawing it here as well would paint a second mower underneath him, one
+     frame behind, because this runs before the fighters do. */
+  draw() {}
+}
+
 /* The car.
 
    Comes in off the edge behind him and crosses the whole stage the way he is
@@ -13207,6 +13949,15 @@ const AUDIO_RECIPES = {
            noise: { dur: 0.06, lp: 1500 } },
   throw: { osc: 'sine', f0: 300, f1: 120, dur: 0.20, gain: 0.44,
            noise: { dur: 0.10, lp: 2600, lp1: 500 } },
+
+  /* A small engine catching. A sawtooth is what a two-stroke sounds like and
+     the sweep upward is it coming up to speed; the noise is the blade.
+     Deliberately quiet -- 0.16, near the bottom of this table -- for the
+     reason the belch's note gives: this is a 72-frame special he can throw
+     whenever the bar allows, and loud plus often is what makes a sound
+     something people turn off. */
+  mower: { osc: 'sawtooth', f0: 88, f1: 150, dur: 0.34, gain: 0.16,
+           noise: { dur: 0.22, lp: 1800, lp1: 700 } },
 
   // The floor coming up and going back down.
   deadlift: { osc: 'sine', f0: 120, f1: 28, dur: 0.5, curve: 'exp', gain: 0.5,
@@ -14134,12 +14885,25 @@ function sweepFrail(fighters) {
   /* Nothing frail on the stage is the overwhelmingly common case -- one
      character in the file makes any -- so this walks the list once and
      leaves rather than asking every projectile for a box every frame. */
-  let any = false;
+  /* Two ways in now: something FRAIL on the stage, or something that SHREDS.
+     `frail` is a shot that anything can destroy; `shreds` is the other half
+     of the same idea, a shot that destroys anything -- Houston's lawnmower
+     deck and nothing else. The second half exists because `frail` alone can
+     only ever answer the one projectile that opted into being fragile, and
+     "the answer to a screen full of shots" has to work on shots nobody
+     marked. A shredder is not itself frail, so two mowers grind past each
+     other rather than annihilating, and neither is a shredder ever the thing
+     a fighter's swing deletes below. */
+  let any = false, shredder = false;
   for (let i = 0; i < projectiles.length; i++) {
-    if (projectiles[i].frail && !projectiles[i].dead) { any = true; break; }
+    const p = projectiles[i];
+    if (p.dead) continue;
+    if (p.frail) any = true;
+    if (p.shreds) shredder = true;
   }
-  if (!any) return;
+  if (!any && !shredder) return;
   for (const a of fighters) {
+    if (!any) break;
     if (a.eliminated || a.hitstop > 0) continue;
     const h = a.hitbox();
     if (!h) continue;
@@ -14162,7 +14926,12 @@ function sweepFrail(fighters) {
     const box = atk.box();
     for (let j = 0; j < n; j++) {
       const shot = projectiles[j];
-      if (shot === atk || shot.dead || !shot.frail) continue;
+      /* Frail dies to anything; everything else dies only to a shredder, and
+         a shredder dies to neither. Written as one condition rather than a
+         second loop so the ordering question -- which of two mowers eats the
+         other -- cannot arise at all. */
+      if (shot === atk || shot.dead) continue;
+      if (!shot.frail && !(atk.shreds && !shot.shreds)) continue;
       if (shot.owner === atk.owner) continue;
       if (!overlap(box, shot.box())) continue;
       if (shot.struck) shot.struck();
@@ -14354,8 +15123,14 @@ function aiDecide(me, foe) {
 
   // Close the gap.
   const s = me.def.specials.neutral;
+  /* `milk` is here for the same reason the cookie is: it is a thing you
+     throw at a piece of floor some distance away, and a CPU that stands on
+     top of somebody with it spills the puddle under its own feet -- which
+     works, since Houston slips in his own milk, and is the exact opposite of
+     the move. */
   const ranged = s.kind === 'projectile' || s.kind === 'pizza' ||
-                 s.kind === 'hotdog' || s.kind === 'cookie' || s.kind === 'star';
+                 s.kind === 'hotdog' || s.kind === 'cookie' ||
+                 s.kind === 'star' || s.kind === 'milk';
   const idealRange = ranged ? AI_TUNE.rangedIdeal : s.kind === 'beam' ? 45 : 13;
 
   const crowded = ranged || s.kind === 'beam' ? AI_TUNE.rangedCrowd : 0;
@@ -14415,6 +15190,13 @@ function aiDecide(me, foe) {
       s.kind === 'buff' ? (me.buffTimer <= 0 && adx > 40) :
       s.kind === 'dash' ? (me.grounded && adx > 20 && adx < 70 && Math.abs(dy) < 14) :
       s.kind === 'uppercut' ? (adx < 16 && dy < 6) :
+      /* Measured off the arc rather than guessed: the carton leaves at 3.1
+         with a lift of -1.5 against a drop of 0.16, and lands 77 pixels away
+         on flat ground. So the far end is the throw's own reach plus a little
+         for somebody walking into it, and the near end is far enough that the
+         spill does not land on his own feet -- which it would, and he slips
+         in his own milk like everybody else. */
+      s.kind === 'milk' ? (adx > 30 && adx < 110 && Math.abs(dy) < 26) :
       /* shockwave */ (adx < 26 && Math.abs(dy) < 14);
 
     if (desperate && inJab) {
@@ -14995,7 +15777,11 @@ function drawRoom() {
     if (select.cursor[0] === i) {
       sctx.strokeStyle = '#ffffff';
       sctx.lineWidth = Math.max(2, SCALE);
-      sctx.strokeRect(px(cx - 27), px(cy - 5), px(54), px(36));
+      // 46 in a 52-wide cell, the same three pixels of clearance a side the
+      // 54-in-60 it replaces had -- and the room nests up to four of these
+      // inside one another, three pixels apart, so the clearance is what
+      // stops the outermost touching its neighbour.
+      sctx.strokeRect(px(cx - 23), px(cy - 5), px(46), px(36));
       sctx.lineWidth = 1;
     }
     /* Everybody else's box, in their own colour. Solid once they have
@@ -15016,8 +15802,8 @@ function drawRoom() {
       sctx.globalAlpha = seat.ready ? 1 : 0.45;
       sctx.lineWidth = Math.max(2, SCALE);
       const pad = (n + mineHere) * 3;
-      sctx.strokeRect(px(cx - 27 + pad), px(cy - 5 + pad),
-                      px(54 - pad * 2), px(36 - pad * 2));
+      sctx.strokeRect(px(cx - 23 + pad), px(cy - 5 + pad),
+                      px(46 - pad * 2), px(36 - pad * 2));
       sctx.lineWidth = 1;
       sctx.globalAlpha = 1;
     });
@@ -15402,8 +16188,22 @@ const SEAT_COLORS = ['#59a5ff', '#ff5f5f', '#5fd46a', '#ffc14d'];
 
    If a genuine eleventh ever arrives: six columns at a 52-pixel cell is the
    widest that fits across 320, and it holds twelve in two rows. */
-const GRID_COLS = 5;
-const CELL_W = 60;
+/* He arrived. Houston is the eleventh and this is that change, made exactly
+   as the line above worked it out: 6 x 52 is 312 across a 320px screen, and
+   eleven lands as a full row of six and a row of five. Three rows is still
+   the thing being avoided -- the local select puts row 2 at y 144 with its
+   name at 184, on a screen 180 tall -- and this buys one more character
+   before it has to be thought about again.
+
+   The two selection rings narrow with the cell and are not derived from it,
+   because they are not the same inset on both screens: the local select's
+   ring is 4px inside its cell and the room's is 6px, and that difference is
+   deliberate (the room draws up to four rings nested inside one another).
+   Both are measured off CELL_W in their own file position; what must not
+   happen is a 56-wide ring in a 52-wide cell, which is two neighbours'
+   rings overlapping and reading as one box around both. */
+const GRID_COLS = 6;
+const CELL_W = 52;
 
 function moveCursor(slot, dx, dy) {
   let i = select.cursor[slot];
@@ -16215,9 +17015,25 @@ function drawFighter(g, f) {
   // An eliminated fighter is still on screen while the KO that removed them
   // plays out. 'gone' is when they are actually off the board.
   if (f.eliminated && f.state !== 'ko') return;
-  if (f.def.dummy) { drawSandbag(g, f); return; }
-  const im = f.sprite();
-  if (!im) return;
+  /* The dummy is a fighter everywhere else in this file, and from here down
+     it is one here too.
+
+     This used to be a single line that drew the sandbag and RETURNED, and
+     that return was the whole of a bug: everything below draws what is
+     HAPPENING to a body rather than which body it is, so a burning sandbag
+     did not burn, a poisoned one gave off no gas, a confused one had no
+     birds, a dozing one had no zzz, Kel's irons closed on nothing and Simon's
+     guillotine shut around a sandbag that was demonstrably caught in it. The
+     simulation had all of it right the whole time -- burn ticked its health
+     down, grabbing went to 1 on frame six -- and only the picture disagreed.
+
+     The one thing it genuinely cannot share is the body: there is no sprite
+     sheet for it, sprite() would return nothing, and the blit below would
+     draw an undefined image. So `dummy` carries that one difference down to
+     the blit, which is the only place it matters, and nothing else changes. */
+  const dummy = !!f.def.dummy;
+  const im = dummy ? null : f.sprite();
+  if (!im && !dummy) return;
 
   // Translating the context rather than offsetting each coordinate: this
   // function draws a seat arrow, a sprite, a poison glyph and a sword, and
@@ -16248,7 +17064,14 @@ function drawFighter(g, f) {
   // Whose is whose. Fighters do not collide with each other, so four of them
   // can stand in exactly the same place, and everybody can pick the same
   // character. Left off at two players, where the game has never needed it.
-  if (fighters.length > 2) {
+  /* Never over the dummy. This arrow answers one question -- which of these
+     is you -- and the sandbag is the one body on the stage that is nobody:
+     it is seated by name rather than by a cursor, it is always a CPU, and it
+     is the thing being practiced ON. A seat-colored arrow over it would be
+     the only mark on screen claiming somebody is driving it. (Unreachable in
+     the shipped modes, where practice is always two fighters, but the engine
+     seats four and this is a cheap thing to be right about.) */
+  if (fighters.length > 2 && !dummy) {
     const mx = Math.round(f.x);
     /* Ten above his head, wherever his head has got to. It used to be a flat
        24 above his feet, which is ten clear of a standing man and buried in
@@ -16469,17 +17292,45 @@ function drawFighter(g, f) {
     g.globalAlpha = 0.6 + Math.sin(f.timer * 0.4) * 0.25;
   }
 
-  /* Drawn at his size, anchored on his FEET and his center -- the same two
-     points hurtbox() builds from, which is what keeps the picture and the
-     target the same shape. d is the cell size in screen pixels; at sizeMul 1
-     it is 16 and both expressions below reduce to x and y exactly, so every
-     other fighter in the game is blitted on the identical pixel they always
-     were. */
-  const d = Math.round(16 * f.sizeMul);
-  // Nearest-neighbor, or a 48-pixel Simon arrives blurred in a game whose
-  // whole look is that the pixels are square.
-  if (d !== 16) g.imageSmoothingEnabled = false;
-  g.drawImage(im, x + 8 - (d >> 1), y + 16 - d, d, d);
+  /* THE SEAM. The dummy's body goes exactly where every other body goes, and
+     that is the point of putting it here rather than anywhere else:
+
+       - Everything ABOVE this line is drawn behind a body on purpose -- the
+         poison gas comes off his outline, the flames and the buff aura glow
+         around him, the shield bubble encloses him. Everything BELOW is on or
+         in front of him: the irons bolted across his chest, the sword in his
+         hand, the guillotine standing over him, the birds circling his head.
+         A body inserted anywhere else puts half the statuses on the wrong
+         side of it.
+       - The alpha for rolling, breaking and being asleep is set in the twenty
+         lines above and cleared on the line below. A body drawn outside that
+         pair ignores all three.
+       - The translate that carries the rollback correction and the pin tremor
+         is still open, so the sandbag now shakes inside its own irons.
+
+     The sandbag's cell is 16x21, not 16x16, and drawSandbag anchors it on its
+     own feet -- which is why it does not go through the blit below: d, x and
+     y are the square-cell arithmetic for a sprite sheet the dummy has none
+     of. Everything overhead is still placed off HURT_H, so the ducks and the
+     zzz circle the top of its HURTBOX rather than the top of its art, which
+     for a 21-tall body over a 14-tall hurtbox is seven pixels lower down. Left that way on purpose: the
+     hurtbox is what is actually being hit, and a second dummy-only rule up
+     there would undo what this whole change is for. */
+  if (dummy) {
+    drawSandbag(g, f);
+  } else {
+    /* Drawn at his size, anchored on his FEET and his center -- the same two
+       points hurtbox() builds from, which is what keeps the picture and the
+       target the same shape. d is the cell size in screen pixels; at sizeMul
+       1 it is 16 and both expressions below reduce to x and y exactly, so
+       every other fighter in the game is blitted on the identical pixel they
+       always were. */
+    const d = Math.round(16 * f.sizeMul);
+    // Nearest-neighbor, or a 48-pixel Simon arrives blurred in a game whose
+    // whole look is that the pixels are square.
+    if (d !== 16) g.imageSmoothingEnabled = false;
+    g.drawImage(im, x + 8 - (d >> 1), y + 16 - d, d, d);
+  }
   g.globalAlpha = 1;
 
   /* The irons go on straight after the body and before the sword and the rod,
@@ -16506,6 +17357,7 @@ function drawFighter(g, f) {
   drawBling(g, f);
   drawGuillotine(g, f);
   drawAxe(g, f);
+  drawMower(g, f);
   drawWhip(g, f);
   /* After the sprite, like the sword and the rod: a swollen cheek is drawn
      ON him, and drawn under the body it would be a man with a lump behind
@@ -17037,9 +17889,11 @@ function drawSelect() {
     if (on.length) {
       sctx.strokeStyle = on.length > 1 ? '#ffffff' : SEAT_COLORS[on[0]];
       sctx.lineWidth = Math.max(2, SCALE);
-      // 56 wide inside a 60-wide cell. At the old 64 the rings of two
-      // neighbours overlapped, which read as one wide box around both.
-      sctx.strokeRect(px(cx - 28), px(cy - 6), px(56), px(46));
+      // 48 wide inside a 52-wide cell -- two pixels of clearance a side, the
+      // same clearance the 56-in-60 it replaces had. At the old 64 the rings
+      // of two neighbours overlapped, which read as one wide box around both,
+      // and a 56 left in a 52-wide cell does it again.
+      sctx.strokeRect(px(cx - 24), px(cy - 6), px(48), px(46));
       sctx.lineWidth = 1;
     }
 
@@ -17200,7 +18054,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '563d56759f';
+const BUILD_ID = 'e811d5de56';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -17211,7 +18065,7 @@ const BUILD_ID = '563d56759f';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.73';
+const VERSION = '2.74';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

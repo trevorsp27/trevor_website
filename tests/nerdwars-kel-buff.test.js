@@ -402,7 +402,16 @@ test("he wears the buff sheet while it lasts, swinging or standing", async () =>
     me.setState('attack'); me.attackFrame = 2;
     var swinging = me.sprite() === IMG['kel.buffAttack.standR'];
     me.buffTimer = 0;
-    var swingingPlain = me.sprite() === IMG['kel.attack.standR'];
+    /* 2.73 moved the jab onto its own set -- every fighter got one, built out
+       of his own pixels, and the shared procedural arm that used to be drawn
+       over the top of all ten is gone. For Kel that set is not new art: the
+       build emits his 2016 punch under BOTH names, so kel.jab.* and
+       kel.attack.* are the same eight files and an unbuffed Kel's swing is
+       still the ordinary attack sheet, pixel for pixel. It is a different
+       Image OBJECT, though, which is why this compares the art it was decoded
+       from as well as the key sprite() chose. */
+    var swingingPlain = me.sprite() === IMG['kel.jab.standR'] &&
+                        SPRITES.kel.jab.standR === SPRITES.kel.attack.standR;
     me.setState('idle');
     var plain = me.sprite() === IMG['kel.base.standR'];
     return { standing: standing, swinging: swinging, plain: plain,

@@ -269,19 +269,32 @@ test("the shipped bundle carries JohnnyHam's ham ult", async () => {
     ladeane: "THE STROKES", reese: "SHIRTS OPTIONAL", trev: "LASER SWORD",
     cobeus: "DESIGNATED DRIVER", simon: "SIMON SLOUCH",
     squalls: "SALAMENCE", christian: "FOUR AND TWENTY",
+    /* Houston arrived in 2.74 with a character sheet, a lawnmower and a
+       carton of milk, and nothing whatsoever for an ult. His is a working
+       placeholder and says so on the select screen; see the exception
+       below, which is what keeps that fact from going quiet. */
+    houston: "PLACEHOLDER",
   })) {
     assert.equal(ults[key], ult, key + "'s ult should be " + ult);
   }
 
-  /* And none of them is still a placeholder. Squalls was the last one -- he
-     kept an uppercut wearing the word for several releases because nothing
-     had been drawn for him -- so this is the assertion that stops the next
-     one being shipped quietly and left there. */
+  /* And which of them is still a placeholder, EXACTLY. Squalls kept an
+     uppercut wearing the word for several releases because nothing had been
+     drawn for him, and this is the assertion that stops the next one being
+     shipped quietly and left there.
+
+     An empty string was the right answer right up until an eleventh fighter
+     arrived with two moves drawn for him and no ult, so it is a named list
+     now rather than a count or a "not more than": a twelfth placeholder
+     fails this, and so does Houston's ult quietly becoming something real
+     without this line being read again. The list is the promise, and it has
+     one name on it. */
   const placeholders = g.nw.roster
     .filter((c) => /PLACEHOLDER/i.test(c.ult || ""))
     .map((c) => c.key).join(", ");
-  assert.equal(placeholders, "",
-    "no ult should still be a placeholder; these are: " + placeholders);
+  assert.equal(placeholders, "houston",
+    "the placeholder ults should be exactly houston; they are: " +
+    (placeholders || "none"));
 
   // And nobody is left without one: an ult read off a fighter who has none is
   // a null the HUD draws as blank rather than an error anybody would notice.
