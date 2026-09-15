@@ -3660,41 +3660,63 @@ ROSTER.houston = {
        about a second of standing still in the open to do it. That is a
        counter, and the roster should have one.
 
-       GROUNDED ONLY -- see canSpecial. A mower has wheels; there is no
-       frame of this art off the floor, and a hitbox that also eats every
-       projectile on the stage has no business being available mid-jump.
-       Refused rather than cast, so the mana is not spent either.
+       AND IT IS LEGAL IN THE AIR NOW -- see `air` below, and the branch in
+       runSpecial. It used to be refused off the floor, and the reason given
+       was that a mower has wheels. The honest reason it was refused was that
+       nobody had decided what one does mid-jump; "it has wheels" is a
+       description of the drawing, not an argument. So: airborne he holds it
+       UNDER himself and rides it down. Different reach, different box,
+       twenty active frames rather than forty, and the whole thing lands him
+       already mowing if he cast it low. It is a descent, never a recovery --
+       the altitude arithmetic is under `air`.
+
+       IT ALSO STOPS AT A LEDGE, which is the other half of what was wrong
+       with it. It stops; it does not turn. Turning would hand back the one
+       thing the move is costed on.
 
        `roots` because the push IS the movement: runSpecial drives his vx
        and nothing else may. He cannot turn round once it is running, which
-       is the cost -- forty-two frames pointed one way, on the lightest
-       fighter in the game, is a long time to be predictable, and he can
-       absolutely walk himself off a ledge behind it. */
+       is the cost -- sixty-two frames pointed one way, on the lightest
+       fighter in the game, is a long time to be predictable. Note `roots` is
+       read as `roots && grounded`, so it is inert in the air: the air cast
+       steers on ordinary drift, and that free control is the whole reason a
+       sixty-two-frame commitment off the floor is not a death sentence. */
     down: {
       kind: 'mower', label: 'LAWNMOWER',
       startup: 10, active: 40, recovery: 12,
       roots: true, shreds: true,
-      /* IT WAS SLOWER THAN WALKING AWAY, and that one number is most of what
-         was wrong with it. `push` was 1.25 against a roster whose walk runs
-         1.24 to 1.58: everybody in the game except JohnnyHam could hold back
-         and never be touched. A probe across six starting gaps and four
-         things a victim can do said exactly that -- a victim walking away
-         took 0.0 damage from every gap -- and the move as a whole connected
-         on 42% of casts for a mean of 2.67 damage, having committed him for
-         72 frames and a third of a mana bar.
+      /* One deck at a time, and this is the explicit replacement for the
+         grounded clause canSpecial used to carry. The move used to be
+         limited by a fact rather than a rule -- sixty-two committed frames
+         against a forty-frame deck meant a second one could not exist -- and
+         the air cast can now end on frame thirty-one, so the fact is gone
+         and the rule has to be written down. maxAlive returns BEFORE the
+         mana subtraction, the way every other budgeted move does, and it
+         filters on owner AND spec, so two rival Houstons still get one
+         each. */
+      maxAlive: 1,
+      /* IT WAS STILL SLOWER THAN WALKING AWAY. `push` went 1.25 -> 2 and
+         that fixed the arithmetic against the fastest walk on the roster
+         (1.58) without fixing the game: the same probe, re-run, still read
+         0.0 damage against a victim who simply held back from every gap of
+         45 pixels or more. Two beats a walk by 0.42 a frame, which over the
+         forty active frames is seventeen pixels of ground gained -- less
+         than one body length, and he starts the move fourteen pixels behind
+         his own deck.
 
-         TWO. A quarter faster than the quickest man on the roster, so
-         backing off no longer beats it outright: you jump it, or you hit him
-         out of it, or you are somewhere else before it starts. It also means
-         the deck sweeps 80 pixels rather than 52, which puts its far edge
-         about 105 forward of where he pressed the button and therefore
-         inside the 30-to-110 band aiDecide actually casts from.
+         2.8. Retreat damage trebles, 2.0 to 6.7 on the same six-gap probe,
+         and it is the last value before the connect rate starts FALLING --
+         past it the deck outruns the frames it has to bite with. 3.2 was
+         measured too and is worse as a game: it makes retreating a worse
+         answer than blocking, and a move nobody may walk away from is a move
+         with one answer.
 
-         The cost goes up with it, deliberately. He is rooted, he cannot
-         turn, and the thing now carries him a quarter of the stage: walking
-         himself off a ledge behind it was always possible and is now easy,
-         which is what a move that runs people down ought to charge. */
-      push: 2,                // how fast he walks it forward
+         What it costs him is real and is the other half of this rework: at
+         2.8 the thing carries him 112 pixels over the active window, which
+         is most of a small stage. That is what the kerb rule in runSpecial is
+         for, and why every grounded frame of the move -- startup and
+         recovery included -- is braked there as well. */
+      push: 2.8,              // how fast he walks it forward
       reach: 14,              // the deck's centre, forward of his own
       boxW: 20, boxH: 13,     // and how big the deck is
       /* NOT `ox`/`oy`/`w`/`h`. Those four names mean a melee box to
@@ -3718,14 +3740,23 @@ ROSTER.houston = {
          copy of it on the roster, and it was unaffordable as the thing it is
          for. Walking into a screen full of somebody else's projectiles costs
          a special, most of a second rooted and pointed one way, and the
-         mana. Against a zoner throwing three of them that now comes back;
-         against somebody who has thrown nothing it pays him nothing at all.
-         A counter that funds itself only when there is something to counter
-         needs no second rule written to limit it.
+         mana. Against somebody who has thrown nothing it pays him nothing at
+         all. A counter that funds itself only when there is something to
+         counter needs no second rule written to limit it.
 
          Twelve is under half the cast, so two shots is most of the move back
          and one is not. It cannot be farmed: every projectile it eats was
-         paid for by the man who threw it. */
+         paid for by the man who threw it.
+
+         MEASURE IT BEFORE YOU BELIEVE IT. An earlier draft of this paragraph
+         claimed the cast comes back against a zoner throwing three shots. It
+         does not. Forced volleys from nine different zoners fed him a mean
+         of one shot a cast -- twelve of the twenty-eight, 43 per cent -- and
+         four of the nine fed him nothing at all, because their shots fly
+         above the deck's thirteen-pixel band entirely. In live play it is
+         0.19 shots a cast, which is two mana. `feeds` is a discount on the
+         matchups it is for, not a refund, and it is not what pays for this
+         move: the damage is. */
       feeds: 12,
       /* AND IT MULCHES HIS OWN MILK. The deck over one of his own fresh
          spills turns it on the spot and starts its life over -- see
@@ -3744,6 +3775,71 @@ ROSTER.houston = {
          Only his own, only while it is fresh, and it does not widen
          anything. The point is the timing, not more floor. */
       mulch: true,
+      /* IN THE AIR IT IS A DESCENT. Four numbers and a box, nested here the
+         way the guillotine keeps its air half, so there is still exactly one
+         spec object: decks(), maxAlive, simFrozen's by-reference guarantee
+         and Mower's own moveFor() check all test identity, and splitting the
+         move into two specs would blind every one of them.
+
+         `hang: 0.35` is held through the ten startup frames, written before
+         updateAttack's gravity rather than instead of it, so the real
+         descent is 0.35 + 0.40 = 0.75 a frame. It exists to kill rising
+         momentum: without it he casts at the top of a jump and keeps
+         climbing, and a projectile-eater that floats up out of reach is not
+         a move anybody can answer. Seven and a half pixels of sink over the
+         wind-up is the telegraph.
+
+         `fall: 2.4` is held through the active frames, so the real descent
+         is 2.8 -- deliberately the same number as `push`, because then the
+         machine travels a readable 45-degree line and one frame of it tells
+         you the next twenty.
+
+         `active: 20`, half the ground version, and it is the single most
+         important ledge property the air cast has: the airborne commitment
+         is 31 frames against 62. Enforced by the stall-out in runSpecial,
+         which jumps attackFrame to the last recovery frame and lets the
+         engine's own exit end the move.
+
+         `reach: 7` and `sink: 6`: he is holding it BENEATH himself, not
+         pushing it ahead. With boxH 13 the deck spans from 7 above his feet
+         to 6 below them -- he is standing on it. That is a real box in a
+         real place and it shreds what is in it, but do not oversell it as a
+         projectile answer the way an earlier draft of this paragraph did:
+         measured against nine zoners it ate none of their volleys, because a
+         box descending at 2.8 arrives at a shot's height a good while after
+         his own hurtbox has already gone past it. Eating shots is the GROUND
+         deck's job and the ground deck is where `feeds` is earned. What the
+         air box is actually for is the gap the ground cast cannot reach at
+         all -- somebody directly underneath him -- and it beats the ground
+         cast at point blank for exactly that reason. Safe to hang a
+         box below a falling man only because the knockback angle is 20
+         degrees with a POSITIVE ky, and applyHit does vy = -ky * kb: it
+         launches upward. This cannot be a meteor, and that is not luck, it
+         is the reason the angle is not being touched.
+
+         IT IS NOT A RECOVERY, and what makes that true is the give-up in
+         runSpecial rather than the arithmetic this paragraph used to carry.
+         That arithmetic was wrong and it is worth writing down why, because
+         it is the sort of wrong that reads as rigor: it set 63.5 pixels of
+         ride against a 46.5-pixel double jump and concluded he ends
+         seventeen pixels down, as though the ride and the jump were
+         alternatives. They were not. The ride is a STALL -- 65.6 pixels over
+         its thirty-one frames against 133.6 pixels of free fall over the
+         same thirty-one -- and the stall-out then handed the jump back on
+         top of it. Pressing this over the blast zone was worth about a
+         hundred pixels of altitude he would not otherwise have had, and it
+         still killed him in 34 offstage presses out of 72, because a
+         hundred pixels of stall is not the same thing as a hundred pixels of
+         control.
+
+         So it is not a recovery for the only reason that actually holds: it
+         does not run out there. Off the side of the stage the move ends on
+         the frame it notices there is nothing underneath him, with no stall
+         and NO JUMP BACK -- see the give-up in runSpecial, where the missing
+         refund is the load-bearing half. Over his own floor, where the stall
+         and the refund do happen, a free jump above a platform is not a way
+         home from anywhere. His `up` stays the only way home. */
+      air: { hang: 0.35, fall: 2.4, active: 20, reach: 7, sink: 6 },
       /* moveCost sees one four-damage hit and prices it at 10. It cannot
          see that it lands five times, and it certainly cannot see that the
          thing also deletes projectiles and turns his milk.
@@ -3751,11 +3847,18 @@ ROSTER.houston = {
          TWENTY-EIGHT, and it is two under the carton on purpose. aiDecide
          gates every special cast on `me.mana >= specials.neutral.mana` and
          then picks a slot at random, so a Houston holding between the two
-         costs reached for the mower and was refused by canSpecial: the press
-         thrown away, the cooldown spent, nothing cast. Pricing the down
-         special below the neutral one means that branch cannot exist. It is
-         the honest direction as well -- sixty-two frames he cannot turn out
-         of should not also be the most expensive thing he does in neutral. */
+         costs reaches for the mower; were this the dearer of the two, the
+         press would be thrown away, the cooldown spent, nothing cast.
+         Pricing the down special below the neutral one means that branch
+         cannot exist. It is the honest direction as well -- sixty-two frames
+         he cannot turn out of should not also be the most expensive thing he
+         does in neutral.
+
+         UNCHANGED through this rework, on purpose. The move just gained
+         ledge safety, air legality and forty per cent more push, and three
+         buffs and a price cut at once is not a measurement, it is a guess.
+         Price is the safest knob in the file to turn and it is the SECOND
+         one to reach for after a ladder run; `hitEvery` is the first. */
       manaOverride: 28,
     },
     /* HAMMER & SICKLE. He swings the emblem up over his head, and whoever
@@ -3951,8 +4054,11 @@ ROSTER.houston = {
      Nothing else on the roster can set that up.
 
      `groundOnly`, which the ult button already understands: you cannot pave
-     the sky. Same rule canSpecial puts on the mower and for the same reason,
-     and a refused press costs him nothing.
+     the sky. It used to cite the mower as precedent and no longer can -- the
+     mower is legal off the floor now -- so the reason has to stand on its
+     own, and it does: the road is laid FROM HIS FEET along the platform he
+     is standing on, and there is no answer to where it goes if his feet are
+     nowhere. A refused press costs him nothing.
 
      WHAT IT DID TO HIM, on the house yardstick. Ninety CPU-vs-CPU matches
      against each of the other ten, all six stages, seats alternated, one
@@ -6553,13 +6659,15 @@ class Fighter {
         s.maxAlive;
     }
     if (s.kind === 'buff') return this.buffTimer <= 0;
-    /* A mower has wheels. There is no frame of that art off the floor, and a
-       forty-frame hitbox that also deletes every projectile it touches
-       has no business being available out of a jump. Refused here rather
-       than cast and ignored, so the mana is not spent either -- the whole
-       point of this gate being in canSpecial is that the caller checks it
-       BEFORE the subtraction. */
-    if (s.kind === 'mower') return this.grounded;
+    /* THE MOWER USED TO BE REFUSED HERE off the floor, and it is not any
+       more. The clause is gone rather than moved: there is no air gate to
+       find somewhere else. What stands in its place is `maxAlive: 1` on the
+       spec, which the branch above already answers, and the air cast itself
+       -- a different reach, a different box, and twenty active frames rather
+       than forty -- which lives in runSpecial and in class Mower.
+
+       Said out loud because "where did the grounded check go" is the first
+       question anybody reading this function will have. */
     /* No gambling while he IS the jackpot. Nothing stopped him pulling again
        mid-transformation, and every outcome of doing so was wrong: another
        three sevens re-armed the growth from scratch and snapped a settled
@@ -8293,10 +8401,110 @@ class Fighter {
         break;
 
       case 'mower':
+        /* HE STEERS, BUT NOT FASTER THAN ANYBODY ELSE MAY.
+
+           `roots` only bites while he is grounded, so off the floor
+           updateAttack's ordinary air-drift arm owns his vx and he keeps
+           control of the cast -- which is the property that makes an
+           airborne commitment survivable at all, and why there is no held
+           `drift` number here to fight it. Note the arm he gets is every
+           move's arm, `airAccel * 0.5`: the CAP is the same airDriftMax a
+           man with no move out steers to, the acceleration is half of it, so
+           he needs twenty-nine frames to reach the cap rather than fifteen.
+           Roughly half the steering over the length of the cast. That is the
+           cost of having a mower out, and it is the right cost.
+
+           THE CLAMP is for the case that arm cannot reach: a mower that got
+           into the air with the GROUND push still on it, launched out of the
+           mow or standing on a platform that went away. updateAttack only
+           clamps inside the branch that reads the stick, so with nothing
+           held there was no clamp at all, and `push` is 2.8 against an
+           airDriftMax of 1.9 -- forty-seven per cent over the game's own
+           ceiling, carried with no friction for the entire fall. That is the
+           difference between a drop he can drift out of and a sideways exit
+           through the blast line, and it is what turned every ledge overshoot
+           lethal. Clamped and not damped: the cap is the rule, and anything
+           under the cap is his drift, not ours. */
+        if (!this.grounded) {
+          this.vx = clamp(this.vx, -PHYS.airDriftMax, PHYS.airDriftMax);
+        }
+        /* AND IT GIVES UP OVER NOTHING, which is the curb rule for the half
+           of the move that has no kerb to stop at.
+
+           The ground cast asks about the floor in front of it every frame.
+           The air cast asked nothing: it wrote vy for thirty frames whether
+           or not there was anything underneath him, so pressing it off the
+           side of the stage bought a 68-pixel forced descent -- measured, a
+           stock in 34 offstage presses out of 72, against 9 of 72 for not
+           pressing at all. That is the original bug wearing the new half's
+           clothes, and the fix is not a smaller `fall`: every tuning number
+           that survives the ledge kills the damage, because essentially all
+           of the air cast's damage comes from landing inside the twenty
+           active frames and converting to a ground deck.
+
+           So ask the cheapest honest question there is -- floorBeneath(), is
+           there a platform anywhere below him at any depth -- and if there is
+           not, end the move where it stands. Before the spawn, so a press
+           made over the blast zone does not even put a deck out. Re-derived
+           every frame with no latch and no new field, exactly like the kerb.
+
+           NO JUMP BACK ON THIS EXIT, and that omission is the whole reason
+           the give-up is safe to have. The stall-out below hands one back
+           because thirty frames of forced descent were paid for it. This
+           exit costs two or three frames, and a two-frame press that returns
+           a jump for 28 mana is a mana-to-jumps converter, which is to say a
+           recovery, which is the one thing this move may not become. He
+           keeps the jumps he had and gets his drift and his `up` back
+           immediately. A mispress off the ledge now costs a special and
+           about a fifth of a second of altitude instead of a stock. */
+        if (!this.grounded && s.air &&
+            this.attackFrame < s.startup + s.active + s.recovery - 1 &&
+            !this.floorBeneath()) {
+          this.attackFrame = s.startup + s.active + s.recovery - 1;
+        }
+        /* The deck itself, spawned BELOW the give-up on purpose: a press
+           made out over the blast zone has already jumped attackFrame past
+           this line, so it never puts a mower out there to be drawn for one
+           frame and then deleted. */
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           projectiles.push(new Mower(this, s));
           cue('mower', { slot: this.slot, x: this.x });
+        }
+        /* THE AIR CAST, and every frame of it is a velocity written here.
+
+           Frames 0 to 9, the cord: `hang` written before applyGravity adds
+           its 0.40, so he sinks 0.75 a frame and a cast at the top of a jump
+           cannot keep climbing. No hitbox yet -- the deck spawns on the
+           startup frame like the ground version. */
+        if (!this.grounded && s.air && this.attackFrame < s.startup) {
+          this.vy = s.air.hang;
+        }
+        /* Frames 10 to 29, the ride: 2.4 plus gravity is 2.8 a frame, which
+           is `push` exactly, so the machine draws a 45-degree line. */
+        if (!this.grounded && s.air &&
+            this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + s.active) {
+          this.vy = s.air.fall;
+        }
+        /* IT REVS, AND IT STALLS. Twenty active frames in the air, not
+           forty, and this is what enforces it: attackFrame is jumped to the
+           last recovery frame and the engine's own exit at the bottom of
+           updateAttack ends the move on the next pass. One exit from a
+           special, not two -- and the give-up above reaches the same line
+           for the same reason.
+
+           `===` and not `>=`, and that is load-bearing -- a `>=` re-fires
+           every frame and pins him in a recovery that never finishes.
+
+           The jump back is SIDEARM's and JITTERS' line verbatim, and it is
+           only here, on the exit that was paid for with thirty frames of
+           descent over his own floor. A free jump above a platform is not a
+           way home from anywhere. */
+        if (!this.grounded && s.air &&
+            this.attackFrame === s.startup + s.air.active) {
+          this.attackFrame = s.startup + s.active + s.recovery - 1;
+          this.jumpsLeft = Math.max(this.jumpsLeft, 1);
         }
         /* THE PUSH, and this line is the whole of his movement for the
            length of it. `roots` is what makes that true: with it set, the
@@ -8307,10 +8515,73 @@ class Fighter {
            `facing` rather than the deck's latched `dir`, and they are the
            same thing -- he cannot turn while rooted -- but this is the man
            and that is the machine, and the machine is the one that must not
-           be allowed to swing round under somebody. */
-        if (this.attackFrame >= s.startup &&
-            this.attackFrame < s.startup + s.active && this.grounded) {
-          this.vx = this.facing * s.push;
+           be allowed to swing round under somebody.
+
+           AND HE STOPS AT A CURB. He killed himself off a ledge in 54 of 60
+           measured casts, from anywhere inside 120 pixels of an edge: rooted
+           means no friction, the push was unconditional, and the deck cannot
+           turn. So ask whether there is floor under the deck's own front
+           edge, and if there is not, stop dead.
+
+           He STOPS, he does not turn. The dash turns because a dash is
+           movement; this move is sold on him having committed to a direction
+           twelve frames ago, and a turn would refund exactly that. It is
+           also what the drawn object does at a kerb.
+
+           EVERY GROUNDED FRAME OF THE MOVE, not only the active window, and
+           that one word is two of the bugs. `roots` suppresses updateAttack's
+           friction for the whole sixty-two frames, so the ten startup frames
+           coasted unbraked at whatever he walked or dashed in with and never
+           asked the question at all -- a press within four pixels of a lip
+           stepped off it and died, and at dash-carry speed the lethal band
+           was fourteen pixels wide. The twelve recovery frames coasted the
+           same way, thirty-four free pixels with no hitbox on them. One
+           clause, all sixty-two frames, one question.
+
+           `this.vx = 0` rather than a friction multiply, and that is the
+           third bug. The brake used to be stopping(), which answers
+           slickFriction -- 0.985 -- for anybody standing in milk, and
+           Puddle.update arms `slick` on the man who spilt it as well as on
+           everybody else. So in the exact combination the ROSTER advertises,
+           milk at their feet and the mower driven through it, the kerb bled
+           one and a half per cent a frame instead of forty-five and he went
+           over the lip still doing 2.4. Twenty-four honest carton-then-mower
+           runs lost twenty-four stocks. A kerb is not a friction coefficient;
+           it is a kerb. The damp below it is the literal groundFriction for
+           the same reason -- there is no stick to keep during a rooted move,
+           so there is nothing for slickness to be charged against.
+
+           `s.reach + s.boxW / 2` is the deck's own front edge, 24, derived
+           from the spec rather than picked, and it parks him with the blades
+           overhanging the lip, live, so somebody hugging that ledge still
+           eats all five bites.
+
+           groundAhead RATHER THAN dashLandingAhead, and that is the fourth.
+           dashLandingAhead walks a free fall -- vy += gravity, capped at
+           maxFall 5.4 -- because that is what a dash does off a ledge. The
+           mower's airborne half pins vy at 2.8, which is slower, which means
+           he travels further sideways per pixel of drop than the projection
+           says and lands short of whatever it cleared him for. Measured on
+           the lava pit's top platform: the projection put him on the shelf at
+           x 240, the real ride reached that height eight pixels to the left
+           of it, missed, and overshot the main floor underneath as well.
+           Eight stocks in 184 platform casts, every one of them on that
+           one shelf and none anywhere else in the game.
+           A mower does not roll off a kerb hoping to land on something. It
+           stops at the kerb, and "is there floor at my feet a little way
+           ahead" is a question about this frame that no fall model can be
+           wrong about. Re-derived every frame with no latch: if the floor
+           comes back he resumes, which is correct -- if there is floor
+           again, mow it. */
+        if (this.grounded) {
+          if (!this.groundAhead(s.reach + s.boxW / 2)) {
+            this.vx = 0;
+          } else if (this.attackFrame >= s.startup &&
+                     this.attackFrame < s.startup + s.active) {
+            this.vx = this.facing * s.push;
+          } else {
+            this.vx *= PHYS.groundFriction;
+          }
         }
         break;
 
@@ -8426,6 +8697,34 @@ class Fighter {
     const probe = this.x + this.facing * (lookahead || 9);
     return platformsNow().some(
       (p) => probe >= p.x && probe <= p.x + p.w && Math.abs(this.y - p.y) < 2
+    );
+  }
+
+  /* Is there any floor under him AT ALL?
+
+     The third of the three footing questions, and the bluntest. groundAhead
+     asks about the step in front of a man who is standing on something;
+     dashLandingAhead walks a whole projected fall and answers where it ends.
+     This one asks neither -- is he over the stage, or is he over the blast
+     zone -- and it is the right question for a move that drives its own
+     descent, because a projection is a thing that can disagree with the fall
+     and a fact about this frame cannot. The mower's airborne half pins vy at
+     2.8 a frame where dashLandingAhead walks a free fall to maxFall 5.4;
+     handing that move a projection built on the wrong descent cleared it for
+     landings it could not reach, which is exactly how the lava pit's top
+     platform kept killing him after the ledge rule went in.
+
+     `p.x - 3` and `p.x + p.w + 3` is collidePlatforms' own skirt, so a man
+     hanging off a lip is judged by the same tolerance that would catch him.
+     `p.y >= this.y - 1` is "below his feet", with the one pixel of slack
+     that keeps a man standing flush on a platform from reading as above it.
+     Depth is deliberately not bounded: a platform two hundred pixels down is
+     still somewhere to be over, and how he gets there is not this
+     function's question. platformsNow() so a trapdoor hanging open is a hole
+     to this too, and no clock and no random in any of it. */
+  floorBeneath() {
+    return platformsNow().some(
+      (p) => this.x >= p.x - 3 && this.x <= p.x + p.w + 3 && p.y >= this.y - 1
     );
   }
 
@@ -12286,10 +12585,22 @@ function drawMower(g, f) {
      Driven off attackFrame, which is snapshotted, so a rollback replays the
      identical frame of it instead of an animation that jumps. The wind-up
      holds frame 0 -- he is starting it, not pushing it yet -- and the cycle
-     runs from the moment the deck comes out. */
+     runs from the moment the deck comes out.
+
+     AND IN THE AIR IT IS FRAMES 4 AND 5, which is not new art: the sheet is
+     three leg poses crossed with two wheel phases and build.py's layout note
+     names the third band as his JUMP legs, so 4 and 5 are that pose with the
+     wheels in each position. Fighter.sprite() is already returning a jump
+     pose for the body underneath, so the legs agree -- which they
+     emphatically would not if this kept cycling all six and painted his walk
+     over his hop. Same five-frame cadence either way, so the wheels have one
+     rule; and because k is pinned at 0 through the wind-up he HOLDS frame 4
+     for the whole airborne telegraph, knees tucked and the machine silent,
+     before it starts turning. */
   const k = Math.max(0, f.attackFrame - s.startup);
-  const im = IMG['mower.' + (f.facing < 0 ? 'L' : 'R') + '.' +
-                 (Math.floor(k / 5) % n)];
+  const cel = f.grounded ? Math.floor(k / 5) % n
+                         : 4 + (Math.floor(k / 5) % 2);
+  const im = IMG['mower.' + (f.facing < 0 ? 'L' : 'R') + '.' + cel];
   if (im) {
     g.imageSmoothingEnabled = false;
     g.drawImage(im, Math.round(f.x) - (im.width >> 1),
@@ -16292,7 +16603,9 @@ class Puddle {
    THE LAWNMOWER.
 
    Welded to the man pushing it rather than flying on its own: he walks, it
-   goes where he is, and the move ends when he stops. That is what the art
+   goes where he is, and the move ends when he stops. Or he falls and it goes
+   where he falls -- see `this.air`, which is the same weld with a different
+   reach and the box dropped under his feet. That is what the art
    says -- six frames of him behind the handle -- and it is why this is a
    projectile at all rather than a hitbox on the fighter. Two things need it
    to be an object in `projectiles`:
@@ -16313,7 +16626,19 @@ class Mower {
        other way -- and he is `roots`ed precisely so that the direction is a
        decision he made twelve frames ago and has to live with. */
     this.dir = owner.facing;
-    this.x = owner.x + this.dir * spec.reach;
+    /* Ground deck or air deck, read once off his footing at the spawn frame
+       and remembered -- the same latch and for the same reason as `dir`.
+
+       Declared in the constructor and not merely where it is set, because
+       restoreSim DELETES any key missing from a snapshot: a field first
+       assigned mid-flight works perfectly offline and vanishes on the first
+       online rollback. It is its own field rather than a borrow of the
+       Fighter's `airCast`, which belongs to the guillotine -- two unrelated
+       moves sharing a flag is safe only for exactly as long as the other
+       one's hitbox gate happens to survive, and that is a property of
+       today's code rather than a rule. */
+    this.air = !owner.grounded;
+    this.x = owner.x + this.dir * this.reachNow();
     this.y = owner.y;
     this.t = 0;
     this.life = spec.active;
@@ -16330,25 +16655,35 @@ class Mower {
     for (let i = 0; i < this.hitAt.length; i++) {
       if (this.hitAt[i] > 0) this.hitAt[i]--;
     }
-    // Wherever he has got to, in front of him. No velocity of its own: the
-    // push is his, in runSpecial, and there is one place that says how fast
-    // this thing travels rather than two that have to agree.
-    this.x = this.owner.x + this.dir * s.reach;
+    // Wherever he has got to, in front of him -- or under him, in the air.
+    // No velocity of its own: the push and the fall are both his, in
+    // runSpecial, and there is one place that says how fast this thing
+    // travels rather than two that have to agree.
+    this.x = this.owner.x + this.dir * this.reachNow();
     this.y = this.owner.y;
 
     /* It has wheels, and three ways to end.
 
-       Off the floor -- knocked into the air, or walked off a ledge behind it
-       -- and it is gone, which is the same rule canSpecial applies on the way
-       in. Out of the move, for any reason at all including being hit out of
-       it, and it is gone with him: an enemy projectile-eater that outlived
-       the man pushing it would be a free screen-clear off any trade.
+       A GROUND deck still dies the instant its owner leaves the floor --
+       knocked into the air, or walked off a ledge behind it -- and that has
+       not been loosened one inch. An AIR deck is the whole point of being
+       off the floor and lives while he falls. And an air deck that touches
+       down CONVERTS: it becomes a ground deck, obeys the ground rule from
+       that frame on, and is why landing mid-mow needs no transition code
+       anywhere else. Two lines, three answers.
+
+       Out of the move, for any reason at all including being hit out of it,
+       and it is gone with him: an enemy projectile-eater that outlived the
+       man pushing it would be a free screen-clear off any trade. Note that
+       this is also the clause that ends an air cast, since the stall-out in
+       runSpecial ends the MOVE and the deck follows the move.
 
        `moveFor` rather than `specialSlot === 'down'`, for the reason the axe
        and the fishing rod both give: specialSlot is assigned in startAttack
        and is not a constructor field, so restoreSim is entitled to delete it
        on a rewind past his first special of the match. */
-    if (!this.owner.grounded) this.dead = true;
+    if (this.air && this.owner.grounded) this.air = false;
+    if (!this.owner.grounded && !this.air) this.dead = true;
     if (this.owner.state !== 'special' ||
         this.owner.moveFor('special') !== s) this.dead = true;
     if (this.life <= 0) this.dead = true;
@@ -16384,11 +16719,28 @@ class Mower {
       }
     }
 
-    // Cut grass and dust off the front edge, so it reads as a machine doing
-    // something to the floor rather than a box being carried along.
+    /* Cut grass and dust off the front edge, so it reads as a machine doing
+       something to the floor rather than a box being carried along -- and
+       cut grass needs grass, so in the air it throws sparks off the deck
+       instead. Both are effect kinds onShred already uses; a new one would
+       be a new thing to draw and neither of these is. */
     if (this.t % 5 === 0) {
-      addEffect('dust', this.x + this.dir * (s.boxW / 2), this.y, '#9ec46a');
+      if (this.air) {
+        addEffect('spark', this.x + this.dir * (s.boxW / 2), this.y, '#9ec46a');
+      } else {
+        addEffect('dust', this.x + this.dir * (s.boxW / 2), this.y, '#9ec46a');
+      }
     }
+  }
+
+  /* How far forward the deck sits, which is the one thing the two versions
+     of this move disagree about by more than a velocity. Forward of him on
+     the floor; tucked under him in the air, where he is holding it rather
+     than pushing it. Guarded on `s.air` existing so the class still works if
+     a future spec omits the air half entirely. */
+  reachNow() {
+    const s = this.spec;
+    return (this.air && s.air) ? s.air.reach : s.reach;
   }
 
   /* IT EATS. sweepFrail calls this on the frame the deck destroys somebody
@@ -16410,9 +16762,18 @@ class Mower {
     }
   }
 
+  /* The deck. `this.y` is his FEET, and the box grows upward from them on
+     the floor -- which is where a mower is. In the air it is dropped by
+     `sink` so it straddles them: seven pixels above his soles and six below,
+     him standing on it. That puts the shredding surface among the shots he
+     is falling through, and it is only a safe thing to hang under a falling
+     man because the knockback angle launches upward. See `air` in the
+     ROSTER, where the sign of ky is the argument. */
   box() {
     const s = this.spec;
-    return { x: this.x - s.boxW / 2, y: this.y - s.boxH, w: s.boxW, h: s.boxH };
+    const sink = (this.air && s.air) ? s.air.sink : 0;
+    return { x: this.x - s.boxW / 2, y: this.y + sink - s.boxH,
+             w: s.boxW, h: s.boxH };
   }
 
   /* NOTHING. The mower is drawn as part of the man -- the art is one picture
@@ -22252,7 +22613,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'c737c5170c';
+const BUILD_ID = '38ac0ee661';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -22263,7 +22624,7 @@ const BUILD_ID = 'c737c5170c';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.78';
+const VERSION = '2.79';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
