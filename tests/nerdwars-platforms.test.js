@@ -4171,33 +4171,239 @@ test("Reese's dash wraps the map instead of leaving it", async () => {
   }
 });
 
-test("the wrap forgives the sides only, and only while it is armed", async () => {
-  /* A window that caught every blast line would make Reese unkillable for a
-     hundred frames after every dash. The floor still takes the stock, and so
-     does anything that is not a dash. */
+test("the wrap forgives the sides and the floor, never the ceiling, and " +
+     "charges for every catch", async () => {
+  /* The window was widened deliberately and this is the shape of the new
+     hole in it. It used to be sides only and once per dash, which caught the
+     tidy overshoot and missed the way a recovery actually fails -- you do not
+     get back, and you go out of the BOTTOM.
+
+     So the floor counts now. The ceiling still does not, and that is the
+     whole reason this can be widened without making him unkillable: a
+     fighter who leaves through the top was PUT there by somebody's
+     knockback, and every upward finisher in the game still works on him
+     mid-dash.
+
+     And each catch costs half of whatever window is left, so the net wears
+     out under exactly the fighter who keeps needing it. */
   const run = await bootEngine();
   run("select.cursor=[4,2]; playerCount=2; humanCount=0; stagePick=0;" +
       " startBattle(); for (var j=0;j<130;j++) step();");
 
-  const die = (setup) => run(`(function () {
+  const probe = (setup) => JSON.parse(run(`(function () {
     var me = fighters[0];
     var bz = STAGE.blast;
     me.setState('fall'); me.hitstun=0; me.hitstop=0; me.invuln=0;
     me.stocks=99; me.eliminated=false; me.vx=0; me.vy=0;
     ${setup}
+    me.prevY = me.y;
     var before = me.stocks;
     me.checkBlastZones();
-    return before - me.stocks;
-  })()`);
+    return JSON.stringify({ lost: before - me.stocks, left: me.dashWrap,
+                            x: me.x, y: me.y, vy: me.vy, top: bz.top });
+  })()`));
+  const die = (setup) => probe(setup).lost;
 
-  assert.equal(die("me.dashWrap = 60; me.x = bz.left - 5; me.y = bz.bottom + 30;"), 1,
-    "falling out of the bottom should still end the stock, armed or not");
+  // Unarmed, every line still kills -- this is a dash window and nothing else.
   assert.equal(die("me.dashWrap = 0; me.x = bz.right + 5; me.y = 60;"), 1,
-    "and walking off the side with no dash armed should still end it");
+    "walking off the side with no dash armed should still end it");
+  assert.equal(die("me.dashWrap = 0; me.x = 160; me.y = bz.bottom + 30;"), 1,
+    "and so should falling out of the bottom with nothing armed");
+
+  // Armed, the two lines a failed recovery ends at are forgiven.
   assert.equal(die("me.dashWrap = 60; me.x = bz.right + 5; me.y = 60;"), 0,
-    "while an armed side exit should wrap");
+    "an armed side exit should wrap");
+  const floor = probe("me.dashWrap = 60; me.x = 160; me.y = bz.bottom + 30;" +
+                      " me.vy = 5.4;");
+  assert.equal(floor.lost, 0,
+    "and an armed exit through the FLOOR should be caught, which is how a " +
+    "recovery actually fails");
+  assert.ok(floor.y < floor.top + 24,
+    "caught off the floor he comes back in at the top, not where he left; " +
+    "y " + floor.y);
+  assert.ok(floor.vy <= 0,
+    "and not still falling at terminal velocity, which would be the same " +
+    "death with extra steps; vy " + floor.vy);
+
+  // The ceiling is the deliberate hole: knockback still kills him mid-dash.
+  assert.equal(die("me.dashWrap = 60; me.x = 160; me.y = bz.top - 30;"), 1,
+    "an armed exit through the CEILING must still take the stock, or the " +
+    "window would make him immune to being killed rather than forgiving " +
+    "his own mistake");
+
+  // And the net wears out: each catch spends half of what is left.
+  const first = probe("me.dashWrap = 100; me.x = bz.right + 5; me.y = 60;");
+  assert.equal(first.lost, 0, "the first catch works");
+  assert.equal(first.left, 50,
+    "and costs half the window, so it is not a revolving door; left " +
+    first.left);
+  const spent = probe("me.dashWrap = 1; me.x = bz.right + 5; me.y = 60;");
+  assert.equal(spent.left, 0,
+    "and the halving always reaches zero rather than asymptoting above it");
 });
 
+
+/* ------------------------------------------------------------------ *
+ * REESE: the dash hurts for as long as it travels, and the fart can be
+ * charged on the move.
+ * ------------------------------------------------------------------ */
+
+/* Cast Reese's up special on frame 0 and report, per frame, whether his
+   hitbox is live and how fast he is still going. */
+const JITTERS_PROBE = `(function () {
+  var f = fighters[0], o = fighters[1];
+  var main = STAGE.platforms.find(function (p) { return p.main; });
+  o.x = main.x + 4; o.invuln = 99999;
+  f.x = main.x + 20; f.y = main.y;
+  ${CLEAN}
+  f.facing = 1; f.mana = 100;
+  var rows = [], x0 = f.x;
+  netplay.active = true;
+  for (var i = 0; i < 26; i++) {
+    netplay.framePads = [bitsToPad(i === 0 ? 2048 : 0), bitsToPad(0)];
+    step();
+    rows.push([f.state === 'special' && f.hitbox() ? 1 : 0,
+               Math.abs(f.vx), f.x - x0]);
+  }
+  netplay.active = false; netplay.framePads = null;
+  var s = ROSTER.reese.specials.up;
+  return JSON.stringify({ rows: rows, speed: s.speed,
+                          total: s.startup + s.active + s.recovery });
+})()`;
+
+/* The claim, as a function, so the negative control can run exactly it. */
+function checkJitters(r) {
+  const live = r.rows.filter((row) => row[0]).length;
+  assert.equal(live, r.total - 3,
+    "the box should be live for every frame of the move from the first " +
+    "active one to the last; it was live for " + live + " of " + r.total);
+  let lastLive = -1;
+  r.rows.forEach((row, i) => { if (row[0]) lastLive = i; });
+  assert.ok(r.rows[lastLive][1] >= r.speed - 0.01,
+    "and on the LAST live frame he must still be moving at dash speed -- " +
+    "a box that closes while he is still travelling is the whole complaint; " +
+    "vx was " + r.rows[lastLive][1]);
+  const dead = r.rows.slice(0, lastLive).filter((row) => !row[0]).length;
+  assert.equal(dead, 3,
+    "and nothing between the first live frame and the last may be dead: " +
+    dead + " dead frames before the box closed, startup included");
+  return r.rows[lastLive][2];
+}
+
+test("JITTERS hurts for as long as it is still travelling", async () => {
+  /* `active` is how long the move DRIVES him; a dash is `rooted`, so nothing
+     damps the speed those frames set and he coasts the whole recovery at it.
+     The box used to close with `active` and the sprite did not -- sprite()
+     holds the attack posture for the entire state -- so the second half of
+     the distance was drawn as a lunge that could not touch anybody. */
+  const run = await bootEngine();
+  run("var R = ORDER.indexOf('reese');" +
+      " select.cursor=[R,(R+1)%ORDER.length]; twoPlayer=true; playerCount=2;" +
+      " humanCount=0; stagePick=0; startBattle();");
+  run(QUIET_WARMUP);
+  const r = JSON.parse(run(JITTERS_PROBE));
+  const reach = checkJitters(r);
+  assert.ok(reach > 95,
+    "which is worth about a hundred pixels of dangerous travel rather than " +
+    "fifty; he covered " + reach.toFixed(1) + " under a live box");
+});
+
+test("negative control: a dash box that closes with `active` fails it", async () => {
+  const run = await bootEngine(
+    sabotage("(s.hitActive || s.active)", "(s.active)"));
+  run("var R = ORDER.indexOf('reese');" +
+      " select.cursor=[R,(R+1)%ORDER.length]; twoPlayer=true; playerCount=2;" +
+      " humanCount=0; stagePick=0; startBattle();");
+  run(QUIET_WARMUP);
+  const r = JSON.parse(run(JITTERS_PROBE));
+  await expectToFail(() => checkJitters(r),
+    "with the box tied to `active` again the dash must fail the travel test");
+});
+
+/* Cast CROP DUST, then hold the button -- plus whatever else `extra` says --
+   for 40 frames, and report where he ended up and what came out. */
+const FART_PROBE = (extra) => `(function () {
+  var f = fighters[0], o = fighters[1];
+  var main = STAGE.platforms.find(function (p) { return p.main; });
+  o.x = main.x + 4; o.invuln = 99999;
+  f.x = main.x + 30; f.y = main.y;
+  ${CLEAN}
+  f.facing = 1; f.mana = 100;
+  var x0 = f.x, y0 = f.y, air = 0;
+  netplay.active = true;
+  for (var i = 0; i < 40; i++) {
+    netplay.framePads = [bitsToPad(i === 0 ? (8 | 1024 | 8192) : ${extra}),
+                         bitsToPad(0)];
+    step();
+    if (!f.grounded) air++;
+  }
+  for (var j = 0; j < 30; j++) {
+    netplay.framePads = [bitsToPad(0), bitsToPad(0)];
+    step();
+  }
+  netplay.active = false; netplay.framePads = null;
+  var cloud = null;
+  for (var k = 0; k < projectiles.length; k++) {
+    if (projectiles[k].spec && projectiles[k].spec.stinkName) {
+      cloud = projectiles[k].spec.stinkName;
+    }
+  }
+  return JSON.stringify({ dx: f.x - x0, dy: f.y - y0, air: air,
+                          cloud: cloud, mana: f.mana });
+})()`;
+
+// 8192 alone is the button held and nothing else; |2 adds right, |16 a jump.
+const FART_HOLD = 8192;
+const FART_HOLD_RIGHT = 8192 | 2;
+const FART_HOLD_RIGHT_JUMP = 8192 | 2 | 16;
+
+function checkFartWalk(held, still) {
+  assert.ok(held.dx > 20,
+    "holding a direction through the charge should WALK him -- the fart is " +
+    "gas you leave behind you, and a charge that rooted him inverted the " +
+    "move; he moved " + held.dx.toFixed(1) + " pixels");
+  assert.equal(still.dx, 0,
+    "and letting the stick go should still leave him where he is; he " +
+    "drifted " + still.dx.toFixed(1));
+  assert.equal(held.cloud, still.cloud,
+    "walking must not change WHICH cloud the charge produces");
+}
+
+test("CROP DUST can be charged on the move, and never off the ground", async () => {
+  /* The two halves are deliberately different. Walking keeps him in the piece
+     of stage he is denying, which is still a price. Jumping would let him
+     clear an approach without giving any of the charge back, and would let a
+     RANCID be carried into the air and dropped on somebody's recovery. */
+  const run = await bootEngine();
+  run("var R = ORDER.indexOf('reese');" +
+      " select.cursor=[R,(R+1)%ORDER.length]; twoPlayer=true; playerCount=2;" +
+      " humanCount=0; stagePick=0; startBattle();");
+  run(QUIET_WARMUP);
+
+  const still = JSON.parse(run(FART_PROBE(FART_HOLD)));
+  const held = JSON.parse(run(FART_PROBE(FART_HOLD_RIGHT)));
+  checkFartWalk(held, still);
+
+  const jumped = JSON.parse(run(FART_PROBE(FART_HOLD_RIGHT_JUMP)));
+  assert.equal(jumped.air, 0,
+    "but the jump button must do nothing at all while the charge is held; " +
+    "he spent " + jumped.air + " frames off the floor");
+  assert.equal(jumped.dy, 0, "and must not have left the floor he started on");
+});
+
+test("negative control: a charge that roots him fails the walking test", async () => {
+  const run = await bootEngine(
+    sabotage("chargeWalk = !!m.charge.walk && this.grounded;",
+             "chargeWalk = false;"));
+  run("var R = ORDER.indexOf('reese');" +
+      " select.cursor=[R,(R+1)%ORDER.length]; twoPlayer=true; playerCount=2;" +
+      " humanCount=0; stagePick=0; startBattle();");
+  run(QUIET_WARMUP);
+  const still = JSON.parse(run(FART_PROBE(FART_HOLD)));
+  const held = JSON.parse(run(FART_PROBE(FART_HOLD_RIGHT)));
+  await expectToFail(() => checkFartWalk(held, still),
+    "with the walk switched off the charge must fail the walking test");
+});
 
 test("a match ending any way at all lands in the room, if there is one", async () => {
   /* netStop is where EVERY ending converges -- a KO, somebody pressing

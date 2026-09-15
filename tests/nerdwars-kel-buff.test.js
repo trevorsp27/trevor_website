@@ -5,9 +5,18 @@
  * reason: with a jab recovering in nine frames a long pin is not a pin, it
  * is a turn. It comes down again here because the pin is no longer the
  * point. What follows it is: ten seconds of buff Kel, drawn from the sheet he
- * redrew for exactly this, hitting twice as hard and moving exactly as fast
- * as he did before. Damage was the ask. A faster Kel who also hits twice as
- * hard would be a different character, not a buffed one.
+ * redrew for exactly this, hitting half again as hard and moving exactly as
+ * fast as he did before. Damage was the ask. A faster Kel who also hits
+ * harder would be a different character, not a buffed one.
+ *
+ * It was DOUBLE and the doubling is what came off. Measured over 289 CPU
+ * matches, a landed LEG DAY was worth 58.1 damage across the ten seconds that
+ * followed it against 18.6 in an ordinary ten seconds, and 20.8 of that 58.1
+ * was what the multiplier ADDED to swings he was throwing anyway. The reason
+ * the number is 1.5 rather than any other cut is pinned below: at x2 his DROP
+ * SET was 30, which is harder than the hardest single hit anywhere in the
+ * roster, and a buff is not allowed to put an ordinary special above that
+ * ceiling.
  *
  * The buff rides the machinery Reese's SHIRTS OPTIONAL already owns --
  * buffTimer, buffStats, the damageMul getter -- so the two things most
@@ -310,19 +319,20 @@ test("the floor landing still stops the world for a moment", async () => {
     " frames; freezeFrames was " + r.freeze + " on the hit frame");
 });
 
-test("landing LEG DAY makes him buff Kel: twice the damage, none of the speed", async () => {
+test("landing LEG DAY makes him buff Kel: half again the damage, none of the speed", async () => {
   /* Measured, not restated: a jab from plain Kel and a jab from buffed Kel
      into the same victim, reset between, and the second has to take exactly
-     twice the health. The buff comes from actually landing the ult rather
-     than from setting buffTimer by hand, so the path from the move's own
-     `buff` block through buffStats to the getter to applyHit is the thing
+     the multiplier's share more. The buff comes from actually landing the ult
+     rather than from setting buffTimer by hand, so the path from the move's
+     own `buff` block through buffStats to the getter to applyHit is the thing
      under test. Speed stays at 1 on purpose: the ask was damage, and a
-     faster Kel who also hits twice as hard is a different character. */
+     faster Kel who also hits harder is a different character. */
   const run = await kelVsReese();
   const spec = run("(function(){ var b = ROSTER.kel.ult.buff;" +
     " return { duration: b.duration, damageMul: b.damageMul, speedMul: b.speedMul }; })()");
   assert.equal(spec.duration, 600, "ten seconds of buff, as designed; got " + spec.duration);
-  assert.equal(spec.damageMul, 2, "double damage, as designed; got " + spec.damageMul);
+  assert.equal(spec.damageMul, 1.5,
+    "half again the damage, as designed; got " + spec.damageMul);
   assert.equal(spec.speedMul, undefined,
     "the buff must not name a speed multiplier -- damage was the ask");
 
@@ -357,9 +367,58 @@ test("landing LEG DAY makes him buff Kel: twice the damage, none of the speed", 
   assert.ok(r.plain > 0, "precondition: the plain jab should have connected; it took " + r.plain);
   assert.ok(r.stillBuffed && r.mulNow === spec.damageMul,
     "precondition: he should still be buffed for the second jab");
-  assert.ok(Math.abs(r.buffed - 2 * r.plain) < 1e-9,
-    "a jab from buffed Kel should take exactly twice what a plain one does: " +
-    "plain took " + r.plain + ", buffed took " + r.buffed);
+  assert.ok(Math.abs(r.buffed - spec.damageMul * r.plain) < 1e-9,
+    "a jab from buffed Kel should take exactly " + spec.damageMul +
+    " times what a plain one does: plain took " + r.plain +
+    ", buffed took " + r.buffed);
+});
+
+test("the buff cannot lift one of his moves above the roster's hardest hit", async () => {
+  /* THE REASON THE NUMBER IS 1.5. This is the assertion the multiplier was
+     cut to satisfy, and it is written as a rule rather than as a number so
+     that raising the buff, or raising DROP SET, or softening whatever
+     currently holds the ceiling, each fails here instead of quietly shipping
+     a 29-frame special that hits harder than any ult in the game.
+
+     LEVEL WITH the ceiling is allowed; a class of its own is not. DROP SET
+     buffed is 22.5 against Cobeus' car at 22, and the slack below is one
+     point because the health bar is drawn with Math.ceil -- half a point is
+     under what it can show. Thirty against twenty-two was not.
+
+     Squalls' ult is excluded and has to be: SALAMENCE is 999, a deliberate
+     one-shot, and it is not a ceiling anybody else is measured against. */
+  const run = await kelVsReese();
+  const r = run(`(function(){
+    var cap = 0, capName = '';
+    for (var k in ROSTER) {
+      var d = ROSTER[k];
+      var moves = [['jab', d.jab]];
+      if (d.ult) moves.push(['ult', d.ult]);
+      for (var s in d.specials) moves.push([s, d.specials[s]]);
+      for (var i = 0; i < moves.length; i++) {
+        var dmg = moves[i][1] && moves[i][1].damage || 0;
+        if (dmg >= 100) continue;            // the one-shot, see above
+        if (dmg > cap) { cap = dmg; capName = k + ' ' + moves[i][0]; }
+      }
+    }
+    var mul = ROSTER.kel.ult.buff.damageMul;
+    var worst = 0, worstName = '';
+    var mine = [['jab', ROSTER.kel.jab]];
+    for (var s2 in ROSTER.kel.specials) mine.push([s2, ROSTER.kel.specials[s2]]);
+    for (var j = 0; j < mine.length; j++) {
+      var v = (mine[j][1].damage || 0) * mul;
+      if (v > worst) { worst = v; worstName = mine[j][0]; }
+    }
+    return { cap: cap, capName: capName, mul: mul,
+             worst: worst, worstName: worstName };
+  })()`);
+
+  assert.ok(r.cap > 0 && r.mul > 1, "precondition: a ceiling and a real buff");
+  assert.ok(r.worst <= r.cap + 1,
+    "buffed Kel's " + r.worstName + " deals " + r.worst + " at x" + r.mul +
+    ", clear of the roster's hardest single hit (" + r.capName + " at " +
+    r.cap + "). A buff may take one of his moves LEVEL with that ceiling " +
+    "and no further.");
 });
 
 test("he wears the buff sheet while it lasts, swinging or standing", async () => {
@@ -515,8 +574,9 @@ test("Reese still takes his shirt off, not Kel's", async () => {
 test("a Simon slouch aura does not cancel Kel's buff", async () => {
   /* Simon's aura sets `drowsy`, which slows a fighter's walk on its own path
      and has nothing to do with buffStats -- and it must stay that way. A
-     sleepy buffed Kel is slow AND hits twice as hard; the buff is not a state
-     the slouch is allowed to switch off. Set by hand, then ticked one frame
+     sleepy buffed Kel is slow AND hits harder; the buff is not a state the
+     slouch is allowed to switch off. The multiplier is read off the spec so
+     this test is about the slouch rather than about the number. Set by hand, then ticked one frame
      so the drowsy countdown gets its turn too. */
   const run = await kelVsReese();
   const r = run(`(function(){
@@ -531,12 +591,15 @@ test("a Simon slouch aura does not cancel Kel's buff", async () => {
     step();
     netplay.active = false; netplay.framePads = null;
     return { atOnce: atOnce, after: me.damageMul, drowsy: me.drowsy,
-             buffTimer: me.buffTimer };
+             buffTimer: me.buffTimer, mul: u.buff.damageMul };
   })()`);
-  assert.equal(r.atOnce, 2,
-    "a buffed Kel under the slouch aura should still read damageMul 2; got " + r.atOnce);
+  assert.ok(r.mul > 1, "precondition: the ult's buff is a real multiplier");
+  assert.equal(r.atOnce, r.mul,
+    "a buffed Kel under the slouch aura should still read damageMul " + r.mul +
+    "; got " + r.atOnce);
   assert.ok(r.drowsy > 0 && r.buffTimer > 0,
     "precondition: both the drowsiness and the buff should still be running");
-  assert.equal(r.after, 2,
-    "and a frame later, with drowsy ticking, it should still be 2; got " + r.after);
+  assert.equal(r.after, r.mul,
+    "and a frame later, with drowsy ticking, it should still be " + r.mul +
+    "; got " + r.after);
 });

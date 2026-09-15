@@ -541,10 +541,12 @@ function checkTints(run, rows) {
   })`));
   assert.equal(up.tints.length, 6, "six colors, one per press of the wheel");
   assert.equal(up.bursts.length, 6, "and six explosions to match, built at load");
-  assert.equal(up.mul, 1.2,
-    "a burst is worth a fifth more than the shot it came from -- a multiplier " +
-    "rather than a flat number, so ORANGE still hits hardest inside the ball " +
-    "exactly as it does outside it");
+  assert.equal(up.mul, 1.1,
+    "a burst is worth a TENTH more than the shot it came from -- it was a " +
+    "fifth until the multiplier was nerfed by name, and the number is pinned " +
+    "here so that cut cannot quietly come back. Still a multiplier rather " +
+    "than a flat number, so ORANGE hits hardest inside the ball exactly as " +
+    "it does outside it");
   for (let i = 0; i < 6; i++) {
     assert.equal(up.bursts[i].tint, up.tints[i].tint,
       "burst " + i + " should carry color " + up.tints[i].tint);
@@ -574,7 +576,7 @@ function checkTints(run, rows) {
     "it took " + (purple.r.foeManaBefore - purple.r.foeManaAfter));
 }
 
-test("six burst colors, each keeping its own payload and a fifth more damage", async () => {
+test("six burst colors, each keeping its own payload and a tenth more damage", async () => {
   const run = await arena(NICK, REESE);
   const rows = COLORS.map((c) => ({ ...c, r: burstAt(run, c.hue) }));
   checkTints(run, rows);
@@ -2164,4 +2166,386 @@ test("negative control: a frog that reaches the man beside the pie fails the bur
   expectToFail(() => checkPieBurst(run, bakeRun(run, BESIDE), bakeRun(run, CLEAR)),
     "with a frog dying on the man beside the pie the burst test should " +
     "fail; it passed");
+});
+
+/* =====================================================================
+   WHAT A POISONED MAN LOOKS LIKE, AND WHAT SET HIM OFF
+
+   Two moves in the game poison you and they are nothing like each other: a
+   KISS, which is a mark somebody put on you, and a FART, which is a cloud you
+   are standing in. There was one picture for both for a while -- rising green
+   gas -- and the kiss's own heart had been deleted to get there, which put a
+   heart-shaped hole in the one move that had earned it.
+
+   The fix is a `tell` named on the poison SPEC, copied onto the fighter when
+   it lands, because by the time anything draws him the only things left are a
+   timer, a rate and `poisonBy`, and `poisonBy` is a SLOT: it cannot tell a
+   kiss from a fart, and in a mirror match it cannot even tell two AutisNicks
+   apart.
+
+   So there are three claims here and each is measured where it is made:
+   the right tell LANDS (driven through the pads, not by calling applyHit),
+   the two tells DRAW differently (recorded rectangles, not a promise), and
+   the tell SURVIVES A ROLLBACK, which is what a field declared anywhere but
+   the constructor would not do.
+   ===================================================================== */
+
+/* A context that keeps what was drawn. stubContext above stores properties
+   and throws draws away, which is right for a test that only needs the engine
+   not to crash and useless for one that has to look at the picture. */
+const RECORDER = `
+  var __rects = [];
+  var __g = new Proxy({ fillStyle: '#000', globalAlpha: 1 }, {
+    get: function (t, k) {
+      if (k === 'fillRect') {
+        return function (x, y, w, h) {
+          __rects.push({ x: x, y: y, w: w, h: h,
+                         c: t.fillStyle, a: t.globalAlpha });
+        };
+      }
+      if (k === 'canvas') return { width: 320, height: 180 };
+      if (k in t) return t[k];
+      return function () {};
+    },
+    set: function (t, k, v) { t[k] = v; return true; },
+  });`;
+
+/* Poison a fighter with nothing else on him and record what drawFighter puts
+   on the screen. The sprite itself goes through drawImage, which this context
+   does not record, so what comes back IS the status picture and nothing else.
+
+   Both tells are read off the SAME body at the same poison clock, so anything
+   that differs between the two pictures is the branch under test rather than
+   the difference between two characters. */
+const glyphOf = (run, tell) => JSON.parse(run(`(function () {
+  ${RECORDER}
+  ${SETUP}
+  foe.poison = 120; foe.poisonDps = 0.05;
+  foe.poisonTell = ${JSON.stringify(tell)};
+  foe.burn = 0; foe.confused = 0; foe.buffTimer = 0; foe.invuln = 0;
+  drawFighter(__g, foe);
+  return JSON.stringify({
+    rects: __rects,
+    headY: Math.round(foe.y - HURT_H * foe.sizeMul),
+  });
+})()`));
+
+/* The two poisons landing the way they actually land: a kiss thrown at
+   somebody standing next to him, and a cloud dropped by Reese with the other
+   man standing in it. Through netplay's pads, so the spec that reaches
+   applyHit is the one the move really uses. */
+const tellsLanded = (run) => JSON.parse(run(`(function () {
+  var out = {};
+  (function () {
+    ${SETUP}
+    foe.x = me.x + 8;
+    netplay.active = true;
+    for (var i = 0; i < 40 && !out.kiss; i++) {
+      me.hitstop = 0; foe.hitstop = 0; foe.invuln = 0;
+      netplay.framePads = [bitsToPad(i === 0 ? ${SP_DOWN} : 0), bitsToPad(0)];
+      step();
+      if (foe.poison > 0) out.kiss = { tell: foe.poisonTell, frames: foe.poison };
+    }
+    netplay.active = false; netplay.framePads = null;
+  })();
+  (function () {
+    ${SETUP}
+    foe.x = me.x;
+    netplay.active = true;
+    for (var i = 0; i < 120 && !out.fart; i++) {
+      me.hitstop = 0; foe.hitstop = 0; me.invuln = 0; me.x = foe.x;
+      netplay.framePads = [bitsToPad(0), bitsToPad(i === 0 ? ${SP_DOWN} : 0)];
+      step();
+      if (me.poison > 0) out.fart = { tell: me.poisonTell, frames: me.poison };
+    }
+    netplay.active = false; netplay.framePads = null;
+  })();
+  /* And the rollback. A kiss, a snapshot, a fart over the top of it, then a
+     restore: the tell has to come back as the kiss's. restoreSim DELETES any
+     key it cannot find in the snapshot, so a field assigned on first use
+     rather than in the constructor comes back undefined here -- and an
+     undefined tell is not 'heart', so the man goes back to giving off gas the
+     moment somebody rewinds. */
+  (function () {
+    ${SETUP}
+    applyHit(me, foe, ROSTER.autisnick.specials.down, me.x);
+    out.beforeSnap = foe.poisonTell;
+    var snap = saveSim();
+    applyHit(me, foe, ROSTER.reese.specials.down, me.x);
+    out.overwritten = fighters[1].poisonTell;
+    restoreSim(snap);
+    out.restored = fighters[1].poisonTell;
+  })();
+  /* And the harder half of the same rule, asked of a fighter who has just
+     been built. saveSim sweeps a fighter's own keys and restoreSim DELETES
+     any key the snapshot it is handed does not carry, so a field that only
+     appears when a move first assigns it is a field that can be rewound out
+     of existence -- and an absent tell is not 'heart', which puts gas over a
+     man who was kissed the first time anybody's connection hiccups. The key
+     itself is asked after rather than its value, because the failure is the
+     field going missing and not its contents changing. */
+  out.ctorHasField = 'poisonTell' in new Fighter('autisnick', 0, 1, 2);
+  out.ctorValue = new Fighter('autisnick', 0, 1, 2).poisonTell;
+  out.specs = {
+    kiss: ROSTER.autisnick.specials.down.poison.tell,
+    fart: ROSTER.reese.specials.down.poison.tell,
+  };
+  return JSON.stringify(out);
+})()`));
+
+// The kiss's own pink, as drawEffects paints the lips mark it leaves.
+const KISS_PINK = "#ff5f8f";
+// The two acid greens the gas alternates between.
+const GAS_GREENS = ["#d4ff3a", "#66b812"];
+
+function checkTells(run, landed, heart, gas) {
+  assert.equal(run("ROSTER.autisnick.specials.down.label"), "KISS",
+    "precondition: Nick's down special is the kiss");
+  assert.equal(run("ROSTER.reese.specials.down.kind"), "cloud",
+    "precondition: Reese's down special is the cloud");
+
+  // ---- the right tell lands
+  assert.ok(landed.kiss, "precondition: the kiss actually poisoned him");
+  assert.ok(landed.fart, "precondition: the cloud actually poisoned him");
+  assert.equal(landed.kiss.tell, "heart",
+    "a kiss should leave a HEART; it left " + landed.kiss.tell);
+  assert.equal(landed.fart.tell, "gas",
+    "a fart should leave GAS; it left " + landed.fart.tell);
+  assert.equal(landed.kiss.frames, 200,
+    "precondition: the kiss still poisons for its own 200 frames");
+  assert.equal(landed.fart.frames, 150,
+    "precondition: the cloud still poisons for its own 150 frames");
+
+  // ---- and survives a rewind
+  assert.equal(landed.beforeSnap, "heart", "precondition: the kiss landed first");
+  assert.equal(landed.overwritten, "gas",
+    "a fart over a kiss should change the picture as well as the timer; it " +
+    "left " + landed.overwritten);
+  assert.equal(landed.restored, "heart",
+    "and a rollback past the fart should bring the heart back; it came back " +
+    JSON.stringify(landed.restored));
+  assert.equal(landed.ctorHasField, true,
+    "a fighter should carry poisonTell from the moment he is built -- " +
+    "restoreSim deletes any key the snapshot does not have, so a field that " +
+    "waits for its first assignment is a field a rollback can delete");
+  assert.equal(landed.ctorValue, "gas",
+    "and it should start on the default, which is the picture for every " +
+    "poison that is a cloud you are standing in; it started " +
+    JSON.stringify(landed.ctorValue));
+
+  // ---- the two pictures are different pictures
+  const colorsOf = (r) => [...new Set(r.rects.map((q) => q.c))].sort();
+  const hc = colorsOf(heart), gc = colorsOf(gas);
+  assert.ok(heart.rects.length > 0, "a poisoned man should be drawn as something");
+  assert.ok(gas.rects.length > 0, "and so should the other one");
+  assert.notDeepEqual(hc, gc,
+    "the heart and the gas should not be painted out of the same pot; both " +
+    "drew " + JSON.stringify(hc));
+  assert.ok(hc.includes(KISS_PINK),
+    "the heart should be the kiss's own pink " + KISS_PINK + "; it drew " +
+    JSON.stringify(hc));
+  assert.ok(GAS_GREENS.every((c) => gc.includes(c)),
+    "the gas should be the two acid greens " + JSON.stringify(GAS_GREENS) +
+    "; it drew " + JSON.stringify(gc));
+  assert.ok(!hc.some((c) => GAS_GREENS.includes(c)),
+    "and no gas should come off a man who was kissed; the heart drew " +
+    JSON.stringify(hc));
+  assert.ok(!gc.includes(KISS_PINK),
+    "and no heart should float over a man in a cloud; the gas drew " +
+    JSON.stringify(gc));
+
+  /* The heart is a GLYPH: a label about him, over his head, not something
+     coming off his body. Every pixel of it clear of the top of the hurtbox,
+     which is also what keeps it out of the seat arrow's four rows. */
+  const lowest = Math.max(...heart.rects.map((q) => q.y + q.h));
+  assert.ok(lowest <= heart.headY,
+    "the heart should sit entirely above his head (head at y " + heart.headY +
+    "); its lowest pixel was at " + lowest);
+}
+
+test("a kiss leaves a heart, a fart leaves gas, and a rollback keeps them straight", async () => {
+  const run = await arena(NICK, REESE);
+  checkTells(run, tellsLanded(run), glyphOf(run, "heart"), glyphOf(run, "gas"));
+});
+
+test("negative control: one picture for every poison fails the tell test", async () => {
+  /* The regression itself, put back: applyHit stops copying the spec's tell
+     and everything poisoned wears the cloud. This is the state the game
+     shipped in, and it is why the test above exists. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "    defender.poisonTell = move.poison.tell || 'gas';",
+    "    defender.poisonTell = 'gas';") });
+  expectToFail(
+    () => checkTells(run, tellsLanded(run), glyphOf(run, "heart"), glyphOf(run, "gas")),
+    "with every poison drawing gas the tell test should fail; it passed");
+});
+
+test("negative control: a tell that does not survive a rollback fails the tell test", async () => {
+  /* The trap that catches any new field on a Fighter. Dropping it from the
+     constructor leaves the game looking completely correct offline -- the
+     kiss still draws a heart -- and wrong the first time a frame is replayed,
+     because restoreSim deletes every key the snapshot does not have. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "    this.poisonTell = 'gas';",
+    "    // the constructor no longer declares it") });
+  expectToFail(
+    () => checkTells(run, tellsLanded(run), glyphOf(run, "heart"), glyphOf(run, "gas")),
+    "with poisonTell missing from the constructor the tell test should fail; " +
+    "it passed");
+});
+
+/* =====================================================================
+   THE BURST, AS A PICTURE
+
+   The rainbow's second press is the one move whose whole identity is colour,
+   and for three versions it went off wearing the generic ring seventeen other
+   things in this file spawn: one colour, and a radius of 30 whatever the
+   hitbox's radius actually was. The radius has been cut twice since -- 34 to
+   24 to 20 -- so by the end the picture was claiming half again the reach it
+   had, which is a thing a player learns wrong and keeps believing.
+
+   Three claims, and the first one is about play rather than looks:
+
+     IT TELLS THE TRUTH   nothing it draws is outside the burst's radius, and
+                          it does reach the radius. Stand outside the picture
+                          and you are outside the ball.
+     IT RADIATES          there is a frame where it is spokes rather than a
+                          ring, which is the one thing an explosion has to do.
+     IT OPENS THE WHEEL   the shot is one colour and the burst is all six of
+                          them, starting from the one the shot had reached.
+
+   The prism is separated from the sparks it throws before anything is
+   measured: the motes are debris, they arc and fall, and they are not the
+   claim being checked. */
+const prismFrames = (run, hue) => JSON.parse(run(`(function () {
+  ${RECORDER}
+  ${SETUP}
+  effects.length = 0;
+  var up = ROSTER.autisnick.specials.up;
+  var shot = new Rainbow(me, up);
+  shot.x = 0; shot.y = 0; shot.hue = ${hue}; shot.spec = up.tints[${hue}];
+  shot.detonate();
+  var kinds = effects.map(function (e) { return e.kind; });
+  for (var i = effects.length - 1; i >= 0; i--) {
+    if (effects[i].kind !== 'prism') effects.splice(i, 1);
+  }
+  var frames = [];
+  for (var t = 0; t < 30 && effects.length; t++) {
+    __rects.length = 0;
+    drawEffects(__g);
+    frames.push(__rects.slice());
+    updateEffects();
+  }
+  return JSON.stringify({
+    frames: frames, kinds: kinds,
+    radius: up.burst.radius,
+    wheel: up.colors.map(function (c) { return c.css; }),
+    shotCss: up.tints[${hue}].css,
+  });
+})()`));
+
+function checkPrism(r) {
+  assert.ok(r.kinds.includes("prism"),
+    "a burst should spawn its own effect, not the generic ring; it spawned " +
+    JSON.stringify([...new Set(r.kinds)]));
+  assert.ok(r.frames.length >= 12,
+    "and it should last long enough to be an animation; it drew " +
+    r.frames.length + " frames");
+
+  let reach = 0, widest = 0;
+  const seen = new Set();
+  for (let t = 0; t < r.frames.length; t++) {
+    let near = Infinity, far = 0;
+    for (const q of r.frames[t]) {
+      seen.add(q.c);
+      /* The far CORNER of the rectangle, not its origin: a pixel drawn at
+         exactly the radius still covers the pixel beyond it, and a claim
+         about reach that ignored that would be off by one in the forgiving
+         direction. */
+      /* The pixel's CENTRE, which is where a viewer reads it as being. Its
+         far corner would charge the diagonals an extra 0.7 for the width of
+         the pixel itself and make the threshold below meaningless. */
+      const d = Math.hypot(q.x + q.w / 2, q.y + q.h / 2);
+      if (d > reach) reach = d;
+      if (q.c === "#ffffff") continue;     // the opening flash is not a spoke
+      const inner = Math.hypot(q.x + q.w / 2, q.y + q.h / 2);
+      if (inner < near) near = inner;
+      if (d > far) far = d;
+    }
+    // The flash lives in the middle for its first frames and would read as a
+    // spoke reaching the centre; the spokes are measured after it is gone.
+    if (t >= 4 && far > 0 && far - near > widest) widest = far - near;
+  }
+
+  assert.ok(reach <= r.radius + 1.5,
+    "nothing the burst draws should be outside the ball it is a picture of " +
+    "(radius " + r.radius + "); the furthest pixel was " + reach.toFixed(2) +
+    " out");
+  assert.ok(reach >= r.radius - 1,
+    "and it should actually reach the edge, or it teaches a reach shorter " +
+    "than the one that hits; the furthest pixel was " + reach.toFixed(2) +
+    " of " + r.radius);
+  /* An explosion has to RADIATE. A single expanding front draws a ring from
+     its second frame onward and never a line, which is what the first draft
+     of this did: the inner end of each spoke leaves later than the outer one,
+     and the gap between them is the spoke. */
+  assert.ok(widest >= r.radius * 0.4,
+    "there should be a frame where the burst is spokes rather than a ring -- " +
+    "a radial run at least " + (r.radius * 0.4) + " long; the longest was " +
+    widest.toFixed(2));
+
+  const wheel = new Set(r.wheel);
+  const colors = [...seen].filter((c) => c !== "#ffffff");
+  for (const c of colors) {
+    assert.ok(wheel.has(c),
+      "the burst should paint only out of the rainbow's own six colours; it " +
+      "used " + c);
+  }
+  assert.equal(colors.length, r.wheel.length,
+    "and it should use ALL six -- a shot is one colour, the burst is the " +
+    "wheel it came from; it used " + colors.length + " of " + r.wheel.length);
+  assert.ok(colors.includes(r.shotCss),
+    "including the colour the shot had actually reached (" + r.shotCss + ")");
+}
+
+test("the rainbow burst opens into the whole wheel and never draws past its own radius", async () => {
+  const run = await arena(NICK, REESE);
+  for (let hue = 0; hue < 6; hue++) checkPrism(prismFrames(run, hue));
+});
+
+test("negative control: a burst drawn bigger than it is fails the picture test", async () => {
+  /* The exact shape of the old bug: a fixed radius in the drawing that the
+     hitbox's radius does not feed. It looked fine until the ball was nerfed,
+     and then went on promising the reach it used to have. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "        const R = s ? s.radius : 20;",
+    "        const R = 30;") });
+  expectToFail(() => checkPrism(prismFrames(run, 0)),
+    "with the picture drawn half again the size of the ball the burst " +
+    "picture test should fail; it passed");
+});
+
+test("negative control: a burst in one colour fails the picture test", async () => {
+  /* What it looked like before: the ball went off in whatever colour the shot
+     had reached and stayed that colour, which threw away the only genuinely
+     interesting thing about the move. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "      radius: up.burst.radius, wheel, hue: i, css: c.css,",
+    "      radius: up.burst.radius, wheel: [c.css], hue: i, css: c.css,") });
+  expectToFail(() => checkPrism(prismFrames(run, 0)),
+    "with every spoke wearing the shot's colour the burst picture test " +
+    "should fail; it passed");
+});
+
+test("negative control: a burst that is a ring from the start fails the picture test", async () => {
+  /* Both ends of the spoke leaving together. The shape is still the right
+     size and still the right colours -- it simply never radiates, which is
+     the one thing an explosion has to do and the thing a still frame of it
+     will not tell you. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "const PRISM_HOLD = 3;",
+    "const PRISM_HOLD = 0;") });
+  expectToFail(() => checkPrism(prismFrames(run, 0)),
+    "with the inner end leaving at the same moment as the outer one the " +
+    "burst picture test should fail; it passed");
 });

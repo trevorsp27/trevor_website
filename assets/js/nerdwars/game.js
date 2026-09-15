@@ -47,15 +47,37 @@ const PHYS = {
                       above has to be paid again through zero.
        slickFriction  how much of what you already had survives letting go.
                       groundFriction is 0.55 and stops you inside four
-                      frames, in under two pixels; 0.985 carries a walk 38
+                      frames, in under two pixels; 0.985 carries a walk 52
                       pixels, which is more than the width of the spill.
 
      Measured against the width of the puddle rather than tuned by feel: a
-     fighter who walks into a 30px spill and lets go of the stick at the near
-     edge comes to rest nine pixels PAST the far edge of it. Arriving
+     fighter who walks into a 40px spill and lets go of the stick at the near
+     edge comes to rest twelve pixels PAST the far edge of it. Arriving
      somewhere you did not choose is the whole of what the move does. */
   slickGrip: 0.09,
   slickFriction: 0.985,
+  /* AND NOT A THIRD NUMBER, which is worth writing down because it is the
+     obvious one to reach for and it was measured and rejected.
+
+     COMBAT.hitstunDrag is a flat 0.22 a frame and never asks what is
+     underfoot, so a blow shoves a fighter exactly as far in a spill as on dry
+     stone: 10.8 pixels either way, to the tenth of a pixel. Being knocked
+     onto ice and sliding is the one slip every player already knows from
+     every other game with ice in it, and this floor does not do it. Quartering
+     the drag while `slick` runs makes it do it beautifully -- a jab carries
+     25.9 pixels instead of 10.8, a soccerball 77 instead of 31.
+
+     It costs the man who throws the milk almost ten points. Five arms of 400
+     CPU matches each against the whole roster, seats alternated, patched at
+     runtime so nothing but the drag differed: Houston wins 44.7% with the
+     floor left alone and 35.0% at a quarter drag. Every setting that moved a
+     jab at all cost about the same (0.35 -> 40.5%, 0.45 -> 36.3%), and 0.6,
+     which moves a jab by half a pixel, costs nothing and buys nothing
+     (44.8%). The reason is not subtle. He slips in his own milk on purpose,
+     the spill is the thing he stands behind, and he is the lightest fighter
+     on the roster at 94 -- so a floor that lengthens every shove lengthens
+     HIS the most, and carries him off the side. A move whose own owner is
+     its best victim is not a better move. */
   // Blast zones are per-stage; see STAGES below.
 };
 
@@ -550,7 +572,21 @@ const ROSTER = {
         startup: 6, active: 6, recovery: 20,
         damage: 10, base: 2.2, scale: 3.2, angle: 50, kx: 0.64278760968653936, ky: 0.76604444311897801,
         ox: 2, oy: -10, w: 11, h: 9,
-        poison: { frames: 200, dps: 0.05 },
+        /* `tell` is WHICH PICTURE a poisoned man wears, and it is named here
+           rather than inferred, because the thing that poisoned you is not
+           recoverable from the fighter afterwards. `poisonBy` remembers the
+           attacker's SLOT -- which is enough to send the tick's ult meter to
+           the right person and not enough for this: two characters poison,
+           the same character can poison two different ways, and both people
+           in a mirror match are AutisNick. So the spec that lands says what
+           it looks like, applyHit copies it onto the fighter, and drawFighter
+           draws that. See `poisonTell` on Fighter and the pair of branches in
+           drawFighter.
+           A kiss leaves a heart. It always did -- the heart WAS the poison
+           glyph, back when a kiss was the only thing in the game that
+           poisoned anybody -- and it was lost the day the fart arrived and
+           every poison started drawing the fart's gas. */
+        poison: { frames: 200, dps: 0.05, tell: 'heart' },
       },
       /* SIX RAINBOWS, one at a time.
 
@@ -681,8 +717,41 @@ const ROSTER = {
              The multiplier below is deliberately left alone. The burst is
              being cut here and the shot it comes from is being cut above;
              taking the multiplier as well would be nerfing one press three
-             times in a single pass. */
-          radius: 20, damageMul: 1.2,
+             times in a single pass.
+
+             THE MULTIPLIER, a pass later, asked for by name. 1.2 -> 1.1.
+             That is the whole of the nerf and it is the smallest lever on
+             this move on purpose:
+
+               plain colour in a burst   10.8 -> 9.9
+               ORANGE in a burst         13.2 -> 12.1   (still the hardest)
+
+             8.3% off the ball and nothing off the shot, the radius, the
+             knockback or any of the six statuses. He measured 15.5% in the
+             last full CPU run -- dead last -- and this is the third nerf to
+             the same press (11 -> 10 -> 9 damage, 34 -> 24 -> 20 radius), so
+             the only defensible size for it is a small one.
+
+             What it will cost in a balance run is approximately nothing, and
+             that is not a defence of the change so much as a warning about
+             reading one. The instrumented run beside the damage note above
+             is the reason: over 216 matches the CPU detonated twelve times
+             in total and caught nobody in a burst, not once. A number the
+             measurement cannot see is a number only a person pays, and the
+             person who pays this one is the one who throws this constantly
+             because at range it is all he has.
+
+             AND RAW DAMAGE IS NOT WHY THE BURST IS STRONG, which is worth
+             writing down where the next person to nerf it will find it. What
+             makes it strong is that it is the only way in his kit to apply a
+             STATUS to an area with no hitbox to beat: YELLOW stuns everyone
+             in the disc for 26 frames, BLUE swaps their controls for 140,
+             RED sets them alight, and it costs no mana at all because the
+             press was already paid for by the shot. A stun on somebody who
+             was not obliged to be hit is worth several times the point of
+             damage taken off here. It is left alone anyway -- he is last, the
+             ask was damage, and the statuses are the reason to throw this. */
+          radius: 20, damageMul: 1.1,
           base: 4.2, scale: 7.6, angle: 68,
           kx: 0.37460659341591196, ky: 0.9271838545667874,
         },
@@ -932,11 +1001,33 @@ const ROSTER = {
          is no longer the whole ult -- what follows it is. */
       freeze: 10, stun: 84,
       damage: 19, base: 0.5, scale: 0.9, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
-      /* Then he is buff Kel for ten seconds: double damage, drawn from the
-         sheet he redrew for exactly this. Speed and knockback are untouched
-         on purpose -- the ask was damage, and a faster Kel who also hits
-         twice as hard would be a different character, not a buffed one. */
-      buff: { duration: 600, damageMul: 2 },
+      /* Then he is buff Kel for ten seconds, drawn from the sheet he redrew
+         for exactly this. Speed and knockback are untouched on purpose --
+         the ask was damage, and a faster Kel who also hits harder would be a
+         different character, not a buffed one.
+
+         IT WAS DOUBLE, and doubling was the thing that had to go rather than
+         the ult's own 19 or its pin. What a landed LEG DAY is worth is not
+         its damage, it is every point Kel deals in the ten seconds that
+         follow, so that is what was measured: 58.1 over 575 landings in 289
+         CPU matches, against 18.6 in an ordinary ten seconds of the same
+         fight. Three things are inside that 58.1 and only one of them was
+         the complaint -- 20.5 is the hit itself, 6.6 is everything the
+         84-frame pin converts into, and 20.8 is what the multiplier ADDED
+         to swings he was going to throw anyway. The pin is the smallest
+         part of it by a factor of three.
+
+         And the multiplier was doing something no number in this file is
+         allowed to do. DROP SET is 15, so buffed it was THIRTY: harder than
+         Cobeus's car at 22, which is the hardest single hit in the game,
+         and it was a 29-frame special he could throw as often as the mana
+         bar allowed for ten seconds. 1.5 puts it at 22.5 -- level with that
+         ceiling instead of 36% over it -- and CLEAN & JERK at 16.5 instead
+         of 22. Measured after: the ten seconds are worth 48.8 instead of
+         58.1, and his CPU win rate falls 50.8% to 43.2% over 600 matches a
+         variant, which is real and is the price of the ask. He is still
+         mid-table on a roster that runs 28% to 85%. */
+      buff: { duration: 600, damageMul: 1.5 },
     },
   },
 
@@ -1262,27 +1353,58 @@ const ROSTER = {
                        inverts that and makes him stand in the piece of stage
                        he is trying to deny, in front of somebody who can see
                        the gas swelling behind him the entire time.
-             drain 0.5 the mana bar runs BACKWARDS at exactly the rate it
+             drain 0.8 the mana bar runs BACKWARDS, half again as fast as it
                        normally runs forwards. The refill lives in updateFree
                        and a man in the middle of a special never reaches it,
                        so the bar is flat while he charges and this tips it
-                       into reverse at COMBAT.manaRegen's own 0.5 a frame.
-                       Measured: a full charge is 36 mana on top of the 19 the
-                       cast costs, 55 of a 100 bar, and 36 is nearly two more
-                       farts he does not get. An empty bar ends the charge
-                       where it stands rather than pinning him there for
-                       free -- so how far he can take this is bounded by the
-                       meter and not by his patience, and a Reese who has been
-                       throwing burps cannot afford a RANCID at all.
+                       into reverse; COMBAT.manaRegen is 0.5 a frame, and this
+                       is 1.6 times that.
+                       Measured: a full charge is 57.6 mana on top of the 19
+                       the cast costs, 76.6 of a 100 bar. A full bar still
+                       buys a whole RANCID and 23 mana -- two more than
+                       JITTERS costs -- so the most expensive fart in the game
+                       leaves him exactly one way home and nothing else. An
+                       empty bar ends the charge where it stands rather than
+                       pinning him there for free, so how far he can take this
+                       is bounded by the meter and not by his patience, and a
+                       Reese who has been throwing burps cannot afford a
+                       RANCID at all.
+
+           WAS 0.5, WHICH IS WHAT THE WALK COST. `walk` below is what changed:
+           the second of the two prices above used to be "rooted", and it is
+           now only "on foot". Half of what made the charge expensive was
+           standing still in front of somebody, so half of it had to be
+           bought back somewhere, and the meter is where -- 36 mana became
+           57.6, which is more than another whole fart. The frames were the
+           wrong place to charge it: making `hold` longer would have made the
+           walk the reason the move is slow, and the walk is the thing that
+           was asked for.
+
+           WALK IT. He can hold the charge while he walks, which is the whole
+           of what the fart is for -- gas laid across ground he is leaving --
+           restored to a move that had inverted it. Grounded only and NO JUMP,
+           and the jump is the deliberate half:
+
+             walking  keeps him in the piece of stage he is denying, at
+                      walking speed, in front of whoever is coming. The price
+                      is still being THERE; it is no longer being a statue.
+             jumping  would clear an approach without giving any of the charge
+                      back, and worse, would let a RANCID be carried into the
+                      air and dropped on somebody's recovery -- a use of the
+                      move nobody has ever had to play around. The cloud
+                      spawns at his feet; the charge should too.
 
            NOT MEASURED BY THE TOURNAMENT, and that has to be said out loud
            rather than discovered later. aiPad never sets holdDown -- the CPU
            has never held a button for a charge in its life, which is the same
            reason the belch's three aims rode in unpriced -- so a CPU-vs-CPU
-           run sees a tap and only a tap. A tap is byte-for-byte the move that
-           measured 68.5%, which is the point: the balance number does not
-           move, and everything the charge buys is bought twice. */
-        charge: { hold: 72, drain: 0.5 },
+           run sees a tap and only a tap, and a tap neither charges nor walks.
+           A tap is byte-for-byte the move that measured 68.5%, which is the
+           point: the balance number does not move, everything the charge buys
+           is bought twice, and the walk is bought in the same currency as the
+           rest of it rather than being smuggled in free because the yardstick
+           happens to be blind to it. */
+        charge: { hold: 72, drain: 0.8, walk: true },
         speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,
         life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
         hitEvery: 45, cue: 'belch',
@@ -1310,7 +1432,12 @@ const ROSTER = {
            times dps -- so the cloud also comes back sooner. The measurement
            above already includes that, which is why the nerf is worth less
            than the arithmetic suggests. */
-        poison: { frames: 150, dps: 0.05 },
+        /* And gas comes off a man who was farted on -- see `tell` on the
+           kiss for why this is written down rather than worked out. Named
+           explicitly even though 'gas' is what drawFighter falls back to,
+           because the fart is the move that MADE gas the picture and a
+           reader who finds the heart on the kiss should find this here. */
+        poison: { frames: 150, dps: 0.05, tell: 'gas' },
         /* HOW STINKY, in three steps, finished into three whole specs at load
            by the loop under ROSTER -- the same shape as the belch's three
            aims and for the same reason: applyHit and Cloud are each handed
@@ -1342,12 +1469,16 @@ const ROSTER = {
            legible from the cloud alone without counting damage ticks. */
         stink: [
           { stinkName: 'CROP DUST' },
+          /* `tell` is repeated on both of these because stinkTiers is an
+             Object.assign patch: a step that names `poison` REPLACES the
+             whole object above rather than merging into it, so a tell left
+             off here is a tell the charged cloud does not have. */
           { stinkName: 'RIPE', r0: 5, r1: 16,
             tints: ['#86b53a', '#a9d15e', '#66902c'],
-            poison: { frames: 150, dps: 0.07 } },
+            poison: { frames: 150, dps: 0.07, tell: 'gas' } },
           { stinkName: 'RANCID', r0: 6, r1: 19,
             tints: ['#7fae14', '#a8d62c', '#55780a'],
-            poison: { frames: 150, dps: 0.09 } },
+            poison: { frames: 150, dps: 0.09, tell: 'gas' } },
         ],
         damage: 2, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
       },
@@ -1358,6 +1489,26 @@ const ROSTER = {
       up: {
         kind: 'dash', label: 'JITTERS',
         startup: 3, active: 9, recovery: 10, speed: 5.4,
+        /* The box outlives the `active` frames, because HE does. See the
+           comment on `hitActive` in hitbox(): a dash is `rooted`, so nothing
+           damps the vx the active frames set, and he coasts the ten recovery
+           frames at the full 5.4. Measured on a standing cast: 48.6 pixels
+           travelled under a live box and 54 more travelled under none.
+
+           19 is startup + active + recovery - startup, which is every frame
+           of the move from the first active one to the last -- frames 3
+           through 21 inclusive. Frame 22 is not covered and cannot be: the
+           move has already handed him back to `idle` by then.
+
+           IT IS NOT TEN MORE HITS. `hasHit` latches on the first connect and
+           this does not re-arm it, exactly as the ledge turn does not -- a
+           dash still hits once per cast. What the extra frames buy is the
+           chance that the one hit lands, which is the whole of the
+           complaint: the end of the animation looked dangerous and was not.
+           The connect rate against a moving opponent, before and after, is
+           on the `damage` line at the bottom of this move -- along with what
+           it cost, because that measurement is what set the price. */
+        hitActive: 19,
         airRise: 4.4,
         /* How many times ONE dash may turn itself around at a ledge instead
            of stopping. The turn itself is in runSpecial's 'dash' case, which
@@ -1370,29 +1521,41 @@ const ROSTER = {
            and JITTERS goes back to stopping dead at the edge, which is what
            it did before and is still what happens once the budget is gone. */
         edgeTurns: 2,
-        /* 17 before, which is what moveCost derives from six damage and this
-           much knockback. The turn is not damage and not knockback, so the
-           formula cannot see it at all -- what it buys is that the move never
-           strands him at a ledge again, and keeps a live hitbox pointed back
-           at whoever was chasing him. moveCost has no term for "and it no
-           longer wastes itself", so this is an admission the formula missed
-           something, written down as one rather than smuggled in by inflating
-           a damage number.
+        /* 17 was what moveCost derived from six damage and this much
+           knockback, back when the damage was six. It is 14 now -- see the
+           damage line at the bottom -- so this is a premium of SEVEN over
+           what the formula would charge, and every mana of it is for
+           something the formula has no term for:
 
-           MEASURED, at the same size as every other number in this file:
-           three seeds, all six stages, both spawn sides, 9,720 CPU matches a
-           side. Against a control that is this exact engine with `edgeTurns`
-           set to 0, the turn takes Reese from 69.5% to 71.4% and widens the
-           roster spread from 53.7 to 54.5. Four more mana puts it back:
-           71.4 -> 69.7 and the spread to 53.3. Eight more (25) buys almost
-           nothing further -- 69.5 -- so 21 is where the curve flattens and
-           paying more would be nerfing the recovery for no measured return.
+             the ledge turn        `edgeTurns` above. It never strands him at
+                                   a ledge and it keeps a live hitbox pointed
+                                   back at whoever was chasing him.
+             the box past `active` `hitActive` above. Ten more frames of live
+                                   box over the coast he was already doing.
+             the net               `wrapFor` below, and checkBlastZones. Not
+                                   dying is not damage and not knockback.
 
-           And that is the reason it is only four. JITTERS is Reese's ONLY way
-           home now that BOUNCE is gone, so its price is also the price of not
-           dying: four mana is eight frames of regen, an eighth of a second
-           between being able to recover and not. Twenty-five was on the table
-           and was rejected for exactly that. */
+           moveCost reads damage, knockback and status terms and nothing else,
+           so all three are invisible to it. This is an admission the formula
+           missed something, written down as one rather than smuggled in by
+           inflating a damage number.
+
+           WHY IT DID NOT GO UP WHEN THOSE ARRIVED, which is the question this
+           number invites. Because it was measured and mana does nothing. The
+           tournament below run with this at 32 instead of 21 puts Reese at
+           82.6% against 82.2% for the same engine at 21 -- a tenth of a point
+           inside one standard error, in the wrong direction. He regenerates
+           half a mana a frame, so eleven more mana is twenty-two frames of
+           standing still, and the AI is never waiting on this bar when it
+           wants a dash. Raising it would have LOOKED like paying for the
+           buffs while changing nothing, which is worse than not paying at
+           all. The damage is where the price actually landed; see it there.
+
+           And the old reason it was only four over is now gone, which is
+           worth recording rather than quietly dropping: it used to be that
+           JITTERS is Reese's ONLY way home, so its price was also the price
+           of not dying. The net below is what does that job now, so the move
+           being expensive no longer means the man is dead. */
         manaOverride: 21,
         /* He can vent mid-dash: pressing the down special during JITTERS
            lays CROP DUST behind him WITHOUT ending the dash. A fart that
@@ -1405,11 +1568,73 @@ const ROSTER = {
            being free. Not priced: moveCost only reads damage, knockback and
            status terms, so an extra string costs zero mana. */
         trailSpecial: 'down',
-        // Frames after an air dash during which the side of the map wraps
-        // rather than kills. Long enough to cover the coast: the dash is
-        // nine active frames and he is still moving well past the end of it.
+        /* Frames after a dash -- ANY dash, grounded or not, see the arming in
+           runSpecial -- during which leaving the world puts him back into it
+           rather than killing him. Long enough to cover the coast: the dash
+           is nine active frames and he is still moving at the full 5.4 well
+           past the end of it. checkBlastZones is where the three sides it
+           covers and the toll each catch pays are written down. */
         wrapFor: 100,
-        damage: 6, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
+        /* SIX BEFORE, AND THIS IS WHAT PAYS FOR ALL THREE BUFFS.
+
+           The box now covers 102.6 pixels of travel where it covered 48.6, so
+           the move connects about twice as often: measured against an
+           opponent walking in, standing and running away over a sweep of
+           every starting distance from 8 to 150 pixels, 38.9% of those
+           setups connected before and 76.4% connect now. A move that lands
+           twice as often for the same damage is twice the move.
+
+           So it lands for half. 0.389 x 6 is 2.33 damage per cast; 0.764 x 3
+           is 2.29. A JITTERS is worth what a JITTERS was worth, and what
+           changed is that it is worth it from further away and at the end of
+           the animation instead of only the start -- which is the whole of
+           what was asked for.
+
+           MEASURED AGAINST THE HOUSE YARDSTICK, not reasoned about: Reese
+           against all ten of the others, 90 matches each per seed, three
+           seeds, six stages, seats alternated, about 2,350 decided matches a
+           side. Every control is this exact engine with the three buffs
+           undone and this damage put back to 6, and nothing else touched --
+           three of us are editing this file, so a control has to be built
+           from the same copy as the arm it is compared against or the drift
+           underneath is what gets measured.
+
+           Finding the price:
+
+             buffs out, damage 6   (control)        80.2%  +/- 0.8
+             buffs in,  damage 6   (unpaid)         82.2%
+             buffs in,  damage 3   (this)           79.9%
+
+           Confirming it, against a control rebuilt from the file as it
+           stands now:
+
+             buffs out, damage 6                    80.7%  +/- 0.8
+             buffs in,  damage 3                    80.9%
+
+           Two tenths of a point apart, which is a quarter of one standard
+           error: three buffs, paid for. A whole-roster round robin over the
+           same pair puts him at 82.7% both ways and pulls the spread from
+           60.0 to 58.6.
+
+           Read the DIFFERENCE and not the level. 80.2% is not comparable to
+           the 68.5% the belch was measured at further up: that was a
+           different tournament shape, and a run concentrated on one character
+           is not the same population as a round robin. Every row above comes
+           off one script, one seed set and one match schedule, and the only
+           claim being made is the gap between the rows.
+
+           WHY NOT THE KNOCKBACK TOO, which is where a nerf this size would
+           normally also land. Because `scale` is inert on this move and that
+           was checked rather than assumed: damage 3 with scale at 5, at 3 and
+           at 2.5 produce BYTE-IDENTICAL tournaments -- the same 2,329 decided
+           matches and the same winner in every one of them. Dropping it would
+           have been a change that reads as a nerf in the diff and is not one
+           in the game, and those are worse than no nerf at all. `base` is
+           untouched for the same reason it always was: it is what makes the
+           hit push somebody off a ledge, and the dash is a positioning move.
+
+           Mana was tried first and is also inert -- see manaOverride above. */
+        damage: 3, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
         ox: -4, oy: -9, w: 14, h: 12,
       },
     },
@@ -2805,7 +3030,7 @@ ROSTER.houston = {
 
        The carton is almost not the move: five damage if it hits somebody on
        the way, which is less than his jab. What he is throwing is the
-       puddle -- thirty pixels of floor that stops answering the stick.
+       puddle -- forty pixels of floor that stops answering the stick.
        Walk into it and you keep going; let go and you keep going; try to
        turn round and you spend most of a second coming back through zero.
        Nothing else in the file does this, and it is the one thing on the
@@ -2852,7 +3077,7 @@ ROSTER.houston = {
        into somebody -- and that is the character rather than a bug in him.
 
        One stays anyway, on its own terms and not on that evidence: one
-       spill is a seventh of the floor, it is somewhere instead of
+       spill is a fifth of the floor, it is somewhere instead of
        everywhere, and putting it in the right place is the move. */
     neutral: {
       kind: 'milk', label: 'SPILT MILK',
@@ -2871,7 +3096,12 @@ ROSTER.houston = {
       /* The spill. `slick` is how many frames of lost traction a body
          standing in it is given, re-armed every frame, so it decays about
          five frames after they leave -- that tail is the skid off the far
-         edge and it is why a 30px puddle is worth more than 30px.
+         edge and it is why a 40px puddle is worth more than 40px. TEN, up
+         from five: the tail is the only part of the slip that happens on
+         dry ground, which makes it the only part a player can see the end
+         of, and five frames of it put them 9.3px past the far edge where
+         ten put them 17.4. That is the difference between overshooting the
+         spill and overshooting the LEDGE.
 
          `curdle` is when it turns. `hitEvery` is the re-arm on the bite
          afterwards: 42 frames is deliberately slower than anybody's escape,
@@ -2882,8 +3112,16 @@ ROSTER.houston = {
          frog list does: simFrozen walks ROSTER and keeps what it finds by
          reference, and a payload built per shot would be deep-copied into
          every snapshot sixty times a second for as long as it lasted. */
+      /* THIRTY WAS TOO SMALL TO BE A PLACE. Rendered against the stage's
+         own floor tile with a fighter standing in it, a 30x3 spill is three
+         and a bit bodies wide and a fifth of one tall -- at 320x180 that
+         reads as a scuff on the stone rather than as somewhere you have to
+         decide about. Forty is four and a half bodies, a fifth of the main
+         floor rather than a seventh, and 26 frames of lost footing to walk
+         through rather than 19. Still one at a time, still somewhere
+         instead of everywhere. */
       puddle: {
-        w: 30, h: 3, life: 330, curdle: 190, slick: 5,
+        w: 40, h: 3, life: 330, curdle: 190, slick: 10,
         hitEvery: 42, damage: 4, graze: true,
         poison: { frames: 110, dps: 0.045 },
         base: 0, scale: 0, angle: 80,
@@ -3350,6 +3588,24 @@ for (const key in ROSTER) {
   if (up.burst) {
     up.burstTints = up.tints.map((t) => Object.assign({}, t, up.burst, {
       damage: t.damage * up.burst.damageMul,
+    }));
+    /* And the six again as PICTURES, which is a third thing and not a fourth
+       copy of the first two. What drawEffects needs to paint a burst is the
+       reach, the whole colour wheel, and which spoke of it the shot had got
+       to -- and it needs them off ONE object, because addEffect carries a
+       single `spec` reference.
+
+       Built here, at load, for the same two reasons the tints above are: an
+       object made inside detonate() would be allocated again on every
+       rollback replay, and snapValue keeps an object by reference only if
+       simFrozen has walked it. simFrozen walks ROSTER, and these hang off
+       the move.
+
+       `wheel` is the SAME array in all six, not six copies of it: they differ
+       only in where the colour starts. */
+    const wheel = up.colors.map((c) => c.css);
+    up.burstFx = up.colors.map((c, i) => ({
+      radius: up.burst.radius, wheel, hue: i, css: c.css,
     }));
   }
 }
@@ -4361,6 +4617,22 @@ class Fighter {
     this.belchAim = 'level';
     this.poison = 0;
     this.poisonDps = 0;
+    /* WHICH picture the poison wears: 'heart' for a kiss, 'gas' for anything
+       that is a cloud. Copied off `move.poison.tell` when it lands, because
+       what poisoned you is not a question `poisonBy` can answer -- that is a
+       slot, and AutisNick's kiss and AutisNick's green rainbow come from the
+       same slot and do not look alike.
+
+       A string on the fighter, like `belchAim`, and IN THE CONSTRUCTOR for
+       the reason everything here is: restoreSim deletes any key it cannot
+       find in the snapshot, so a tell assigned only on first poison would
+       come back undefined after a rollback and a kissed man would start
+       giving off gas the moment somebody rewound the match.
+
+       'gas' is the default rather than 'heart' because gas is what the two
+       poisons NOBODY authored a glyph for -- the green rainbow and Houston's
+       curdled milk -- should wear: both of them are something you stand in. */
+    this.poisonTell = 'gas';
     /* Burning. Its own status rather than poison with a different color,
        because they stack: a kiss and a laser sword are two different things
        happening to you and the screen has to be able to say both. Set in the
@@ -4610,7 +4882,27 @@ class Fighter {
           s.kind === 'milk' || s.kind === 'mower' ||
           s.kind === 'newdeal') return null;
       if (this.attackFrame < s.startup) return null;
-      if (this.attackFrame >= s.startup + s.active) return null;
+      /* `hitActive` is how long the BOX lives, where `active` is how long the
+         MOVE does its thing -- and they are only the same number when the
+         fighter stops when the move does.
+
+         JITTERS is the one move where they are not. Its `active` frames are
+         the frames that SET vx; a dash is `rooted`, so nothing damps that vx
+         afterwards, and he coasts through the whole recovery at the full
+         5.4 a frame. Measured: nine active frames carry him 48.6 pixels and
+         the ten recovery frames carry him 54 more, so over half the distance
+         he travels during the move he travels with no hitbox on him at all.
+
+         The picture already disagreed with that. sprite() holds the `attack`
+         posture for the entire `special` state -- a set is a posture and not
+         a timeline -- so he is drawn mid-lunge for all 22 frames and could
+         only hurt you during the first 12. Same failure the whip comment
+         downstairs describes and for the same reason: the drawing has to
+         agree with the box about when the dangerous part is.
+
+         Absent on every other move in the file, where `active` is the whole
+         truth, and `|| s.active` is what keeps it that way. */
+      if (this.attackFrame >= s.startup + (s.hitActive || s.active)) return null;
       return { box: this.relBox(s), move: s };
     }
     return null;
@@ -4750,8 +5042,35 @@ class Fighter {
     if (this.drowsy > 0) this.drowsy--;
     /* Milk under his feet, counting down. Whatever he is standing in re-arms
        it every frame (Puddle.update), so this only ever runs out once he is
-       clear of it -- and the few frames it takes to are the skid. */
-    if (this.slick > 0) this.slick--;
+       clear of it -- and the few frames it takes to are the skid.
+
+       AND THE SKID IS DRAWN NOW. It was invisible: a body sliding on milk
+       wore the same pose at the same size as one standing still, so the only
+       evidence a player ever got was arriving somewhere they had not chosen,
+       which reads as the stick having failed rather than as the floor. The
+       numbers were never the problem -- letting go at the near edge already
+       carried you 39 pixels against 1.8 dry -- the problem was that nothing
+       on screen said so.
+
+       Milk comes off the TRAILING foot, so the spray points back down the
+       skid and says which way he is being carried. Cosmetic only: addEffect
+       returns null while resimulating, which is also what keeps the rand()
+       calls below out of a rollback replay. */
+    if (this.slick > 0) {
+      this.slick--;
+      // 0.35 is under half a walk: fast enough that a spray means sliding
+      // rather than standing, slow enough to catch the end of a long skid.
+      if (this.grounded && Math.abs(this.vx) > 0.35 && battleFrames % 3 === 0) {
+        const back = this.vx > 0 ? -1 : 1;
+        /* Ankle height, not hip: the `milk` effect arcs at 1.6x its vector
+           and takes 0.22 of gravity a frame, so a droplet thrown at -0.8
+           clears his knee and the skid reads as a man leaking rather than a
+           man sliding. Kept under a pixel of lift, it stays a spray off the
+           heel and its 16 frames of travel draw the line he came along. */
+        const e = addEffect('milk', this.x + back * 4, this.y - 2);
+        if (e) { e.vx = back * rand(0.25, 0.8); e.vy = rand(-0.55, -0.2); }
+      }
+    }
     // Landing means he got home on his own; the window is spent either way.
     if (this.dashWrap > 0) { if (this.grounded) this.dashWrap = 0; else this.dashWrap--; }
     /* The choke, ticked wherever the grabber happens to be.
@@ -4863,6 +5182,7 @@ class Fighter {
     if (this.state === 'hitstun') {
       this.hitstun--;
       // Bleed off the horizontal shove so a hit is a nudge, not a journey.
+      // Deliberately the same on milk as on stone; see PHYS, above slickGrip.
       if (this.vx > 0) this.vx = Math.max(0, this.vx - COMBAT.hitstunDrag);
       else if (this.vx < 0) this.vx = Math.min(0, this.vx + COMBAT.hitstunDrag);
       this.applyGravity();
@@ -5597,11 +5917,25 @@ class Fighter {
        than a requirement to let go on the right frame. The counter stops,
        attackFrame advances, and the case below fires on startup + 1 with a
        chargeTimer that has reached the threshold. */
+    /* Is he charging RIGHT NOW, and may he walk while he does it?
+
+       Declared out here rather than inside the branch because two later
+       blocks need the answer: the one that lets a `mobile` move keep
+       walking, and the friction that would otherwise undo it the same frame.
+
+       GROUNDED ONLY, on purpose. The `walk` flag is a licence to keep
+       playing the game while the meter fills, not a licence to fill it
+       somewhere else -- and the only move that carries it is a cloud dropped
+       at his feet, which in the air would become a charged cloud dropped
+       from wherever he had drifted to. An airborne charge behaves exactly as
+       it did before this existed. */
+    let chargeWalk = false;
     if (m.charge && !this.specialSpawned && this.attackFrame >= m.startup &&
         pad && pad[HOLD_FOR_SLOT[this.chargeKey] || 'holdNeutral'] &&
         !(m.charge.hold && this.chargeTimer >= m.charge.hold) &&
         !(m.charge.drain && this.mana <= 0)) {
       this.attackFrame = m.startup;
+      chargeWalk = !!m.charge.walk && this.grounded;
       this.chargeTimer++;
       /* A charge that also costs meter while it runs. Optional, and only the
          fart uses it: the pieces and the bottle are paid for in standing
@@ -5610,8 +5944,9 @@ class Fighter {
 
          Note what this is competing with, which is nothing: the refill is in
          updateFree and a fighter in the middle of a special never gets there,
-         so a drain of COMBAT.manaRegen tips a flat bar into falling at
-         exactly the rate it usually rises rather than merely slowing it.
+         so a drain does not slow a rising bar, it tips a FLAT one into
+         falling. The fart's 0.8 against COMBAT.manaRegen's 0.5 is therefore
+         not "60% slower", it is a bar emptying at 0.8 a frame.
 
          Drained AFTER the pin so the frame that spends the mana is the frame
          that counts, and clamped at zero so the bar cannot go negative and
@@ -5632,7 +5967,13 @@ class Fighter {
     /* A `mobile` move is one you keep playing the game through: walking,
        turning and jumping all still answer while it runs. Everything else
        commits, which is what makes a swing a decision. */
-    if (m.mobile && pad) {
+    /* `chargeWalk` borrows the walking half of this and NOT the jumping half.
+       See the flag where it is set, and `charge.walk` in the roster for why
+       the jump is withheld: the price of a charge is standing in the piece of
+       stage you are trying to deny, and a hop clears an approach without
+       giving any of the charge back. Walking keeps him in front of you at
+       walking speed; jumping would let him leave and come back paid up. */
+    if ((m.mobile || chargeWalk) && pad) {
       if (pad.left || pad.right) {
         const dir = pad.left ? -1 : 1;
         this.facing = dir;
@@ -5651,7 +5992,8 @@ class Fighter {
            slid him clean past whoever he was aiming at. */
         this.vx *= this.stopping();
       }
-      if (pad.jump) {
+      // `m.mobile` and not the combined flag: a charge may walk, not jump.
+      if (m.mobile && pad.jump) {
         if (this.grounded) {
           this.vy = -this.def.jump;
           this.grounded = false;
@@ -5668,7 +6010,15 @@ class Fighter {
     const rooted = !m.mobile && (this.state === 'special' || this.state === 'ult') &&
       ((m.roots && this.grounded) || m.kind === 'dash' || m.kind === 'uppercut' ||
        m.kind === 'knightmove' || m.kind === 'slouch');
-    if (!rooted && !m.mobile) {
+    /* `chargeWalk` has to skip this for the same reason `mobile` does. The
+       block above sets vx to a walk; this one would multiply it by
+       groundFriction on the very same frame, which is 0.55 -- he would lean
+       and get nowhere, which is worse than being rooted because it looks
+       like the controls are broken rather than like the move is committing
+       him. Nothing else about the move changes: let the button go and the
+       pin ends, chargeWalk goes false, and the recovery damps him as it
+       always has. */
+    if (!rooted && !m.mobile && !chargeWalk) {
       if (this.grounded) this.vx *= this.stopping();
       else if (pad && (pad.left || pad.right)) {
         this.vx += (pad.left ? -1 : 1) * PHYS.airAccel * 0.5;
@@ -6363,16 +6713,29 @@ class Fighter {
           if (s.airRise && !this.grounded) {
             this.vy = -s.airRise;
             this.jumpsLeft = Math.max(this.jumpsLeft, 1);
-            /* And arm the wrap. The dash is only nine active frames but it
-               leaves at 5.4 a frame, so he is usually still travelling when
-               it ends -- he crosses the blast line WELL after the move is
-               over. Latching a window rather than checking inside the move
-               is the difference between a wrap that fires and one that
-               never does; the first version checked during the active
-               frames and never once triggered. */
-            this.dashWrap = s.wrapFor || 100;
           }
         }
+        /* Arm the wrap, EVERY frame of the move, grounded or not.
+
+           It used to be armed once, on the startup frame, and only if he was
+           already off the ground -- so the only dash that could not kill him
+           was the one thrown as a recovery. That is the narrower half of the
+           problem. The wider half is the dash thrown ALONG the stage: the
+           ledge turn below is budgeted, and once the budget is gone
+           `dashStopped` only HALVES his speed, which at a stage edge is a
+           slower way of leaving rather than a way of staying. A grounded
+           dash that walked him off the end was armed with nothing at all.
+
+           Every frame rather than once, and through the recovery rather than
+           only the active window, because the window is latched here and
+           counted down in update(), where landing spends it outright -- "he
+           got home on his own". Re-arming each frame is what lets that rule
+           stand unchanged and still cover a grounded dash: while his feet are
+           down it is set, cleared and set again for nothing, and the frame he
+           leaves the floor is the frame it starts running for real. He coasts
+           at the full 5.4 through all ten recovery frames, so those are the
+           frames that carry him off the edge and they have to arm it too. */
+        this.dashWrap = s.wrapFor || 100;
         if (this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active) {
           // A dash that starts on the ground stops at the ledge instead of
@@ -7034,25 +7397,69 @@ class Fighter {
     if (this.state === 'ko' || this.eliminated) return;
     this.checkHazard();
     const bz = STAGE.blast;
-    /* Reese dashing off the side comes back on the other one.
+    /* Reese leaving the world during a dash comes back into it.
 
        His dash is his recovery, and it keeps every pixel of its speed in the
        air on purpose -- which meant the move that was supposed to save him
-       was the one killing him. Now the side of the map wraps while the dash
-       window is open: he reappears at the far edge, near the top, carrying
-       the SAME vx, which from that side points back onto the stage.
+       was the one killing him. While the dash window is open the map catches
+       him instead: he reappears near the top, carrying the SAME vx.
 
-       Only the SIDES, and only sideways. Falling out of the bottom still
-       ends the stock, and so does being launched through the ceiling -- a
-       wrap that caught those would make him unkillable for the whole window
-       rather than forgiving one specific mistake. */
-    if (this.dashWrap > 0 && this.y >= bz.top && this.y <= bz.bottom &&
-        (this.x < bz.left || this.x > bz.right)) {
-      const wentLeft = this.x < bz.left;
-      this.x = wentLeft ? bz.right - 6 : bz.left + 6;
+       THREE THINGS WERE WIDENED HERE, and each one was a different way the
+       old net let him through. It used to be sides only, once per dash, and
+       armed only on a dash begun in the air.
+
+       1. THE BOTTOM COUNTS NOW. Falling out of the floor of the world is how
+          a failed recovery actually ends -- the side is where you go when you
+          are launched, the bottom is where you go when you simply did not get
+          back -- and catching only the side caught the rarer of the two. He
+          is put back at the top of the side he fell out on, not the far one:
+          he went straight down, so appearing across the map would read as a
+          different event entirely. His downward speed is cleared with him,
+          because he arrives at terminal velocity and re-entering at the top
+          still falling at 5.4 is the same death with extra steps.
+
+       2. THE TOP STILL KILLS, and that is the deliberate hole in the net. A
+          fighter who leaves through the ceiling was PUT there by somebody
+          else's knockback, and a window that caught that would make him
+          immune to being killed rather than forgiving his own mistake. Every
+          upward finisher in the game still works on him mid-dash.
+
+       3. IT IS NO LONGER ONCE. A single catch was enough for the neat case --
+          one overshoot, one rescue -- and useless for the real one, where he
+          crosses the line, is put back at speed, and crosses it again before
+          he has control of anything. Each catch now costs HALF of whatever
+          window is left instead of all of it: 100 frames becomes 50, then 25,
+          then 12.
+
+          Halved rather than counted, because what bounds this is not a number
+          of catches, it is distance. A stage crossing at his dash speed is
+          about 61 frames, so the 50 he has after one catch is already not
+          enough to get back out the side under his own power, and each catch
+          after that buys less than the last. MEASURED, both ways: put outside
+          the right line at the dash's own 5.4 and then left entirely alone,
+          he is caught ONCE and lives out the window. Launched out at 12,
+          which is knockback speed rather than dash speed, he is caught TWICE
+          and then killed on frame 70 with the window spent. That second
+          result is the one that matters -- the net has an edge, and somebody
+          hitting him hard enough still finds it. */
+    const outSide = this.x < bz.left || this.x > bz.right;
+    const outBottom = this.y > bz.bottom;
+    if (this.dashWrap > 0 && this.y >= bz.top && (outSide || outBottom)) {
+      // Out of the side: the OPPOSITE edge, because his vx points that way
+      // and that is what turns the overshoot back onto the stage. Out of the
+      // bottom: the side he was nearest, because he did not go anywhere
+      // sideways and should not appear as though he had.
+      const wentLeft = outSide ? this.x < bz.left
+                               : this.x < (bz.left + bz.right) / 2;
+      // Which edge he comes back in at -- not "the far one", because for the
+      // floor it is the near one, and one name for two rules is how the
+      // second rule gets read as a bug.
+      const putLeft = outSide ? !wentLeft : wentLeft;
+      this.x = putLeft ? bz.left + 6 : bz.right - 6;
       this.y = Math.min(this.y, bz.top + 16);
       this.prevY = this.y;
-      this.dashWrap = 0;          // once per dash, not a revolving door
+      if (outBottom && this.vy > 0) this.vy = 0;
+      this.dashWrap = Math.floor(this.dashWrap / 2);
       for (let i = 0; i < 8; i++) {
         addEffect('spark', this.x + rand(-4, 4), this.y + rand(-8, 8),
                   this.accent);
@@ -9455,10 +9862,52 @@ class Rainbow {
       const dx = nx - this.x, dy = ny - this.y;
       if (dx * dx + dy * dy <= r2) applyHit(this.owner, f, spec, this.x);
     }
-    addEffect('ring', this.x, this.y, css);
-    for (let i = 0; i < 14; i++) {
-      addEffect('spark', this.x + rand(-s.radius, s.radius),
-                this.y + rand(-s.radius, s.radius), css);
+    /* WHAT IT LOOKS LIKE. See the 'prism' case in drawEffects.
+
+       This used to be 'ring' -- the generic shockwave seventeen other things
+       in this file spawn -- plus fourteen one-pixel sparks, all of them the
+       one colour the shot happened to be. Three things were wrong with that
+       and they compound. It was the same picture as everybody else's, so the
+       signature move of the character whose whole identity is a rainbow went
+       off looking like a pawn promoting. It was MONOCHROME, which threw away
+       the one genuinely interesting thing about this move: six colours, and
+       the ball goes off in whichever one it had reached. And the ring grew
+       to a radius of 30 whatever the burst's radius actually was, so the
+       picture claimed half again the reach the hitbox has -- a lie that got
+       worse every time the radius was cut, and it has now been cut twice.
+
+       The prism fixes all three: it is its own shape, it opens the shot's
+       colour into the whole wheel starting from that colour, and it stops
+       exactly at `radius`, so what you see is what it hit. */
+    const fx = this.base.burstFx ? this.base.burstFx[this.hue] : null;
+    addEffect('prism', this.x, this.y, css, 1, fx);
+    /* The shower, THROWN off the star rather than scattered in a square
+       around it. Twelve motes, one per spoke, born at the middle in that
+       spoke's colour and given that spoke's direction, so they leave with the
+       star and then fall out of it -- which is a firework. The fourteen the
+       old line spawned appeared all over a square, all in one colour, and did
+       nothing but drift: they read as grit that happened to be nearby.
+
+       The speed is chosen against the reach, not by feel. A spark lives 16
+       frames, so 1.1 a frame carries it about as far as the ring and no
+       further before gravity takes it down: the debris lands inside the thing
+       that threw it, and nothing on screen suggests this reaches further than
+       it does.
+
+       `rand` here is Math.random and that is allowed exactly here: it feeds
+       addEffect and nothing else, effects are never snapshotted, and
+       addEffect returns null while resimulating, so a rollback cannot spawn
+       one at all. The line it replaces did the same thing for the same
+       reason. Nothing the simulation reads is downstream of this. */
+    const wheel = fx ? fx.wheel : RAINBOW;
+    for (let i = 0; i < PRISM_SPOKES; i++) {
+      const u = PRISM_DIRS[i * (PRISM_DIRS.length / PRISM_SPOKES)];
+      const mote = addEffect('spark', this.x + u[0] * 3, this.y + u[1] * 3,
+                             wheel[(this.hue + i) % wheel.length]);
+      if (mote) {
+        mote.vx = u[0] * 1.1 + rand(-0.25, 0.25);
+        mote.vy = u[1] * 1.1 + rand(-0.25, 0.25);
+      }
     }
     // No recipe of its own: 'hit-big' is the loudest impact the mixer
     // owns and an explosion is what it was written for.
@@ -13650,6 +14099,12 @@ class Puddle {
     for (const f of fighters) {
       if (f.eliminated || f.state === 'ko') continue;
       if (!overlap(b, f.hurtbox())) continue;
+      /* The moment the footing goes, and only that moment. `slick` is
+         re-armed every frame they stay in it, so it is zero exactly once per
+         entry -- the frame they step in, or the frame they step back in
+         after the tail ran out -- and a cue here fires once instead of sixty
+         times a second at somebody standing still. */
+      if (f.slick === 0) cue('slip', { slot: f.slot, x: f.x });
       if (f.slick < s.slick) f.slick = s.slick;
     }
 
@@ -13683,6 +14138,16 @@ class Puddle {
        chosen so the two states are not two shades of one thing: fresh is a
        cold near-white, curdled is a warm ochre, and at 320x180 that is the
        difference a player can actually see. */
+    /* A WET RIM, ON the floor rather than above it. Three pale rows on gray
+       speckled stone have a middle and no ends: rendered at 320x180 over the
+       stage's own floor tile, the last few pixels at either side dissolved
+       into the speckle, and the ends are precisely what a player has to
+       judge -- where to stop, where to start, where the skid will put them.
+       One dark row the width of the box makes the near edge and the far edge
+       lines instead of a guess, and reads as wet stone rather than as an
+       outline drawn around a sprite. */
+    g.fillStyle = bad ? '#5e5729' : '#5d7d7e';
+    g.fillRect(x - half, y, s.w, 1);
     g.fillStyle = bad ? '#b9ad63' : '#e8f2f0';
     g.fillRect(x - half, y - 1, s.w, 1);
     g.fillStyle = bad ? '#cdc07a' : '#cbe6e4';
@@ -13698,10 +14163,18 @@ class Puddle {
         g.fillRect(x - half + 3 + (k * (s.w - 8)) / 29, y - 1 - (k % 2), 1, 1);
       }
     } else {
-      // And a highlight on fresh milk, for the same reason: it is wet.
+      /* And a highlight on fresh milk, for the same reason: it is wet.
+
+         It MOVES now -- three pixels of travel on an eight-frame step, off
+         `t` rather than off anything random, so both machines draw the same
+         milk. A static highlight is a painted-on shine and reads as part of
+         the floor; one that crawls is the only thing on a three-pixel-tall
+         rectangle that says liquid, and it is what catches an eye that was
+         not looking at the ground. */
+      const sh = (this.t >> 3) % 3;
       g.fillStyle = '#ffffff';
-      g.fillRect(x - half + 4, y - 2, 2, 1);
-      g.fillRect(x + half - 7, y - 1, 2, 1);
+      g.fillRect(x - half + 4 + sh, y - 2, 2, 1);
+      g.fillRect(x + half - 7 - sh, y - 1, 2, 1);
     }
   }
 }
@@ -14627,6 +15100,16 @@ const AUDIO_RECIPES = {
   mower: { osc: 'sawtooth', f0: 88, f1: 150, dur: 0.34, gain: 0.16,
            noise: { dur: 0.22, lp: 1800, lp1: 700 } },
 
+  /* A shoe losing the floor. Noise only: a skid has no pitch, and anything
+     pitched here would be a note played several times in a few seconds --
+     two bodies and one spill is a lot of entries -- which is the belch's
+     complaint about loud-plus-often in its other form. The filter sweeps
+     DOWN because a skid runs out of speed rather than gathering it, and at
+     0.11 it is the quietest thing in this table after Trev's cycle tick,
+     which is right for a sound whose whole job is to make somebody glance
+     at their own feet. */
+  slip:  { noise: { dur: 0.20, lp: 4200, lp1: 800 }, dur: 0.20, gain: 0.11 },
+
   // The floor coming up and going back down.
   deadlift: { osc: 'sine', f0: 120, f1: 28, dur: 0.5, curve: 'exp', gain: 0.5,
               noise: { dur: 0.28, lp: 1400, lp1: 150 } },
@@ -14898,7 +15381,8 @@ function addEffect(kind, x, y, color, dir, spec) {
   if (netplay.resimulating) return null;
   const e = { kind, x, y, color, dir: dir || 1, spec, t: 0,
               life: kind === 'beam' ? 20 : kind === 'ring' ? 18
-                  : kind === 'wave' ? 13 : kind === 'burp' ? 18 : 16,
+                  : kind === 'wave' ? 13 : kind === 'burp' ? 18
+                  : kind === 'prism' ? 20 : 16,
               vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) };
   /* Sound is AIMED, not thrown. Everything else here drifts on a random
      vector and that is right for a spark; a wave that did it would arrive
@@ -14950,6 +15434,68 @@ function updateEffects() {
 }
 
 const RAINBOW = ['#ff2d55', '#ff9500', '#ffd60a', '#34c759', '#0a84ff', '#5e5ce6', '#bf5af2'];
+
+/* Twenty-four points evenly round a circle, as unit offsets, every fifteen
+   degrees from due east and going clockwise on screen because +y is down.
+
+   Written out rather than computed, for the reason SHELL_ORBIT is and the
+   knockback triples are: the build refuses a file that contains a runtime
+   cosine call at all, so that an angle can never drift between what a comment
+   claims and what the code does.
+
+   EXACTLY MIRRORED, which is the part worth being careful about. Each
+   quadrant is the first one with signs flipped and the pair swapped, to the
+   last digit -- so the star drawn out of this is symmetric to the pixel. Take
+   the values from a library one at a time instead and the rounding differs in
+   the last place, which at this size is a spoke landing one pixel long on one
+   side of the screen and not the other, and the whole burst looks bent.
+
+   The prism reads it two ways: every other entry is a SPOKE (twelve of them)
+   and every entry is a dot on the ring. */
+const PRISM_DIRS = [
+  [1, 0],
+  [0.96592582628906831, 0.25881904510252074],
+  [0.86602540378443871, 0.49999999999999994],
+  [0.70710678118654752, 0.70710678118654752],
+  [0.49999999999999994, 0.86602540378443871],
+  [0.25881904510252074, 0.96592582628906831],
+  [0, 1],
+  [-0.25881904510252074, 0.96592582628906831],
+  [-0.49999999999999994, 0.86602540378443871],
+  [-0.70710678118654752, 0.70710678118654752],
+  [-0.86602540378443871, 0.49999999999999994],
+  [-0.96592582628906831, 0.25881904510252074],
+  [-1, 0],
+  [-0.96592582628906831, -0.25881904510252074],
+  [-0.86602540378443871, -0.49999999999999994],
+  [-0.70710678118654752, -0.70710678118654752],
+  [-0.49999999999999994, -0.86602540378443871],
+  [-0.25881904510252074, -0.96592582628906831],
+  [0, -1],
+  [0.25881904510252074, -0.96592582628906831],
+  [0.49999999999999994, -0.86602540378443871],
+  [0.70710678118654752, -0.70710678118654752],
+  [0.86602540378443871, -0.49999999999999994],
+  [0.96592582628906831, -0.25881904510252074],
+];
+/* Twelve spokes, which is two full turns of a six-colour wheel. Six looked
+   thin and twenty-four closed into a disc; twelve is the count where the
+   spectrum is legibly a spectrum -- you can see it repeat, so you can see it
+   is a wheel -- and the gaps between spokes are still gaps. */
+const PRISM_SPOKES = 12;
+// Half-widths of the opening flash, one per frame. It swells before it
+// collapses, because a flash that only shrinks reads as something ending.
+const PRISM_FLASH = [3, 5, 3, 2];
+// Frames the OUTER end of a spoke takes to reach full reach. Eight at 60Hz is
+// about an eighth of a second: fast enough to be an explosion, slow enough to
+// be a shape.
+const PRISM_OUT = 8;
+// Frames the inner end waits before it follows, and frames it then takes. The
+// difference between the two fronts is the length of the spoke, so these are
+// what decide whether this reads as a star or as a ring: leaving is 3 and 9,
+// which holds a visible radiating line from frame 1 to about frame 10.
+const PRISM_HOLD = 3;
+const PRISM_IN = 9;
 
 function drawEffects(g) {
   for (const e of effects) {
@@ -15203,6 +15749,153 @@ function drawEffects(g) {
         g.globalAlpha = 1;
         break;
       }
+      /* THE RAINBOW GOING OFF. AutisNick's up special is one colour at a
+         time out of six, and the whole move is which colour it has reached
+         when you set it off. So the burst is that colour opening back into
+         the wheel it came from: it starts on the shot's own colour and rolls
+         forward through the spectrum, twice round, in three beats.
+
+           frames 0-3   a white core swells and collapses. The instant.
+           frames 0-9   twelve spokes fly out, each with a fat head, each the
+                        next colour along, decelerating into the edge.
+           frames 9-20  the heads land on a ring and the spokes fold into it.
+                        The ring HOLDS AT THE BURST'S ACTUAL RADIUS and fades.
+
+         That last line is the one that matters for play and not just for
+         looks. The old ring grew to a flat 30 pixels whatever the radius was,
+         and the radius is 20 -- so the picture promised half again the reach
+         the hitbox has, and got less honest every time the radius was nerfed.
+         Here the ring is `radius` exactly, so the thing on screen is the
+         thing that hit, and a player learning how far to stand is learning
+         the truth. Nothing about the size of this is decorative.
+
+         Everything is a fillRect. No stroke, no ellipse, no gradient: at 320
+         by 180 a two-pixel antialiased curve is a grey smear, which is what
+         the generic ring was, and it is also why the burst used to look like
+         every other impact in the file instead of like this character's.
+
+         Drawn from `e.t` and constants alone -- no per-frame randomness -- so
+         it is the same explosion every single time. For a signature move that
+         is the point: it is a shape you come to recognize. */
+      case 'prism': {
+        const s = e.spec;
+        const R = s ? s.radius : 20;
+        const wheel = s ? s.wheel : RAINBOW;
+        const hue = s ? s.hue : 0;
+        const nc = wheel.length;
+        const per = PRISM_DIRS.length / PRISM_SPOKES;
+
+        if (e.t < PRISM_FLASH.length) {
+          const w = PRISM_FLASH[e.t];
+          const fx = Math.round(e.x), fy = Math.round(e.y);
+          // White for the first two frames, then the shot's own colour, so
+          // the flash hands over to the wheel rather than just stopping.
+          g.globalAlpha = e.t < 2 ? 1 : 0.8 - (e.t - 2) * 0.3;
+          g.fillStyle = e.t < 2 ? '#ffffff' : e.color;
+          // Two rects with the corners clipped off each other. A plain square
+          // this size reads as a box; four missing corners read as light.
+          g.fillRect(fx - w, fy - w + 1, w * 2, w * 2 - 2);
+          g.fillRect(fx - w + 1, fy - w, w * 2 - 2, w * 2);
+          g.globalAlpha = 1;
+        }
+
+        /* TWO fronts, not one, and the gap between them IS the spoke.
+
+           `head` is the outer end and leaves immediately; `tail` is the inner
+           end and does not start until PRISM_HOLD frames later. So the shape
+           opens as twelve lines radiating out of the middle, stretches, and
+           then closes as the inner ends catch up and fold the lines into the
+           ring they were pointing at.
+
+           The first draft had a single front with a short dash hung off it,
+           and it was a ring from frame three onward -- it never radiated at
+           all, which is the one thing an explosion has to do. A moving tail
+           is the whole difference and it costs one line of arithmetic.
+
+           Both eased (1-(1-p)^2) rather than linear: fast away, slow into the
+           edge, which is how a shell moves. Both reach exactly R and neither
+           passes it -- see the note above about the ring telling the truth. */
+        const p = e.t >= PRISM_OUT ? 1 : e.t / PRISM_OUT;
+        const head = R * (1 - (1 - p) * (1 - p));
+        const q = e.t <= PRISM_HOLD ? 0
+                : Math.min(1, (e.t - PRISM_HOLD) / PRISM_IN);
+        const tail = R * (1 - (1 - q) * (1 - q));
+
+        if (head - tail > 0.5) {
+          g.globalAlpha = Math.min(1, k * 1.9);
+          /* Where the shard stops being three pixels across and becomes two.
+             Thick at the root and narrowing: a spoke of even width is a wheel,
+             and this is supposed to be light coming apart.
+
+             THE WIDTH IS NOT DECORATION, it is what keeps the twelve spokes
+             the same weight as each other. Walking one pixel at a time along
+             a direction lays down a SOLID line if that direction is flat or
+             upright and a corner-touching staircase if it is diagonal -- so a
+             one-pixel-wide star came out with two fat bars on the axes and
+             ten dotted ones between, and since the colour on the axis is
+             whatever colour the shot had reached, two of the six always
+             looked twice as strong as the other four. Every sample carries
+             its neighbours on the perpendicular (-uy, ux), which fills the
+             staircase in and makes all twelve read alike. The perpendicular
+             rather than a 2x2 block, so a shard stays square to its own
+             direction instead of leaning down and to the right. */
+          const waist = tail + (head - tail) * 0.55;
+          for (let c = 0; c < nc; c++) {
+            // One fillStyle per COLOUR, not per spoke: the same mistake the
+            // matrix rain made cost 433 state changes a frame.
+            g.fillStyle = wheel[(hue + c) % nc];
+            for (let n = c; n < PRISM_SPOKES; n += nc) {
+              const u = PRISM_DIRS[n * per];
+              const ux = u[0], uy = u[1];
+              /* HALF a pixel at a time, not a whole one. Sampling a slanted
+                 direction on whole steps SKIPS: consecutive samples land a
+                 full pixel apart on both axes at once, so the run comes out
+                 as corner-touching blocks with holes between them, while a
+                 flat or upright spoke comes out solid. Half steps close the
+                 holes, and `px`/`py` throw away the samples that land where
+                 the last one did -- which is most of them on a flat spoke.
+                 Measured across a whole burst, the pair costs nothing and
+                 takes the peak frame from 830 rectangles to 524, against
+                 twelve fillStyle writes either way. */
+              let px = 1e9, py = 1e9;
+              for (let d = tail; d < head; d += 0.5) {
+                const fx0 = e.x + ux * d, fy0 = e.y + uy * d;
+                const sx = Math.round(fx0), sy = Math.round(fy0);
+                if (sx === px && sy === py) continue;
+                px = sx; py = sy;
+                g.fillRect(sx, sy, 1, 1);
+                g.fillRect(Math.round(fx0 - uy), Math.round(fy0 + ux), 1, 1);
+                if (d < waist) {
+                  g.fillRect(Math.round(fx0 + uy), Math.round(fy0 - ux), 1, 1);
+                }
+              }
+            }
+          }
+        }
+
+        /* The edge, once there is one to draw. Twenty-four dots, each drawn
+           twice a pixel apart along the tangent, which is what turns a ring
+           of dots into a ring. Coloured by the spoke it belongs to, so the
+           ring is the same wheel in the same order as the star -- the spokes
+           do not change colour when they arrive. */
+        if (head > 6) {
+          g.globalAlpha = Math.min(1, k * 1.6) * 0.85;
+          for (let c = 0; c < nc; c++) {
+            g.fillStyle = wheel[(hue + c) % nc];
+            for (let n = c; n < PRISM_SPOKES; n += nc) {
+              for (let j = 0; j < per; j++) {
+                const u = PRISM_DIRS[n * per + j];
+                const rx = e.x + u[0] * head, ry = e.y + u[1] * head;
+                g.fillRect(Math.round(rx), Math.round(ry), 1, 1);
+                g.fillRect(Math.round(rx - u[1]), Math.round(ry + u[0]), 1, 1);
+              }
+            }
+          }
+        }
+        g.globalAlpha = 1;
+        break;
+      }
+
       case 'ring': {
         const r = (1 - k) * 30;
         g.strokeStyle = e.color;
@@ -15382,6 +16075,12 @@ function applyHit(attacker, defender, move, sourceX, scale) {
     defender.poison = move.poison.frames;
     defender.poisonDps = move.poison.dps;
     defender.poisonBy = attacker.slot;
+    /* Set on every landing, not only the first, so a fart over a kiss
+       changes the picture the way it changes the timer. Refreshing the
+       duration and leaving the old glyph up would put a heart over a man
+       standing in a cloud of gas, which is the exact confusion this field
+       exists to end. */
+    defender.poisonTell = move.poison.tell || 'gas';
   }
 
   /* Set alight. Refreshed rather than stacked on a second hit: eighteen
@@ -17845,18 +18544,41 @@ function drawFighter(g, f) {
   const x = Math.round(f.x - 8);
   const y = Math.round(f.y - 16);
 
-  /* POISONED. It is not a heart any more.
+  /* POISONED, and the picture follows WHAT DID IT.
 
-     It was a five-pixel pink lozenge over the head -- the exact three
-     rectangles the KISS paints where it lands, in the exact same pink, which
-     you can still read twenty lines into drawEffects under 'lips'. That made
-     sense while the kiss was the only thing in the game that poisoned you. It
-     stopped making sense the day a man could be farted on: a heart floating
-     over somebody standing in a cloud of gas reads as a different status
-     entirely, and it read as the wrong one.
+     There used to be one glyph for this: a five-pixel pink lozenge over the
+     head, the exact three rectangles the KISS paints where it lands, in the
+     exact same pink, which you can still read twenty lines into drawEffects
+     under 'lips'. That made sense while the kiss was the only thing in the
+     game that poisoned you. It stopped making sense the day a man could be
+     farted on: a heart floating over somebody standing in a cloud of gas
+     reads as a different status entirely, and it read as the wrong one.
 
-     So: gas coming off him. Four bubbles rising out of his sides and popping
-     at about head height, in an acid green nothing else on screen is.
+     The fix at the time was to make every poison draw gas, and that was half
+     right and half a regression. Gas was right for the fart. It was wrong for
+     the kiss, which had a perfectly good glyph of its own and lost it to a
+     move it has nothing to do with -- and the kiss is the one poison in the
+     game that is not a cloud you are standing in.
+
+     So there are two tells now and `f.poisonTell` picks between them. It is
+     copied off the poison spec that landed rather than worked out here,
+     because by the time this runs the only things left on the fighter are a
+     timer, a rate and a slot -- see poisonTell on Fighter. Adding a third
+     poison with a look of its own is a `tell` on its spec and a branch here,
+     and nothing else.
+
+     ONE: A HEART, for the kiss. Back where it was, and an actual heart now
+     rather than the lozenge that was standing in for one -- five wide and
+     four tall, two lobes and a point, which is the smallest thing that reads
+     as a heart and not as a blob. Pulsing and bobbing on the poison clock,
+     like a mark that is still on you. It is a GLYPH: it sits over the head at
+     a fixed size even on a giant, because it is a label about him rather than
+     something coming off him, which is the same rule the health readout obeys
+     and the opposite of the rule the gas below does.
+
+     TWO: gas coming off him, for everything that is a cloud. Four bubbles
+     rising out of his sides and popping at about head height, in an acid
+     green nothing else on screen is.
 
      The four things it must not be mistaken for, and what keeps it apart from
      each -- checked by rendering a fighter under every status side by side
@@ -17868,7 +18590,9 @@ function drawFighter(g, f) {
                  they travel and leave.
        confused  three cream ducks on a fixed orbit above the head. Nothing
                  here orbits, and nothing here stays.
-       the kiss  pink, one glyph, stationary, over the head.
+       the heart  the OTHER half of this status, and the one thing here it is
+                 allowed to be confused with only in the sense that both mean
+                 poisoned: pink, one glyph, over the head, holding still.
        the cloud that causes it is a muted olive (#9dc25a and friends). These
                  are deliberately brighter and more acid, so a poisoned man
                  standing inside a fart is still legible as poisoned rather
@@ -17879,7 +18603,45 @@ function drawFighter(g, f) {
      re-rolling one -- and nothing here writes back. Drawn before the sprite,
      like the flames and for the same reason: gas coming off his outline, not
      gas covering the one thing you need to see. */
-  if (f.poison > 0) {
+  if (f.poison > 0 && f.poisonTell === 'heart') {
+    const hx = Math.round(f.x);
+    /* Over the head wherever the head has got to, and deliberately clear of
+       the seat arrow above it: in a four-way that arrow owns headY-10 down
+       to headY-7, and the bob below is a pixel either way off headY-6, so the
+       top row of the heart can never reach it. */
+    const head = Math.round(f.y - HURT_H * f.sizeMul);
+    const hy = head - 6 + Math.round(Math.sin(f.poison * 0.18));
+    /* Breathing, not blinking. It never goes out, so it cannot be read as
+       the respawn flash a few lines above, and it never holds perfectly
+       still either -- a static glyph on a 16-pixel man disappears into him.
+       Thinning over the last half second for the reason the gas does: that
+       the mark is about to lift is worth more than that it landed. */
+    const beat = Math.min(1, f.poison / 30);
+    g.globalAlpha = beat * (0.62 + Math.sin(f.poison * 0.3) * 0.3);
+    /* The kiss's own pink, the same value drawEffects paints the lips mark
+       in. Same move, same color: the glyph is supposed to be recognizably
+       the thing that landed on you, still on you. */
+    g.fillStyle = '#ff5f8f';
+    /* Five wide and four tall:  . # . # .
+                                 # # # # #
+                                 . # # # .
+                                 . . # . .
+       Two lobes and a point, which is the smallest heart that stays a heart.
+       The lozenge this replaces was three rows with no notch in the top, and
+       at a glance it read as a pill. */
+    g.fillRect(hx - 1, hy, 1, 1);
+    g.fillRect(hx + 1, hy, 1, 1);
+    g.fillRect(hx - 2, hy + 1, 5, 1);
+    g.fillRect(hx - 1, hy + 2, 3, 1);
+    g.fillRect(hx, hy + 3, 1, 1);
+    // One lit pixel in the near lobe. A flat five-pixel shape is a sticker;
+    // a highlight makes it an object catching the same light the sprite is.
+    g.fillStyle = '#ffc2d6';
+    g.fillRect(hx - 1, hy + 1, 1, 1);
+    g.globalAlpha = 1;
+  }
+
+  if (f.poison > 0 && f.poisonTell !== 'heart') {
     const cx = Math.round(f.x);
     // Thin out over the last half second. Knowing a status is about to end is
     // worth more than knowing it began -- you can plan the next input.
@@ -18804,7 +19566,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'b7590d3474';
+const BUILD_ID = '913d43140a';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -18815,7 +19577,7 @@ const BUILD_ID = 'b7590d3474';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.76';
+const VERSION = '2.77';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
