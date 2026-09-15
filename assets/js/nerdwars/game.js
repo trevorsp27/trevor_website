@@ -73,11 +73,17 @@ const PHYS = {
      floor left alone and 35.0% at a quarter drag. Every setting that moved a
      jab at all cost about the same (0.35 -> 40.5%, 0.45 -> 36.3%), and 0.6,
      which moves a jab by half a pixel, costs nothing and buys nothing
-     (44.8%). The reason is not subtle. He slips in his own milk on purpose,
+     (44.8%). The reason is not subtle. He stands in his own milk on purpose,
      the spill is the thing he stands behind, and he is the lightest fighter
      on the roster at 94 -- so a floor that lengthens every shove lengthens
      HIS the most, and carries him off the side. A move whose own owner is
-     its best victim is not a better move. */
+     its best victim is not a better move.
+
+     AND IT STILL IS NOT, which is worth saying because Fighter.slickFoe has
+     since let him keep the STICK in milk he threw himself. It did not let him
+     keep the BRAKES: stopping() still answers slickFriction for him, so every
+     word above about a lengthened shove applies to him exactly as it did, and
+     the reason this number stayed where it is has not moved. */
   // Blast zones are per-stage; see STAGES below.
 };
 
@@ -1000,7 +1006,30 @@ const ROSTER = {
          not a pin, it is a turn. It comes down again here because the pin
          is no longer the whole ult -- what follows it is. */
       freeze: 10, stun: 84,
-      damage: 19, base: 0.5, scale: 0.9, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
+      /* TWENTY-TWO, up from 19, and `base` retuned from 0.5 to 0.08 so that
+         the launch does not move by a pixel.
+
+         The two numbers are one decision. Knockback here is
+         (base + damage * 0.14), so raising the damage alone would have
+         raised the launch 13% as a side effect -- and this move's whole
+         argument is that they are stunned in PLACE. 0.5 + 19 * 0.14 and
+         0.08 + 22 * 0.14 are both 3.16, so every pixel of the pin is the pin
+         that was measured. What changed is only the number on screen.
+
+         22 is the ceiling and not a millimeter over it: Cobeus's car is the
+         hardest single hit in the game at 22, and this is now level with it
+         rather than under it. That is the trade this release makes -- the
+         ten seconds afterwards were cut, and the part everybody actually
+         watches was paid the difference. */
+      damage: 22, base: 0.08, scale: 0.9, angle: 78, kx: 0.20791169081775945, ky: 0.97814760073380558,
+      /* AND IT DOES NOT MULTIPLY ITSELF. A second LEG DAY landing inside the
+         first one's ten seconds was 19 x 1.5 = 28.5, which is 30% over the
+         hardest hit in the game -- the exact thing 2.77 cut the multiplier
+         to 1.5 to prevent, leaking back in through the one move that was
+         never checked against the ceiling. Measured over 10832 landings in
+         7200 CPU matches: 10.4% of them landed on an already-buffed Kel, so
+         this was not a corner case, it was one landing in ten. */
+      noBuff: true,
       /* Then he is buff Kel for ten seconds, drawn from the sheet he redrew
          for exactly this. Speed and knockback are untouched on purpose --
          the ask was damage, and a faster Kel who also hits harder would be a
@@ -1027,7 +1056,52 @@ const ROSTER = {
          58.1, and his CPU win rate falls 50.8% to 43.2% over 600 matches a
          variant, which is real and is the price of the ask. He is still
          mid-table on a roster that runs 28% to 85%. */
-      buff: { duration: 600, damageMul: 1.5 },
+      /* AND NOW IT WEARS OFF. `decay` is the duration the multiplier is
+         measured against: the getter reads 1 + (damageMul - 1) * buffTimer /
+         decay, so it is the full 1.5 on the frame he stands up out of the
+         slam and has faded to 1.0 by the time the sheet goes away.
+
+         This is the 2.78 nerf, and it is aimed at the one part of the ult
+         nobody can see. Measured over 10832 landings: of everything the
+         multiplier added, 79.7% of it was his JAB -- not DROP SET (2.0%),
+         not the bone (11.3%). The buff was never "his big hits get bigger",
+         it was a 7.5-damage jab for ten seconds, which is a number you only
+         ever meet on a health bar. Weighted by when that damage actually
+         lands -- 27.5% of it inside the first 100 frames, 31.7% of it in the
+         second half -- a linear fade keeps 59% of what a flat 1.5 was worth
+         and throws the rest away.
+
+         A FADE RATHER THAN A SHORTER TIMER, and that is the whole point of
+         picking this one: five seconds of 1.5 and ten seconds of a fade cut
+         almost exactly the same amount, but the fade puts the strongest
+         version of him on the frames straight after the slam -- the ones
+         everybody is already looking at -- instead of ending the buff at the
+         moment nobody is. And it is VISIBLE: the aura drawFighter already
+         paints around a buffed fighter now dims with it, so the pump
+         visibly wearing off is a thing on screen rather than a number in
+         this file.
+
+         `decay` names the denominator rather than being a boolean, so
+         nothing has to go looking for the duration on a snapshot -- and
+         buffTimer, which it divides, is a Fighter constructor field that
+         saveSim already carries, so a rollback across the fade recomputes
+         the identical multiplier instead of restarting it. */
+      /* `decayTo` is the floor it fades to, not zero. 1.2 rather than 1.0,
+         and the reason is the sprite: sprite() swaps Kel to the buff sheet
+         for as long as buffTimer runs, so a multiplier that reaches exactly
+         1.0 leaves two seconds in which the drawing says BUFF and the
+         arithmetic says nothing at all. The picture is not allowed to lie.
+
+         It is also where the nerf was aimed rather than how deep it went.
+         Measured, six seeds of 1200 CPU matches each, all three arms on the
+         same engine: the flat 1.5 is a 45.0% win rate, a fade to 1.0 is
+         38.7%, and a fade to 1.2 is 40.7%. Falling all the way to 1.0 took
+         more out of him than the ask needed -- he was already mid-table --
+         and it is the SHAPE that answers the ask anyway: at 1.2 the
+         multiplier that added 10.2 damage per landing adds 7.1, and what is
+         left of it is front-loaded onto the seconds right after the slam
+         instead of spread flat across ten. */
+      buff: { duration: 600, damageMul: 1.5, decay: 600, decayTo: 1.2 },
     },
   },
 
@@ -1057,14 +1131,202 @@ const ROSTER = {
         speed: 3.4, lift: -0.4, drop: 0.14, bounce: 0.62, life: 225,
         damage: 7, base: 3.0, scale: 6, angle: 26, kx: 0.89879404629916704, ky: 0.4383711467890774,
       },
-      // "drumstick weapon". A plain melee swing -- no kind handler needed,
-      // the hitbox is the whole move.
+      /* "lucas loves robotics", so he builds one, and it takes three presses.
+
+         IT REPLACED DRUMSTICKS, which was a plain melee swing: four frames
+         of startup, six of hitbox, one number. The drums have not left his
+         kit -- HIGH NOTE is a riff and THE STROKES is the song -- but the
+         drumSTICKS were the one move of his that was only a number, so this
+         is the slot that could afford to become a project.
+
+         ONE ROBOT, AND EVERY PRESS GOES INTO THE SAME ONE. There is
+         deliberately no `maxAlive` here: maxAlive REFUSES a cast once the
+         cap is reached, which is exactly backwards for a move whose whole
+         idea is pressing it again. The cap lives in runSpecial instead --
+         the first press builds a chassis, the next two bolt parts onto
+         whatever he already has, wherever it is standing.
+
+           1  CHASSIS  treads, a deck, and a servo claw on the front. Knee
+                       high. It snaps that claw at anything that walks into
+                       it, slowly, for two, and only along the floor.
+           2  ARMS     a torso and a real arm. Waist high, longer reach,
+                       a third again as often, four, and high enough to
+                       catch somebody who is not standing on the ground.
+           3  ONLINE   a head, a sensor eye and an antenna. It is a turret
+                       now: it still punches, and every sixty-six frames it
+                       puts a bolt through whoever is nearest.
+
+         A fourth press RECHARGES it -- full battery, the part it is missing
+         back -- so the button is never dead and keeping a robot alive costs
+         him meter all match instead of being free after the third press.
+
+         IT DOES NOT MOVE, and that is the whole of what separates it from
+         John's dog and Christian's frogs, which are summons that go and
+         find somebody. This one is a piece of ground he has decided to own,
+         and the decision is where he was standing when he pressed it.
+         Nothing else on this roster is a stationary ally.
+
+         HOW YOU BEAT IT: walk up and hit it. Every part takes two hits to
+         come off and every hit staggers it out of whatever it was doing, so
+         six swings scrap a finished robot and the first of them shuts it up
+         for a moment. Only a FIGHTER's own hitbox can do that -- not a
+         projectile; see Bot.takeHits -- which is deliberate. A machine you
+         have to come and break in person is the counterplay. One a zoner
+         can delete from the other side of the stage is not a machine, it is
+         a slow projectile.
+
+         WHY IT IS A SIDEWAYS MOVE AND NOT A BUFF. DRUMSTICKS was 6 damage
+         off a 4-frame startup with a scale of 6.4 -- a genuine kill move at
+         high percent and the fastest thing in his kit. Nothing below kills
+         anybody: the punches are chip and shove and the bolt is worth four.
+         What he has instead is something he must spend two thirds of a bar
+         building and then stand near and defend. He has traded a panic
+         button for a position.
+
+         AND IT MEASURED THAT WAY. Ladeane against the whole field, both
+         seats, all six stages, one seeded generator, and the ONLY difference
+         between the two engines is this move -- everything four other agents
+         have in flight is present on both sides:
+
+           DRUMSTICKS            52.8%   (5,043 decided)
+           the robot, as below   53.2%   (5,088)
+
+         That is four tenths of a point on ten thousand matches, which is
+         inside the noise: the standard error on the difference is about one
+         point. Sideways is what it was asked to be and sideways is what it
+         is. Nobody's matchup against him moved by more than seven.
+
+         THE PUNCHES WERE 3/5/6 AND ARE 2/4/5, and that is where the 53.2
+         came from rather than from luck. The same tournament, same
+         generation: 3/5/6 measured 54.4% -- a point and a half of buff,
+         which is not what this slot was for. Slowing the punch RATE instead
+         of its damage (54/40/36 to 72/54/48) measured 49.8%, which is too
+         far in the other direction and made the machine look broken
+         besides, standing there doing nothing for most of a second.
+
+         TWO INTERACTIONS WORTH KNOWING, both measured directly rather than
+         read off a win rate, because neither of them shows up in one:
+
+           HOUSTON'S MOWER DELETES IT. His deck carries `shreds`, so
+           sweepFrail destroys the robot the frame the two touch. Measured:
+           the deck appears on frame 10 and 66 mana of machine is gone on
+           frame 12, against a control robot still standing after 200. One
+           pass, for nothing. If that ever needs answering it is `shreds`
+           that would have to learn the difference between a shot and a thing
+           somebody built, which is a change to his move and not to this one.
+
+           IT WAKES SQUALLS UP. SOMEDAY, A BAKERY is eighty frames of him
+           rooted on the floor daydreaming, and a machine standing over him
+           does not care that he is having a moment. Measured with him parked
+           beside a finished robot: the daydream lasted 30 frames instead of
+           101 and cost him 25 health.
+
+         READ THE TOURNAMENT WITH BOTH THUMBS ON THE SCALE, in opposite
+         directions. Over 60 CPU matches a robot was on the stage about 1,575
+         frames a match and was lost 179 times -- but 130 of those were the
+         battery running out and only 49 were somebody taking it apart. The
+         CPU does not go and break things, so the counterplay this whole move
+         is built around is nearly absent from that 53.2, and a person who
+         walks over and swings six times gets more out of it than the
+         tournament did. Pulling the other way: the CPU reached the finished
+         tier in 17 of those 60 matches and spent 64% of its robot-frames at
+         the first, so most of what was measured is a chassis and a claw
+         rather than the turret the third press buys. */
       down: {
-        kind: 'swing', label: 'DRUMSTICKS',
-        tint: '#ffe9c4', sticks: '#c9a066',
-        startup: 4, active: 6, recovery: 12,
-        damage: 6, base: 2.2, scale: 6.4, angle: 52, kx: 0.61566147532565829, ky: 0.78801075360672201,
-        ox: 1, oy: -10, w: 15, h: 12,
+        kind: 'bot', label: 'BUILD-A-BOT',
+        startup: 6, active: 1, recovery: 16,
+        /* By hand, because moveCost cannot see any of this. It prices
+           `damage`, and the cast's damage is zero -- he kneels down with a
+           wrench and hits nobody -- so the formula valued the whole move at
+           its floor of 6. A finished robot is three presses, 66 mana, two
+           thirds of the bar and 132 frames of regen, and it is 22 again
+           every time the battery runs out. */
+        manaOverride: 22,
+        /* THE BATTERY, and it is the clock the whole move runs on: eight
+           seconds from the last press, whatever tier it is at. Any press
+           refills it, which is what makes the fourth press a recharge
+           rather than a wasted one. */
+        life: 480,
+        // Set down in front of his feet, then it falls to whatever floor is
+        // under it -- built out of a jump, or off a ledge, the same as the
+        // dog.
+        ahead: 12,
+        /* Frames of it sitting there doing nothing: after every bolt-on,
+           AND after every part knocked off. Building is a commitment at
+           both ends -- he cannot upgrade it into an attack that lands
+           immediately, and smashing a part buys real time. */
+        boot: 16,
+        // One hit per attacker per this many frames, so a single swing with
+        // five active frames costs the robot one point of health rather than
+        // five. (Its parts are the things that come off; the BOLT in this
+        // file is what the finished one shoots.)
+        hurtEvery: 12,
+        /* A stagger on EVERY hit, fatal to the part or not, and it cancels
+           a punch in progress. Hitting the robot has to do something you
+           can see even on the hit that leaves the part on. */
+        flinch: 9,
+        /* How far it will reach out. It cannot chase, so it has to at least
+           notice: a foe further than this across, or than `noticeY` up and
+           down, is somebody it politely ignores rather than swinging at the
+           air over. */
+        notice: 30, noticeY: 20,
+        /* THE THREE PARTS, as patches. They are merged over this spec into
+           finished ones at load -- see the `build` loop below ROSTER, which
+           is the same machinery the fart's three strengths use -- because
+           resolveCombat is handed `shot.spec` and reads the payload
+           straight off it, so three tiers of punch want three finished
+           specs rather than arithmetic done inside the robot.
+
+           `reach` is the near edge of the punch forward of the ROBOT's
+           center and `boxW` runs that much further forward, the same
+           convention a melee move's ox and w use. `boxTop` and `boxH` are
+           the top edge and the height straight out, NOT a center and a
+           height, because this is a projectile's box() and every other one
+           in the file is written in corners. */
+        build: [
+          /* CHASSIS. The claw is mounted three pixels off the floor and
+             the box is drawn to match it -- one pixel above the ground up
+             to six, which is the top half of a pair of shins. A foe standing
+             on the same floor is inside it; a foe in the air is not, not
+             even slightly. That is the honest weakness of a first press,
+             and it is most of why the second one is worth making. */
+          { part: 'CHASSIS', hp: 2, every: 54, swing: 6, hitEvery: 40,
+            reach: 3, boxW: 7, boxTop: -6, boxH: 5,
+            damage: 2, base: 1.6, scale: 3.4, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994 },
+          /* ARMS. A torso to hang one off, and fourteen frames off the
+             interval. The box climbs from shin height to chest height,
+             which is the upgrade you can feel rather than read. */
+          { part: 'ARMS', hp: 2, every: 40, swing: 7, hitEvery: 34,
+            reach: 3, boxW: 8, boxTop: -11, boxH: 8,
+            damage: 4, base: 2.2, scale: 4.6, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994 },
+          /* ONLINE. The punch barely improves -- the third press is not
+             bought for the punch, it is bought for the gun. */
+          { part: 'ONLINE', hp: 2, every: 36, swing: 7, hitEvery: 30,
+            reach: 3, boxW: 8, boxTop: -12, boxH: 9,
+            damage: 5, base: 2.4, scale: 5.0, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
+            /* A shot a bit more than once a second, which over a full
+               battery is seven of them if nobody interrupts it. Slower than
+               anything a person throws, because the person had to walk up
+               and press a button and this thing does it while he is
+               somewhere else. */
+            fireEvery: 66,
+            bolt: {
+              /* How far it can SEE, which is a different and much longer
+                 question than how far it can reach: `notice` above is an
+                 arm's length, this is most of a stage. */
+              sight: 150, sightY: 60,
+              speed: 2.6, life: 70, tint: '#5ce1e6',
+              /* Battable. sweepFrail deletes any frail shot an opposing
+                 hitbox touches, so the answer to a turret standing where
+                 you would rather not go is to swat what it sends -- and the
+                 same pass already lets somebody else's shot do it. */
+              frail: true,
+              damage: 4, base: 2.0, scale: 4.2, angle: 12, kx: 0.9781476007338057, ky: 0.20791169081775934,
+            } },
+        ],
+        // The cast is a man crouching over a machine. It hits nobody, and
+        // moveCost reads this, which is why manaOverride is above.
+        damage: 0, base: 0, scale: 0,
       },
       // "something creative with a music note", and his way back to the
       // stage: he rides the note up. The purple is the note motif, not his
@@ -2249,10 +2511,9 @@ ROSTER.simon = {
 
                     Taken literally, as asked: three times the damage on every
                     attack he owns, and three times the size in the drawing,
-                    in his hurtbox and in his own hitboxes alike. It ends when
-                    he loses a stock -- see payout(), and the hold in
-                    update(), which is what makes an otherwise timed buff
-                    untimed.
+                    in his hurtbox and in his own hitboxes alike. It ends
+                    after FIFTEEN SECONDS, or when he loses a stock,
+                    whichever comes first -- see `duration` below.
 
                     A PAIR of sevens does NOT transform him. Every other
                     payout halves cleanly at k = 0.5 and this one cannot: half
@@ -2269,6 +2530,34 @@ ROSTER.simon = {
                     the strongest thing in the game by a distance. The SIZE is
                     still three -- that is the joke and it costs him, because a
                     27x42 hurtbox is a much easier thing to hit. */
+                 /* NINE HUNDRED FRAMES. Fifteen seconds, and then he is a
+                    man again.
+
+                    It used to be untimed: buffTimer was pinned at 1 and a
+                    `hold` flag stopped update() counting it down, so losing
+                    a stock was the only thing in the game that could end it.
+                    That made the best outcome on the reel a thing you won
+                    once and then kept -- and made DYING the cheapest way to
+                    get rid of a 27x42 hurtbox, which is a strange sentence
+                    to have to write about a reward.
+
+                    A clock fixes both ends of that. The giant is now a
+                    window you have to use rather than a state you live in,
+                    and losing a stock stops being the only exit. The death
+                    clear stays exactly as it was -- respawn() zeroes
+                    buffTimer and buffStats, and every way of losing a stock
+                    funnels through it -- so this is "fifteen seconds OR he
+                    dies", not a replacement for it.
+
+                    It ends the way it began, which is the part worth
+                    checking: the sizeMul getter runs its ramp backwards over
+                    the last JACKPOT_GROW frames so he visibly deflates
+                    instead of snapping, and drawBling hangs the chain and the
+                    sunglasses off buffTimer, so they come off with him. A
+                    second jackpot inside the window refreshes this without
+                    restarting `since` -- fifteen more seconds, no shrink and
+                    re-grow, and no second chain dropped on the first. */
+                 duration: 900,
                  damageMul: 2, sizeMul: 3 },
       chips: { mana: 100 },
       /* 50, so three of a kind is half a health bar and a pair is 25. A lot,
@@ -2406,7 +2695,26 @@ ROSTER.simon = {
     // Cast in the air it was a five-second invulnerable glide that ended
     // in the blast zone with the meter spent.
     groundOnly: true,
-    heal: 25,
+    /* FORTY, up from 25, and it is the price of the body being hittable.
+
+       The sleep used to buy five things: invulnerability, the heal, the free
+       specials, the aura and the soul. The first of those is gone -- see
+       `rouse` -- and it was by a distance the biggest, so something had to
+       be paid back or the ult stops being worth lying down for. The heal is
+       the right thing to raise, because it is the one payment the sleep
+       makes that you can watch happening on the bar, and it is now in a
+       race with whatever the other player is doing to him: forty over six
+       hundred frames against a `guard` of a half means he comes out ahead
+       only if they land less than eighty damage worth of swings on him.
+
+       Measured, three seeds of 1200 CPU matches an arm, every arm on the
+       same engine: taking the invulnerability off drops his CPU win rate
+       from 29.2% to 19.2%. `guard` and the no-kill floor put back half of
+       that; this number is what returns the other half, landing him at
+       28.7% -- where he started, which is the point. He is still the
+       weakest character on the roster and this release does not pretend to
+       fix that. */
+    heal: 40,
     /* TEN seconds of specials that cost nothing, started the moment he nods
        off -- so the first five are spent asleep and the second five are his
        again when he wakes up. That split is the whole point of the number.
@@ -2448,13 +2756,96 @@ ROSTER.simon = {
       float: 30,
       accel: 0.62, drag: 0.84, maxSpeed: 2.8,
       punchEvery: 7, punchActive: 4,
-      reach: 7, w: 10, h: 9,
+      /* A BIGGER GLOVE. 10x9 at reach 7 became 14x12 at reach 6 -- 90 square
+         pixels to 168, and a span of +6..+20 from the soul's center where it
+         was +7..+17.
+
+         It grew in three directions and not one. Forward is the obvious one,
+         but the two that actually change how it plays are INWARD -- reach 6
+         rather than 7, so somebody pressed right up against the ghost is
+         inside the punch instead of under it -- and TALLER, 12 against a
+         14-pixel hurtbox, so a target half a body above or below the gloves
+         is still reachable. The old box was almost exactly one man wide and
+         two thirds of a man tall, flying at 2.8 pixels a frame: it missed
+         far more often than it read as missing, which is the worst kind of
+         miss in a game at this resolution. */
+      reach: 6, w: 14, h: 12,
       punch: {
-        damage: 2, base: 1.1, scale: 1.5, hitEvery: 16,
+        /* THREE, up from two, and `base` retuned from 1.1 to 0.96 so the
+           shove is exactly the shove it was.
+
+           The two numbers are one decision, the same one LEG DAY's 22 makes:
+           knockback is (base + damage * 0.14), so raising the damage alone
+           would have pushed people 10% further away as a side effect -- and
+           this move is a FLURRY. Everything it is worth comes from staying
+           glued to somebody, and a punch that shoves harder is a punch that
+           lands fewer times. 1.1 + 2 * 0.14 and 0.96 + 3 * 0.14 are both
+           1.38.
+
+           `hitEvery` is untouched at 16. It is the reason two damage was
+           ever defensible -- one person can only be taken for one punch
+           every sixteen frames however fast the gloves move -- and it is
+           still the thing that stops this being a damage race. What changed
+           is what one of those punches is worth: 6.99 damage a second
+           measured against a target it never loses, now 10.49. */
+        damage: 3, base: 0.96, scale: 1.5, hitEvery: 16,
         angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476,
       },
     },
     wake: { damage: 6, radius: 26, base: 3.0, scale: 4.0, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832 },
+    /* AND YOU CAN SHAKE HIM AWAKE. Thirty damage into the sleeping body ends
+       the sleep on the spot -- he gets the stretch and the ring exactly as if
+       the ten seconds had run out, and the soul goes back in with him.
+
+       This is the half of the change that costs him, and it costs him twice,
+       because it is only reachable at all now that THE BODY CAN BE HIT.
+       Before this the sleep pinned `invuln` at 2 every frame: measured, fifty
+       jabs landed on him over the 600 frames for zero damage, so a
+       thirty-damage rule would have been a number that could never be
+       reached. He is now an ordinary target lying on the floor.
+
+       What he keeps is that being hit does not, by itself, interrupt
+       anything: see applyHit, where a sleeping man takes the damage and
+       none of the launch. Thirty is the whole of the interrupt, so waking him
+       is a bill somebody has to pay rather than a single poke -- and the
+       aura is what makes paying it awkward, since standing next to him for
+       ninety frames puts YOU to sleep. It is a third of a health bar, against
+       the 25 he heals: land less than that and you have paid for his nap.
+
+       The tally is `slouchDamage`, a Fighter constructor field zeroed on the
+       frame the eyes close, so it is per-sleep and a rollback carries it. */
+    rouse: 30,
+    /* HALF. What fraction of a hit actually reaches a man asleep on the
+       floor -- the same idea as the `knockbackTakenMul` on Remy's nap,
+       applied to the damage instead of the launch, and for the same reason:
+       a slack body does not take a blow the way a braced one does.
+
+       The tally counts what GETS THROUGH, so "thirty damage wakes him" is
+       thirty damage he really took -- sixty swung. That is the number that
+       makes `rouse` a decision rather than a formality: sixty is three
+       seconds of somebody's full attention, spent standing next to an aura
+       that puts them to sleep in ninety frames. Without it the thirty
+       arrived almost incidentally and the ult was over before the soul had
+       finished climbing out. */
+    guard: 0.5,
+    /* AND YOU CANNOT KILL HIM IN HIS SLEEP. A blow that would take him below
+       zero floors him at one instead: he wakes at one point of health, with
+       nothing left and somebody standing over him, which is punishment
+       enough for a ten-second commitment.
+
+       The file already has this idea -- a busted reel is
+       `Math.max(1, health - bust.damage)`, an embarrassment that cannot take
+       a stock -- and the alternative is worse than it sounds. Without it the
+       ult becomes uncastable below about forty health, which is exactly the
+       situation a ten-second heal exists for: a comeback move you may not
+       use while behind is not a comeback move.
+
+       It is about BLOWS, not about every way a number can fall. A poison or
+       a burn he was already carrying when he lay down goes on ticking in
+       update() and can still finish him there, because that clock was
+       started before the sleep was and nothing about lying down should
+       stop it. */
+    lethal: false,
     damage: 0, base: 0, scale: 0,
   },
 };
@@ -2517,11 +2908,11 @@ ROSTER.squalls = {
   specials: {
     /* STAR OF DAVID. Two triangles, and it can be either.
 
-       Thrown whole it is one slow six-pointed star, turning as it goes.
-       Press the button again while it is in the air and it comes APART along
-       the seam it was always drawn on: the upward triangle climbs away and
-       the downward one dives, and between them they cover two lanes the
-       whole star never could.
+       Thrown whole it is one six-pointed star, turning as it goes. Press the
+       button again while it is in the air and it comes APART along the seam
+       it was always drawn on: the upward triangle climbs away and the
+       downward one dives, and between them they cover two lanes the whole
+       star never could.
 
        That is the entire move, and it is the shape of the thing itself
        rather than an effect bolted to it -- a Star of David is two
@@ -2533,82 +2924,164 @@ ROSTER.squalls = {
 
        The split costs nothing and is heard in every state -- see
        splitStars -- because it is a command to a thing already in the air,
-       not a cast, and no state of his has any business eating it. */
+       not a cast, and no state of his has any business eating it.
+
+       WHY IT IS FLAT NOW, AND FASTER. It left at 2.5 pixels a frame with
+       `lift` -0.9 against `drop` 0.05, and the arc that made was most of
+       what was wrong with him. Walked frame by frame along flat ground: the
+       star was still at a standing man's height for SIXTY-FIVE frames and
+       123 pixels, and past that it sank below his feet and could not touch
+       anybody at all. A third of the stage, arriving a second after you
+       threw it, from the character whose whole job is the far half of it.
+
+       The top of that arc was no better. It peaked 18.4 pixels above his
+       feet and the star's box is five either way, so against a hurtbox that
+       is HURT_H tall it overlapped by six tenths of a pixel -- the same shot
+       that sinks under you at range sails over your head in the middle of
+       its flight, and neither of those is a thing the player did wrong.
+
+       A quarter of the sag and a third again the speed peaks at 13.9 -- five
+       pixels of overlap, dead on the chest -- and stays somewhere a standing
+       man can be hit for 263 pixels, which is the range this move has always
+       been drawn as having.
+
+       AND IT FEEDS THE DREAM. `dream` is what a star that CONNECTS is worth
+       on the meter the dragon is made of -- see Star.burst. The bakery is
+       still where the meter comes from in bulk; this is what stops the
+       dragon being hostage to a single button, and it is the route that is
+       open while somebody is standing on him. A half pays less than the
+       whole for the same reason it hits for less. */
     neutral: {
       kind: 'star', label: 'STAR OF DAVID',
-      startup: 8, active: 1, recovery: 13, maxAlive: 2,
-      speed: 2.5, lift: -0.9, drop: 0.05, life: 190, spin: 5,
-      manaOverride: 22,
-      damage: 9, base: 2.9, scale: 5.8, angle: 40,
+      startup: 7, active: 1, recovery: 11, maxAlive: 2,
+      speed: 3.4, lift: -0.3, drop: 0.012, life: 190, spin: 5,
+      dream: 5,
+      manaOverride: 20,
+      damage: 11, base: 3.1, scale: 6.2, angle: 40,
       kx: 0.766044443118978, ky: 0.6427876096865393,
       /* The two halves, as patches over the spec above -- `parts` is built
          after the pricing loop the way the hotdog's are, so each half is a
          finished spec applyHit can be handed. */
-      up: { damage: 6, base: 2.6, scale: 5.2, angle: 66,
+      up: { damage: 8, base: 2.8, scale: 5.6, angle: 66,
             kx: 0.40673664307580021, ky: 0.91354545764260087,
-            climb: -1.5, life: 95 },
-      down: { damage: 6, base: 2.6, scale: 5.2, angle: 16,
+            climb: -1.35, life: 110, dream: 3 },
+      down: { damage: 8, base: 2.8, scale: 5.6, angle: 16,
               kx: 0.96126169593831889, ky: 0.27563735581699916,
-              climb: 1.9, life: 95 },
+              climb: 1.55, life: 110, dream: 3 },
     },
     /* SOMEDAY, A BAKERY. He wants to own one. He is thinking about it now.
 
-       This is the move the old nap used to be -- the thing that fills the
-       DREAM the dragon is made of -- and it is the same bargain in a much
-       better hat: he stops dead in the middle of a fight and commits to
-       something that pays later. What has changed is what he is doing while
-       he stands there. He is not asleep. He is picturing the shop.
+       This is where the DREAM the dragon is made of comes from in bulk, and
+       the bargain is the one it always was: he stops dead in the middle of a
+       fight and commits to something that pays later. He is not asleep. He
+       is picturing the shop.
 
        And the daydream leaves crumbs. Every `every` frames a loaf he has
-       imagined lands in front of him and stays there, warm, as something
-       anybody can pick up: he heals for it, and SO DOES WHOEVER ELSE GETS
-       THERE FIRST. That is the joke and it is also the balance -- standing
-       and dreaming about bread in the middle of a fight puts bread in the
-       middle of a fight, and it is not your bread until you have eaten it.
+       imagined lands BEHIND him and stays there, warm, as something anybody
+       can pick up: he heals for it, and so does whoever else gets there
+       first. The joke is intact -- standing and dreaming about bread in the
+       middle of a fight puts bread in the middle of a fight, and it is not
+       your bread until you have eaten it. What changed is whose side of him
+       it lands on. See runSpecial: it used to land thirteen to thirty-four
+       pixels FORWARD, which is the opponent's half of the floor, and across
+       480 measured matches the man he was fighting ate twice as many of them
+       as he did.
 
-       Shorter than the nap was, and interruptible on any input, because the
-       payoff is no longer five seconds of invulnerable healing; it is a
-       meter and a floor full of pastry. He is not invulnerable and being hit
-       does not stop him -- it just means somebody else is eating. */
+       WHY THE STAND IS A THIRD AS LONG. The old one dreamed for 245 frames
+       and it never once got there. `wakeUp` fired on any input at all, and
+       the input that fired it was THE DIRECTION HE WAS ALREADY HOLDING when
+       he cast it -- so the move cancelled itself on dreaming frame ten,
+       every time, and neither the player nor the bar had any way to see why.
+       Measured over 2077 real casts: an average of 4.5 dream banked out of a
+       hundred, and TWELVE loaves baked in total. A move advertising four
+       seconds and four loaves was delivering a sixth of a second and
+       nothing, which is the whole reason the dragon has spent its life at
+       its floor speed.
+
+       So the wake is a button now rather than any input at all (see
+       updateAttack), and the stand is eighty frames rather than 245 -- a
+       length you can honestly ask somebody to commit to. The meter is paid
+       per dreaming frame, so a daydream broken up early still banks what it
+       stood for. `knockbackTakenMul` is the rest of the deal: a hit still
+       ends the dream, because applyHit puts him in hitstun like anybody
+       else, but a heavy man standing still thinking about bread should not
+       also be launched across the stage for it. */
     down: {
       kind: 'bakery', label: 'SOMEDAY, A BAKERY',
-      /* 245 rather than 240, and the five frames are load-bearing. A loaf
-         drops when `t % every === 0` and `t / every <= loaves`, so the fourth
-         one needs t to REACH 240 -- and a 240-frame window only ever counts
-         0..239. The move advertised four loaves and baked three, every time,
-         which is the sort of off-by-one that never announces itself because
-         three loaves looks perfectly deliberate. */
-      startup: 12, active: 245, recovery: 14,
-      dream: 0.52,              // per dreaming frame; a full stand fills it
-      every: 60, loaves: 4,
-      loaf: { heal: 11, life: 420, w: 9, h: 6 },
-      knockbackTakenMul: 0.75,
-      manaOverride: 12,
+      /* 80 rather than 78, and the two frames are load-bearing. A loaf drops
+         when `t % every === 0` and `t / every <= loaves`, so the third one
+         needs t to REACH 78 -- and a 78-frame window only ever counts 0..77.
+         The move used to advertise four loaves and bake three for exactly
+         this reason, which is the sort of off-by-one that never announces
+         itself because three loaves looks perfectly deliberate. */
+      startup: 10, active: 80, recovery: 12,
+      dream: 1.3,               // per dreaming frame; a full stand fills it
+      every: 26, loaves: 3,
+      /* `mine` is how long it is HIS before it is anybody's -- see Loaf. A
+         hundred and ten frames is just under two seconds, which is what it
+         takes him to come out of the daydream and walk the thirteen pixels
+         back to the first one at 1.38 a step. Measured, and it is the number
+         the rest of the move already set: the first loaf lands 26 dreaming
+         frames in and he is rooted for another 54 of those plus 12 of
+         recovery, so it is already SIXTY-SIX frames old the first moment he
+         is allowed to take a step toward it. Anything at or under that hands
+         it to whoever is standing over him while he cannot move, and the
+         walk back is ten frames on top. */
+      loaf: { heal: 13, life: 420, w: 9, h: 6, mine: 110 },
+      knockbackTakenMul: 0.45,
+      manaOverride: 16,
       damage: 0, base: 0, scale: 0,
     },
-    /* THE WHIP. Long, slow, and worth twice as much at the very end of it.
+    /* THE WHIP. Long, and worth twice as much at the far end of it.
 
        The whole move is the tip. It reaches forty pixels and every pixel of
-       that hurts, but the last eight -- `sweet` -- hit for double and launch
-       like something that should not come out of a whip. Standing at the
-       range where only the end of it can reach is the hard part and the
-       point; anywhere closer and it is a long poke with a lot of recovery.
+       that hurts, but everything past `sweet.from` hits for double and pops
+       them up on its own angle. Standing at the range where only the end of
+       it can reach is the point; anywhere closer and it is a long poke.
 
-       That is a spacing move rather than a panic button, which is why the
-       recovery is what it is: whiffing it at the wrong distance has to be
-       the punish, or there is no reason to stand at the right one.
+       WHY THE GOOD PART IS TWICE THE MOVE NOW. It was the last eight pixels,
+       and measured by walking a victim along the floor three pixels at a
+       time, those eight authored pixels came out as a ten-pixel band at the
+       end of a forty-five pixel reach. In 1782 real casts the tip landed
+       NINETEEN times -- three percent of the hits the move got at all, and
+       one percent of the presses. That is not a spacing move, it is a
+       lottery ticket: a sweet spot has to be somewhere a person can stand,
+       and the outer half of a whip is somewhere a person can stand. It is
+       worth 16 rather than 20 precisely because it now happens, and the near
+       half is a weaker poke than it was for the same reason.
+
+       The angle is the other half of what the tip buys. 58 degrees throws
+       them UP and forward rather than away, which turns the move from
+       something that ends an exchange into something that starts one: he has
+       a star and a second in which to throw it. That is the follow-up the
+       kit never had.
+
+       Thirty-two frames rather than forty, and twenty mana rather than
+       twenty-six, because it was the worst damage-per-frame in his kit by a
+       factor of two -- 0.080 against the star's 0.182 -- which is a strange
+       thing for the most expensive button he owned.
 
        It goes in the up slot because that is where his pole was, and like
-       the pole it does not lift him. He gets home on his double jump. */
+       the pole it does not lift him. He gets home on his double jump, and
+       that is measured rather than assumed: twenty of the 947 stocks he lost
+       over those matches went off the side, so a recovery is not what is
+       wrong with him and giving him one would have bought nothing. */
     up: {
       kind: 'whip', label: 'THE WHIP',
-      startup: 12, active: 6, recovery: 22,
+      /* Thirty-two frames, and the cut is all out of RECOVERY on purpose.
+         WHIP_POSE is keyed on attackFrame and frames 13..19 of it are the
+         whip at full stretch, drawn to line up with `startup` 12 and
+         `active` 6 -- move either of those and the picture slides out from
+         under the box it is supposed to be teaching. The gather at the end
+         is the part that can be played faster, and it has been: see the
+         re-keyed tail of that table. */
+      startup: 12, active: 6, recovery: 14,
       ox: 4, oy: -11, w: 40, h: 9,
       // The far end of that box, and what it is worth.
-      sweet: { from: 32, damage: 20, base: 4.4, scale: 9.0, angle: 42,
-               kx: 0.7431448254773942, ky: 0.6691306063588582 },
-      manaOverride: 26,
-      damage: 10, base: 2.4, scale: 5.0, angle: 30,
+      sweet: { from: 22, damage: 16, base: 5.0, scale: 8.6, angle: 58,
+               kx: 0.52991926423320490, ky: 0.84804809615642596 },
+      manaOverride: 20,
+      damage: 8, base: 2.6, scale: 5.4, angle: 30,
       kx: 0.86602540378443871, ky: 0.49999999999999994,
     },
   },
@@ -2627,11 +3100,20 @@ ROSTER.squalls = {
      An ult that cannot miss would be a button that ends a match; this one is
      a question you get four seconds to answer.
 
-     And the nap is what makes the question harder. `dreamSpeed` is the only
-     thing the meter buys now -- a full dream is 3.6 rather than 2.1, which
-     is the difference between strolling out of the way and having to commit
-     to a jump. Sleeping is no longer about how hard the dragon hits, because
-     it cannot hit harder than this; it is about how little time you have. */
+     And the dream is what makes the question harder. `dreamSpeed` is the
+     only thing the meter buys, and it cannot be anything else: the dragon
+     cannot hit harder than an instant kill, so the meter can only be about
+     how little time you have. Measured across three hundred pixels of flat
+     ground: an empty dream takes 2.97 seconds, half a dream 1.90, and a full
+     one 1.47 -- which is the difference between strolling out of the way and
+     having to commit to a jump before you have decided where you land.
+
+     It was 1.5, and the reason it is 3.0 is that the meter was never full.
+     The bakery was the only thing that filled it and the bakery cancelled
+     itself on dreaming frame ten (see it above), so across 1376 real ults
+     the dragon flew at its floor speed essentially every time: the whole
+     upper half of this move was machinery nobody had ever watched run. It
+     runs now, off a bakery that finishes and off every star that lands. */
   ult: {
     kind: 'salamence', label: 'SALAMENCE',
     startup: 14, active: 1, recovery: 26,
@@ -2656,7 +3138,7 @@ ROSTER.squalls = {
        the other player's job. */
     wander: 11, veer: 17, ease: 0.9,
     // The meter buys speed and nothing else: see above.
-    dreamMax: 100, dreamDamage: 0, dreamSpeed: 1.5, dreamLife: 0,
+    dreamMax: 100, dreamDamage: 0, dreamSpeed: 3.0, dreamLife: 0,
     damage: 999, base: 5.0, scale: 10.0, angle: 46,
     kx: 0.6946583704589973, ky: 0.7193398003386512,
   },
@@ -3088,11 +3570,18 @@ ROSTER.houston = {
       kx: 0.46947156278589086, ky: 0.8829475928589269,
       /* moveCost prices the CARTON -- five damage and a gentle pop -- and
          values the whole move at 15, because everything it is actually for
-         is in an object the formula never opens. 30 is the honest figure:
-         half a bar for a five-and-a-half-second hole in the floor, which
-         is one spill up at any time and a real decision about when to
-         spend the second. */
-      manaOverride: 30,
+         is in an object the formula never opens.
+
+         TWENTY-SIX, down from thirty, and the reason is the cast count
+         rather than the cast. The CPU put roughly three and a third spills
+         on the floor a match and got 11.5 damage out of all of them
+         together; a move whose entire value is denial has to be UP to deny
+         anything, and at 0.5 mana a frame thirty is sixty frames of waiting
+         for a puddle that lives three hundred and thirty. Twenty-six is
+         fifty-two -- the same move available a little more of the time. It
+         is still a quarter of the bar for a hole in the floor, and still
+         one spill at a time. */
+      manaOverride: 26,
       /* The spill. `slick` is how many frames of lost traction a body
          standing in it is given, re-armed every frame, so it decays about
          five frames after they leave -- that tail is the skid off the far
@@ -3120,9 +3609,28 @@ ROSTER.houston = {
          floor rather than a seventh, and 26 frames of lost footing to walk
          through rather than 19. Still one at a time, still somewhere
          instead of everywhere. */
+      /* AND IT TURNS SOONER. `curdle` was 190 of a 330-frame life, so the
+         thing spent well over half of itself doing nothing but taking the
+         floor away -- and a count across a hundred CPU matches said what
+         that cost: a spill was on the stage 1090 frames a match and was
+         armed for 416 of them, and the whole move dealt 11.5 damage against
+         his jab's 173. At 110 it is fresh for under two seconds and armed
+         for nearly four, which is the same move with the dead half taken
+         out of it rather than a different move.
+
+         And the bite comes round at 36 rather than 42. The rule that number
+         was written to keep is intact -- it is still slower than anybody's
+         escape from a 40px box, so standing in curdled milk costs you once
+         and costs you again only if you are still there -- but six frames is
+         the difference between a second bite being available to somebody who
+         lingers and it never being available at all.
+
+         Neither number touches `graze`, and that is still the load-bearing
+         one: this is out for five and a half seconds and a floor that put
+         people in hitstun would be a combo rather than a floor. */
       puddle: {
-        w: 40, h: 3, life: 330, curdle: 190, slick: 10,
-        hitEvery: 42, damage: 4, graze: true,
+        w: 40, h: 3, life: 330, curdle: 110, slick: 10,
+        hitEvery: 36, damage: 4, graze: true,
         poison: { frames: 110, dps: 0.045 },
         base: 0, scale: 0, angle: 80,
         kx: 0.17364817766693041, ky: 0.984807753012208,
@@ -3164,24 +3672,91 @@ ROSTER.houston = {
        absolutely walk himself off a ledge behind it. */
     down: {
       kind: 'mower', label: 'LAWNMOWER',
-      startup: 12, active: 42, recovery: 18,
+      startup: 10, active: 40, recovery: 12,
       roots: true, shreds: true,
-      push: 1.25,             // how fast he walks it forward
-      reach: 13,              // the deck's centre, forward of his own
-      boxW: 15, boxH: 12,     // and how big the deck is
+      /* IT WAS SLOWER THAN WALKING AWAY, and that one number is most of what
+         was wrong with it. `push` was 1.25 against a roster whose walk runs
+         1.24 to 1.58: everybody in the game except JohnnyHam could hold back
+         and never be touched. A probe across six starting gaps and four
+         things a victim can do said exactly that -- a victim walking away
+         took 0.0 damage from every gap -- and the move as a whole connected
+         on 42% of casts for a mean of 2.67 damage, having committed him for
+         72 frames and a third of a mana bar.
+
+         TWO. A quarter faster than the quickest man on the roster, so
+         backing off no longer beats it outright: you jump it, or you hit him
+         out of it, or you are somewhere else before it starts. It also means
+         the deck sweeps 80 pixels rather than 52, which puts its far edge
+         about 105 forward of where he pressed the button and therefore
+         inside the 30-to-110 band aiDecide actually casts from.
+
+         The cost goes up with it, deliberately. He is rooted, he cannot
+         turn, and the thing now carries him a quarter of the stage: walking
+         himself off a ledge behind it was always possible and is now easy,
+         which is what a move that runs people down ought to charge. */
+      push: 2,                // how fast he walks it forward
+      reach: 14,              // the deck's centre, forward of his own
+      boxW: 20, boxH: 13,     // and how big the deck is
       /* NOT `ox`/`oy`/`w`/`h`. Those four names mean a melee box to
          relBox, and this move's box is not a melee box -- it belongs to a
          projectile that outlives the frame. Naming them apart is what
          stops a future edit that drops `mower` from hitbox()'s list from
          silently growing a second, wrongly-placed hitbox on his chest. */
-      hitEvery: 13,
+      /* Nine rather than thirteen: over 40 active frames that is five
+         chances to bite instead of four, and more to the point it is a gap
+         short enough that being shoved along in front of the deck still
+         costs you. The knockback below is flat and weak precisely so that
+         shoving is what happens -- a mower that popped people up would hit
+         once and then mow the empty floor underneath them. */
+      hitEvery: 9,
       damage: 4, base: 1.5, scale: 2.4, angle: 20,
       kx: 0.9396926207859084, ky: 0.3420201433256687,
+      /* IT EATS WHAT IT SHREDS. Twelve mana back for every enemy shot the
+         deck destroys; paid in Mower.onShred.
+
+         `shreds` was already the best thing about this move and the only
+         copy of it on the roster, and it was unaffordable as the thing it is
+         for. Walking into a screen full of somebody else's projectiles costs
+         a special, most of a second rooted and pointed one way, and the
+         mana. Against a zoner throwing three of them that now comes back;
+         against somebody who has thrown nothing it pays him nothing at all.
+         A counter that funds itself only when there is something to counter
+         needs no second rule written to limit it.
+
+         Twelve is under half the cast, so two shots is most of the move back
+         and one is not. It cannot be farmed: every projectile it eats was
+         paid for by the man who threw it. */
+      feeds: 12,
+      /* AND IT MULCHES HIS OWN MILK. The deck over one of his own fresh
+         spills turns it on the spot and starts its life over -- see
+         Mower.update, where it is a handful of lines.
+
+         This is the other half of the milk's problem. The spill's damaging
+         half runs on a clock nobody watches: it turns when it turns, which
+         is usually long after the moment that mattered, and until then the
+         thing Houston spent a quarter of a bar on is a hole in the floor he
+         is hoping somebody walks into. Mulching makes WHEN it turns a
+         decision he gets to make, and it is the only place two of his own
+         moves combine: milk at their feet, mower through it, and the floor
+         they are standing on is armed with five and a half fresh seconds on
+         it.
+
+         Only his own, only while it is fresh, and it does not widen
+         anything. The point is the timing, not more floor. */
+      mulch: true,
       /* moveCost sees one four-damage hit and prices it at 10. It cannot
-         see that it lands four times, and it certainly cannot see that the
-         thing also deletes projectiles. 32 is a third of the bar for a
-         move that clears the screen and walks him fifty pixels. */
-      manaOverride: 32,
+         see that it lands five times, and it certainly cannot see that the
+         thing also deletes projectiles and turns his milk.
+
+         TWENTY-EIGHT, and it is two under the carton on purpose. aiDecide
+         gates every special cast on `me.mana >= specials.neutral.mana` and
+         then picks a slot at random, so a Houston holding between the two
+         costs reached for the mower and was refused by canSpecial: the press
+         thrown away, the cooldown spent, nothing cast. Pricing the down
+         special below the neutral one means that branch cannot exist. It is
+         the honest direction as well -- sixty-two frames he cannot turn out
+         of should not also be the most expensive thing he does in neutral. */
+      manaOverride: 28,
     },
     /* HAMMER & SICKLE. He swings the emblem up over his head, and whoever
        it lands on ends the swing with the same health he has.
@@ -3236,6 +3811,34 @@ ROSTER.houston = {
        this is priced as a hit plus half a health bar's worth of swing. */
     up: {
       kind: 'uppercut', label: 'HAMMER & SICKLE',
+      /* AND IT EATS WHAT IS THROWN AT HIM, which is the same joke the sharing
+         is: what you aimed at him is now his. Any enemy shot that touches the
+         swing's box is destroyed, and he keeps the damage it was carrying as
+         health.
+
+         CAPPED AT THE SAME FIFTEEN the sharing uses, and the cap is not
+         decoration -- Squalls' dragon carries 999 because it is an instant
+         kill, and an uncapped absorb would turn the one move in the game that
+         ends a stock outright into a full health bar. Fifteen is also what
+         one swing of this move can already move, so the move has exactly one
+         number for how much it is allowed to change the scoreline.
+
+         It does NOT make him immune: the window is the twelve live frames of
+         a melee swing he has to aim, not a button he holds. */
+      /* `pad` widens the catching box beyond the damage box and `from`/`to`
+         open it earlier and hold it later, and BOTH are load-bearing rather
+         than generous. Tied to the damage box exactly, this was not a read,
+         it was a coin flip: the swing's box is fifteen pixels wide and most
+         of that is his own body, so a flat shot crosses it in about three
+         frames. Swept at two-pixel resolution there was NO gap between "swung
+         too late and took it on the chin" and "swung too early and it sailed
+         past" -- no timing existed that caught the thing at all.
+
+         Fourteen pixels of pad and the whole swing as the window turn that
+         into about a fifth of a second of catching, which is a read a person
+         can actually make. He still has to point it at the shot, it still
+         costs half his bar, and it still does not follow him around. */
+      absorb: { cap: 15, pad: 14, from: 1, to: 22 },
       startup: 6, active: 12, recovery: 21,
       rise: -6.2, drift: 0.8,
       /* Draws the emblem over his head for the whole swing -- see the
@@ -3284,7 +3887,19 @@ ROSTER.houston = {
          reach. Whatever this move is worth, CPU win rates cannot see it,
          and a future tuning pass should measure it by hand or fix the gate
          rather than trust a number this blind. */
-      manaOverride: 40,
+      /* 50, up from 40, and it is the ONLY manaOverride on this move -- a
+         second one was added above this comment when the absorb landed, and a
+         duplicate key in an object literal is not an error: the last one
+         silently wins, so the new price did nothing at all until the two were
+         merged here.
+
+         Half a bar, because the move now buys three separate things -- his
+         recovery, the redistribution and the absorb -- which is more than any
+         other single special in the file. moveCost can see none of them; it
+         prices damage and knockback, and this move's damage is four. At 40 he
+         could throw it twice a bar, and a projectile eater you can throw
+         twice a bar is not a read, it is a wall. */
+      manaOverride: 50,
     },
   },
   /* FDR'S NEW DEAL.
@@ -3366,7 +3981,14 @@ ROSTER.houston = {
        event, and the event is half of what the move is selling. */
     pave: 26,
     travel: 84,           // frames from the vanishing point down to his feet
-    gap: 34,              // and between one car being let on and the next
+    /* And between one car being let on and the next. 26 rather than 34
+       because there are six of them now: at the old spacing the last car
+       would arrive four and a half seconds after he broke ground, which is
+       long enough that the road stops being a move and starts being weather.
+       26 puts the whole public work at 263 frames -- see life() -- against
+       201 for the three-car version, so it is half a second longer in the
+       world and twice the traffic inside it. */
+    gap: 26,
     /* Nine frames past the near edge before it is gone, so the last thing a
        car does is get BIGGER and drop off the bottom of the road rather than
        blink out at the moment it arrives.
@@ -3408,7 +4030,46 @@ ROSTER.houston = {
        of the road's width at its row, so up where the road is narrow the two
        lanes are nearly on top of each other. Jumping does not get you out of
        traffic. Walking does. */
-    laneX: 28, lanes: [1, -1, 1],
+    laneX: 28, lanes: [1, -1, 1, -1, 1, 1],
+    /* HOW MUCH BIGGER, as ONE number.
+
+       `spread` scales the road's drawn width, the lane offsets and the cars
+       together, and nothing else. That is the only honest way to enlarge a
+       perspective: `laneX` and `carW` below stay in the DRAWING'S units --
+       28 is still half of Kel's 56-pixel lane and 34 is still a car's share
+       of his 123-pixel road -- and this multiplies all three at once, so a
+       car can never come out too wide for the lane it is drawn in.
+
+       The vertical is deliberately NOT scaled. `rowY` divides one road width
+       by another, so it does not move at all when both are multiplied by the
+       same number -- which is what keeps `bite`'s argument true word for
+       word: at half size a car's wheels are still 60 pixels above the floor
+       and still under the top platform of every stage in this file. Scaling
+       the height as well would have quietly put traffic on the one platform
+       the move is documented as not reaching.
+
+       197 pixels of a 320-pixel stage, up from 123. He now takes nearly
+       two thirds of the floor instead of a third of it.
+
+       AND THE STRIPE GETS WIDER, which is the thing that had to be checked
+       rather than hoped for. The safe window is the gap between the inner
+       edges of the two lanes at the closest size a car can still reach a man
+       standing on the floor, and every term in it is multiplied by `spread`
+       -- so the answer is too.
+
+       MEASURED, by parking a target at every pixel from the white line out
+       to 110 and running the whole ult at each one, both engines, same
+       probe. On the floor: untouched from -8 to +8 with the three-car road,
+       and from -15 to +15 with this one. Standing 46 pixels up, where the
+       two lanes are nearly on top of each other: -2 to +2 before, -6 to +6
+       now. A fighter is 9 across, so the stripe has gone from a place you
+       have to find to a place you can stand.
+
+       The SHOULDER moved out with it and gained: the far edge of the road
+       stopped being safe at 59 of a 61-wide half before, which is two
+       pixels of verge, and stops at 91 of a 98-wide half now, which is
+       seven. Both ways off the road are wider than they were. */
+    spread: 1.6,
     /* How wide a car is drawn when it arrives. 34 of a 123-wide road is
        about what a car is of a two-lane road, and it is also as big as this
        should get: the drawing is much taller than it is wide, so 34 across
@@ -3465,12 +4126,239 @@ ROSTER.houston = {
        the ones it walks over -- sweepFrail needs no new code for it -- and
        only while it is close enough to be a hitbox at all. */
     traffic: {
-      damage: 13, base: 3.2, scale: 7.0, angle: 34,
+      /* ELEVEN, down from thirteen, and the drop is smaller than doubling
+         the traffic would suggest, because the thing this move sells is no
+         longer the number.
+
+         Thirteen was priced as three cars on a road a third of the stage
+         wide, worst case 26. Six cars at thirteen on this road measures 52,
+         which is a health bar and a half for pressing one button. Eleven
+         measures 44.
+
+         MEASURED rather than multiplied out, with the same parked-target
+         sweep the stripe above was measured with -- every pixel from the
+         white line out to 110, both engines, the whole ult run at each one:
+         the worst any offset on the floor could be made to take was 26 with
+         the three-car road and 44 with this one, and 46 pixels up it is 26
+         against 44 as well. Four cars in the lane he is facing, and that is
+         the whole of it -- being hit by BOTH lanes needs a car to throw you
+         across the stripe, which is what the sideways launch below is for
+         and is not a number anybody can multiply out.
+
+         44 is deliberately the number Cobeus's car ult already takes off a
+         body it catches twice. This move is the bigger of the two in every
+         other way -- it is a place, it lasts four and a half seconds, it
+         covers two thirds of the floor, and it leaves a chicken behind -- so
+         the one dimension it does not win on is damage, and the ceiling is
+         shared rather than beaten.
+
+         `base` goes 3.2 -> 3.4 to keep the launch. applyHit builds knockback
+         out of base + damage * 0.14, so thirteen at 3.2 was 5.02 and eleven
+         at 3.2 would be 4.74 -- and the sideways throw is the entire reason
+         a car built beside a ledge takes a stock. 3.4 lands at 4.94. */
+      damage: 11, base: 3.4, scale: 7.0, angle: 34,
       kx: 0.8290375725550417, ky: 0.5591929034707469,
-      hitEvery: 40,
+      /* NINETY, up from forty, and the number moved because the car did.
+
+         `hitEvery` is how long a piercing shot waits before it may hit the
+         same person again, and forty was chosen as "longer than a car has
+         left by the time it is close enough to touch anybody". That was true
+         of a car whose box was 38 pixels tall. At `spread` 1.6 it is 61, and
+         a box that tall starts reaching somebody standing on a platform --
+         or hanging in the air -- forty-five frames before it arrives, which
+         is more than forty. So cars silently started hitting twice.
+
+         MEASURED, at 46 pixels off the floor, a target parked and the whole
+         ult run: EIGHT hits landed at forty against six cars on the road,
+         and FOUR at ninety. Four is one car one hit, which is what this
+         number has always claimed to say. Ninety is past the whole remaining
+         life of a car from the frame it stops being scenery (45 frames), so
+         it is true by construction now rather than by arithmetic somebody
+         has to redo every time the art changes. */
+      hitEvery: 90,
+      /* AND THE REAL PAYLOAD. Anyone a car connects with gets up as a
+         chicken and stays one until they lay a golden egg on somebody or
+         lose a stock. Read by applyHit, once, at the bottom -- see
+         becomeChicken -- so it lands exactly where poison and burn land:
+         below the shield branch, so blocking a car blocks all of it, and
+         below the KO branch, so the blow that takes your last health takes
+         the stock instead of the feathers. */
+      chicken: true,
     },
   },
 };
+
+/* =====================================================================
+   THE CHICKEN
+
+   Not a character. It is what is LEFT of a character after one of Houston's
+   cars has been through them, and it stays until they lay a golden egg on
+   somebody or lose a stock.
+
+   IT IS NOT IN `ROSTER`, and that is deliberate three times over:
+
+     Nobody can pick it. ORDER is built off the roster and so is the select
+     screen, and a bird with two moves and no walk speed of its own has no
+     business on either.
+
+     The load-time loops under ROSTER must not walk it. The mana loop would
+     price these two moves and the tint loop would look for `specials.up`;
+     the first is wrong (see `mana` below) and the second would find nothing,
+     which is harmless but is the kind of harmless that stops being harmless
+     the next time somebody edits that loop.
+
+     And simFrozen is told about it BY HAND -- see simFrozen -- which is the
+     one thing that genuinely had to happen. snapValue keeps an object by
+     reference only if simFrozen has walked it, so without that line every
+     snapshot would deep-copy whichever of these two specs a chicken happened
+     to be mid-swing on, sixty times a second, and `b.spec === s` -- the test
+     maxAlive uses -- would stop being true across a rollback.
+
+   THE SHAPE OF IT. The whole moveset is two specials, because the two
+   buttons the request named are the two special buttons: H is `neutral` and
+   J is `down`. There is no jab, no ult, no up special and no grab, and those
+   are refused in updateFree rather than left out here -- a missing spec is a
+   move that silently does nothing, and a refused press is a move that
+   visibly is not there.
+
+   WHY `damage: 10` TWICE AND NOTHING ELSE TO CHOOSE BETWEEN THEM. It is what
+   was asked for, and it is also the right shape: the peck is a fast poke you
+   have to walk into somebody to land, the egg is a slow lob you can throw
+   from across the stage, and the only reason to ever throw the egg is that
+   one in five of them is the way out. Making the egg hit harder would turn
+   the punishment into a kit.
+   ===================================================================== */
+const CHICKEN = {
+  /* How long the transformation takes on screen. Nothing about the
+     SIMULATION waits for it -- a chicken is a chicken on the frame the car
+     lands, pecking and laying and being hit exactly as it will be a second
+     later -- so this is a drawing length and lives here beside the moves
+     only so that one object is the whole of what a chicken is.
+
+     18 frames is three tenths of a second: long enough to read as a bang and
+     a bird rather than a sprite swap, short enough that it is over before
+     the hitstun the car handed out has run down. See drawChickenPop. */
+  transform: 18,
+  specials: {
+    /* H -- THE PECK. A head thrown forward, which is the one thing everybody
+       already knows a chicken does.
+
+       `ox` is the near edge forward of its center and the box runs `w`
+       further forward, so 3 + 7 puts the beak between 3 and 10 pixels ahead
+       of the middle of the bird. A hurtbox is 9 across, so that reaches a
+       man standing 14 away, and aiDecide's chicken branch is gated at 15 off
+       this number rather than off a second guess.
+
+       `oy` is the box's CENTER, so -9 with h 5 runs from 6 to 11 above the
+       floor. That is chest height on a standing man and it is also exactly
+       where the drawn bird's head is -- CHICKEN_PECK sits the beak on row 7
+       of a 16-row cell, which is eight above the feet, inside that window.
+       The picture and the box are the same claim.
+
+       SLOW FOR WHAT IT DOES, and this is the number that took the most
+       measuring. Ten damage is twice a typical jab and it was given by the
+       request, so the price has to be somewhere else: 8 + 3 + 17 is 28
+       frames, against a jab's twenty-ish, which is about 21 damage a second
+       at point blank. THE FIRST DRAFT WAS 5 + 4 + 11 AND IT WAS A BUFF --
+       CPU-vs-CPU, Houston's own win rate fell from 47% to 26% over 600
+       matches, because a two-button kit with no mana cost is a kit the CPU
+       plays WELL and the eleven-button one it replaces is not. Slowing the
+       peck and shortening it by two pixels is most of what put that back.
+
+       Angle 20 is nearly flat -- it shoves rather than launches -- and the
+       triple is one already verified in this file, which is the rule: a
+       hand-typed cosine is the kind of thing that passes review and fails
+       build.py's 1e-12 check. `base` 1.6 is low on purpose: a chicken can
+       wear you down and cannot throw you off the stage. */
+      neutral: {
+        kind: 'peck', label: 'PECK',
+        startup: 8, active: 3, recovery: 17,
+        ox: 3, oy: -9, w: 7, h: 5,
+        damage: 10, base: 1.6, scale: 3.4, angle: 20,
+        kx: 0.93969262078590843, ky: 0.34202014332566871,
+        /* FREE, and priced here by hand rather than by moveCost.
+
+           The pricing loop at the bottom of the ROSTER walks ROSTER, and this
+           is not in it -- so a missing `mana` would be undefined, `this.mana <
+           undefined` is false, canSpecial would wave it through and
+           `this.mana -= undefined` would make the bar NaN for the rest of the
+           match. That is the whole failure, and it is silent until somebody
+           looks at the HUD.
+
+           Zero rather than a number because a chicken has two moves. Mana
+           exists to make a fighter choose between six things; there is
+           nothing here to choose between, and a bird that ran out of pecks
+           would simply be a bird that cannot play. What limits the peck is
+           its own twenty frames. */
+        mana: 0,
+      },
+    /* J -- THE EGG, laid out of the back end.
+
+       IT COMES OUT THE BUTT AND IT TRAVELS FORWARD, and those two are only a
+       contradiction until you look at the drawing: CHICKEN_LAY turns the bird
+       around, so the rear it lays from is pointed at whoever it is aiming at.
+       That is the joke doing the mechanical work. The alternative -- an egg
+       that genuinely fired backward -- reads as funny for one press and then
+       costs the player a stock every time they forget, and would have needed
+       the CPU to walk away from its target before it could attack.
+
+       A LOB, not a bullet. MEASURED, by laying one at a target parked at
+       every fifth pixel out to 140: it flies 82 pixels and connects with
+       anybody standing between 10 and 85 away. That is a quarter of the
+       stage -- far enough to be the thing you throw when you cannot get
+       close, short enough that it is not a better neutral than the peck, and
+       it is the number aiDecide's egg range is set from rather than a
+       separate guess.
+
+       `maxAlive` 2 rather than a cooldown, and it is the existing machinery:
+       canSpecial counts projectiles whose spec IS this object, so two in the
+       air is two, and the third press is refused until one of them lands. It
+       stops a chicken standing at the edge of the stage laying a wall of
+       eggs, without taking away the double-lay that is how you actually fish
+       for a golden one. */
+    down: {
+      kind: 'egg', label: 'LAY',
+      startup: 10, active: 3, recovery: 18,
+      damage: 10, base: 2.4, scale: 5.2, angle: 40,
+      kx: 0.76604444311897801, ky: 0.64278760968653925,
+      speed: 3.2, lift: -1.8, drop: 0.17, life: 90,
+      maxAlive: 2,
+      /* ONE IN FIVE IS GOLDEN, and a golden one that reaches an enemy is the
+         way home. The number lives here rather than in eggIsGolden so that
+         the odds are data next to the move they belong to, and the hash is
+         the hash. */
+      goldenOneIn: 5,
+      mana: 0,
+    },
+  },
+};
+
+/* WHICH EGG IS GOLDEN.
+
+   A pure function of the frame it was laid on and whose bird laid it, and
+   that is not a stylistic preference -- it is the whole of why this feature
+   can exist in this game at all. Math.random here would mean two machines
+   laying different eggs on the same frame, and the first one to come out
+   golden on one side and white on the other would turn one player back into
+   a person and leave them a chicken on the other screen. A rollback replays
+   the same battleFrames, so it replays the same egg.
+
+   Math.imul for the mixing, like every other hash in this file, because it
+   is the one multiply JavaScript defines to 32 bits exactly -- an ordinary
+   `*` on two large integers goes through a double and the low bits, which
+   are the ones being read, are the ones it loses.
+
+   The slot goes in AFTER the first avalanche rather than being added to the
+   frame. Added, slot 1 on frame 100 and slot 0 on frame 101 would be the
+   same input and therefore the same egg, which is a coincidence nobody would
+   ever notice and exactly the kind that makes a bug look like magic. */
+function eggIsGolden(frame, slot, oneIn) {
+  let h = Math.imul(frame + 0x9e3779b9, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h ^ (slot + 1), 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) % (oneIn || 5) === 0;
+}
 
 /* THE SANDBAG.
 
@@ -3675,6 +4563,26 @@ for (const key in ROSTER) {
   const d = ROSTER[key].specials.down;
   if (!d || !d.stink) continue;
   d.stinkTiers = d.stink.map((step) => Object.assign({}, d, step));
+}
+
+/* And the robot's three parts, as finished specs -- same place, same shape
+   and the same reason as the fart's three strengths above.
+
+   AFTER THE PRICING LOOP on purpose, exactly like those: updateFree spends
+   `specials.down.mana` and never a tier's, so a tier that priced itself
+   differently would be a lie on the mana bar. Every press costs the one
+   number the move carries, whether it is bolting on a claw or a gun.
+
+   The one difference from the fart is that the FIRST entry is not the spec
+   copied whole. A chassis is a weaker thing than the move rather than the
+   default version of it, so all three parts are spelled out as patches and
+   none of them is the bare spec. simFrozen walks ROSTER and therefore walks
+   these, which is what keeps a snapshot from cloning a punch spec -- and the
+   bolt spec hanging off the third one -- per robot per frame. */
+for (const key in ROSTER) {
+  const d = ROSTER[key].specials.down;
+  if (!d || !d.build) continue;
+  d.tiers = d.build.map((part) => Object.assign({}, d, part));
 }
 
 /* Appended rather than slotted in alphabetically, and that is deliberate:
@@ -4604,6 +5512,16 @@ class Fighter {
        saveSim sweeps it up reflectively and restoreSim, which deletes any key
        it does not find in the snapshot, puts it back. */
     this.aimDown = false;
+    /* How much damage this slouch has taken, for the thirty that ends it
+       early. Zeroed on the frame the eyes close rather than at the end of
+       the last sleep, so it is always about the sleep that is running.
+
+       In the CONSTRUCTOR like everything else the simulation owns: restoreSim
+       deletes any key it cannot find in a snapshot, so a tally first written
+       on the frame somebody landed a hit would vanish at the next rollback --
+       and a Simon who woke up on one machine and slept on for four more
+       seconds on the other is the worst desync this file could produce. */
+    this.slouchDamage = 0;
     /* And which way a BELCH was aimed: 'level', 'up' or 'down'. Its own
        field rather than a second reading of aimDown, because it is not the
        same question -- aimDown is "is down held right now", this is "which
@@ -4664,6 +5582,31 @@ class Fighter {
        first online rollback -- and vanish on ONE machine, which is a desync
        rather than a bug you can see. */
     this.slick = 0;
+    /* AND WHOSE MILK IT IS. `slick` says there is something spilt under you;
+       this says it is somebody ELSE'S, and grip() is the only thing that
+       reads it.
+
+       The split is the whole of what turns the spill from a wash into a
+       move. Measured over a hundred CPU matches before it existed: Houston
+       spent 345 frames a match with no traction and 339 of them were in milk
+       he had thrown himself, against 386 for the man opposite. He was paying
+       thirty mana to lose his own footing very nearly as often as theirs,
+       which is the arithmetic behind "the milk is weak" -- it took the floor
+       away from both of them and only one of them had bought it.
+
+       HE IS NOT EXEMPT. `slick` is still armed on him, so he still has no
+       brakes in his own spill: PHYS.slickFriction carries a walk 52 pixels,
+       which is further than the puddle is wide, and it will carry him off
+       the ledge behind it exactly as it always did. What he gets back is the
+       STICK -- full grip, so he can turn, accelerate and close through it.
+       A floor its owner can stand on safely is a wall; a floor he can skate
+       and nobody else can is an opportunity, which is the thing this move
+       was missing.
+
+       In the constructor for the reason `slick` above is: restoreSim deletes
+       any Fighter key a snapshot does not carry, so a field first assigned
+       the moment somebody stepped in milk would vanish on one machine. */
+    this.slickFoe = 0;
 
     this.shield = COMBAT.shieldMax;
     this.shieldBroken = 0;
@@ -4712,12 +5655,65 @@ class Fighter {
     this.rainSpec = null;
     this.rainStep = 0;
 
+    /* A CHICKEN. Houston's traffic turns whoever it hits into one, and they
+       stay one until a golden egg of theirs reaches somebody or they lose a
+       stock. While `chicken` is true this fighter's entire moveset is
+       CHICKEN's -- see specialsNow -- and every other button is refused.
+
+       ALL THREE ARE HERE, IN THE CONSTRUCTOR, and that is not a formality.
+       restoreSim deletes any Fighter key a snapshot does not carry, so a
+       field first assigned on the frame a car landed would work perfectly
+       all through local play and then VANISH on the first online rollback
+       that reached back past the transformation -- turning a chicken back
+       into a person on one machine and not the other, which is the exact
+       desync this game may not have.
+
+       `chickenSince` is the battleFrame it happened on rather than a timer
+       counting down, for the reason buffStats.since is: battleFrames is
+       snapshotted, so a rollback recomputes the same moment in the same
+       animation instead of restarting it. -1 means "not a chicken", which
+       is the value a fresh fighter and a respawned one both hold.
+
+       `chickenEggs` is how many they have laid this transformation. Nothing
+       in the simulation reads it -- whether an egg is golden is a hash of
+       the frame, not of the count -- it is on the HUD-less side of the
+       drawing, where the bird's tail counts up so a player can see that
+       laying more is the plan. Snapshotted with everything else, so it does
+       not run away during a rollback. */
+    this.chicken = false;
+    this.chickenSince = -1;
+    this.chickenEggs = 0;
+
     this.ai = { timer: 0, plan: 'approach', cooldown: 0, jumpCd: 0,
                 aggression: rand(0.5, 0.9) };
   }
 
+  /* How much harder he hits than he does standing still.
+
+     A buff may FADE. `buffStats.decay` is the number of frames the
+     multiplier is spread over -- the duration the buff was granted for --
+     and the strength left is simply how much of the timer is left, so 1.5
+     over 600 frames is 1.5 on the first frame and 1.0 on the last. Kel's
+     LEG DAY is the only thing in the file that sets it; everything else has
+     no `decay` and takes the flat value it always did, on the same two
+     property reads.
+
+     buffTimer is a Fighter CONSTRUCTOR field and is in every snapshot, so
+     the fade is recomputed on a rollback rather than being restarted -- the
+     same reason the jackpot's size ramp is derived from `since` rather than
+     counted on a field of its own. */
   get damageMul() {
-    return this.buffTimer > 0 && this.buffStats ? this.buffStats.damageMul : 1;
+    if (!(this.buffTimer > 0) || !this.buffStats) return 1;
+    const b = this.buffStats;
+    if (!b.decay) return b.damageMul;
+    /* It fades TOWARDS a floor, not to nothing. `decayTo` is what is left
+       when the timer runs out, and a buff with none named falls all the way
+       back to 1. The floor exists so the picture cannot lie: sprite() swaps
+       Kel to the buff sheet for as long as buffTimer runs, and a sheet that
+       still says BUFF over a multiplier that has reached exactly 1.0 is a
+       drawing making a promise the arithmetic has stopped keeping. */
+    const end = b.decayTo || 1;
+    return end + (b.damageMul - end) * (this.buffTimer / b.decay);
   }
   /* How many times life size he is drawn AND hit at.
 
@@ -4738,12 +5734,43 @@ class Fighter {
        treat him as fully grown rather than dividing by undefined and painting
        a man NaN pixels wide, which draws nothing at all. */
     if (!(b.since >= 0)) return b.sizeMul;
+    /* Two ramps, and he is the smaller of them: UP from the frame the reel
+       landed, and DOWN over the last JACKPOT_GROW frames of the timer. The
+       second one is new, and it is what makes the buff ENDING a thing you
+       watch rather than a sprite being swapped for a smaller one on a single
+       frame. Both are derived -- one from `since` and battleFrames, one from
+       buffTimer, all three of which are snapshotted -- so a rollback across
+       either end recomputes the identical size instead of restarting it.
+
+       Everything that cares about how big he is reads THIS one getter: the
+       drawing, the hurtbox, his own hitboxes and the chain. That is the only
+       reason deflating him is honest, and it is why the shrink is written
+       here rather than in the draw. */
     const t = battleFrames - b.since;
-    if (t >= JACKPOT_GROW) return b.sizeMul;
-    return 1 + (b.sizeMul - 1) * (t > 0 ? t / JACKPOT_GROW : 0);
+    const up = t >= JACKPOT_GROW ? 1 : (t > 0 ? t / JACKPOT_GROW : 0);
+    const down = this.buffTimer >= JACKPOT_GROW ? 1 : this.buffTimer / JACKPOT_GROW;
+    return 1 + (b.sizeMul - 1) * Math.min(up, down);
   }
   get speedMul() {
     return this.buffTimer > 0 && this.buffStats ? this.buffStats.speedMul : 1;
+  }
+  /* WHICH SPECIALS THIS FIGHTER HAS RIGHT NOW.
+
+     One accessor rather than a check at each of the six places inside this
+     class that used to read `this.def.specials` directly -- canSpecial,
+     slotFor, moveFor, the mana subtraction, the out-of-mana tell and the
+     dog/pawn intent lookup. Six copies of one question is six chances for a
+     future edit to add a seventh that forgets, and the failure mode of
+     forgetting is a chicken casting a lawnmower.
+
+     It is deliberately NOT a swap of `this.def`. A chicken is still the
+     fighter they were everywhere it matters -- their name on the HUD, their
+     seat color, their stocks, their weight, their walk speed, their ult
+     meter and their portrait are all `def` and all still theirs. What the
+     car takes is the moveset, and this is exactly the moveset and nothing
+     else. */
+  get specialsNow() {
+    return this.chicken ? CHICKEN.specials : this.def.specials;
   }
   get kbTakenMul() {
     /* A body flat on the floor is harder to throw than one on its feet.
@@ -4796,7 +5823,11 @@ class Fighter {
      which is exactly what the movement code did before there was anything
      to slip in -- `vx += (target - vx) * 1` is `vx = target` -- so the two
      calls below cost nothing anywhere except in milk. */
-  grip() { return this.slick > 0 ? PHYS.slickGrip : 1; }
+  /* `slickFoe`, not `slick`: in his own spill Houston keeps the stick and
+     loses only the brakes. See the field for the measurement, and note that
+     stopping() below deliberately still asks `slick` -- the glide is charged
+     to everybody standing in milk, including the boy who spilt it. */
+  grip() { return this.slickFoe > 0 ? PHYS.slickGrip : 1; }
   stopping() { return this.slick > 0 ? PHYS.slickFriction : PHYS.groundFriction; }
 
   /* ---- the active hitbox this frame, or null ---- */
@@ -4880,6 +5911,18 @@ class Fighter {
              on his chest while he breaks ground would hit people the
              traffic was meant for, a second and a half early. */
           s.kind === 'milk' || s.kind === 'mower' ||
+          /* And the chicken's egg, which is laid rather than swung: the
+             hitbox is the egg, wherever it has got to. A melee box grown on
+             the bird at the same time would be a second, invisible attack
+             nobody authored -- and the PECK, which is a real swing, is
+             deliberately not in this list and takes the ordinary path
+             below. */
+          s.kind === 'egg' ||
+          /* He kneels down and bolts a part onto a machine. The robot
+             is the hitbox and it is a projectile; a box grown on his
+             chest while he works would be a second, invisible attack
+             nobody authored. */
+          s.kind === 'bot' ||
           s.kind === 'newdeal') return null;
       if (this.attackFrame < s.startup) return null;
       /* `hitActive` is how long the BOX lives, where `active` is how long the
@@ -5026,19 +6069,37 @@ class Fighter {
     if (this.manaFree > 0) { this.manaFree--; this.mana = COMBAT.manaMax; }
     if (this.invuln > 0) this.invuln--;
     if (this.evadeCd > 0) this.evadeCd--;
-    /* A HELD buff does not tick. Reese's ult is a DURATION and counts down;
-       the jackpot is "until he dies" and must not, so buffStats.hold pins the
-       timer and respawn() -- which zeroes buffTimer and buffStats after a
-       lost stock -- becomes the only thing that can end it. Every way of
-       losing a stock funnels through respawn(), a blast zone included, so
-       "until he dies" is literally what this does.
+    /* EVERY buff is a duration now. This used to carry an exception --
+       buffStats.hold, which pinned the timer so the jackpot could be "until
+       he dies" -- and the jackpot is fifteen seconds like everything else, so
+       the exception is gone rather than left standing with nothing setting
+       it. A branch on a flag no spec writes is a branch that will be true
+       again by accident one day.
 
-       The hold is a property of the BUFF rather than a field on the fighter
-       on purpose: a later buff assigns a whole new buffStats object, so it
-       cannot inherit a hold something else set and quietly become permanent.
-       It is also why no new Fighter field was needed here -- and a new field
-       is exactly what restoreSim deletes off a rollback. */
-    if (this.buffTimer > 0 && !(this.buffStats && this.buffStats.hold)) this.buffTimer--;
+       respawn() is untouched and still zeroes buffTimer and buffStats after
+       a lost stock, so a buff can still end early by dying; it can simply no
+       longer outlive its own number. */
+    if (this.buffTimer > 0) {
+      this.buffTimer--;
+      /* And the moment it runs out is a moment, not a silent frame. Only the
+         jackpot asks for one -- `bling` is the flag for a buff you can see
+         from across the stage, and a giant reverting with no punctuation
+         reads as the drawing glitching rather than as the timer ending.
+
+         Cosmetic and nothing else: addEffect returns null while resimulating,
+         so a rollback across the expiry replays the same arithmetic without
+         spawning the ring twice. No rand() here either, deliberately -- the
+         offsets are literals, so this consumes nothing from a stream two
+         machines have to agree on. */
+      if (this.buffTimer === 0 && this.buffStats && this.buffStats.bling) {
+        const gold = this.buffStats.glow || '#ffd60a';
+        addEffect('ring', this.x, this.y - 8, gold);
+        addEffect('puff', this.x, this.y - 14, gold);
+        for (let i = 0; i < 6; i++) {
+          addEffect('spark', this.x + (i - 2.5) * 4, this.y - 6 - (i % 3) * 7, gold);
+        }
+      }
+    }
     if (this.drowsy > 0) this.drowsy--;
     /* Milk under his feet, counting down. Whatever he is standing in re-arms
        it every frame (Puddle.update), so this only ever runs out once he is
@@ -5056,6 +6117,8 @@ class Fighter {
        skid and says which way he is being carried. Cosmetic only: addEffect
        returns null while resimulating, which is also what keeps the rand()
        calls below out of a rollback replay. */
+    // Both tails run down together; the Puddle re-arms both every frame.
+    if (this.slickFoe > 0) this.slickFoe--;
     if (this.slick > 0) {
       this.slick--;
       // 0.35 is under half a walk: fast enough that a spray means sliding
@@ -5236,7 +6299,16 @@ class Fighter {
        shield, and behind nothing: a button that only sometimes comes out is
        worse than no button. Grounded only, and not while already holding
        somebody. */
-    if (pad.grab && this.grounded && this.landLag <= 0 && this.grabbing < 0) {
+    /* A chicken has no hands. `!this.chicken` on this and on the two
+       branches below is where "everything else they own is gone" actually
+       happens -- refused at the button rather than left out of CHICKEN, so
+       the press visibly does nothing instead of quietly falling through to
+       some other move's spec.
+
+       Being grabbed is untouched: that is the other fighter's code, and a
+       chicken is caught, held and thrown exactly as a person is. */
+    if (pad.grab && this.grounded && this.landLag <= 0 && this.grabbing < 0 &&
+        !this.chicken) {
       this.startAttack('grab', pad);
       return;
     }
@@ -5308,11 +6380,19 @@ class Fighter {
     }
 
     // --- attacks ---
-    if (pad.attack && this.landLag <= 0) {
+    if (pad.attack && this.landLag <= 0 && !this.chicken) {
       this.startAttack('attack');
       return;
     }
-    if (pad.ult && this.landLag <= 0 && this.def.ult) {
+    /* AND THE ULT IS REFUSED WITHOUT SPENDING IT, which is the half of
+       this that had to be got right. The meter keeps filling while they are
+       a bird -- applyHit pays it for damage dealt and knows nothing about
+       any of this -- and a gate written one line lower, after
+       `this.ultMeter = 0`, would have banked four seconds of pecking and
+       then thrown the bar away on a press that did nothing. Gated on the
+       whole branch, so a full meter is still full the moment they are a
+       person again. */
+    if (pad.ult && this.landLag <= 0 && this.def.ult && !this.chicken) {
       // Sword already in hand: the same button swings it, and costs nothing.
       if (this.swordTimer > 0 && this.def.ult.swing) {
         this.swordSwing = true;
@@ -5343,7 +6423,7 @@ class Fighter {
       /* A command, not a cast. While his dog is out the button talks to it
          instead of spending mana on another one -- checked before canSpecial
          so that a full-mana John cannot quietly get two. */
-      const intent = this.def.specials[this.slotFor(pad)];
+      const intent = this.specialsNow[this.slotFor(pad)];
       if (intent && intent.kind === 'dog') {
         let told = false;
         for (const b of projectiles) {
@@ -5385,12 +6465,12 @@ class Fighter {
       // also the press that throws the next.
       if (intent && intent.kind === 'rainbow' && this.rainbowBurst) return;
       if (this.canSpecial(pad)) {
-        this.mana -= this.def.specials[this.slotFor(pad)].mana;
+        this.mana -= this.specialsNow[this.slotFor(pad)].mana;
         this.startAttack('special', pad);
         return;
       }
       // Out of mana: say so rather than silently eating the input.
-      const wanted = this.def.specials[this.slotFor(pad)];
+      const wanted = this.specialsNow[this.slotFor(pad)];
       if (wanted && this.mana < wanted.mana) this.manaDenied = 18;
     }
 
@@ -5454,7 +6534,7 @@ class Fighter {
   }
 
   canSpecial(pad) {
-    const s = this.def.specials[this.slotFor(pad)];
+    const s = this.specialsNow[this.slotFor(pad)];
     if (!s) return false;
     if (this.mana < s.mana) return false;
     if (s.maxAlive) {
@@ -5474,7 +6554,7 @@ class Fighter {
     }
     if (s.kind === 'buff') return this.buffTimer <= 0;
     /* A mower has wheels. There is no frame of that art off the floor, and a
-       forty-two-frame hitbox that also deletes every projectile it touches
+       forty-frame hitbox that also deletes every projectile it touches
        has no business being available out of a jump. Refused here rather
        than cast and ignored, so the mana is not spent either -- the whole
        point of this gate being in canSpecial is that the caller checks it
@@ -5520,29 +6600,43 @@ class Fighter {
   // falls back to neutral rather than doing nothing.
   slotFor(pad) {
     const want = pad && pad.spUp ? 'up' : pad && pad.spDown ? 'down' : 'neutral';
-    return this.def.specials[want] ? want : 'neutral';
+    return this.specialsNow[want] ? want : 'neutral';
   }
 
-  /* Invulnerable ON PURPOSE, as part of a move, rather than because he has
+  /* ASLEEP IN A SLOUCH, and the ult spec if he is -- null if he is not.
+
+     ONE definition, asked by four places that must never disagree about it:
+     the damage tally and the early wake in applyHit, the soul, which dies the
+     instant the body stops sleeping, the hazard floor, and the drawing. The
+     window used to be spelled out three separate times from attackFrame, and
+     three copies of a frame range is three chances for the ghost to outlive
+     the man by a frame.
+
+     It returns the MOVE rather than a boolean because the callers want what
+     that particular sleep says -- `rouse`, `startup`, `active` -- the same
+     way napping() hands back Remy's dream. */
+  slouching() {
+    if (this.state !== 'ult') return null;
+    const u = this.def.ult;
+    if (!u || u.kind !== 'slouch') return null;
+    return this.attackFrame >= u.startup &&
+           this.attackFrame < u.startup + u.active ? u : null;
+  }
+
+  /* Drawn as a man who is not all the way here, rather than as a man who has
      just respawned.
 
      The difference matters to exactly one place -- drawFighter -- and it
      matters a lot. Respawn invulnerability BLINKS: the fighter is skipped on
      alternate groups of four frames so you can see that you cannot yet be
      hit. That reads correctly for a hundred and ten frames of counting down
-     to nothing.
+     to nothing; it reads as a missing sprite for ten seconds.
 
-     A slouch is a different animal. It pins `invuln` at 2 every frame for
-     five seconds so that nothing can run it out, and 2 lands on the half of
-     the blink that is skipped -- floor(2/4) % 2 is 0, always -- so Simon was
-     not flickering during his ult, he was absent. The aura, the shell and
-     the Zs were all being drawn around a man who was never painted. */
+     It no longer means "untouchable" -- the sleeping body takes hits now, and
+     thirty of them wake him. It means ASLEEP, which is still a whole posture
+     and still wants its own picture: a slow breath rather than a blink. */
   guardedByMove() {
-    if (this.state !== 'ult') return false;
-    const u = this.def.ult;
-    return !!(u && u.kind === 'slouch' &&
-              this.attackFrame >= u.startup &&
-              this.attackFrame < u.startup + u.active);
+    return !!this.slouching();
   }
 
   /* Off in a daydream, which is a whole posture rather than a state. Asked by
@@ -5571,7 +6665,8 @@ class Fighter {
          : state === 'ult'
            ? (this.swordSwing && this.def.ult.swing ? this.def.ult.swing
                                                     : this.def.ult)
-         : this.def.specials[this.specialSlot || 'neutral'];
+         : this.specialsNow[this.specialSlot || 'neutral'] ||
+           this.specialsNow.neutral;
   }
 
   /* What the reels paid. Called once, on the frame the third one lands.
@@ -5624,9 +6719,9 @@ class Fighter {
              This is the engine's existing buff and nothing new: buffTimer and
              buffStats, the pair Reese's ult uses, read by the damageMul
              getter every hit in the game already goes through. The only new
-             idea is hold, which stops update() counting the timer down -- see
-             there. buffTimer is 1 rather than some enormous number because
-             with hold set it is never decremented and only its SIGN is read.
+             idea used to be `hold`, which stopped update() counting the
+             timer down; there is no hold any more and buffTimer is the
+             fifteen seconds off the spec, counted down like anybody else's.
 
              since is the frame it landed on. The sizeMul getter swells him
              from it and drawBling drops the chain from it, and battleFrames
@@ -5639,11 +6734,16 @@ class Fighter {
              original `since` is what stops the second win shrinking him back
              to a man for ten frames and dropping a second chain on him while
              the first one is still there. He still gets the blast and the
-             mana; he simply does not get taller. */
+             mana; he simply does not get taller.
+
+             What a second win DOES buy is the clock: buffTimer is written
+             unconditionally, so winning again with four seconds left is
+             fifteen fresh ones. That is the only cumulative thing about it,
+             and it is the one a player would expect. */
           const already = this.buffTimer > 0 && this.buffStats &&
                           this.buffStats.since >= 0 && this.buffStats.sizeMul > 1;
           const began = already ? this.buffStats.since : battleFrames;
-          this.buffTimer = 1;
+          this.buffTimer = s.jackpot.duration;
           this.buffStats = {
             damageMul: s.jackpot.damageMul,
             speedMul: 1,
@@ -5653,7 +6753,6 @@ class Fighter {
             // says JACKPOT rather than saying Simon.
             glow: '#ffd60a',
             bling: 1,
-            hold: 1,
             since: began,
           };
         }
@@ -5860,11 +6959,24 @@ class Fighter {
       this.reelStops++;
     }
 
-    /* Getting up. Any direction, any button: a man asleep on the floor
-       should stand up for whatever you press, not for one particular key. */
+    /* Snapping out of it. A BUTTON -- and deliberately not a direction, and
+       not the special button that started it.
+
+       It used to be any input at all, on the reasoning that a man should
+       stand up for whatever you press. The reasoning was fine and the move
+       was dead. You cast a DOWN special, so on the next frame you are still
+       holding down, and `down` woke him; cast it while walking and the
+       direction woke him. Measured over 2077 real casts, the daydream ended
+       on dreaming frame ten essentially every time and banked 4.5 of the
+       hundred it advertises -- and nothing on screen ever said that the
+       thing cancelling it was the stick nobody had let go of.
+
+       Jump, attack, grab and shield are four presses somebody made on
+       purpose. He cannot walk out of the move anyway -- `vx` is pinned at
+       zero for every frame of it -- so a direction was never going to take
+       him anywhere; all it ever did was throw the daydream away. */
     if (m.kind === 'bakery' && pad) {
-      if (pad.left || pad.right || pad.up || pad.down || pad.jump ||
-          pad.attack || pad.shield || pad.grab || pad.special) {
+      if (pad.jump || pad.attack || pad.shield || pad.grab) {
         this.wakeUp = true;
       }
     }
@@ -6157,7 +7269,14 @@ class Fighter {
            it runs exactly alongside the sleep rather than a nod ahead of it.
            The two are the same ten seconds and end together: the bar emptying
            is how you know the ult is over. */
-        if (this.attackFrame === s.startup && s.manaFree) this.manaFree = s.manaFree;
+        if (this.attackFrame === s.startup) {
+          if (s.manaFree) this.manaFree = s.manaFree;
+          /* Zero on the frame the eyes close, so thirty damage means thirty
+             damage into THIS nap. Reset here rather than when he wakes up:
+             the sleep has several ways to end -- the clock, the thirty, a
+             KO, the blast zone -- and only one way to begin. */
+          this.slouchDamage = 0;
+        }
         const asleep = this.attackFrame >= s.startup &&
                        this.attackFrame < s.startup + s.active;
         // Out it comes, on the frame the eyes close.
@@ -6165,8 +7284,19 @@ class Fighter {
           projectiles.push(new Soul(this, s.soul));
         }
         if (asleep) {
-          // You cannot wake him. Re-armed every frame so nothing can run it out.
-          this.invuln = Math.max(this.invuln, 2);
+          /* HE IS NOT INVULNERABLE ANY MORE. This used to pin `invuln` at 2
+             every frame so that nothing could run it out, which made the
+             five seconds genuinely untouchable -- and made `rouse` above a
+             threshold nothing in the game could ever reach. Measured on the
+             old build: fifty jabs landed into the sleeping body over the 600
+             frames for exactly zero damage.
+
+             So the guard is gone and the body is an ordinary target. What
+             replaces it is not armor, it is INERTIA: applyHit gives a
+             sleeping man the damage and none of the launch, so hitting him
+             moves nothing, interrupts nothing and stuns nothing until the
+             thirty is paid. The aura is the rest of the defense -- ninety
+             frames beside him and you are asleep too. */
           this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);
 
           /* Everybody at the party gets sleepy. +2 in the aura against the -1
@@ -6526,9 +7656,21 @@ class Fighter {
           // Six shovelfuls, thrown the width of a road that does not exist
           // yet, which is what breaking ground for one looks like.
           for (let i = 0; i < 6; i++) {
-            addEffect('dust', this.x + rand(-1, 1) * (ROAD_NEAR / 2),
+            addEffect('dust', this.x + rand(-1, 1) * (roadWide(s) / 2),
                       this.y, '#c9c6c2');
           }
+        }
+        break;
+
+      /* THE EGG, which belongs to the bird the road above makes rather than
+         to anybody on the roster -- see CHICKEN. One per press, on the
+         startup frame, like every other thrown thing in this switch. */
+      case 'egg':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Egg(this, s));
+          this.chickenEggs++;
+          cue('throw', { slot: this.slot, x: this.x, gain: 0.7 });
         }
         break;
 
@@ -6820,23 +7962,56 @@ class Fighter {
         }
         break;
 
-      // A melee swing had no handler at all, which is why it drew nothing.
-      case 'swing':
-        if (this.attackFrame === s.startup) {
-          addEffect('swipe', this.x, this.y - 9,
-                    s.tint || '#ffffff', this.facing);
-          // A move named after an object should show the object.
-          if (s.sticks) {
-            for (let i = 0; i < 2; i++) {
-              const e = addEffect('stick', this.x + this.facing * (6 + i * 3),
-                                  this.y - 12 + i * 4, s.sticks, this.facing);
-              if (e) {
-                e.vx = this.facing * (1.1 + i * 0.5);
-                e.vy = -1.4 + i * 0.5;
-                e.life = 18;
-              }
+      /* Three presses, one robot -- and the fourth press onwards keeps it
+         alive. See ROSTER.ladeane.specials.down for what each part is.
+
+         THE CAP IS HERE and not on `maxAlive`, for the reason that note
+         gives: maxAlive refuses the cast outright once the count is
+         reached, and this is a move whose whole idea is pressing it again.
+         So the cast is always allowed, and what it does depends on what he
+         already has out.
+
+         The robot is FOUND by walking the projectile list rather than kept
+         in a field on him, which is the same way Simon's ult finds his
+         soul and for the same reason: a fighter field pointing at a
+         projectile is a field restoreSim would have to remap on every
+         rollback, and the list is already snapshot state that rebuilds
+         itself. Ownership is identity, the way the maxAlive gate and the
+         don't-hit-yourself check are, and snapValue keeps a Fighter by
+         pointer precisely so that survives a rewind. */
+      case 'bot':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          let bot = null;
+          for (const b of projectiles) {
+            if (b instanceof Bot && b.owner === this && !b.dead) {
+              bot = b;
+              break;
             }
           }
+          if (bot) bot.upgrade();
+          else {
+            bot = new Bot(this, s);
+            projectiles.push(bot);
+          }
+          /* The welding sparks come off THE ROBOT, wherever it is, and not
+             off his hands. A press that lands on a machine on the other
+             side of the stage has to be visible over there or it reads as
+             the button doing nothing.
+
+             Fixed offsets rather than rand(). All of this is cosmetic --
+             addEffect refuses to spawn at all while the netcode is
+             re-simulating -- but a rand() evaluated inside these arguments
+             would still pull draws out of Math.random on a replayed frame
+             that the first pass through it did not. */
+          for (let i = 0; i < BOT_WELD.length; i++) {
+            addEffect('spark', bot.x + BOT_WELD[i][0],
+                      bot.y + BOT_WELD[i][1], BOT_WELD[i][2]);
+          }
+          // And a puff at his own feet, so the man is visibly the one who
+          // did it rather than a bystander to his own special.
+          addEffect('dust', this.x + this.facing * 7, this.y, '#8d93a6');
+          cue('throw', { slot: this.slot, x: this.x });
         }
         break;
 
@@ -6980,6 +8155,18 @@ class Fighter {
               damageMul: s.buff.damageMul || 1,
               speedMul: s.buff.speedMul || 1,
               knockbackTakenMul: s.buff.knockbackTakenMul || 1,
+              /* The fade, carried onto the fighter rather than looked up
+                 from the roster at every hit. restoreSim replaces buffStats
+                 wholesale, so a buff has to say everything about itself in
+                 one object -- a decay left behind on the spec would come
+                 back as undefined after a rollback and the multiplier would
+                 stop fading on one machine and not the other.
+
+                 A spec with no `decay` yields undefined here, which the
+                 damageMul getter reads as "flat", so nothing else in the
+                 file changes shape. */
+              decay: s.buff.decay || 0,
+              decayTo: s.buff.decayTo || 0,
             };
             for (let i = 0; i < 12; i++) {
               addEffect('spark', this.x + rand(-8, 8), this.y - rand(4, 18), '#ffffff');
@@ -7039,8 +8226,16 @@ class Fighter {
              the same bread on the same frames. */
           const t = this.attackFrame - s.startup;
           if (t > 0 && t % s.every === 0 && t / s.every <= s.loaves) {
+            /* BEHIND him, and the minus sign is the whole of it. It used
+               to be `+ this.facing`, which put every loaf on the opponent's
+               side of him -- thirteen to thirty-four pixels toward the man
+               he was fighting -- and across 480 measured matches the
+               opponent ate twice as many as he did. The bread is still
+               anybody's; he is just standing between it and them now, which
+               is the only version of that joke he can afford to keep
+               telling. */
             projectiles.push(new Loaf(this, s.loaf,
-                                      this.x + this.facing * (6 + (t / s.every) * 7),
+                                      this.x - this.facing * (6 + (t / s.every) * 7),
                                       this.y));
             cue('land', { slot: this.slot, x: this.x, gain: 0.4 });
           }
@@ -7341,6 +8536,12 @@ class Fighter {
     if (this.hazardCd > 0) { this.hazardCd--; return; }
     if (this.y < hz.y || this.x < 0 || this.x > VW) return;
     if (this.invuln > 0) return;
+    /* And a sleeping man is not burned by the floor. Not a favor: the slouch
+       used to pin `invuln` and this line was already skipping him, so leaving
+       it out would have been a silent second change riding along with the one
+       that took the guard off. A hazard tick sets hitstun and launches, which
+       would end the ult from a source no `rouse` tally can see. */
+    if (this.slouching()) return;
 
     this.health -= hz.damage;
     cue('hazard', { slot: this.slot, x: this.x });
@@ -7553,6 +8754,21 @@ class Fighter {
     this.confused = 0;
     // A fresh stock does not arrive skidding.
     this.slick = 0;
+    this.slickFoe = 0;
+    /* AND A FRESH STOCK IS A PERSON. "Until they die" is the other half of
+       the way out of being a chicken, and this is it -- one of the two
+       escapes the move advertises, written where every other status this
+       game can put on you is already cleared.
+
+       Three lines rather than a call to unchicken(), on purpose: unchicken
+       is the CURE and it announces itself, throws a burst of light and puts
+       the fighter back on their feet in an idle. None of that belongs on a
+       respawn, which has its own announcement, its own invulnerability and
+       its own state. What the two share is the three fields, and those are
+       written out here where the rest of the reset is. */
+    this.chicken = false;
+    this.chickenSince = -1;
+    this.chickenEggs = 0;
     this.evadeCd = 0;
     this.mana = COMBAT.manaMax;
     this.hitstun = 0;
@@ -7561,6 +8777,113 @@ class Fighter {
     this.grounded = false;
     this.jumpsLeft = PHYS.airJumps;
     this.setState('air');
+  }
+
+  /* RUN OVER, AND UP AS A BIRD.
+
+     Called from the bottom of applyHit on any move carrying `chicken` --
+     which today is exactly one thing, the traffic on FDR'S NEW DEAL. It is a
+     flag on the move rather than a check for that move, so the next thing
+     that wants to do this says so in its own spec instead of teaching
+     applyHit about a second character.
+
+     WHERE IT IS CALLED FROM MATTERS and is guaranteed by that caller: below
+     the shield branch, so blocking a car blocks the feathers too; below the
+     graze return, so nothing that only grazes can do it; and below the KO
+     branch with a `health > 0` guard, so the blow that takes your last
+     health takes the stock rather than turning a corpse into a chicken that
+     respawn would immediately un-chicken anyway.
+
+     IDEMPOTENT. A second car hitting a bird already covered in feathers does
+     its eight damage and nothing else -- it must not restart `chickenSince`,
+     because that is what the drawing reads, and a transformation that
+     re-popped every time you were run over would look like a bug in the one
+     situation where being run over twice is the normal case. */
+  becomeChicken() {
+    if (this.chicken || this.eliminated) return;
+    /* The sandbag is exempt, and not because it would break -- it is a
+       Fighter everywhere else in this file and it would transform perfectly
+       well. It is exempt because it has nothing to lose: aiDecide hands it an
+       empty pad, so taking its moveset away takes nothing, and all a chicken
+       sandbag would be is a practice target you can no longer recognize.
+       The one body on the stage that is nobody stays the shape it was. */
+    if (this.def.dummy) return;
+
+    this.chicken = true;
+    this.chickenSince = battleFrames;
+    this.chickenEggs = 0;
+
+    /* EVERYTHING ELSE THEY OWN IS GONE, and these are the things a fighter
+       CARRIES as against the things they have already put into the world. A
+       mower still driving or a dog already out keeps going, because those
+       stopped being his the moment he cast them; a sword in his hand did
+       not.
+
+       The buff is the one that would have bitten. buffStats carries sizeMul
+       and damageMul, so a jackpot Simon caught by a car would have got up as
+       a chicken three times life size hitting for thirty a peck -- a
+       punishment that plays as a reward, which is the worst thing a
+       punishment can do. */
+    this.swordTimer = 0;
+    this.swordSwing = false;
+    this.buffTimer = 0;
+    this.buffStats = null;
+    this.chargeTimer = 0;
+    if (this.grabbing >= 0) releaseGrab(this);
+
+    /* Whatever they were mid-swing on is over, and it has to be, because
+       moveFor answers with a different spec from this frame on: a fighter
+       left in `special` on frame 9 of a cast would spend frames 10 onward
+       running a chicken's egg through a lawnmower's clock.
+
+       applyHit has already put them in hitstun by the time this runs, so
+       today this branch is never taken. It is here anyway: a method that is
+       only correct because of where it happens to be called from is a method
+       that breaks the first time somebody calls it from somewhere else. */
+    if (this.state === 'attack' || this.state === 'special' ||
+        this.state === 'ult' || this.state === 'grab') {
+      this.setState(this.grounded ? 'idle' : 'air');
+    }
+    this.attackFrame = 0;
+    this.hasHit = true;
+    this.specialSpawned = false;
+    this.specialSlot = 'neutral';
+
+    announce(this.def.name + ' IS A CHICKEN', CHICKEN_GOLD);
+    cue('hazard', { slot: this.slot, x: this.x });
+    addEffect('ring', this.x, this.y - 8, CHICKEN_GOLD);
+  }
+
+  /* AND BACK. One golden egg, landed on somebody who is not you.
+
+     Called from Egg.burst, which resolveCombat only reaches on a fighter
+     that is not the owner -- so "an ENEMY player" is enforced by the loop
+     that calls it rather than by a check here that could drift out of step
+     with it.
+
+     It puts them back on their feet rather than leaving them where the egg
+     found them, for the same reason becomeChicken takes them off theirs:
+     moveFor answers with the other spec from this frame on, and a fighter
+     part way through a chicken's twenty-seven frame lay would spend the rest
+     of it running whatever sits in their own `down` slot. Idle on the floor,
+     air off it -- the two states respawn already chooses between. */
+  unchicken() {
+    if (!this.chicken) return;
+    this.chicken = false;
+    this.chickenSince = -1;
+    this.chickenEggs = 0;
+    this.setState(this.grounded ? 'idle' : 'air');
+    this.attackFrame = 0;
+    this.hasHit = true;
+    this.specialSpawned = false;
+    this.landLag = 0;
+    announce(this.def.name + ' IS BACK', CHICKEN_GOLD);
+    cue('promote', { slot: this.slot, x: this.x });
+    addEffect('ring', this.x, this.y - 8, CHICKEN_GOLD);
+    for (let i = 0; i < 10; i++) {
+      addEffect('spark', this.x + rand(-8, 8), this.y - rand(2, 18),
+                CHICKEN_GOLD);
+    }
   }
 
   setState(s) {
@@ -8364,6 +9687,197 @@ const EMBLEM_RED = '#c41c20';
    a glance what it is.
 
    '#' gold, 'r' the field, 'o' the edge. */
+/* =====================================================================
+   THE CHICKEN, DRAWN
+
+   Nobody drew one, so it is written out here the way the chess pieces and
+   the Star of David are -- strings, so the shape is visible in the source
+   and editable without a paint program, rasterised once by pixelArt and
+   blitted after that.
+
+   SIXTEEN BY SIXTEEN, feet on the bottom row, which is not a preference: it
+   is the same cell every other fighter's sprite sheet uses, so drawFighter
+   puts a chicken exactly where it puts a man and the hurtbox underneath does
+   not move. The bird is deliberately drawn to fill that 9-by-14 hurtbox
+   rather than to be smaller than it -- being a chicken takes your MOVESET
+   away, and a smaller target would quietly hand back a defensive buff in
+   exchange, which is the opposite of a punishment.
+
+   AUTHORED FACING RIGHT and mirrored by pixelArt's `flip`, except LAY --
+   see below, where facing the other way is the entire joke.
+
+   WHAT MAKES IT READ AS A CHICKEN at sixteen pixels, in order of how much
+   each is worth: the comb (two red points, and nothing else in this game has
+   one), the beak-and-wattle pair in orange over red, the tail cocked up and
+   back, and the wing as a lighter shape with a drawn underline. Take away
+   the comb and it is a duck; take away the tail and it is a chick. */
+const CHICKEN_PAINT = {
+  o: '#2a211c',   // outline, the darkest thing on it
+  w: '#f7f2e4',   // feathers
+  s: '#d8cfb8',   // the wing, one step down so it reads as a separate part
+  r: '#e0392c',   // comb and wattle
+  b: '#f5a623',   // beak and legs
+  e: '#2a211c',   // the eye, the same ink as the outline
+};
+
+/* The one color the whole feature announces itself in: the golden egg, the
+   ring on the transformation, the banner, and the feathers that are not
+   white. It is the jackpot's gold, on purpose -- this game already means
+   "something rare just happened" with that exact yellow, and a second
+   almost-gold would read as a different event. */
+const CHICKEN_GOLD = '#ffd60a';
+
+const CHICKEN_STAND = [
+  '..........r.r...',
+  '..........rrr...',
+  '.........oooo...',
+  '........owwwwo..',
+  '........owwwwobb',
+  '..oo....owwewob.',
+  '.owo...owwwwwor.',
+  'owwo..owwwwwwor.',
+  '.owwwwwwwwwwwo..',
+  '..owwoosswwwwo..',
+  '..owwossssswwo..',
+  '..owwwooooowwo..',
+  '...owwwwwwwwwo..',
+  '....owwwwwwwo...',
+  '......b..b......',
+  '.....bbb.bbb....',
+];
+
+/* THE WALK IS A HEAD BOB. The body does not move at all between these two --
+   only the head and neck slide back a pixel and the feet swap. That is what
+   a chicken actually does and it is also the only animation that survives
+   being two frames: a bob is legible at one pixel, a leg cycle is not. */
+const CHICKEN_STEP = [
+  '.........r.r....',
+  '.........rrr....',
+  '........oooo....',
+  '.......owwwwo...',
+  '.......owwwwobb.',
+  '..oo...owwewob..',
+  '.owo..owwwwwor..',
+  'owwo.owwwwwwor..',
+  '.owwwwwwwwwwwo..',
+  '..owwoosswwwwo..',
+  '..owwossssswwo..',
+  '..owwwooooowwo..',
+  '...owwwwwwwwwo..',
+  '....owwwwwwwo...',
+  '.....b....b.....',
+  '....bbb...bbb...',
+];
+
+// Off the ground: the same bird with its legs hanging. A chicken in the air
+// is a chicken that has given up on its legs, and the dangle is the tell.
+const CHICKEN_FLAP = [
+  '..........r.r...',
+  '..........rrr...',
+  '.........oooo...',
+  '........owwwwo..',
+  '........owwwwobb',
+  '..oo....owwewob.',
+  '.owo...owwwwwor.',
+  'owwo..owwwwwwor.',
+  '.owwwwwwwwwwwo..',
+  '..owwoosswwwwo..',
+  '..owwossssswwo..',
+  '..owwwooooowwo..',
+  '...owwwwwwwwwo..',
+  '....owwwwwwwo...',
+  '.....b...b......',
+  '....bb...bb.....',
+];
+
+/* THE PECK. The whole bird drops two rows and the head goes out to the very
+   edge of the cell, so the beak ends up where the hitbox is: CHICKEN's peck
+   is `ox` 3 by `w` 7, which is 3 to 10 pixels ahead of center, and the beak
+   here sits at 14 and 15 of a cell centered on 8 -- 6 and 7 ahead. The tip of
+   the drawing is inside the reach of the box, which is the way round it has
+   to be. A drawn beak that stuck out further than the box would be a move
+   that visibly misses things it is touching. */
+const CHICKEN_PECK = [
+  '................',
+  '................',
+  '................',
+  '..........r.r...',
+  '..........rrr...',
+  '..oo.....oooo...',
+  '.owo....owwwwo..',
+  'owwo...owwewwobb',
+  '.owwwwwwwwwwwor.',
+  '..owwoosswwwwo..',
+  '..owwossssswwo..',
+  '..owwwooooowwo..',
+  '...owwwwwwwwwo..',
+  '....owwwwwwwo...',
+  '......b..b......',
+  '.....bbb.bbb....',
+];
+
+/* LAYING, AND THIS ONE IS DRAWN BACKWARDS ON PURPOSE.
+
+   The request was an egg out of the bird's back end, and an egg that
+   genuinely flew backward would be a move you have to turn around to use --
+   funny once, a lost stock every time after, and something aiDecide would
+   have to learn to walk away from its target to fire. So the DRAWING does
+   the joke instead: press J and the chicken spins its rear to face whoever
+   it is aiming at, and the egg leaves from the end it is supposed to leave
+   from, travelling forward.
+
+   Mechanically that means this grid is the mirror of CHICKEN_STAND -- head
+   at the left, tail cocked up at the right -- squatting a row lower with its
+   feet tucked under it and its underside closed. It takes the SAME `flip` as
+   the other four, because it is authored as a bird facing left and is wanted
+   tail-forward: facing right draws it as written, facing left mirrors it.
+
+   The squat and the closed base are what tell it apart from an ordinary
+   standing bird when the mirror happens to land the same way round. */
+const CHICKEN_LAY = [
+  '................',
+  '...r.r..........',
+  '...rrr..........',
+  '...oooo.........',
+  '..owwwwo........',
+  'bbowwwwo........',
+  '.bowewwo....oo..',
+  '.rowwwwwo...owo.',
+  '.rowwwwwwo..owwo',
+  '..owwwwwwwwwwwo.',
+  '..owwwwssoowwo..',
+  '..owwsssssowwo..',
+  '..owwooooowwwo..',
+  '..owwwwwwwwwo...',
+  '...ooooooooo....',
+  '....bb..bb......',
+];
+
+const CHICKEN_POSES = {
+  stand: CHICKEN_STAND, step: CHICKEN_STEP, flap: CHICKEN_FLAP,
+  peck: CHICKEN_PECK, lay: CHICKEN_LAY,
+};
+
+/* THE EGG. Five by seven, narrow at the top and wide at the bottom, which is
+   the whole of what makes an oval read as an egg rather than as a pebble.
+
+   ONE SHAPE, TWO PAINTS, and that is the point: a golden egg has to be the
+   same object as a white one at a glance or the difference does not mean
+   anything. The paint is the difference, and then Egg.draw puts a turning
+   sparkle round the gold one so it is unmistakable even against a bright
+   stage, mid-flight, three pixels tall on somebody else's screen. */
+const EGG_ART = [
+  '..o..',
+  '.owo.',
+  'ohwwo',
+  'owwwo',
+  'owwwo',
+  'owwwo',
+  '.ooo.',
+];
+const EGG_WHITE = { o: '#6b6355', w: '#f7f2e4', h: '#ffffff' };
+const EGG_GOLD = { o: '#8a6108', w: CHICKEN_GOLD, h: '#fff6c0' };
+
 const HAMMER_SICKLE_ART = [
   '........ooooooooo........',
   '......ooorrrrrrrooo......',
@@ -9529,27 +11043,6 @@ function drawPole(g, f) {
 }
 
 
-/* A drumstick, tip up and to the right. Mirrored for the other facing. */
-const STICK_ART = [
-  '....##',
-  '....##',
-  '...##.',
-  '...#..',
-  '..##..',
-  '..#...',
-  '.##...',
-  '.#....',
-  '##....',
-];
-
-/* The path a swing travels: an arc out from the shoulder and down. Written
-   out rather than computed, because Math.cos is banned in this file -- the
-   simulation has to be identical on both machines and runtime trig is not
-   (see the note on kx/ky in the roster). */
-const SWING_ARC = [
-  [11, -6], [12, -2], [11, 2], [9, 6], [6, 9], [2, 11],
-];
-
 /* A quaver: head bottom left, stem up its right side, flag off the top. */
 const NOTE_ART = [
   '....##',
@@ -10594,7 +12087,13 @@ function drawBling(g, f) {
   if (!b || !b.bling || !(b.since >= 0)) return;
   const t = battleFrames - b.since;
   if (t < 0) return;
-  const k = b.sizeMul || 1;
+  /* The size he IS this frame, not the size the buff is worth. They were the
+     same number for as long as the jackpot could only end by dying; now that
+     it runs out, the last ten frames are a man shrinking, and a chain built
+     from `b.sizeMul` would have hung there at full giant scale around him
+     until it vanished. f.sizeMul is the one getter the body, the hurtbox and
+     this all read, so they cannot disagree. */
+  const k = f.sizeMul;
   /* The cell, in screen pixels, exactly as drawFighter blitted it -- same
      rounding, same anchor. Anything else and the chain shivers against the
      body by a pixel as he walks. */
@@ -10870,13 +12369,20 @@ const WHIP_POSE = [
   [ 16,    13, -16,    46, -12,   44,  -6, 1.00,   3, 0.00 ],
   [ 17,    13, -15,    34, -15,   44, -13, 1.00,   3, 0.00 ],
   [ 18,    12, -12,    33,  -9,   42,  -8, 0.96,   2, 0.00 ],
+  /* And the gather, re-keyed for a fourteen-frame recovery rather than the
+     twenty-two it was drawn for. The poses are untouched -- this is the same
+     gesture at 22/14 of the speed -- and the keys are the old ones mapped
+     through that ratio off frame 18, which is where the box goes away. The
+     LAST one has to land exactly on startup + active + recovery, because
+     drawWhipArt returns on anything past `total` and a tail that ran long
+     would simply vanish mid-sag with the lash still twenty pixels out. */
   [ 19,    13, -12,    32,  -8,   41,  -7, 0.95,  -2, 0.00 ],
-  [ 21,    14,  -7,    30,  -3,   38,  -3, 0.93,  -3, 0.00 ],
-  [ 24,    15,  -3,    29,   0,   34,  -1, 0.90,  -3, 0.00 ],
-  [ 27,    14,  -1,    25,   0,   27,   0, 0.90,  -3, 0.04 ],
-  [ 31,    11,  -2,    18,   0,   17,   0, 0.90,  -3, 0.24 ],
-  [ 35,     8,  -4,    10,  -1,    5,  -1, 0.92,  -2, 0.58 ],
-  [ 40,     6,  -8,     8,  -5,    7,  -2, 1.00,   0, 1.00 ],
+  [ 20,    14,  -7,    30,  -3,   38,  -3, 0.93,  -3, 0.00 ],
+  [ 22,    15,  -3,    29,   0,   34,  -1, 0.90,  -3, 0.00 ],
+  [ 24,    14,  -1,    25,   0,   27,   0, 0.90,  -3, 0.04 ],
+  [ 26,    11,  -2,    18,   0,   17,   0, 0.90,  -3, 0.24 ],
+  [ 29,     8,  -4,    10,  -1,    5,  -1, 0.92,  -2, 0.58 ],
+  [ 32,     6,  -8,     8,  -5,    7,  -2, 1.00,   0, 1.00 ],
 ];
 
 /* How bright the last twelve pixels are on each of the six live frames.
@@ -11631,6 +13137,29 @@ class Star {
     return true;
   }
 
+  /* A star that CONNECTS pays him dream, which is the meter the dragon is
+     made of.
+
+     `burst` is not a name chosen here. It is the hook resolveCombat calls on
+     a shot that has just landed, in place of simply killing it -- see the
+     note beside it -- which makes this the one place in the file that knows
+     a star reached somebody. It therefore has to do what the default branch
+     would have done as well, or the star sails on through them.
+
+     Why a second source at all: the bakery is where the meter comes from in
+     bulk, and the bakery is one button that costs him eighty frames of
+     standing still. A dragon hostage to that is a dragon that flies at its
+     floor speed all match, which is exactly what 1376 measured ults did. A
+     half pays the smaller `dream` its own spec carries, for the same reason
+     it hits for less: splitting buys coverage, not value. */
+  burst() {
+    this.dead = true;
+    const d = this.spec.dream || 0;
+    // The same clamp the daydream uses in runSpecial; ult.dreamMax is the
+    // hundred both of them mean.
+    if (d) this.owner.dream = Math.min(100, this.owner.dream + d);
+  }
+
   box() {
     const r = this.piece === 'whole' ? 5 : 4;
     return { x: this.x - r, y: this.y - r, w: r * 2, h: r * 2 };
@@ -11660,6 +13189,12 @@ class Loaf {
   constructor(owner, spec, x, y) {
     this.owner = owner;
     this.spec = spec;
+    /* How long it is his alone. Copied onto the loaf rather than read off
+       `spec` where it is used, because that is the shape every other
+       projectile field in here has and because restoreSim deletes any key a
+       snapshot does not carry -- a field that only exists once somebody has
+       eaten one would vanish on the first rollback. */
+    this.mine = spec.mine || 0;
     this.x = clamp(x, 8, VW - 8);
     this.y = y;
     this.vy = -1.4;
@@ -11687,11 +13222,21 @@ class Loaf {
         }
       }
     }
-    /* Whoever gets there first, and that is the joke: he stood in the middle
-       of a fight thinking about bread, so now there is bread in the middle
-       of the fight and it is not his until he has eaten it. */
+    /* Whoever gets there first, and that is still the joke: he stood in the
+       middle of a fight thinking about bread, so now there is bread in the
+       middle of the fight and it is not his until he has eaten it.
+
+       For the first `mine` frames it is his, though, and that is not a
+       softening of the joke so much as the thing that makes it survivable.
+       Measured over 480 matches with the bread landing behind him and no
+       window at all: 937 loaves baked, and the man he was fighting ate 445
+       of them to his 315. He is rooted for the eighty frames he is baking
+       and cannot reach any of it, so without a window the daydream is a
+       vending machine somebody else is standing in front of. Fresh bread is
+       the baker's; stale bread is anybody's. */
     for (const f of fighters) {
       if (f.eliminated || f.state === 'ko') continue;
+      if (f !== this.owner && this.t < this.mine) continue;
       if (Math.abs(f.x - this.x) > 9) continue;
       if (Math.abs(f.y - this.y) > 14) continue;
       f.health = Math.min(COMBAT.maxHealth, f.health + this.spec.heal);
@@ -12357,12 +13902,12 @@ class Soul {
        a KO, the match stopping. Asked about the body rather than counted
        down here, so there is exactly one clock and no way for the two to
        disagree about whether he is still asleep. */
-    const u = o && o.def.ult;
-    const asleep = o && !o.eliminated && o.state === 'ult' && u &&
-                   u.kind === 'slouch' &&
-                   o.attackFrame >= u.startup &&
-                   o.attackFrame < u.startup + u.active;
-    if (!asleep) { this.dead = true; return; }
+    /* Asked of the BODY rather than counted down here, so there is exactly
+       one clock and no way for the two to disagree about whether he is still
+       asleep -- which matters far more now that the sleep can end early:
+       thirty damage moves the body's frame counter, and the ghost has to go
+       back in on the same frame or it is flying on its own. */
+    if (!o || o.eliminated || !o.slouching()) { this.dead = true; return; }
 
     const c = this.cfg;
     this.t++;
@@ -13315,6 +14860,563 @@ class Dog {
   }
 }
 
+
+/* =====================================================================
+   BUILD-A-BOT - the machine Ladeane bolts together, one press at a time.
+
+   ROSTER.ladeane.specials.down says what the move IS and why each number is
+   what it is. What is here is the machine: where it stands, what it does
+   from there, and how somebody takes it apart.
+
+   IT IS A PROJECTILE, which is the same trick the dog and the pie are: it
+   lives in `projectiles`, so saveSim clones it and restoreSim rebuilds it
+   through its prototype without either of them having to be taught what a
+   robot is. It is a projectile that never travels -- the only velocity it
+   ever has is the fall onto whatever floor is under it -- and after that it
+   is a fixed point on the stage with a clock and a temper. The roster is the
+   place that argues for why that is worth having; the short version is that
+   nothing else on this roster is a stationary ally, and a thing that cannot
+   follow you is a completely different kind of pressure from a thing that
+   can.
+
+   WHICH SPEC IT HITS WITH changes as it is built. resolveCombat is handed
+   `shot.spec` and reads the payload straight off it, so the three tiers of
+   punch are three FINISHED specs out of `move.tiers`, built once at load
+   beside the fart's three strengths -- an object allocated in here would be
+   allocated again on every rollback replay, and snapValue keeps an object by
+   reference only if simFrozen has walked it. `move` is the whole down
+   special and `spec` is the part it is currently wearing; both live inside
+   ROSTER, so a snapshot keeps both by pointer rather than cloning a spec per
+   robot per frame.
+
+   EVERY FIELD IS ASSIGNED IN THE CONSTRUCTOR. restoreSim deletes any key a
+   snapshot lacks, so a field written for the first time anywhere else would
+   quietly vanish on the first rollback that crossed the frame it appeared.
+   ===================================================================== */
+
+// How tall the machine stands at each tier, measured up from the floor. This
+// is its silhouette AND its hull -- the rectangle somebody has to hit to
+// break a part off -- so growing it is a real cost as well as a real upgrade:
+// a finished robot is a bigger target than a man, and it is meant to be.
+const BOT_TALL = [5, 9, 16];
+
+const BOT_TREAD = '#2b2f3a';   // rubber, and the shadow under everything
+const BOT_DARK = '#565d70';    // metal in shade, and ALL metal while it is
+                               // rebooting, which is the whole tell
+const BOT_BODY = '#8d93a6';    // metal
+const BOT_TRIM = '#c2c9dc';    // a lit edge
+const BOT_EYE = '#5ce1e6';     // the sensor, and the bolt it fires
+const BOT_HOT = '#e8ffff';     // the eye in the moment before it shoots
+
+/* Welding sparks, as fixed offsets and colors. Written out rather than
+   rolled, for the reason Christian's FROG_POP is: this is cosmetic and
+   addEffect refuses to spawn at all while the netcode is re-simulating, but
+   a rand() evaluated inside the call's arguments would still pull draws out
+   of Math.random on a replayed frame that the first pass did not. Nothing
+   cosmetic is allowed to move that stream. */
+const BOT_WELD = [
+  [0, -6, '#ffffff'], [3, -4, BOT_EYE], [-3, -5, '#ffd76a'],
+  [2, -9, '#ffffff'], [-2, -8, BOT_EYE], [0, -2, '#ffd76a'],
+];
+
+// And the same idea for the scrap heap it leaves when the last part comes
+// off: further apart, and mostly the color of the metal rather than of the
+// spark, so a robot dying does not look like a robot being built.
+const BOT_SCRAP = [
+  [-5, -2, BOT_BODY], [5, -2, BOT_BODY], [-3, -7, BOT_TREAD],
+  [3, -7, BOT_BODY], [0, -11, BOT_TRIM], [-1, -4, '#ffd76a'],
+  [2, -13, BOT_EYE], [0, -1, BOT_TREAD],
+];
+
+class Bot {
+  constructor(owner, move) {
+    this.owner = owner;
+    this.move = move;
+    this.tier = 1;
+    this.spec = move.tiers[0];
+    // Which way it is pointed. Re-aimed every time it decides to swing or
+    // shoot, so a robot built facing left does not spend its battery
+    // punching away from the only person on the stage.
+    this.dir = owner.facing;
+    this.x = owner.x + this.dir * move.ahead;
+    this.y = owner.y;
+    this.vy = 0;
+    this.hp = this.spec.hp;
+    this.life = move.life;
+    // Frames until the next punch, frames of punch left, frames until the
+    // next bolt. Separate clocks because a turret does both at once.
+    this.clock = this.spec.every;
+    this.swing = 0;
+    this.fire = 0;
+    /* Whether the last look round found nobody. It exists for the drawing
+       and only for the drawing: the wind-up below is five frames of the arm
+       pulled back, and a robot alone on the stage re-checks every six, so
+       without this it would twitch forever at a wall. */
+    this.idle = true;
+    // It arrives in pieces and has to finish assembling itself, which is the
+    // same stagger a part being knocked off leaves behind. Casting this on
+    // top of somebody must not hit them on the spawn frame.
+    this.boot = move.boot;
+    this.flinch = 0;
+    /* `pierce` with a per-victim clock, and it is not optional. resolveCombat
+       sets `dead` on any non-piercing shot the moment it connects, so a robot
+       that landed one punch would delete itself; the piercing branch is the
+       only one that lets a projectile hit somebody and go on existing.
+       `hitEvery` comes off the tier, set to roughly the punch interval, so
+       one punch is one hit per person rather than one per frame of it. */
+    this.pierce = true;
+    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    // And the other direction: how long until this attacker's swing can do
+    // the robot any more damage.
+    this.hurtAt = new Array(MAX_PLAYERS).fill(0);
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update() {
+    this.t++;
+    this.life--;
+    for (let i = 0; i < this.hitAt.length; i++) {
+      if (this.hitAt[i] > 0) this.hitAt[i]--;
+      if (this.hurtAt[i] > 0) this.hurtAt[i]--;
+    }
+
+    /* It falls onto whatever is under it and then rides that surface -- the
+       same arithmetic the dog uses, and exact for the same reason: the
+       landing branch assigns `this.y = p.y` and assigns it again every frame
+       after, because gravity pushes it to p.y + 0.4 and the same branch snaps
+       it straight back. So a robot standing on a platform is bit-identical to
+       the platform top, and a robot standing on a trapdoor that opens simply
+       stops finding one and falls. */
+    const prevY = this.y;
+    this.vy += 0.4;
+    this.y += this.vy;
+    for (const p of platformsNow()) {
+      if (this.x < p.x - 2 || this.x > p.x + p.w + 2) continue;
+      if (prevY <= p.y + 1 && this.y >= p.y) {
+        this.y = p.y;
+        this.vy = 0;
+        break;
+      }
+    }
+
+    this.takeHits();
+
+    /* Rebooting and flinching are the same thing from outside -- frames in
+       which it cannot hurt anybody -- so they cancel a punch in progress
+       rather than pausing it. A robot that resumed a half-finished swing
+       after being hit would be a machine you cannot actually interrupt. */
+    if (this.boot > 0) this.boot--;
+    if (this.flinch > 0) this.flinch--;
+    const stunned = this.boot > 0 || this.flinch > 0;
+    if (stunned) this.swing = 0;
+    else if (this.swing > 0) this.swing--;
+    else if (this.clock > 0) this.clock--;
+    else this.punch();
+    if (!stunned) this.shoot();
+
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -14 || this.x > VW + 14 || this.y > VH + 30) this.dead = true;
+  }
+
+  /* BREAKING IT, and the rule is one sentence: a fighter's own hitbox, and
+     nothing else.
+
+     Not a projectile, deliberately. `frail` already exists and would have
+     been one word -- but frail is a single hit from anything, which is right
+     for a frog and wrong for sixty-six mana of machine, and it would also
+     hand every zoner on the roster a way to delete this from the far side of
+     the stage. A thing you have to walk up to and break in person is the
+     counterplay this move is built around. Two hits a part, six for a
+     finished robot, and every one of them staggers it.
+
+     Done here rather than through sweepFrail because sweepFrail's contract is
+     that the shot dies, full stop: it calls `struck` and then assigns `dead`
+     unconditionally. Nothing there can express "it took one".
+
+     `fighters` is module state the snapshot already owns, and hitbox() is
+     pure -- it reads state and writes none -- so this is as deterministic as
+     resolveCombat asking the same question three lines later. It runs in the
+     projectile pass, AFTER every fighter has updated, which is the same view
+     of the frame resolveCombat gets. The hitstop skip mirrors resolveCombat's
+     for the same reason: a fighter frozen in hitstop is not swinging. */
+  takeHits() {
+    const m = this.move;
+    const hull = this.hull();
+    for (const f of fighters) {
+      if (f === this.owner || f.eliminated) continue;
+      if (f.hitstop > 0 || this.hurtAt[f.slot] > 0) continue;
+      const h = f.hitbox();
+      if (!h || !overlap(h.box, hull)) continue;
+      this.hurtAt[f.slot] = m.hurtEvery;
+      this.flinch = m.flinch;
+      this.hp--;
+      addEffect('spark', this.x, this.y - 4, '#ffd76a');
+      addEffect('spark', this.x, this.y - BOT_TALL[this.tier - 1] + 2, BOT_TRIM);
+      cue('hit', { slot: f.slot, x: this.x, gain: 0.45 });
+      if (this.hp <= 0) this.strip();
+    }
+  }
+
+  /* A part comes off. It is not deleted the first time somebody gets through
+     its health -- it is UNBUILT, one press at a time, in the reverse of the
+     order he put it together, and it goes on fighting with whatever is left.
+     That is most of what makes the third press feel like it was worth 22:
+     you can see it lose the gun and keep swinging.
+
+     A strip costs the attacker nothing and buys them `boot` frames of
+     silence, which is the other half of the same idea -- hitting it has to
+     be immediately worth having done. */
+  strip() {
+    this.tier--;
+    this.swing = 0;
+    if (this.tier <= 0) {
+      this.dead = true;
+      for (let i = 0; i < BOT_SCRAP.length; i++) {
+        addEffect('spark', this.x + BOT_SCRAP[i][0],
+                  this.y + BOT_SCRAP[i][1], BOT_SCRAP[i][2]);
+      }
+      addEffect('puff', this.x, this.y - 5, BOT_BODY);
+      cue('hit', { slot: this.owner.slot, x: this.x, gain: 0.7 });
+      return;
+    }
+    this.spec = this.move.tiers[this.tier - 1];
+    this.hp = this.spec.hp;
+    this.boot = this.move.boot;
+    this.clock = this.spec.every;
+    this.fire = this.spec.fireEvery || 0;
+    addEffect('puff', this.x, this.y - BOT_TALL[this.tier], BOT_BODY);
+    addEffect('spark', this.x, this.y - BOT_TALL[this.tier], BOT_TRIM);
+  }
+
+  /* A press that landed on a robot that already exists.
+
+     The tier only climbs while there is a part left to add, but the three
+     lines after it run on EVERY press -- a full battery, the current part's
+     health back, and a reboot he has to wait out. That is what makes the
+     fourth press a recharge instead of a dead button, and it is why keeping
+     a robot alive is a standing cost on his meter rather than something he
+     pays once. */
+  upgrade() {
+    if (this.tier < this.move.tiers.length) {
+      this.tier++;
+      this.spec = this.move.tiers[this.tier - 1];
+    }
+    this.hp = this.spec.hp;
+    this.life = this.move.life;
+    this.boot = this.move.boot;
+    this.flinch = 0;
+    this.swing = 0;
+    this.clock = this.spec.every;
+    this.fire = this.spec.fireEvery || 0;
+  }
+
+  /* Whoever is nearest THE ROBOT, which is a different question from the one
+     nearestFoe answers -- that one measures from the owner, and the entire
+     point of this thing is that Ladeane is somewhere else. Same distance
+     weighting and the same slot-order tie break, because this feeds the
+     simulation and both machines have to pick the same person.
+
+     `rx`/`ry` are how far it is willing to look, and they are handed in
+     rather than read off the spec because the arm and the eye disagree by an
+     order of magnitude about what counts as near. */
+  target(rx, ry) {
+    let best = null, bestD = Infinity;
+    for (const f of fighters) {
+      if (f === this.owner || f.eliminated) continue;
+      if (f.invulnerable || f.state === 'ko') continue;
+      const dx = Math.abs(f.x - this.x), dy = Math.abs(f.y - this.y);
+      if (dx > rx || dy > ry) continue;
+      const d = dx + dy * 0.6;
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best;
+  }
+
+  /* It cannot chase, but it can turn round, and the turn is the swing's own
+     decision rather than something the box does later -- `dir` is read by
+     box() and by draw(), so what is painted and what can hit you come out of
+     one number.
+
+     Nobody in range is not a rest: the clock is set short so it keeps
+     checking, rather than to the full interval, which would have it staring
+     at the wall for most of a second after somebody walked past. */
+  punch() {
+    const f = this.target(this.move.notice, this.move.noticeY);
+    if (!f) { this.idle = true; this.clock = 6; return; }
+    this.idle = false;
+    this.dir = f.x >= this.x ? 1 : -1;
+    this.swing = this.spec.swing;
+    this.clock = this.spec.every;
+    cue('hit', { slot: this.owner.slot, x: this.x, gain: 0.3 });
+  }
+
+  /* The third press, doing the thing the third press was bought for.
+
+     Only the finished tier carries a `bolt`, so this returns immediately for
+     the other two rather than being guarded by a tier number -- the spec says
+     what the part can do, the same way `fireEvery` does.
+
+     THE AIM IS A UNIT VECTOR, not an angle, and that is not a style choice:
+     runtime trigonometry is not bit-identical between JavaScript engines and
+     this simulation runs on two machines at once, which is why every knockback
+     in the roster is a precomputed kx/ky pair. A subtraction, a square root
+     and two divisions are all exactly-rounded IEEE-754 operations, so they are
+     the same number everywhere. The knockback the bolt lands with is still a
+     literal off its spec; only which way it FLIES is computed. */
+  shoot() {
+    const s = this.spec;
+    if (!s.bolt) return;
+    if (this.fire > 0) { this.fire--; return; }
+    const b = s.bolt;
+    const f = this.target(b.sight, b.sightY);
+    if (!f) return;
+    /* Turned to face it -- but NOT while the arm is already out. `dir` is
+       what box() mirrors off, so re-aiming mid-punch would swing a live
+       hitbox around somebody already standing inside it, which is the exact
+       failure the belch's latched aim exists to prevent. A bolt fired while
+       it is punching the other way simply leaves from a muzzle four pixels
+       off; the aim vector below is computed to where the target actually is
+       either way. */
+    const face = f.x >= this.x ? 1 : -1;
+    if (this.swing <= 0) this.dir = face;
+    // Out of the sensor eye, which is where it visibly comes from.
+    const mx = this.x + face * 2, my = this.y - 13;
+    let ux = f.x - mx, uy = (f.y - HURT_H / 2) - my;
+    const len = Math.sqrt(ux * ux + uy * uy);
+    // Standing exactly on the muzzle. Nothing to aim at, so it holds its
+    // shot rather than firing a bolt with no direction.
+    if (len < 0.001) return;
+    ux /= len;
+    uy /= len;
+    this.fire = s.fireEvery;
+    projectiles.push(new Bolt(this.owner, b, mx, my, ux, uy));
+    addEffect('spark', mx + ux * 3, my + uy * 3, BOT_HOT);
+    cue('shoot', { slot: this.owner.slot, x: this.x, gain: 0.5 });
+  }
+
+  /* THE ARM, and only while it is out. `live` below is what makes this a
+     hitbox for the six or seven frames of a punch and scenery for the rest of
+     the time -- the same capability Simon's soul uses, and for the same
+     reason: a box that lied about where it is for the other fifty frames
+     works right up until somebody reads it.
+
+     `reach` is the near edge forward of the robot's center and `boxW` runs
+     that much further forward, which is the convention a melee move's ox and
+     w already use. `boxTop` and `boxH` are a top edge and a height rather
+     than a center and a height, because every other box() in this file is
+     written in corners. */
+  box() {
+    const s = this.spec;
+    return {
+      x: this.dir > 0 ? this.x + s.reach : this.x - s.reach - s.boxW,
+      y: this.y + s.boxTop,
+      w: s.boxW,
+      h: s.boxH,
+    };
+  }
+
+  live() { return this.swing > 0; }
+
+  /* THE MACHINE ITSELF, which has to be a different rectangle from box()
+     above: that one is the arm, and the arm is only there seven frames at a
+     time. This is what somebody has to hit to break a part off, and it is
+     exactly the silhouette that gets drawn -- eleven wide on its treads, and
+     as tall as it has been built.
+
+     A prototype method, like the dog's onSurface and for the same reason:
+     restoreSim copies own keys and its deletion pass never sees a method. */
+  hull() {
+    const h = BOT_TALL[this.tier - 1];
+    return { x: this.x - 5, y: this.y - h, w: 11, h: h };
+  }
+
+  /* Drawn in fillRects rather than as a sprite sheet, because nobody drew
+     this and because rectangles are the only thing a recorder can read back:
+     drawImage is invisible to the harness that checks what this actually
+     puts on screen.
+
+     THREE THINGS ANIMATE, and each of them is a fact about the simulation
+     rather than decoration:
+
+       the arm     pulled back for the five frames before a punch, thrown
+                   forward for the frames the hitbox is live. That is the
+                   telegraph, and it is the only warning a person gets.
+       the metal   goes dark and judders while it is rebooting or flinching,
+                   which are exactly the frames it cannot hurt anybody.
+       the eye     pulses on the finished tier, and goes white for the eight
+                   frames before it fires. */
+  draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const d = this.dir;
+    const off = this.boot > 0 || this.flinch > 0;
+    // Everything is placed in forward-space and mirrored exactly once, here,
+    // which is the trick relBox uses so nothing needs a second set of
+    // numbers for facing left. `n` is pixels in front of the center.
+    const bx = x + (this.boot > 0 && Math.floor(this.boot / 2) % 2 ? d : 0);
+    const fx = (n, w) => (d > 0 ? bx + n : bx - n - w + 1);
+    const body = off ? BOT_DARK : BOT_BODY;
+    const trim = off ? BOT_TREAD : BOT_TRIM;
+
+    // TREADS, and two hubs in them. It has wheels it will never use, which
+    // is the joke and also the reason it reads as a machine somebody built
+    // rather than as a box sitting on the floor.
+    g.fillStyle = BOT_TREAD;
+    g.fillRect(bx - 5, y - 3, 11, 3);
+    g.fillStyle = trim;
+    g.fillRect(bx - 4, y - 3, 2, 2);
+    g.fillRect(bx + 2, y - 3, 2, 2);
+
+    /* DECK. The first press, and the shelf everything else is bolted to.
+
+       Its top band is painted in THE BUILDER'S OWN COLOR rather than in
+       metal, and that is the only thing on the robot that is not gray. With
+       four players on a stage there can be more than one machine standing
+       around, and "whose is that" has to be answerable at a glance rather
+       than by remembering who pressed what. It is also the one stripe wide
+       enough to read at this size. */
+    g.fillStyle = body;
+    g.fillRect(bx - 4, y - 5, 9, 2);
+    g.fillStyle = off ? BOT_DARK : (this.owner.accent || BOT_TRIM);
+    g.fillRect(bx - 4, y - 5, 9, 1);
+
+    /* THE ARM, before the torso that owns it, so a punch passes behind the
+       body instead of hovering in front of it. Two of them, and which one
+       depends only on the tier: at one press it is a servo claw on the front
+       of the deck, low enough that its box misses anybody in the air, and
+       from two presses on it is a real arm at chest height. */
+    const winding = !this.idle && this.swing <= 0 &&
+                    this.clock > 0 && this.clock <= 5;
+    if (this.tier === 1) {
+      g.fillStyle = off ? BOT_DARK : BOT_BODY;
+      if (this.swing > 0) {
+        g.fillRect(fx(5, 5), y - 4, 5, 2);
+        g.fillStyle = trim;
+        g.fillRect(fx(8, 2), y - 5, 2, 1);      // the claw, opened
+        g.fillRect(fx(8, 2), y - 2, 2, 1);
+      } else {
+        /* At rest the claw is two pixels of metal butted against a deck
+           made of the same metal, which read as a slightly longer deck and
+           not as an arm at all. The GRIPPER is trim, so there is an edge
+           where the machine stops and the tool starts. */
+        g.fillRect(fx(winding ? 4 : 5, 2), y - 4, 2, 2);
+        g.fillStyle = trim;
+        g.fillRect(fx(winding ? 5 : 6, 1), y - 4, 1, 2);
+      }
+    } else {
+      g.fillStyle = off ? BOT_DARK : BOT_BODY;
+      if (this.swing > 0) {
+        g.fillRect(fx(3, 6), y - 8, 6, 2);
+        g.fillStyle = trim;
+        g.fillRect(fx(9, 2), y - 9, 2, 3);      // the fist, at full stretch
+      } else {
+        // And the hand, for the reason the gripper above is trim: an arm
+        // the color of the torso it is bolted to has no end.
+        g.fillRect(fx(winding ? 2 : 3, 3), y - 8, 3, 2);
+        g.fillStyle = trim;
+        g.fillRect(fx(winding ? 4 : 5, 1), y - 8, 1, 2);
+      }
+    }
+
+    // TORSO, the second press.
+    if (this.tier >= 2) {
+      g.fillStyle = body;
+      g.fillRect(bx - 3, y - 9, 7, 4);
+      /* Shoulder CAPS rather than a bar across the whole top. Drawn full
+         width it was a black line between the deck and the torso, and the
+         machine read as two slabs stacked up instead of as one body with
+         arms on it. */
+      g.fillStyle = BOT_TREAD;
+      g.fillRect(bx - 3, y - 9, 2, 1);
+      g.fillRect(bx + 2, y - 9, 2, 1);
+      g.fillStyle = trim;
+      g.fillRect(bx - 2, y - 8, 3, 2);          // a plate on the chest
+    }
+
+    // HEAD, ANTENNA AND EYE: the third press, and the only part of it that
+    // says the machine is looking at you.
+    if (this.tier >= 3) {
+      g.fillStyle = BOT_TREAD;
+      g.fillRect(bx - 1, y - 10, 3, 1);         // neck
+      g.fillStyle = body;
+      g.fillRect(bx - 2, y - 14, 5, 4);
+      /* ONE ROW of visor, not two. At two the dark band was three quarters
+         of a head that is only four rows tall and the whole thing read as a
+         black brick with a cap on it -- the eye had nothing to be set into.
+         One row of slot and a jaw under it leaves metal above, between and
+         below, which is what makes it a face. */
+      g.fillStyle = BOT_TREAD;
+      g.fillRect(bx - 2, y - 13, 5, 1);         // the visor the eye sits in
+      g.fillRect(bx - 1, y - 11, 3, 1);         // and a jaw under it
+      g.fillRect(fx(2, 1), y - 16, 1, 2);       // the antenna
+      /* Lit unless it is rebooting, and WHITE for the eight frames before a
+         bolt leaves it. The pulse is driven off `t`, which is snapshot state,
+         so a rollback replays the same frame of it rather than a light that
+         jumps. */
+      const charging = this.fire > 0 && this.fire <= 8;
+      const lit = !off && (charging || Math.floor(this.t / 9) % 4 !== 3);
+      if (lit) {
+        g.fillStyle = charging ? BOT_HOT : BOT_EYE;
+        g.fillRect(fx(1, 2), y - 13, 2, 1);
+        g.fillRect(fx(2, 1), y - 16, 1, 1);     // the antenna's tip
+      }
+    }
+  }
+}
+
+/* What a finished robot fires. A short bright dash on the line between its
+   eye and whoever it decided was nearest.
+
+   Straight, because it is aimed: there is no arc to lead and no drop to
+   learn, which is what stops a turret nobody is standing next to from being
+   a guessing game. It is the SHORTEST-lived shot in the file for the same
+   reason -- `life` times `speed` is how far it reaches, and that is the
+   number that decides whether standing across the stage from a robot is
+   safe.
+
+   FRAIL. sweepFrail deletes any shot carrying that the moment an opposing
+   hitbox touches it, so the answer to a turret parked somewhere awkward is to
+   swat what it sends -- and the same pass lets somebody else's projectile do
+   it too, which matters for the characters who never come close enough to
+   swing. Read off the spec rather than written here, so it stays a property
+   of the move, and assigned in the constructor because restoreSim deletes
+   keys a snapshot lacks. */
+class Bolt {
+  constructor(owner, spec, x, y, ux, uy) {
+    // The FIGHTER, not the robot, so applyHit credits the man who built it
+    // and the don't-hit-yourself check in resolveCombat knows who to skip.
+    this.owner = owner;
+    this.spec = spec;
+    this.x = x;
+    this.y = y;
+    this.vx = ux * spec.speed;
+    this.vy = uy * spec.speed;
+    this.life = spec.life;
+    this.frail = !!spec.frail;
+    this.dead = false;
+  }
+
+  update() {
+    this.life--;
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.life <= 0) this.dead = true;
+    if (this.x < -12 || this.x > VW + 12 ||
+        this.y < -24 || this.y > VH + 24) this.dead = true;
+  }
+
+  box() {
+    return { x: this.x - 2, y: this.y - 2, w: 5, h: 4 };
+  }
+
+  draw(g) {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = this.spec.tint || BOT_EYE;
+    g.fillRect(x - 2, y - 1, 5, 3);
+    g.fillStyle = BOT_HOT;
+    g.fillRect(x - 1, y, 3, 1);
+  }
+}
 /* The piece he chose, walking the board, and what it turns into.
 
    It used to be a pawn: one sprite, one speed, one line along the floor,
@@ -14106,6 +16208,13 @@ class Puddle {
          times a second at somebody standing still. */
       if (f.slick === 0) cue('slip', { slot: f.slot, x: f.x });
       if (f.slick < s.slick) f.slick = s.slick;
+      /* AND THE GRIP, which goes only if the milk is not yours. Re-armed off
+         the same number as `slick`, so the tail past the far edge is exactly
+         as long for the victim as the glide is for the owner and there is
+         one figure in the spec rather than two that can drift apart. See
+         Fighter.slickFoe for why the owner is let off this half and not the
+         other one. */
+      if (f !== this.owner && f.slickFoe < s.slick) f.slickFoe = s.slick;
     }
 
     // It turns. One ring so the moment is legible -- a hazard that changes
@@ -14245,10 +16354,59 @@ class Mower {
     if (this.life <= 0) this.dead = true;
     if (this.x < -24 || this.x > VW + 24) this.dead = true;
 
+    /* MULCHING HIS OWN MILK. The deck over one of his own fresh spills
+       turns it where it lies and gives it its whole life back, which is the
+       one place two of his moves combine -- see `mulch` in the ROSTER for
+       the argument, which is that the spill's damaging half otherwise runs
+       on a clock nobody watches.
+
+       Identity on the payload rather than `instanceof Puddle`, the way
+       canSpecial's maxAlive test does it: two moves can share a class and
+       must not share a rule, and this one is about HIS milk specifically.
+
+       `curdle - 1` rather than `curdle`, so the Puddle's own update does the
+       flip on the next frame and fires its own ring and sparks. There is one
+       place in the file that decides what turning looks like, and it is not
+       here. */
+    if (s.mulch) {
+      const neutral = this.owner.def.specials && this.owner.def.specials.neutral;
+      const pud = neutral && neutral.puddle;
+      if (pud) {
+        const deck = this.box();
+        for (const p of projectiles) {
+          if (p.dead || p.spec !== pud || p.owner !== this.owner) continue;
+          if (!p.curdled || p.curdled()) continue;
+          if (!overlap(deck, p.box())) continue;
+          p.t = pud.curdle - 1;
+          p.life = pud.life;
+          p.born = pud.life;
+        }
+      }
+    }
+
     // Cut grass and dust off the front edge, so it reads as a machine doing
     // something to the floor rather than a box being carried along.
     if (this.t % 5 === 0) {
       addEffect('dust', this.x + this.dir * (s.boxW / 2), this.y, '#9ec46a');
+    }
+  }
+
+  /* IT EATS. sweepFrail calls this on the frame the deck destroys somebody
+     else's shot, before the shot is marked dead.
+
+     The mana is the whole of it -- see `feeds` in the ROSTER -- and it is
+     clamped to the bar rather than allowed to bank, so a Houston who walks
+     through four pies is not carrying a second special around in credit.
+
+     Effects and no `cue`: this can fire several times on one frame when the
+     deck reaches a volley, and a sound per shot would be a rattle. */
+  onShred() {
+    const s = this.spec;
+    if (!s.feeds) return;
+    this.owner.mana = Math.min(COMBAT.manaMax, this.owner.mana + s.feeds);
+    addEffect('ring', this.x, this.y - s.boxH / 2, '#9ec46a');
+    for (let i = 0; i < 3; i++) {
+      addEffect('spark', this.x + this.dir * (i * 3 - 3), this.y - 4, '#0a84ff');
     }
   }
 
@@ -14292,6 +16450,25 @@ const ROAD_ROWS = SPRITES.newdeal.rows;
    ROSTER carries ONE size number for a car -- the width a lane allows it --
    and the height is the artist's, at every scale, forever. */
 const ROAD_CAR_TALL = SPRITES.newdeal.ch / SPRITES.newdeal.cw;
+
+/* HOW WIDE THE ROAD IS ON THE STAGE, as against how wide Kel drew it.
+
+   One function rather than six copies of `ROAD_NEAR * spec.spread`, because
+   the road's own box, its dust, the lane offsets and the cars all have to
+   agree about it -- and a perspective where two of those four disagree still
+   draws, still moves and still hits people, just not where it is painted.
+
+   Rounded, and that matters: drawImage is handed this as a destination width
+   and a fractional one smears a nearest-neighbor blit differently on each
+   row. `spread` is fixed data, so the rounding is the same on every machine.
+
+   `|| 1` covers a snapshot or a hand-built spec from before `spread` existed
+   -- the road comes out at exactly the width it always was rather than at
+   NaN, which draws nothing at all and is the hardest kind of nothing to
+   diagnose. */
+function roadWide(spec) {
+  return Math.round(ROAD_NEAR * (spec.spread || 1));
+}
 
 /* THE ROAD. A public work: he breaks ground and it paves itself in, from his
    feet away toward the vanishing point, and then it lets cars onto itself
@@ -14371,7 +16548,7 @@ class Roadway {
        numbers are multiplied by how much is built. */
     if (this.t < s.pave && this.t % 3 === 0) {
       const k = this.built();
-      addEffect('dust', this.x + rand(-1, 1) * (ROAD_NEAR / 2) * k,
+      addEffect('dust', this.x + rand(-1, 1) * (roadWide(s) / 2) * k,
                 this.y - (ROAD_ROWS - 1) * k, '#b9b6b2');
     }
     if (this.t >= this.life()) this.dead = true;
@@ -14382,7 +16559,8 @@ class Roadway {
      that answered with nothing would be a crash lying in wait for the next
      person to add a pass over the list. */
   box() {
-    return { x: this.x - ROAD_NEAR / 2, y: this.y - 1, w: ROAD_NEAR, h: 1 };
+    const w = roadWide(this.spec);
+    return { x: this.x - w / 2, y: this.y - 1, w: w, h: 1 };
   }
 
   draw(g) {
@@ -14399,9 +16577,17 @@ class Roadway {
        the near edge is pinned to the floor he broke ground on and the far end
        grows away from it. Source rectangle rather than a clip, because the
        part that does not exist yet must not be drawn at all. */
+    /* The SOURCE rectangle is the drawing's own, and the DESTINATION is
+       the drawing's stretched sideways by `spread`. Horizontally only: the
+       trapezoid keeps its height, so the vanishing point stays where it was
+       and every row still recedes at the rate build.py measured. The painted
+       lanes, the dashes down the middle and the yellow shoulders stretch with
+       it, which is why the safe stripe gets wider on screen at the same time
+       as it gets wider in the arithmetic. */
+    const w = roadWide(s);
     g.drawImage(im, 0, ROAD_ROWS - rows, ROAD_NEAR, rows,
-                Math.round(this.x) - (ROAD_NEAR >> 1),
-                Math.round(this.y) - rows, ROAD_NEAR, rows);
+                Math.round(this.x) - (w >> 1),
+                Math.round(this.y) - rows, w, rows);
     if (a < 1) g.globalAlpha = 1;
   }
 }
@@ -14439,7 +16625,22 @@ class Oncoming {
     this.x0 = road.x;
     this.y0 = road.y;
     // Which lane, in near-edge pixels off the white line, and which paint.
-    this.lane = road.spec.lanes[index] * road.spec.laneX * road.dir;
+    /* `laneX` is in the drawing's units and `spread` carries it onto the
+       stage, exactly as it carries the road's width -- which is the whole
+       point of there being one factor: a lane and the asphalt it is painted
+       on cannot come out at different scales. */
+    this.lane = road.spec.lanes[index] * road.spec.laneX *
+                (road.spec.spread || 1) * road.dir;
+    /* WHICH CAR THIS IS in the queue, and which of the three paints it
+       wears. They stopped being the same number the day the road got six
+       cars instead of three: `tint` wraps, so cars 0 and 3 are the same
+       color, and anything that wanted to tell one car from another -- a
+       probe, a test, a future move that treats the last one specially --
+       would have been looking at a number that repeats.
+
+       Both in the constructor, because restoreSim deletes any key a snapshot
+       does not carry. */
+    this.index = index;
     this.tint = index % SPRITES.newdeal.cars.length;
     this.t = 0;
     /* `pierce` with `hitAt`, like the mower and the vine, so it drives
@@ -14510,15 +16711,19 @@ class Oncoming {
     if (before < 1 && this.s >= 1) {
       cue('deadlift', { slot: this.owner.slot, x: this.x });
       for (let i = 0; i < 5; i++) {
-        addEffect('dust', this.x + rand(-1, 1) * this.ult.carW * 0.5,
+        addEffect('dust', this.x + rand(-1, 1) * this.wide() * 0.5,
                   this.y, '#b9b6b2');
       }
     }
     if (this.t >= this.ult.travel + this.ult.past) this.dead = true;
   }
 
+  // Its width on the stage: the drawing's number through `spread`, the
+  // same trip the road's own width and the lane offsets make.
+  wide() { return this.ult.carW * (this.ult.spread || 1); }
+
   box() {
-    const w = this.ult.carW * this.s;
+    const w = this.wide() * this.s;
     const bw = w * this.ult.boxW;
     const bh = w * ROAD_CAR_TALL * this.ult.boxH;
     // Bottom-aligned on its row: its wheels are where the road is, which is
@@ -14532,12 +16737,135 @@ class Oncoming {
     /* Scaled with a destination size, the way the jackpot Simon is. Nearest
        neighbour is already on for this context, so a 44x57 drawing at a third
        of its size stays pixels rather than turning to soup. */
-    const w = Math.max(1, Math.round(this.ult.carW * this.s));
+    const w = Math.max(1, Math.round(this.wide() * this.s));
     const h = Math.max(1, Math.round(w * ROAD_CAR_TALL));
     g.drawImage(im, Math.round(this.x) - (w >> 1), Math.round(this.y) - h,
                 w, h);
   }
 }
+
+/* AN EGG, LAID.
+
+   The chicken's only ranged move and its only way back to being a person.
+   Thrown rather than fired: `speed` forward, `lift` up and `drop` a frame,
+   which is the same three numbers the milk carton arcs on, so it lobs about
+   seventy pixels on flat ground and has to be aimed rather than pointed.
+
+   ONE IN FIVE IS GOLDEN and that is settled on the frame it is laid, by
+   eggIsGolden, out of the frame number and the slot. Settled at BIRTH rather
+   than on contact on purpose: what it is has to be visible for the whole
+   flight -- a gold egg the enemy can see coming is a gold egg they can shield
+   or walk away from, and that is the counterplay to the way out.
+
+   It is not `frail`, so nothing can shoot it down; but it does not set
+   `shreds` either, so a car or a lawnmower driving through one deletes it
+   exactly the way they delete every other loose shot. Being run over while
+   trying to get out of being run over is the right shape for this move. */
+class Egg {
+  constructor(owner, spec) {
+    this.owner = owner;
+    this.spec = spec;
+    this.dir = owner.facing;
+    /* OUT OF THE BACK END, which the LAY pose has just turned to face
+       forward -- see CHICKEN_LAY for why the drawing does the joke instead
+       of the physics. Five ahead of center and five up is the vent on that
+       grid, so the egg appears out of the bird rather than beside it. */
+    this.x = owner.x + this.dir * 5;
+    this.y = owner.y - 5;
+    this.vx = this.dir * spec.speed;
+    this.vy = spec.lift;
+    this.t = 0;
+    this.life = spec.life;
+    /* Every field this class reads is assigned here, `golden` included,
+       because restoreSim deletes any key a snapshot does not carry -- and an
+       egg whose goldenness went undefined on a rollback would be a white egg
+       on one machine and the way home on the other. */
+    this.golden = eggIsGolden(battleFrames, owner.slot, spec.goldenOneIn);
+    this.dead = false;
+  }
+
+  update() {
+    const prevY = this.y;
+    this.t++;
+    this.life--;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.spec.drop;
+    // Landing on the floor is the ordinary end of one: most eggs miss.
+    if (this.vy > 0) {
+      for (const p of platformsNow()) {
+        if (this.x < p.x || this.x > p.x + p.w) continue;
+        if (prevY <= p.y && this.y >= p.y) {
+          this.y = p.y;
+          this.crack();
+          return;
+        }
+      }
+    }
+    if (this.life <= 0) { this.crack(); return; }
+    if (this.x < -20 || this.x > VW + 20 || this.y > VH + 40) this.dead = true;
+  }
+
+  box() {
+    // A little inside the drawing, which is 5 by 7: the shell is not the
+    // hitbox any more than a car's wing mirrors are.
+    return { x: this.x - 2, y: this.y - 3, w: 5, h: 7 };
+  }
+
+  /* `burst` is a RESERVED name on a projectile: resolveCombat calls it on
+     any shot that reaches a fighter, which is the only place that knows it
+     connected -- and, because that loop skips `f === shot.owner`, the only
+     place that knows it connected with SOMEBODY ELSE. That is what makes
+     "an ENEMY player" a property of the caller rather than a check in here
+     that could drift out of step with it. */
+  burst() {
+    if (this.dead) return;
+    this.crack();
+    if (this.golden) this.owner.unchicken();
+  }
+
+  // Broken, wherever it broke. Sets `dead` itself, so neither caller has to.
+  crack() {
+    if (this.dead) return;
+    this.dead = true;
+    const col = this.golden ? CHICKEN_GOLD : '#f7f2e4';
+    for (let i = 0; i < 6; i++) {
+      addEffect('milk', this.x + rand(-2, 2), this.y - rand(0, 4), col);
+    }
+    addEffect('ring', this.x, this.y - 2, col);
+    cue('throw', { slot: this.owner.slot, x: this.x, gain: 0.45 });
+  }
+
+  draw(g) {
+    const art = pixelArt(this.golden ? 'egg.gold' : 'egg.white', EGG_ART,
+                         this.golden ? EGG_GOLD : EGG_WHITE);
+    drawArt(g, art, this.x, this.y);
+    if (!this.golden) return;
+    /* A TURNING SPARKLE, and it is the difference between "that egg is
+       yellow" and "that egg is THE egg". Four points of a cross a quarter
+       turn apart, stepping one notch every other frame, so the gold one
+       glitters from across the stage at three pixels tall.
+
+       EGG_SPARK is a written-out ring rather than a computed one for the
+       reason PRISM_DIRS is: build.py refuses a file that contains a cosine
+       call anywhere, comments included.
+
+       Read off `t`, which is snapshotted, so a rollback replays the same
+       glitter instead of re-rolling it. */
+    const spin = (this.t >> 1) % EGG_SPARK.length;
+    for (let i = 0; i < 4; i++) {
+      const d = EGG_SPARK[(spin + i * 2) % EGG_SPARK.length];
+      g.fillStyle = i % 2 ? '#ffffff' : CHICKEN_GOLD;
+      g.fillRect(Math.round(this.x + d[0]), Math.round(this.y + d[1]), 1, 1);
+    }
+  }
+}
+
+/* Eight points evenly round the golden egg, as whole-pixel offsets. Written
+   out, not computed -- see PRISM_DIRS. */
+const EGG_SPARK = [
+  [0, -7], [4, -5], [6, 0], [4, 5], [0, 7], [-4, 5], [-6, 0], [-4, -5],
+];
 
 /* The car.
 
@@ -15409,9 +17737,6 @@ function updateEffects() {
     if (e.kind === 'milk') {
       e.x += e.vx * 1.6; e.y += e.vy * 1.6; e.vy += 0.22;
     }
-    if (e.kind === 'stick') {
-      e.x += e.vx; e.y += e.vy; e.vy += 0.16;
-    }
     /* Sound goes where it was aimed and only there: no gravity, no drift.
        A vector rather than a speed and a sign, because a belch can now be
        pointed over his head or at the floor -- see the `wave` block on each
@@ -15603,31 +17928,6 @@ function drawEffects(g) {
         g.globalAlpha = Math.min(1, k * 1.8);
         drawArt(g, pixelArt('knightU', KNIGHT_ART,
                             { '#': '#efe7d2', E: '#3c2a1e' }), e.x, e.y);
-        g.globalAlpha = 1;
-        break;
-      }
-
-      case 'swipe': {
-        // The arc of the swing, brightest at the leading edge.
-        const dir = e.dir;
-        const n = SWING_ARC.length;
-        for (let i = 0; i < n; i++) {
-          const p = SWING_ARC[i];
-          g.globalAlpha = k * (0.25 + 0.75 * (i / n));
-          g.fillStyle = e.color;
-          g.fillRect(Math.round(e.x + p[0] * dir) - 1,
-                     Math.round(e.y + p[1]) - 1, 2, 2);
-        }
-        g.globalAlpha = 1;
-        break;
-      }
-
-      case 'stick': {
-        // A drumstick, thrown along the arc and tumbling out of it.
-        const art = pixelArt('stick' + (e.dir > 0 ? 'R' : 'L'), STICK_ART,
-                             { '#': e.color }, e.dir < 0);
-        g.globalAlpha = Math.min(1, k * 1.4);
-        drawArt(g, art, e.x, e.y);
         g.globalAlpha = 1;
         break;
       }
@@ -15966,7 +18266,13 @@ function releaseGrab(grabber) {
    projectile that hits harder in one pose does not also launch harder and
    quietly rewrite the spacing around it. */
 function applyHit(attacker, defender, move, sourceX, scale) {
-  let dmg = move.damage * attacker.damageMul * (scale == null ? 1 : scale);
+  /* `noBuff` is a move that is not multiplied by whatever the attacker is
+     currently buffed with. One move carries it -- LEG DAY, which GRANTS the
+     multiplier, and which at 22 is already level with the hardest single hit
+     in the game. See the roster: an ult that multiplies itself is the only
+     way anything in Kel's kit goes over that ceiling. */
+  let dmg = move.damage * (move.noBuff ? 1 : attacker.damageMul) *
+            (scale == null ? 1 : scale);
   /* What they were doing when it landed, captured before anything below can
      change it. See the punish branch near the bottom. */
   const committed = defender.state === 'attack' || defender.state === 'special' ||
@@ -16000,6 +18306,67 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   if (attacker.swordTimer <= 0 && !move.noMeter) {
     attacker.ultMeter = Math.min(COMBAT.ultMax,
       attacker.ultMeter + dmg * COMBAT.ultPerDamageDealt);
+  }
+
+  /* HITTING A MAN WHO IS ASLEEP.
+
+     He takes the damage and nothing else happens to him: no launch, no
+     hitstun, no grab, no poison, no confusion -- the shape `graze` already
+     has in this file, for the same reason broken glass has it. A body flat
+     on the floor in the middle of a five-hundred-frame move cannot be sent
+     anywhere without ending the move, and ending the move on the first jab
+     is not what "thirty damage wakes him" means.
+
+     DELIBERATELY ABOVE THE GRAB BRANCH, which is the one thing here that is
+     not obvious. Every grab in the game goes through a shield and would have
+     gone through this too: one guillotine on a sleeping Simon would have put
+     him in `grabbed`, killed the soul and ended the ult outright, whatever
+     the tally said. A sleeping man cannot be picked up. He also cannot be
+     shield-broken, poisoned or set alight, which is the price of writing the
+     rule in one place instead of six -- and the honest trade, since the
+     tally is then the ONLY thing that reaches him and there is no second
+     path by which he can quietly lose the ult.
+
+     The KO is the exception that has to stay: thirty is an interrupt, but
+     a health bar reaching zero is a stock, and a sleeping man is now
+     killable. That is the real cost of taking the guard off.
+
+     `dmg` is what the tally counts -- the buffed, scaled number that actually
+     came off the bar -- so thirty damage means thirty damage. */
+  const nap = defender.slouching();
+  if (nap) {
+    /* SOFTENED, the same way Remy's nap softens knockback and for the same
+       reason: a body slack on the floor does not take a hit the way a man on
+       his feet does. `guard` is the fraction that gets through, and the tally
+       counts what GETS THROUGH -- so "thirty damage wakes him" is thirty
+       damage he actually took, not thirty swung at him. */
+    const dealt = dmg * (nap.guard == null ? 1 : nap.guard);
+    defender.health -= dealt;
+    defender.slouchDamage += dealt;
+    defender.sinceHitFrames = 0;
+    // He does not flinch; the attacker still feels it land.
+    defender.hitstop = 0;
+    attacker.hitstop = COMBAT.hitstopLight;
+    addEffect('hit', defender.x, defender.y - 7, '#ffffff');
+    cue('hit', { slot: defender.slot, x: defender.x });
+    /* KILLED IN HIS SLEEP, or not. `lethal: false` floors him at one point
+       instead: the sleep then costs him everything except the stock, and the
+       thirty is the only thing that can end it early. Which of the two is
+       right is a balance question and is answered in the roster, not here. */
+    if (defender.health <= 0) {
+      if (nap.lethal === false) { defender.health = 1; }
+      else { defender.knockOut(); return; }
+    }
+    /* UP. One frame short of the end of the sleep, because updateAttack
+       increments attackFrame before runSpecial looks at it -- so the next
+       frame lands exactly on startup + active, which is the frame the wake
+       ring already fires on and the frame the soul already dies on. Writing
+       the end frame itself would have skipped both. */
+    if (nap.rouse && defender.slouchDamage >= nap.rouse) {
+      defender.attackFrame = nap.startup + nap.active - 1;
+      announce('WAKE UP', '#8fd6ff');
+    }
+    return;
   }
 
   // Shield eats the hit if it's up and facing the right way.
@@ -16276,6 +18643,27 @@ function applyHit(attacker, defender, move, sourceX, scale) {
     defender.knockOut();
   }
 
+  /* AND THE FEATHERS. Beside poison, burn and confusion in spirit but
+     BELOW the launch rather than beside them, and the two reasons are the
+     two guards on the line:
+
+       `health > 0` -- the blow that takes the stock has already called
+       knockOut two lines up. Turning a body in KO flight into a chicken
+       would be a transformation respawn undoes half a second later, which is
+       a flicker of feathers on a corpse and nothing else.
+
+       The move asks for it. `chicken` is a flag on the spec, so the thing
+       that does this is a MOVE rather than a character, and the next one
+       that wants to says so in its own roster entry.
+
+     Everything above this line still applies exactly as it did: a shield
+     returns long before here, so blocking a car blocks the feathers; a graze
+     returns too; and a victim who is already a chicken is dealt with by
+     becomeChicken itself, which is idempotent. */
+  if (move.chicken && defender.health > 0 && !defender.eliminated) {
+    defender.becomeChicken();
+  }
+
   const stop = kb > 7 ? COMBAT.hitstopHeavy : COMBAT.hitstopLight;
   attacker.hitstop = stop;
   defender.hitstop = stop;
@@ -16335,18 +18723,67 @@ function sweepFrail(fighters) {
     if (p.frail) any = true;
     if (p.shreds) shredder = true;
   }
-  if (!any && !shredder) return;
+  /* A THIRD way in, beside frail and shreds: a fighter whose live box EATS a
+     shot instead of merely killing it. Houston's HAMMER & SICKLE is the only
+     one, and it is checked here rather than in the frail pass above because
+     it answers shots nobody marked as fragile -- which is the whole point of
+     it, the same way the shredder exists to answer shots nobody marked. */
+  /* The catching box, which is NOT the hitbox: wider, and open for the whole
+     swing rather than only the frames that hurt. absorbBox returns null for
+     everybody else, on every frame. */
+  const absorbBox = (f) => {
+    if (f.eliminated || f.hitstop > 0) return null;
+    if (f.state !== 'special' && f.state !== 'ult') return null;
+    const m = f.moveFor(f.state);
+    const ab = m && m.absorb;
+    if (!ab) return null;
+    const k = f.attackFrame;
+    if (k < (ab.from || 1) || k > (ab.to || 9e9)) return null;
+    const p = ab.pad || 0;
+    const b = f.relBox(m);
+    return { box: { x: b.x - p, y: b.y - p, w: b.w + p * 2, h: b.h + p * 2 },
+             cap: ab.cap };
+  };
+  let absorbing = false;
+  for (const f of fighters) {
+    if (absorbBox(f)) { absorbing = true; break; }
+  }
+  if (!any && !shredder && !absorbing) return;
   for (const a of fighters) {
-    if (!any) break;
+    if (!any && !absorbing) break;
     if (a.eliminated || a.hitstop > 0) continue;
     const h = a.hitbox();
-    if (!h) continue;
+    const grab = absorbBox(a);
+    if (!h && !grab) continue;
+    const eats = grab;
     for (let n = projectiles.length, i = 0; i < n; i++) {
       const shot = projectiles[i];
-      if (shot.dead || !shot.frail || shot.owner === a) continue;
-      if (!overlap(h.box, shot.box())) continue;
+      if (shot.dead || shot.owner === a) continue;
+      /* Frail dies to any swing; everything else dies only to a swing that
+         eats. A shredder is not food -- two answers to projectiles should not
+         cancel each other out. */
+      if (!shot.frail && !(eats && !shot.shreds)) continue;
+      /* A frail shot dies to the swing itself; anything else has to be inside
+         the wider catching box. Two boxes, because they mean two different
+         things and only one of them is allowed to be generous. */
+      const usingBox = (shot.frail && h) ? h.box : (eats ? eats.box : null);
+      if (!usingBox || !overlap(usingBox, shot.box())) continue;
       if (shot.struck) shot.struck();
       shot.dead = true;
+      if (!eats) continue;
+      /* What it was carrying, capped. `spec` is the finished move a shot
+         hands applyHit, so this is the damage it would actually have done
+         rather than a number off the roster that a half or a tint might have
+         patched. */
+      const worth = Math.min(eats.cap, (shot.spec && shot.spec.damage) || 0);
+      if (worth > 0) {
+        a.health = Math.min(COMBAT.maxHealth, a.health + worth);
+        addEffect('ring', shot.x, shot.y, EMBLEM_GOLD);
+        for (let k = 0; k < 5; k++) {
+          addEffect('spark', shot.x + rand(-5, 5), shot.y + rand(-5, 5), EMBLEM_RED);
+        }
+        cue('drink', { slot: a.slot, x: a.x });
+      }
     }
   }
   for (let n = projectiles.length, i = 0; i < n; i++) {
@@ -16369,6 +18806,13 @@ function sweepFrail(fighters) {
       if (shot.owner === atk.owner) continue;
       if (!overlap(box, shot.box())) continue;
       if (shot.struck) shot.struck();
+      /* The shredder is told what it just ate, if it cares. Houston's mower
+         is the only thing in the file that does -- it pays him mana back, so
+         that walking into a screen full of shots is affordable as the answer
+         to a screen full of shots. Optional on purpose: a car on his road
+         shreds too and has nothing to do about it, and the frog-killing pass
+         above deliberately stays a pass that nobody gets paid for. */
+      if (atk.onShred) atk.onShred(shot);
       shot.dead = true;
     }
   }
@@ -16528,12 +18972,86 @@ function aiDecide(me, foe) {
       pad.jump = true;
       a.jumpCd = 9;
     }
-    // Trev's uppercut doubles as a recovery.
-    if (me.def.specials.up && me.def.specials.up.kind === 'uppercut' && me.vy > 1.5 && me.jumpsLeft <= 0 &&
+    /* Trev's uppercut doubles as a recovery -- unless he is a bird, in which
+       case he does not have it. This is the ONE place above the chicken
+       branch below that reaches for a special, and left alone it would spend
+       a falling chicken's last frames on a peck: slotFor maps the up button
+       to `neutral` for a moveset that has no up slot, so the press comes out
+       as a beak thrown at the sky, and entering `special` mid-fall halves his
+       air control on the way down. A chicken has no recovery move. Double
+       jumps and drift are the whole of getting home, which is a real part of
+       being one. */
+    if (!me.chicken &&
+        me.def.specials.up && me.def.specials.up.kind === 'uppercut' && me.vy > 1.5 && me.jumpsLeft <= 0 &&
         a.cooldown <= 0) {
       pad.special = true;
       pad.spUp = true;
       a.cooldown = 40;
+    }
+    return pad;
+  }
+
+  /* A CPU CHICKEN.
+
+     Its own decision, and it has to be ABOVE everything below, because
+     everything below is written for a fighter with three specials and a jab.
+     `me.def.specials.neutral` is read thirty lines down to decide how the
+     CPU spaces itself and which button it reaches for, and for a chicken
+     that is still whatever the person it used to be had in that slot. A
+     chicken Houston would stand off at milk range -- 55 pixels, because the
+     carton is `ranged` -- and press a button that is now a peck reaching
+     sixteen. It would never touch anybody again.
+
+     That is exactly the "presses buttons it no longer has and stands there"
+     failure, and it is not hypothetical: it is what this function does to a
+     bird unless it is told. So it is told, in two rules, one per button.
+
+     WALK IN AND PECK, out to 15, which is the peck's own reach and not a
+     new number: `ox` 3 by `w` 7 against a 9-wide hurtbox is 14.
+
+     AND LAY, out to 88, which is the egg's MEASURED reach and not a guess --
+     it flies 82 pixels and connects with anybody standing between 10 and 85
+     away, so a gate much past that is a bird lobbing eggs onto the floor in
+     front of somebody it cannot touch.
+
+     AND IT HESITATES EXACTLY AS MUCH AS EVERY OTHER CPU DOES. The two dice
+     below are aiDecide's own -- `aggression * 0.7` on the melee option and
+     `* 0.5` on the ranged one, with the same two cooldown ranges -- and that
+     is a balance decision rather than a copy. The first draft had no dice
+     and a ten-frame cooldown, on the theory that laying constantly is how a
+     bird gets out; MEASURED, that made the chicken BETTER than the fighter
+     it replaced. Houston's own CPU-vs-CPU win rate fell from 47% to 26% over
+     600 matches, because he was handing his opponents a two-button kit the
+     CPU plays competently in place of an eleven-button one it plays badly.
+     A punishment that improves the victim is not a punishment.
+
+     It still gets out. Over 600 CPU matches with this branch, 427 fighters
+     were turned into chickens and 361 of them laid a golden egg on somebody
+     and turned back.
+
+     WHAT STILL RUNS. Everything above this line: the recovery branch is
+     ahead of it, so a bird knocked off the edge still comes home, still
+     spends its air jumps and still steers the right way while confused. And
+     this returns through aiPad like every other branch, so the ledge check
+     that stops a CPU walking off the world applies to a chicken too. */
+  if (me.chicken) {
+    if (adx > 13) { if (toFoe > 0) pad.right = true; else pad.left = true; }
+    /* Hop after somebody standing above it, on the same terms the rest of
+       this function uses -- and never into the top blast zone. */
+    const roof = STAGE.ceilingY !== null || me.y > STAGE.blast.top + 110;
+    if (dy < -16 && me.grounded && roof && Math.random() < 0.10) wantJump();
+    if (a.cooldown <= 0) {
+      if (adx < 15 && Math.abs(dy) < 12 &&
+          Math.random() < a.aggression * 0.7) {
+        pad.special = true;
+        pad.spNeutral = true;
+        a.cooldown = Math.round(rand(12, 26));
+      } else if (adx < 88 && Math.abs(dy) < 30 &&
+                 Math.random() < a.aggression * 0.5) {
+        pad.special = true;
+        pad.spDown = true;
+        a.cooldown = Math.round(rand(24, 50));
+      }
     }
     return pad;
   }
@@ -16628,8 +19146,9 @@ function aiDecide(me, foe) {
          with a lift of -1.5 against a drop of 0.16, and lands 77 pixels away
          on flat ground. So the far end is the throw's own reach plus a little
          for somebody walking into it, and the near end is far enough that the
-         spill does not land on his own feet -- which it would, and he slips
-         in his own milk like everybody else. */
+         spill does not land on his own feet. He keeps the stick in his own
+         milk now -- see Fighter.slickFoe -- but not the brakes, and a puddle
+         under his heels is still a puddle he cannot stop in. */
       s.kind === 'milk' ? (adx > 30 && adx < 110 && Math.abs(dy) < 26) :
       /* shockwave */ (adx < 26 && Math.abs(dy) < 14);
 
@@ -18445,6 +20964,139 @@ function sandbagFrames() {
   return Array.isArray(sp) ? sp : [].concat(sp.rest || [], sp.hit || []);
 }
 
+/* WHICH POSE, and it is a POSTURE plus two moments rather than a timeline.
+
+   Every other fighter in this game holds one drawn pose for a whole move --
+   see sprite(), where a `set` is eight canonical frames and the attack
+   posture is struck on the first frame and held to the last -- because the
+   art for anything finer was never drawn. The chicken's was, so the peck and
+   the lay each get their startup in the standing pose and then snap: the
+   head goes out on the frame the box opens, and the bird turns round three
+   frames before the egg appears. Two frames of animation on a twenty-frame
+   move, and it is the difference between a swing and a sprite swap.
+
+   The peck's snap is deliberately the SAME frame the hitbox opens on. A
+   drawn beak that came out a frame early would be a move that looks like it
+   hits things it does not. */
+function chickenPose(f) {
+  if (f.state === 'special') {
+    const m = f.moveFor('special');
+    if (m && m.kind === 'peck') {
+      return f.attackFrame >= m.startup ? 'peck' : 'stand';
+    }
+    if (m && m.kind === 'egg') {
+      // Three frames before the egg, so the turn reads as a wind-up rather
+      // than as the egg shoving the bird round.
+      return f.attackFrame >= m.startup - 3 ? 'lay' : 'stand';
+    }
+  }
+  /* Off the ground, thrown, or on the way out of the match: legs dangling.
+     Hitstun is in here on purpose -- a chicken that took a hit is a chicken
+     with its feet off the floor, whatever `grounded` happens to say on the
+     frame the launch starts. */
+  if (!f.grounded || f.state === 'ko' || f.state === 'break' ||
+      f.state === 'hitstun') return 'flap';
+  if (f.state === 'walk' || f.state === 'roll') {
+    return (Math.floor(f.walkAnim) % 2) ? 'step' : 'stand';
+  }
+  return 'stand';
+}
+
+/* THE BIRD, blitted where the body goes.
+
+   Anchored on the feet and the center -- the two points hurtbox() is built
+   from -- and scaled by sizeMul for the same reason every other body is: the
+   picture and the target are not allowed to disagree about how big somebody
+   is. becomeChicken clears any buff, so sizeMul is 1 for every chicken in
+   the game today; it is read anyway, because "it happens to be 1" is not a
+   reason to write code that would be wrong if it were not. */
+function drawChicken(g, f) {
+  const pose = chickenPose(f);
+  const flip = f.facing < 0;
+  const art = pixelArt('chick.' + pose + (flip ? 'L' : 'R'),
+                       CHICKEN_POSES[pose], CHICKEN_PAINT, flip);
+  const d = 16 * f.sizeMul;
+  let w = d, h = d;
+
+  /* THE POP. For the first eighteen frames the bird is squashed through a
+     classic three-beat: it arrives WIDE AND FLAT, stretches TALL AND THIN as
+     it stands up, and settles square.
+
+     `wob` is one expression doing all three. (1 - settle) is how much wobble
+     is left, and (1 - 3 * settle) is its SIGN: +1 at the start, through zero
+     a third of the way, down to -1/3 and back to 0. So there is one curve
+     here, not three keyframes somebody has to keep in step.
+
+     Driven off battleFrames - chickenSince rather than a countdown, so a
+     rollback recomputes the same frame of the same pop instead of replaying
+     it from the top -- the same reason sizeMul reads buffStats.since. */
+  const t = f.chickenSince >= 0 ? battleFrames - f.chickenSince
+                                : CHICKEN.transform;
+  if (t >= 0 && t < CHICKEN.transform) {
+    const u = t / CHICKEN.transform;
+    const grow = Math.min(1, u / 0.3);
+    const settle = u < 0.3 ? 0 : (u - 0.3) / 0.7;
+    const wob = (1 - settle) * (1 - 3 * settle);
+    w = Math.max(2, Math.round(d * grow * (1 + 0.5 * wob)));
+    h = Math.max(2, Math.round(d * grow * (1 - 0.35 * wob)));
+  }
+  // Nearest-neighbor, or a squashed 16x16 arrives blurred in a game whose
+  // whole look is that the pixels are square.
+  g.imageSmoothingEnabled = false;
+  g.drawImage(art, Math.round(f.x) - (w >> 1), Math.round(f.y) - h, w, h);
+}
+
+/* THE FEATHERS, and they are drawn rather than spawned as effects.
+
+   addEffect returns null while netplay is re-simulating, which is right for
+   a spark and wrong for this: a transformation that happened on a frame the
+   netcode later replayed would lose its whole burst on the machine that
+   replayed it, and the two players would remember different things about the
+   loudest moment in the match. Everything here is a pure function of
+   battleFrames - chickenSince and the fighter's slot, so it is identical on
+   both screens and survives any number of rewinds.
+
+   PRISM_DIRS is the same twenty-four written-out unit directions the prism
+   burst uses, which is why there is no trig in a radial explosion. The three
+   speeds come off `i % 3` so the ring breaks up into a cloud instead of
+   arriving as a perfect circle, and `t * t` is the gravity that turns the
+   cloud into feathers falling. */
+function drawChickenPop(g, f) {
+  if (f.chickenSince < 0) return;
+  const t = battleFrames - f.chickenSince;
+  if (t < 0 || t >= CHICKEN.transform) return;
+  const u = t / CHICKEN.transform;
+
+  // Four frames of white, over the top of everything. The bang.
+  if (t < 4) {
+    g.globalAlpha = 1 - t / 4;
+    g.fillStyle = '#ffffff';
+    const r = 7 + t * 4;
+    for (let y = -r; y <= r; y++) {
+      const half = Math.round(Math.sqrt(Math.max(0, r * r - y * y)));
+      if (half > 0) g.fillRect(Math.round(f.x) - half, Math.round(f.y) - 8 + y,
+                               half * 2, 1);
+    }
+    g.globalAlpha = 1;
+  }
+
+  for (let i = 0; i < PRISM_DIRS.length; i++) {
+    const d = PRISM_DIRS[i];
+    const r = (2.6 + (i % 3) * 0.8) * t;
+    const px = Math.round(f.x + d[0] * r);
+    // 0.7 on the vertical, so the burst is the flattened ellipse a thing
+    // seen side-on throws rather than a perfect ball.
+    const py = Math.round(f.y - 8 + d[1] * r * 0.7 + t * t * 0.05);
+    g.globalAlpha = Math.max(0, 1 - u);
+    g.fillStyle = i % 5 === 0 ? CHICKEN_GOLD : (i % 2 ? '#f7f2e4' : '#ffffff');
+    g.fillRect(px, py, 2, 1);
+    // A dark quill on the leading end, so a feather has a direction.
+    g.fillStyle = '#2a211c';
+    g.fillRect(px + (d[0] > 0 ? 2 : -1), py, 1, 1);
+    g.globalAlpha = 1;
+  }
+}
+
 function drawFighter(g, f) {
   // An eliminated fighter is still on screen while the KO that removed them
   // plays out. 'gone' is when they are actually off the board.
@@ -18466,8 +21118,11 @@ function drawFighter(g, f) {
      draw an undefined image. So `dummy` carries that one difference down to
      the blit, which is the only place it matters, and nothing else changes. */
   const dummy = !!f.def.dummy;
-  const im = dummy ? null : f.sprite();
-  if (!im && !dummy) return;
+  /* A chicken goes through the same door the sandbag does, and for the same
+     reason: there is no sprite sheet for it, sprite() would hand back one of
+     the fighter's own frames, and the blit below would paint a man. */
+  const im = (dummy || f.chicken) ? null : f.sprite();
+  if (!im && !dummy && !f.chicken) return;
 
   // Translating the context rather than offsetting each coordinate: this
   // function draws a seat arrow, a sprite, a poison glyph and a sword, and
@@ -18741,6 +21396,15 @@ function drawFighter(g, f) {
   // than boxing them in.
   if (f.buffTimer > 0) {
     const pulse = 0.5 + Math.sin(f.timer * 0.22) * 0.5;
+    /* A FADING buff fades its halo. Kel's LEG DAY multiplier decays from 1.5
+       to 1.0 across its ten seconds, and a decay nobody can see is exactly
+       the kind of invisible power this release is trying to remove -- so the
+       glow carries it. Floored at 0.3 rather than run to nothing, because
+       the halo is also what says "still buffed at all", and a fighter whose
+       aura has gone out but whose sprite is still the buff sheet reads as a
+       drawing bug. Flat buffs have no `decay` and are untouched. */
+    const heat = f.buffStats && f.buffStats.decay
+      ? Math.max(0.3, f.buffTimer / f.buffStats.decay) : 1;
     // Around the body he actually has. A halo sized for a small man sits
     // inside a giant's shins and reads as a bug rather than as a buff.
     const ak = f.sizeMul;
@@ -18748,7 +21412,7 @@ function drawFighter(g, f) {
     // default. The jackpot names gold.
     const glow = (f.buffStats && f.buffStats.glow) || f.accent;
     for (let i = 3; i >= 1; i--) {
-      g.globalAlpha = 0.05 + 0.05 * pulse * i;
+      g.globalAlpha = (0.05 + 0.05 * pulse * i) * heat;
       g.fillStyle = glow;
       g.beginPath();
       g.arc(f.x, f.y - 8 * ak, (7 + i * 2.2 + pulse * 1.5) * ak, 0, Math.PI * 2);
@@ -18813,7 +21477,9 @@ function drawFighter(g, f) {
      for a 21-tall body over a 14-tall hurtbox is seven pixels lower down. Left that way on purpose: the
      hurtbox is what is actually being hit, and a second dummy-only rule up
      there would undo what this whole change is for. */
-  if (dummy) {
+  if (f.chicken) {
+    drawChicken(g, f);
+  } else if (dummy) {
     drawSandbag(g, f);
   } else {
     /* Drawn at his size, anchored on his FEET and his center -- the same two
@@ -18846,21 +21512,41 @@ function drawFighter(g, f) {
      running while he casts, and a one-pixel line underneath a burning blade
      is a line nobody sees. Inside the same translate as the sprite above, so
      a rollback correction carries the rod with the hand holding it. */
-  drawPole(g, f);
-  drawCharge(g, f);
-  drawDrink(g, f);
-  drawFartCharge(g, f);
-  drawSlots(g, f);
-  drawBling(g, f);
-  drawGuillotine(g, f);
-  drawAxe(g, f);
-  drawMower(g, f);
-  drawWhip(g, f);
-  /* After the sprite, like the sword and the rod: a swollen cheek is drawn
-     ON him, and drawn under the body it would be a man with a lump behind
-     his face. */
-  drawBelch(g, f);
-  drawSleep(g, f);
+  /* A CHICKEN CARRIES NOTHING, and this is where that is true on screen.
+
+     Every call in here draws a PROP -- a rod in his hand, a charge over his
+     head, a chain round his neck, a mower he is pushing -- and every one of
+     them reads the fighter's own `def.specials` to decide what to paint. A
+     bird still has a `def`, so without this gate a chicken Houston would
+     push a lawnmower and a chicken Simon would wear his bling, which is the
+     exact opposite of what being run over is supposed to mean.
+
+     ONE GATE round the lot rather than `!f.chicken` inside twelve
+     functions: the rule is about the fighter, not about the props, and
+     twelve copies of it is twelve chances for the thirteenth to be missed.
+
+     `drawPinIrons` above is deliberately OUTSIDE it. Irons are not something
+     a chicken owns, they are something Kel does to it. */
+  if (!f.chicken) {
+    drawPole(g, f);
+    drawCharge(g, f);
+    drawDrink(g, f);
+    drawFartCharge(g, f);
+    drawSlots(g, f);
+    drawBling(g, f);
+    drawGuillotine(g, f);
+    drawAxe(g, f);
+    drawMower(g, f);
+    drawWhip(g, f);
+    /* After the sprite, like the sword and the rod: a swollen cheek is drawn
+       ON him, and drawn under the body it would be a man with a lump behind
+       his face. */
+    drawBelch(g, f);
+    drawSleep(g, f);
+  } else {
+    // And the bang, over the top of the bird it just made.
+    drawChickenPop(g, f);
+  }
 
   /* Confused had no tell at all. The only way to find out your controls were
      inverted was to walk the wrong way off a ledge, which is a lesson that
@@ -19566,7 +22252,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '913d43140a';
+const BUILD_ID = 'c737c5170c';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -19577,7 +22263,7 @@ const BUILD_ID = '913d43140a';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.77';
+const VERSION = '2.78';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
@@ -19701,7 +22387,13 @@ function simFrozen() {
     set.add(v);
     for (const k of Object.keys(v)) walk(v[k]);
   };
-  walk(ROSTER); walk(STAGES); walk(COMBAT); walk(PHYS);
+  /* CHICKEN by hand, because it is deliberately NOT in ROSTER -- see the
+     comment on it. Without this line snapValue would deep-copy whichever of
+     its two specs a bird happened to be mid-move on into every snapshot,
+     sixty times a second, and `b.spec === s` -- the identity test maxAlive
+     and the mana subtraction both rely on -- would stop holding the moment a
+     rollback restored one. */
+  walk(ROSTER); walk(STAGES); walk(COMBAT); walk(PHYS); walk(CHICKEN);
   SIM_FROZEN = set;
   return set;
 }
@@ -19951,6 +22643,14 @@ function stateHash(snap) {
     h = mixNumber(h, f.attackFrame);
     h = mixNumber(h, f.facing);
     h = mixNumber(h, f.grounded ? 1 : 0);
+    /* WHETHER THEY ARE A CHICKEN, which is worth a slot in an eleven-value
+       hash because it is the one field in this game that changes what every
+       other one MEANS: the same attackFrame on the same x is a lawnmower on
+       one machine and a peck on the other. Two machines that disagreed about
+       it would eventually diverge in position anyway -- everything a chicken
+       does is different -- but "eventually" is several frames of a match
+       being played wrong, and this catches it on the first one. */
+    h = mixNumber(h, f.chicken ? 1 : 0);
   }
   h = mixNumber(h, ps.length);
   for (const pr of ps) {

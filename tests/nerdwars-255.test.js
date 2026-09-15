@@ -714,10 +714,10 @@ test("negative control: a window armed on the commit frame fails the free-bar te
      the eyes close. The bar still gets pinned; it simply stops being the
      same clock as the sleep, which is the whole of what 2.64 changed. */
   const run = await arena(SIMON, REESE, { engine: sabotage(
-    "        if (this.attackFrame === s.startup && s.manaFree) this.manaFree = s.manaFree;\n" +
-    "        const asleep = this.attackFrame >= s.startup &&\n",
-    "        if (this.attackFrame === 1 && s.manaFree) this.manaFree = s.manaFree;\n" +
-    "        const asleep = this.attackFrame >= s.startup &&\n") });
+    "        if (this.attackFrame === s.startup) {\n" +
+    "          if (s.manaFree) this.manaFree = s.manaFree;\n",
+    "        if (this.attackFrame === 1) {\n" +
+    "          if (s.manaFree) this.manaFree = s.manaFree;\n") });
   const rows = slouch(run, SLOUCH_FRAMES);
   expectToFail(() => checkFreeBar(run, rows),
     "with the window opening on the commit frame the free-bar test should fail; it passed");
@@ -792,9 +792,11 @@ const punches = (run) => run(`(function () {
 
 function checkPunch(run, raw) {
   const cfg = JSON.parse(run("JSON.stringify(ROSTER.simon.ult.soul)"));
-  assert.equal(cfg.punch.damage, 2,
-    "two damage a punch, less than any jab in the game -- the fantasy is " +
-    "being in two places, not a damage race");
+  assert.equal(cfg.punch.damage, 3,
+    "three damage a punch -- retune on purpose, up from two. It is still " +
+    "under every jab in the game, because the fantasy is being in two " +
+    "places rather than a damage race; what pays for it is that the body " +
+    "lying on the floor can now be hit while the gloves are out");
   assert.ok(cfg.punchEvery < cfg.punch.hitEvery,
     "the gloves are meant to move faster than they can hurt (" +
     cfg.punchEvery + " against " + cfg.punch.hitEvery + "), because " +
@@ -823,8 +825,8 @@ test("the soul's punch is 2, and hitEvery is the most anybody can be taken for",
 
 test("negative control: a glove that re-arms as fast as it swings fails the punch test", async () => {
   const run = await arena(SIMON, REESE, { engine: sabotage(
-    "        damage: 2, base: 1.1, scale: 1.5, hitEvery: 16,",
-    "        damage: 2, base: 1.1, scale: 1.5, hitEvery: 1,") });
+    "        damage: 3, base: 0.96, scale: 1.5, hitEvery: 16,",
+    "        damage: 3, base: 0.96, scale: 1.5, hitEvery: 1,") });
   const raw = punches(run);
   expectToFail(() => checkPunch(run, raw),
     "with the damage clock off the punch test should fail; it passed");

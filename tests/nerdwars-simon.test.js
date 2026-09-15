@@ -1250,6 +1250,7 @@ test("negative control: a guillotine that falls at half speed fails the drop tes
 
 const SLOUCH_REC =
   "{ af: me.attackFrame, st: me.state, x: me.x, inv: me.invuln, hp: me.health, mana: me.mana," +
+  " sl: !!me.slouching(), sd: me.slouchDamage," +
   " mf: me.manaFree, soul: countOf(Soul)," +
   " fd: foe.drowsy, fst: foe.state, fhp: foe.health, fgr: foe.grounded }";
 
@@ -1277,17 +1278,38 @@ function checkSleep(log, S) {
   for (let f = 1; f < sleepFrom; f++) {
     assert.equal(log[f].inv, 0, "not yet untouchable while he nods off; invuln was " + log[f].inv + " on frame " + f);
   }
+  /* HE IS NOT UNTOUCHABLE ANY MORE, and that is the point of the release
+     rather than an omission. The sleep used to pin `invuln` at 2 every frame
+     so nothing could run it out; it pins nothing now, because `rouse` -- the
+     rule that thirty damage wakes him -- is unreachable against a body no
+     hit can land on. What replaces the guard is in applyHit: a sleeping man
+     takes the damage and none of the launch, so he is still rooted, still
+     asleep, and still nobody's to grab.
+
+     Asserted from BOTH sides, because "invuln is 0" alone would also be true
+     of a Simon who was never in the ult at all: he is asleep by the engine's
+     own reckoning on every one of these frames, and guarded on none. */
   for (let f = sleepFrom; f < wake; f++) {
-    assert.ok(log[f].inv > 0, "he cannot be woken: invuln must stay above 0 on every sleeping frame; it was " +
+    assert.equal(log[f].inv, 0,
+      "the sleeping body carries no invulnerability now; invuln was " +
       log[f].inv + " on frame " + f + " (attackFrame " + log[f].af + ")");
+    assert.ok(log[f].sl,
+      "and the engine has to agree he is asleep on every one of those frames; " +
+      "slouching() was null on frame " + f + " (attackFrame " + log[f].af + ")");
   }
+  assert.ok(!log[sleepFrom - 1].sl && !log[wake].sl,
+    "asleep for exactly the active window and not a frame either side");
   assert.equal(log[sleepFrom - 1].hp, 40, "no healing before the sleep");
   for (let f = sleepFrom; f < wake; f++) {
     assert.ok(log[f].hp > log[f - 1].hp, "health climbs on every sleeping frame; it did not on frame " + f);
   }
   assert.ok(near(log[wake - 1].hp, 40 + u.heal, 1e-6),
     "a full sleep heals " + u.heal + ": from 40 to " + (40 + u.heal) + "; he woke on " + log[wake - 1].hp);
-  assert.equal(u.heal, 25, "and the heal is 25 -- retune on purpose");
+  assert.equal(u.heal, 40,
+    "and the heal is 40 -- retune on purpose, up from 25. It is what the ult " +
+    "was paid when the body stopped being invulnerable: forty over ten " +
+    "seconds against a `guard` of a half means he comes out ahead only if " +
+    "they land less than eighty damage worth of swings on him");
 
   /* The mana is not refilled, it is suspended: while the window runs the bar
      is simply pinned full. The pin runs at the top of update(), one frame
@@ -1381,13 +1403,184 @@ test("SLOUCH: 24 frames to nod off, then ten seconds asleep -- untouchable, heal
   checkSleep(slouch(run, 30, "", SLEEP_FRAMES), S);
 });
 
-test("negative control: a sleep that does not re-arm invuln fails the sleep test", async () => {
+test("negative control: a sleep that goes back to being untouchable fails the sleep test", async () => {
+  /* The guard put BACK, which is the shape this control used to have upside
+     down. It matters more than a rename: an invulnerable body is a body
+     `rouse` can never reach, so a pin quietly reintroduced here would make
+     "thirty damage wakes him" a rule with no way of ever firing -- and
+     nothing else in the suite would notice, because every other assertion
+     about the sleep is about a Simon nobody is hitting. */
   const run = await simonVsReese({ engine: sabotage(
-    "          this.invuln = Math.max(this.invuln, 2);\n          this.health",
-    "          this.invuln = Math.max(this.invuln, 0);\n          this.health") });
+    "          this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);",
+    "          this.invuln = Math.max(this.invuln, 2);\n" +
+    "          this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);") });
   const S = SPEC(run);
   const log = slouch(run, 30, "", SLEEP_FRAMES);
-  expectToFail(() => checkSleep(log, S), "with the sleep not untouchable the sleep test should fail; it passed");
+  expectToFail(() => checkSleep(log, S),
+    "with the sleeping body untouchable again the sleep test should fail; it passed");
+});
+
+/* =====================================================================
+   SHAKING HIM AWAKE
+
+   Thirty damage into the sleeping body ends the sleep on the spot. Three
+   numbers make that rule, and each is load-bearing in a different way:
+
+     rouse   the thirty itself
+     guard   how much of a swing reaches a man asleep on the floor (half),
+             which is what makes the thirty cost sixty
+     lethal  false -- a blow cannot take the stock, only wake him
+
+   Everything here drives synthetic hits through applyHit rather than
+   arranging a real swing, because what is under test is the rule and not
+   anybody's hitbox. The hits are dealt from the foe so the attacker path is
+   the real one.
+   ===================================================================== */
+
+const SHAKE = (perHit, every, from, until) => ({
+  mana: false,
+  pre: "if (i >= " + from + " && i < " + until + " && (i % " + every + ") === 0) {" +
+       "  applyHit(foe, me, { damage: " + perHit + ", base: 1, scale: 1," +
+       "    angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476 }, foe.x);" +
+       "}",
+  p0: `i === 0 ? ${ULT} : 0`,
+  rec: SLOUCH_REC,
+});
+
+/* The frame the sleep stopped, whatever stopped it. */
+const endOfSleep = (log) => {
+  for (let i = 1; i < log.length; i++) if (log[i - 1].sl && !log[i].sl) return i;
+  return -1;
+};
+
+test("thirty damage into the sleeping body wakes him, and the soul goes in with him", async () => {
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  assert.equal(S.ult.rouse, 30, "thirty damage -- retune on purpose");
+  assert.equal(S.ult.guard, 0.5,
+    "and half of every swing reaches him, so the thirty costs sixty -- retune on purpose");
+
+  const full = slouch(run, 200, "", SLEEP_FRAMES);
+  const natural = endOfSleep(full);
+  assert.equal(natural, S.ult.startup + S.ult.active,
+    "precondition: undisturbed, the sleep runs its whole length and ends on frame " +
+    (S.ult.startup + S.ult.active) + "; it ended on " + natural);
+
+  // Twelve a swing, six swings: 36 through the guard, over the threshold.
+  const shaken = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    SHAKE(12, 40, 41, 281));
+  const woke = endOfSleep(shaken);
+  assert.ok(woke > 0 && woke < natural,
+    "six twelve-damage swings should end the sleep early; it ended on frame " +
+    woke + " against " + natural + " undisturbed");
+  /* Read ON the wake frame, not the one before it. The hit that pays the
+     thirty lands inside the step that also carries attackFrame over the end
+     of the sleep, so the last frame he is still asleep on is the one BEFORE
+     the tally was complete. */
+  assert.ok(shaken[woke].sd >= S.ult.rouse,
+    "and only once the tally had reached " + S.ult.rouse + "; it read " +
+    shaken[woke].sd + " on the wake frame and " + shaken[woke - 1].sd +
+    " the frame before");
+  assert.equal(shaken[woke].soul, 0,
+    "the soul goes back in on the same frame; there were " + shaken[woke].soul);
+  assert.equal(shaken[woke].af, S.ult.startup + S.ult.active,
+    "and it is the WAKE frame he is moved to, not some frame in the middle -- the " +
+    "stretch ring and the soul both hang off that one number; attackFrame read " +
+    shaken[woke].af);
+  // Rooted and unflinching the whole way: a hit that moved him would end the
+  // move by a route the tally knows nothing about.
+  for (let f = 1; f < woke; f++) {
+    assert.equal(shaken[f].x, shaken[0].x,
+      "he never moves off his spot; x changed on frame " + f);
+    assert.notEqual(shaken[f].st, "hitstun",
+      "and is never put in hitstun by a hit; he was on frame " + f);
+  }
+});
+
+test("under the threshold he sleeps it off", async () => {
+  /* The other half of the same rule, and the half a single "it woke early"
+     test would let rot: eight a swing is 24 through the guard, four short,
+     and four short has to be worth nothing at all. */
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    SHAKE(8, 40, 41, 281));
+  const woke = endOfSleep(log);
+  assert.equal(woke, S.ult.startup + S.ult.active,
+    "24 damage is under the " + S.ult.rouse + " and must not end anything; the sleep " +
+    "ended on frame " + woke);
+  const paid = Math.max(...log.filter((r) => r.sl).map((r) => r.sd));
+  assert.ok(paid > 0 && paid < S.ult.rouse,
+    "the tally should have counted them and stopped short: it reached " + paid);
+});
+
+test("the tally is per-sleep: what he took last time does not carry into the next one", async () => {
+  /* `slouchDamage` is a Fighter field and lives as long as he does. Zeroed on
+     the frame the eyes close rather than when he wakes, because the sleep has
+     several ways to end and only one way to begin. */
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  const r = JSON.parse(run(`(function () {
+    ${RESET}
+    me.slouchDamage = 999;
+    var before = me.slouchDamage;
+    netplay.active = true;
+    me.ultMeter = 999;
+    for (var i = 0; i <= ROSTER.simon.ult.startup + 1; i++) {
+      me.hitstop = 0; me.mana = 999;
+      netplay.framePads = [bitsToPad(i === 0 ? ${ULT} : 0), bitsToPad(0)];
+      step();
+    }
+    netplay.active = false; netplay.framePads = null;
+    return JSON.stringify({ before: before, after: me.slouchDamage,
+                            asleep: !!me.slouching() });
+  })()`));
+  assert.equal(r.before, 999, "precondition: the field carried a stale number in");
+  assert.ok(r.asleep, "precondition: he should be asleep by now");
+  assert.equal(r.after, 0,
+    "the tally starts this sleep at zero; it read " + r.after);
+});
+
+test("you cannot kill a man in his sleep -- he wakes on one health instead", async () => {
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  assert.equal(S.ult.lethal, false, "the sleeping body is not lethal -- retune on purpose");
+  const log = drive(run, "me.ultMeter = 999; me.health = 10; me.stocks = 3;",
+    400, SHAKE(60, 1, 60, 61));
+  assert.ok(log.every((r) => r.st !== "ko"),
+    "a blow far bigger than his health bar must not take the stock; he was KO'd on frame " +
+    log.findIndex((r) => r.st === "ko"));
+  assert.ok(Math.min(...log.map((r) => r.hp)) >= 1,
+    "he floors at one point of health; the lowest he reached was " +
+    Math.min(...log.map((r) => r.hp)));
+  const woke = endOfSleep(log);
+  assert.ok(woke > 0 && woke < S.ult.startup + S.ult.active,
+    "and sixty through the guard is thirty, so it wakes him; the sleep ended on frame " + woke);
+});
+
+test("negative control: with rouse gone, thirty damage changes nothing", async () => {
+  const run = await simonVsReese({ engine: sabotage("    rouse: 30,", "    rouse: 0,") });
+  const S = SPEC(run);
+  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    SHAKE(12, 40, 41, 281));
+  const woke = endOfSleep(log);
+  expectToFail(() => assert.ok(woke > 0 && woke < S.ult.startup + S.ult.active,
+    "without a threshold nothing wakes him early"),
+    "the wake test must fail when rouse is zero");
+});
+
+test("negative control: with the guard off, half as much damage wakes him", async () => {
+  /* The guard is the difference between thirty damage and sixty, and it is
+     the number that decides whether `rouse` is a decision or a formality.
+     Eight a swing is 24 taken with the guard on -- four short -- and 48
+     without it, which is comfortably over. */
+  const run = await simonVsReese({ engine: sabotage("    guard: 0.5,", "    guard: 1,") });
+  const S = SPEC(run);
+  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    SHAKE(8, 40, 41, 281));
+  const woke = endOfSleep(log);
+  assert.ok(woke > 0 && woke < S.ult.startup + S.ult.active,
+    "with the guard off the same swings should wake him; the sleep ended on frame " + woke);
 });
 
 test("negative control: a sleep that heals half fails the sleep test", async () => {
@@ -1414,10 +1607,10 @@ test("negative control: a window armed a nod early fails the sleep test", async 
      length, so the only thing that gives it away is that it does not line up
      with the sleep any more -- which is the whole retune. */
   const run = await simonVsReese({ engine: sabotage(
-    "        if (this.attackFrame === s.startup && s.manaFree) this.manaFree = s.manaFree;\n" +
-    "        const asleep = this.attackFrame >= s.startup &&\n",
-    "        if (this.attackFrame === 1 && s.manaFree) this.manaFree = s.manaFree;\n" +
-    "        const asleep = this.attackFrame >= s.startup &&\n") });
+    "        if (this.attackFrame === s.startup) {\n" +
+    "          if (s.manaFree) this.manaFree = s.manaFree;\n",
+    "        if (this.attackFrame === 1) {\n" +
+    "          if (s.manaFree) this.manaFree = s.manaFree;\n") });
   const S = SPEC(run);
   const log = slouch(run, 30, "", SLEEP_FRAMES);
   expectToFail(() => checkSleep(log, S),
@@ -1576,8 +1769,19 @@ const JACKPOT = "me.reels = [0, 0, 0]; me.payout(DOWN);";
 
 const GIANT = {
   p0: "0",
+  /* `bling` is asked of the DRAW rather than of a flag still sitting on
+     buffStats: whether the chain and the sunglasses come off with him is a
+     question about what is painted. The context measures AREA rather than
+     counting calls, because blingArt emits one rect per lit pixel of the art
+     whatever size it is drawn at -- a count would be the same number for a
+     man and for a giant, and could not see a chain that failed to shrink. */
   rec: "{ bt: me.buffTimer, dm: me.damageMul, sm: me.sizeMul," +
-       " hold: !!(me.buffStats && me.buffStats.hold) }",
+       " hurt: me.hurtbox().w," +
+       " bling: (function () { var n = 0;" +
+       "   var g = { fillRect: function (x, y, w, h) { n += w * h; }," +
+       "             fillStyle: 0, globalAlpha: 1 };" +
+       "   drawBling(g, me); return Math.round(n); })()," +
+       " pull: me.canSpecial(bitsToPad(1024)) }",
 };
 
 function checkGiant(log, S) {
@@ -1589,29 +1793,32 @@ function checkGiant(log, S) {
     "distance. The size is still three, and it costs him -- retune on purpose. It read " +
     j.damageMul + "x" + j.sizeMul);
 
-  /* IT DOES NOT TICK. Reese's ult is a DURATION and counts down; this is
-     "until he loses a stock", and buffStats.hold is what stops update()
-     decrementing the timer. buffTimer is 1 rather than some enormous number
-     precisely because nothing is ever subtracted from it -- only its sign is
-     read -- so a timer that has started counting is a buff on its way out,
-     which this one must never be.
+  /* IT IS A CLOCK. It used to be "until he loses a stock" -- buffTimer pinned
+     at 1 with a `hold` flag that stopped update() ever decrementing it -- and
+     it is fifteen seconds now, or a lost stock, whichever comes first. The
+     death clear is untouched and is pinned in its own test; this is the
+     fifteen seconds.
 
-     Read before the size below, because a timer that ticked is a buff that
-     is already GONE by the second frame, and a check that meets that as a
-     sizeMul of 1 reports it as a growth that never started. */
-  assert.ok(log.every((r) => r.hold),
-    "the buff carries the hold that stops the timer; it was missing by frame " +
-    log.findIndex((r) => !r.hold));
-  assert.ok(log.every((r) => r.bt > 0 && r.bt === log[0].bt),
-    "so buffTimer stays exactly where payout() put it, above zero and never moving, however " +
-    "long the recording runs; it read " + log[0].bt + " on the first frame and " +
-    log[log.length - 1].bt + " on the last");
+     Read before the size below, because a timer that ran out is a buff that
+     is already GONE, and a check that meets that as a sizeMul of 1 reports it
+     as a growth that never started. */
+  assert.equal(j.duration, 900,
+    "fifteen seconds -- retune on purpose; the spec says " + j.duration);
+  assert.equal(log[0].bt, j.duration - 1,
+    "payout() puts the whole " + j.duration + " on the clock, and the frame it lands " +
+    "has already spent one of them; buffTimer read " + log[0].bt);
+  for (let f = 1; f < log.length; f++) {
+    assert.equal(log[f].bt, log[f - 1].bt - 1,
+      "and it ticks down one a frame like every other buff in the game; it went " +
+      log[f - 1].bt + " -> " + log[f].bt + " on frame " + f);
+  }
   assert.ok(log.every((r) => r.dm === j.damageMul),
-    "and the damage multiplier is live on every one of those frames; it first read " +
+    "the damage multiplier is live on every one of those frames; it first read " +
     (log.find((r) => r.dm !== j.damageMul) || {}).dm);
-  assert.ok(log.length >= 300,
-    "precondition: the recording has to be long enough that a timed buff would have run out " +
-    "inside it, or 'it does not tick' is a claim about nothing; it was " + log.length + " frames");
+  assert.ok(log.length < j.duration,
+    "precondition: this recording has to END inside the buff, or the size checks " +
+    "below are reading a man who has already reverted; it was " + log.length +
+    " frames against a duration of " + j.duration);
 
   /* IT RAMPS. The size is read through one getter off the frame the buff
      landed, so the drawing, the hurtbox and his own hitboxes cannot disagree
@@ -1639,23 +1846,92 @@ function checkGiant(log, S) {
   }
 }
 
-test("JACKPOT: he grows into it over ten frames, and then nothing counts down", async () => {
+test("JACKPOT: he grows into it over ten frames, and it is on a fifteen-second clock", async () => {
   const run = await simonVsReese();
   const S = SPEC(run);
   checkGiant(drive(run, JACKPOT, 300, GIANT), S);
 });
 
-test("negative control: a jackpot buff that counts down fails the giant test", async () => {
-  /* The buff without its hold, which is what every other buff in the game
-     is. buffTimer is 1, so an ordinary countdown takes it to 0 on the very
-     next frame and the giant is a man again before anyone has seen him. */
+test("negative control: a jackpot buff that never counts down fails the giant test", async () => {
+  /* The old shape: buffTimer pinned where payout put it, so the giant is
+     permanent and the fifteen seconds are a number in the roster that nothing
+     reads. This is what the release removed, and a control that did not pin
+     it would let a `hold` quietly come back. */
   const run = await simonVsReese({ engine: sabotage(
-    "if (this.buffTimer > 0 && !(this.buffStats && this.buffStats.hold)) this.buffTimer--;",
-    "if (this.buffTimer > 0) this.buffTimer--;") });
+    "    if (this.buffTimer > 0) {\n      this.buffTimer--;",
+    "    if (this.buffTimer > 0) {\n      this.buffTimer -= 0;") });
   const S = SPEC(run);
   const log = drive(run, JACKPOT, 300, GIANT);
   expectToFail(() => checkGiant(log, S),
-    "with the timer ticking the giant test should fail; it passed");
+    "with the timer pinned the giant test should fail; it passed");
+});
+
+/* What the end of it looks like, which is the half a duration alone does not
+   buy. He deflates over the same ten frames he swelled over, the chain and
+   the sunglasses come off with him, the doubled damage stops, and the lever
+   he was locked out of comes back. */
+function checkGiantEnds(log, S) {
+  const j = S.d.jackpot;
+  const out = log.findIndex((r) => r.bt <= 0);
+  assert.ok(out > 0, "the buff has to actually run out inside the recording; it did not");
+  assert.equal(out, j.duration - 1,
+    "and it runs out " + j.duration + " frames after the reel landed; it went on frame " + out);
+
+  assert.equal(log[out - 12].sm, j.sizeMul,
+    "still full size twelve frames from the end; sizeMul read " + log[out - 12].sm);
+  for (let k = 9; k >= 1; k--) {
+    assert.ok(log[out - k].sm < log[out - k - 1].sm,
+      "then shrinking on every one of the last ten frames: " + k + " from the end read " +
+      log[out - k].sm + " against " + log[out - k - 1].sm);
+  }
+  assert.equal(log[out].sm, 1, "and he is a man again; sizeMul read " + log[out].sm);
+  assert.equal(log[out].hurt, log[log.length - 1].hurt,
+    "the HURTBOX comes back with him and stays back -- the size is one getter, so a " +
+    "drawing that shrank while the target did not would be impossible by construction, " +
+    "which is the reason it is one getter");
+  assert.equal(log[out].dm, 1,
+    "the doubled damage stops with it; damageMul read " + log[out].dm);
+  assert.ok(log[out - 2].bling > 0,
+    "precondition: the chain and the shades were being drawn before the end");
+  assert.equal(log[out].bling, 0,
+    "and nothing of them is drawn after it; " + log[out].bling + " pixels went down");
+  assert.equal(log[0].pull, false,
+    "precondition: no gambling while he IS the jackpot");
+  assert.equal(log[out].pull, true,
+    "and the lever comes back the moment he is not");
+}
+
+test("JACKPOT: fifteen seconds later he deflates, and the chain comes off with him", async () => {
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  checkGiantEnds(drive(run, JACKPOT, S.d.jackpot.duration + 40, GIANT), S);
+});
+
+test("negative control: a size that snaps back instead of deflating fails the ending test", async () => {
+  const run = await simonVsReese({ engine: sabotage(
+    "    const down = this.buffTimer >= JACKPOT_GROW ? 1 : this.buffTimer / JACKPOT_GROW;",
+    "    const down = 1;") });
+  const S = SPEC(run);
+  const log = drive(run, JACKPOT, S.d.jackpot.duration + 40, GIANT);
+  expectToFail(() => checkGiantEnds(log, S),
+    "with no shrink ramp the ending test should fail; it passed");
+});
+
+test("negative control: bling hung off the buff's size instead of his own fails the ending test", async () => {
+  /* The chain is drawn at `f.sizeMul` and not at `buffStats.sizeMul`, which
+     were the same number for as long as the jackpot could only end by dying.
+     Now that it runs out, the last ten frames are a man shrinking, and a
+     chain built from the buff's own number hangs at full giant scale around
+     him until it vanishes. */
+  const run = await simonVsReese({ engine: sabotage(
+    "  const k = f.sizeMul;", "  const k = b.sizeMul || 1;") });
+  const S = SPEC(run);
+  const log = drive(run, JACKPOT, S.d.jackpot.duration + 40, GIANT);
+  const shrinking = log.findIndex((r) => r.bt > 0 && r.bt < 10);
+  assert.ok(shrinking > 0, "precondition: the recording reaches the shrink");
+  expectToFail(() => assert.ok(log[shrinking].bling < log[shrinking - 12].bling,
+    "a chain hung off the buff's own number covers the same area at every size"),
+    "the bling has to be measured against the size he actually is");
 });
 
 test("negative control: a size that snaps on instead of growing fails the giant test", async () => {
@@ -1713,9 +1989,13 @@ test("negative control: a damage multiplier nobody reads fails the double-damage
   /* The spec still says 2 -- so this is not a number the checker can be
      talked out of by reading it back. The getter every hit goes through is
      what is broken, and the only thing that notices is the health bar. */
+  /* Re-anchored: the getter grew a fade for Kel's LEG DAY and is no longer
+     one line. This is still the same sabotage -- the multiplier computed and
+     then not returned -- on the branch every FLAT buff takes, which the
+     jackpot is. */
   const run = await simonVsReese({ engine: sabotage(
-    "return this.buffTimer > 0 && this.buffStats ? this.buffStats.damageMul : 1;",
-    "return 1;") });
+    "    if (!b.decay) return b.damageMul;",
+    "    if (!b.decay) return 1;") });
   const S = SPEC(run);
   const plain = jabbed(run, ""), giant = jabbed(run, JACKPOT);
   expectToFail(() => checkDoubled(plain, giant, S),

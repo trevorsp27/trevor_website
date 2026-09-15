@@ -386,8 +386,8 @@ test("negative control: a dream spent on damage as well fails the speed test", a
      still gets visibly faster, so everything the eye can check still looks
      right and only the number it carries has changed. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "    dreamMax: 100, dreamDamage: 0, dreamSpeed: 1.5, dreamLife: 0,",
-    "    dreamMax: 100, dreamDamage: 50, dreamSpeed: 1.5, dreamLife: 0,") });
+    "    dreamMax: 100, dreamDamage: 0, dreamSpeed: 3.0, dreamLife: 0,",
+    "    dreamMax: 100, dreamDamage: 50, dreamSpeed: 3.0, dreamLife: 0,") });
   const max = run("ROSTER.squalls.ult.dreamMax");
   expectToFail(() => checkDreamBuysSpeed(run, dragonPass(run, 0), dragonPass(run, max)),
     "with the meter buying damage too the speed test should fail; it passed");
@@ -713,8 +713,8 @@ test("negative control: halves that hit as hard as the star fail the split test"
      costing anything, so there is no longer a reason not to press it every
      single time. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "      up: { damage: 6, base: 2.6, scale: 5.2, angle: 66,",
-    "      up: { damage: 9, base: 2.6, scale: 5.2, angle: 66,") });
+    "      up: { damage: 8, base: 2.8, scale: 5.6, angle: 66,",
+    "      up: { damage: 11, base: 2.8, scale: 5.6, angle: 66,") });
   expectToFail(() => checkSplit(run, starFlight(run, 25), starDamage(run, -1, "whole"),
                                 starDamage(run, 25, "up"), starDamage(run, 25, "down")),
     "with the halves hitting for the whole star's damage the split test " +
@@ -727,8 +727,8 @@ test("negative control: halves that both climb fail the split test", async () =>
      both on screen, both hitting for six. They simply fly in company, and
      the move is a star that got smaller. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "              climb: 1.9, life: 95 },",
-    "              climb: -1.5, life: 95 },") });
+    "              climb: 1.55, life: 110, dream: 3 },",
+    "              climb: -1.35, life: 110, dream: 3 },") });
   expectToFail(() => checkSplit(run, starFlight(run, 25), starDamage(run, -1, "whole"),
                                 starDamage(run, 25, "up"), starDamage(run, 25, "down")),
     "with both halves climbing the split test should fail; it passed");
@@ -778,7 +778,89 @@ test("negative control: without the guard the split press casts as well", async 
 });
 
 /* =====================================================================
-   THE WHIP -- and the eight pixels at the end of it
+   THE STAR AND THE DREAM -- what a shot that lands is worth on the meter
+   ===================================================================== */
+
+/* One star, and the meter read either side of the frame it connects.
+
+   This exists because of HOW it is wired. A star that reaches somebody pays
+   dream from Star.burst -- and `burst` is not a name the star chose, it is
+   the hook resolveCombat calls on a shot that has just landed instead of
+   simply killing it. Rename it, or add an early return above it, and the
+   star still flies, still hits, still does its damage and still dies on
+   contact; the only thing that stops is the meter, and the only thing that
+   shows is a dragon that is slower than it should be four casts later.
+
+   Two arms, because the miss is the half that can go wrong invisibly. The
+   bakery fills the same meter, so a probe that only watched a star that hit
+   would pass just as happily if standing still were doing the work. */
+const starDream = (run, connect) => run(`(function () {
+  ${SETUP}
+  me.dream = 0;
+  foe.invuln = ${connect ? 0 : 9999}; foe.x = main.x + main.w - 8;
+  var before = -1, after = -1, at = -1;
+  netplay.active = true;
+  for (var i = 0; i < 90; i++) {
+    me.hitstop = 0;
+    var st = projectiles.filter(function (q) {
+      return q.constructor.name === 'Star' && !q.dead;
+    })[0];
+    // Walked onto the star rather than waited for, so the frame it lands on
+    // is not a property of where the probe happened to park him.
+    if (st && i > 12 && ${connect}) {
+      foe.invuln = 0; foe.hitstun = 0; foe.hitstop = 0;
+      foe.x = st.x; foe.y = st.y + 7; foe.vx = 0; foe.vy = 0; foe.grounded = false;
+    }
+    netplay.framePads = [bitsToPad(i === 0 ? ${SP_NEUTRAL} : 0), bitsToPad(0)];
+    var h0 = foe.health, d0 = me.dream;
+    step();
+    if (foe.health < h0) {
+      before = +d0.toFixed(4); after = +me.dream.toFixed(4); at = i; break;
+    }
+  }
+  netplay.active = false; netplay.framePads = null;
+  return { before: before, after: after, at: at, dream: +me.dream.toFixed(4) };
+})()`);
+
+function checkStarDream(run, hit, miss) {
+  const s = JSON.parse(run("JSON.stringify(ROSTER.squalls.specials.neutral)"));
+  assert.ok(s.dream > 0,
+    "precondition: a star is specified to pay `dream` when it lands; it pays " +
+    s.dream);
+  assert.ok(hit.at >= 0, "precondition: the star should have connected at all");
+  assert.ok(Math.abs(hit.after - hit.before - s.dream) < 1e-6,
+    "a star that connects should add `dream` (" + s.dream + ") to the meter " +
+    "the dragon reads; it went " + hit.before + " -> " + hit.after);
+
+  assert.equal(miss.at, -1,
+    "precondition: the control star should have reached nobody; it hit on " +
+    "frame " + miss.at);
+  assert.equal(miss.dream, 0,
+    "and a star that reaches nobody should pay nothing at all -- the meter " +
+    "is a reward for landing shots, not for throwing them; it reached " +
+    miss.dream);
+}
+
+test("a star that lands pays the dream, and one that misses pays nothing", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkStarDream(run, starDream(run, true), starDream(run, false));
+});
+
+test("negative control: a star that pays nothing fails the dream test", async () => {
+  /* The hook left in place and emptied, which is what a tidy-up does to it:
+     `burst` looks like a method that only exists to set `dead`, and setting
+     `dead` is what the branch above it in resolveCombat does anyway. Delete
+     the two lines under it and every visible thing about the star is
+     identical. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "    const d = this.spec.dream || 0;",
+    "    const d = 0;") });
+  expectToFail(() => checkStarDream(run, starDream(run, true), starDream(run, false)),
+    "with the star paying no dream the meter test should fail; it passed");
+});
+
+/* =====================================================================
+   THE WHIP -- and the twenty-two pixels at the end of it
    ===================================================================== */
 
 /* One cast, one victim pinned at one distance, and the first damage he takes.
@@ -892,8 +974,8 @@ test("negative control: a sweet spot out past the box fails the whip test", asyn
      move is a long poke with a lot of recovery and no reason to space it.
      The spec still advertises a sweet spot; the stage never hands one out. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "      sweet: { from: 32, damage: 20, base: 4.4, scale: 9.0, angle: 42,",
-    "      sweet: { from: 999, damage: 20, base: 4.4, scale: 9.0, angle: 42,") });
+    "      sweet: { from: 22, damage: 16, base: 5.0, scale: 8.6, angle: 58,",
+    "      sweet: { from: 999, damage: 16, base: 5.0, scale: 8.6, angle: 58,") });
   expectToFail(() => checkWhip(whipRange(run)),
     "with the sweet spot out of reach the whip test should fail; it passed");
 });
@@ -914,8 +996,35 @@ test("negative control: a sweet spot out past the box fails the whip test", asyn
    His health is knocked down first so the healing has somewhere to go: at a
    hundred it is clamped, and a clamped heal is indistinguishable from no
    heal at all. */
+/* The three frames this probe cares about, computed from the move rather
+   than written down. They were written down -- 120 and 121 for the two
+   dreaming frames, 262 for walking the foe onto the bread -- and both numbers
+   were inside a 245-frame stand that is eighty frames now. A probe with a
+   move's old length baked into it does not report that the move got shorter;
+   it reports that the meter stopped filling, which is a different bug and
+   not the one that happened. */
+const dreamProbe = (run) => {
+  const s = JSON.parse(run("JSON.stringify(ROSTER.squalls.specials.down)"));
+  // Two consecutive frames from the middle of the stand, where the meter is
+  // certainly still climbing and certainly not yet clamped.
+  const mid = s.startup + Math.floor(s.active / 2);
+  // And well after the last loaf lands, so nothing is still being baked
+  // while the eating is counted -- see the note below.
+  const eat = s.startup + s.active + s.recovery + 20;
+  /* Long enough for every loaf to go stale and be eaten. `mine` is how
+     long a fresh one is his alone, and a probe that stopped before the
+     last one ripened would count it as bread nobody wanted. */
+  return { mid: mid, eat: eat, total: eat + (s.loaf.mine || 0) + 140 };
+};
+
 const daydream = (run) => run(`(function () {
   ${SETUP}
+  /* Stood in the MIDDLE of the platform, not at SETUP's usual twenty-four
+     pixels in from its left edge. The bread lands behind him now, and from
+     there the third loaf lands three pixels past the edge of the floor and
+     falls off the world -- which is a real thing the move does on a ledge
+     and useless for counting who ate what. */
+  me.x = main.x + main.w / 2;
   foe.invuln = 9999; foe.x = main.x + main.w - 8; foe.health = 40;
   /* Both counts are kept BY IDENTITY -- every loaf object is remembered the
      frame it first appears, and counted eaten when it leaves the live set.
@@ -930,10 +1039,11 @@ const daydream = (run) => run(`(function () {
      by eleven with nothing to show for it. Both bugs hid while the move
      happened to bake three loaves and finish baking before the eating
      started; the fourth loaf found them the day it arrived. */
-  var dreams = [], bakedAt = [], healed = 0, eaten = 0, known = [];
+  var dreams = [], bakedAt = [], healed = 0, eaten = 0, known = [], freshEats = 0, freshTries = 0;
   var hp0 = foe.health;
+  var P = ${JSON.stringify(dreamProbe(run))};
   netplay.active = true;
-  for (var i = 0; i < 330; i++) {
+  for (var i = 0; i < P.total; i++) {
     me.hitstop = 0; me.mana = 999;
     var loaves = projectiles.filter(function (q) {
       return q.constructor.name === 'Loaf' && !q.dead;
@@ -944,22 +1054,29 @@ const daydream = (run) => run(`(function () {
     /* Off to eat, once the daydream has run its COURSE -- not merely once it
        has been going a while.
 
-       262 is after the last loaf lands (they come on 72, 132, 192 and 252),
-       and the gap matters: walking him onto the bread while more is still
-       being baked had him standing seven pixels from where the fourth loaf
-       was about to spawn, and a loaf is eaten by Loaf.update on the same
-       step it is pushed. It was created and gone inside one step() -- never
-       live at any point a probe could look -- so it healed him for eleven
-       that no counter here could attribute to anything. Bake first, then
-       eat; then both counts are of things that were actually on the floor. */
-    if (i >= 262 && loaves.length) {
+       P.eat -- named without backticks, because this comment lives
+       INSIDE a template literal and a backtick in here ends the probe
+       silently -- is past the end of the whole move, and the gap matters:
+       walking him onto the bread while more is still being baked had him
+       standing seven pixels from where the next loaf was about to spawn, and
+       a loaf is eaten by Loaf.update on the same step it is pushed. It was
+       created and gone inside one step() -- never live at any point a probe
+       could look -- so it healed him for eleven that no counter here could
+       attribute to anything. Bake first, then eat; then both counts are of
+       things that were actually on the floor. */
+    if (i >= P.eat && loaves.length) {
       foe.invuln = 0; foe.x = loaves[0].x; foe.y = loaves[0].y;
       foe.vx = 0; foe.vy = 0; foe.grounded = true;
     }
     netplay.framePads = [bitsToPad(i === 0 ? ${SP_DOWN} : 0), bitsToPad(0)];
     var h0 = foe.health;
+    /* Read off the loaf's OWN clock rather than off i, and with a frame in
+       hand: the loaf ages inside the step below, so a loaf one frame short
+       of stale here is stale by the time anybody is standing on it. */
+    var fresh = loaves.length && loaves[0].t + 1 < loaves[0].mine;
+    if (fresh && i >= P.eat) freshTries++;
     step();
-    if (foe.health > h0) healed += foe.health - h0;
+    if (foe.health > h0) { healed += foe.health - h0; if (fresh) freshEats++; }
     var live = projectiles.filter(function (q) {
       return q.constructor.name === 'Loaf' && !q.dead;
     });
@@ -971,11 +1088,12 @@ const daydream = (run) => run(`(function () {
       if (live.indexOf(known[k]) < 0) eaten++;
     }
     // Two consecutive dreaming frames, read off the middle of the stand.
-    if (i === 120 || i === 121) dreams.push(+me.dream.toFixed(4));
+    if (i === P.mid || i === P.mid + 1) dreams.push(+me.dream.toFixed(4));
   }
   var seen = known.length;
   netplay.active = false; netplay.framePads = null;
   return { dreams: dreams.join(','), baked: seen, bakedAt: bakedAt.join(','),
+           freshEats: freshEats, freshTries: freshTries,
            dream: +me.dream.toFixed(3), healed: +healed.toFixed(3),
            eaten: eaten, hp0: hp0, foeHp: +foe.health.toFixed(3) };
 })()`);
@@ -1024,9 +1142,26 @@ function checkBakery(run, r) {
      stopped dead in the middle of a fight to think about a bakery, and what
      he got for it is bread in the middle of a fight. The man he is fighting
      eats it. */
+  /* FRESH bread is his, though, and that is the half of the joke that keeps
+     the move payable. He is rooted for the eighty frames he is baking and
+     cannot reach any of it, so with no window at all the daydream is a
+     vending machine somebody else is standing in front of: measured over 480
+     matches with the loaves already moved behind him, his opponent ate 445
+     of the 937 he baked and he got 315. The probe below walks the foe onto
+     the bread well before it goes stale and he is not allowed a crumb. */
+  assert.ok(s.loaf.mine > 0,
+    "precondition: `loaf.mine` names how long a loaf is the baker's alone");
+  assert.ok(r.freshTries > 10,
+    "precondition: the probe has to actually stand him on bread that is " +
+    "still fresh, or the count below is zero for the wrong reason; it tried " +
+    r.freshTries + " times");
+  assert.equal(r.freshEats, 0,
+    "nobody but him may eat a loaf less than `mine` (" + s.loaf.mine +
+    ") frames old; the foe got " + r.freshEats + " of them out of the oven");
+
   assert.ok(r.eaten > 0,
-    "his opponent should be able to walk over a loaf and eat it; nothing " +
-    "was picked up");
+    "his opponent should be able to walk over a loaf and eat it once it has " +
+    "gone stale; nothing was picked up");
   assert.equal(r.healed, r.eaten * s.loaf.heal,
     "and be healed `loaf.heal` (" + s.loaf.heal + ") for each one; he ate " +
     r.eaten + " and gained " + r.healed);
@@ -1038,6 +1173,20 @@ function checkBakery(run, r) {
 test("the bakery fills the dream and leaves loaves his opponent can eat", async () => {
   const run = await arena(SQUALLS, REESE);
   checkBakery(run, daydream(run));
+});
+
+test("negative control: bread anybody can eat the moment it lands fails the bakery test", async () => {
+  /* The window gone and nothing else touched -- which is what the move
+     looked like before it was measured, and the reason it is measured. It
+     still bakes on the same frames, still heals for the same thirteen, still
+     fills the meter at the same rate, and there is nothing on screen that
+     says anything is wrong. What happens is that he is rooted for the eighty
+     frames he is baking and the man standing over him takes the lot. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "      if (f !== this.owner && this.t < this.mine) continue;",
+    "      if (false && f !== this.owner && this.t < this.mine) continue;") });
+  expectToFail(() => checkBakery(run, daydream(run)),
+    "with a loaf edible the moment it lands the bakery test should fail; it passed");
 });
 
 test("negative control: bread only its baker can eat fails the bakery test", async () => {

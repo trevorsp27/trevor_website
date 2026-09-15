@@ -469,14 +469,19 @@ function checkGroundedOnly(air, ground) {
   assert.equal(ground.meter, 0, "and spend the whole meter; it read " + ground.meter);
 }
 
-/* Anchored on the line AFTER it as well, because `groundOnly: true` is no
-   longer Simon's alone -- Houston's road carries it too, for the same reason
-   and since the same release. `heal: 25` is the slouch's and nothing else's,
-   so the pair is unique again and this control still undoes the flag on the
-   ult it is about. The uniqueness check in sabotaged() is what caught it. */
+/* Anchored on the line BEFORE it, because `groundOnly: true` is no longer
+   Simon's alone -- Houston's road carries it too, for the same reason and
+   since the same release -- so the flag on its own is not unique.
+
+   It used to be anchored on the line AFTER instead, `heal: 25`. That number
+   is a balance knob and it moved to 40 the moment the sleeping body stopped
+   being invulnerable, which broke this control. The comment above the flag
+   is not a balance knob: it explains why the flag exists and will outlive
+   every retune of what the sleep pays. The uniqueness check in sabotaged()
+   is what caught both. */
 const GROUND_ONLY_FLAG = [
-  "    groundOnly: true,\n    heal: 25,\n",
-  "    groundOnly: false,\n    heal: 25,\n",
+  "    // in the blast zone with the meter spent.\n    groundOnly: true,\n",
+  "    // in the blast zone with the meter spent.\n    groundOnly: false,\n",
 ];
 const GROUND_ONLY_GATE = [
   "          (this.grounded || !this.def.ult.groundOnly)) {\n",
@@ -854,7 +859,7 @@ const CURRENCIES = `(function () {
               mana: me.mana, meter: me.ultMeter, buffTimer: me.buffTimer,
               damageMul: me.damageMul,
               grows: me.buffStats ? me.buffStats.sizeMul : 1,
-              held: me.buffStats ? me.buffStats.hold : 0 };
+              duration: ROSTER.simon.specials.down.jackpot.duration };
     /* canSpecial fails on the price before it ever reaches the slots clause,
        so the refusal has to be asked of a Simon who can afford the pull.
        Restored afterwards -- what he spent is one of the readings. */
@@ -910,10 +915,18 @@ function checkCurrencies(r) {
   assert.equal(r.triple.damageMul, r.damageMul,
     "and hits for " + r.damageMul + "x, not " + r.triple.damageMul +
     " -- double was chosen over triple after seeing triple");
-  assert.ok(r.triple.held,
-    "and the buff is HELD, not timed: without hold, update() counts buffTimer " +
-    "down and the transformation that is supposed to last until he dies ends " +
-    "on the next frame");
+  /* It used to be HELD -- buffTimer pinned at 1 by a `hold` flag, so a lost
+     stock was the only thing in the game that could end it. It is fifteen
+     seconds now, or a lost stock, whichever comes first. What this asserts is
+     that the payout put the spec's whole clock on him: that the transformation
+     is a WINDOW rather than either a state he lives in or a buff that expires
+     on the next frame. The shape of the ending -- the deflate, the chain
+     coming off, the lever coming back -- is pinned in nerdwars-simon.test.js,
+     where the recording is long enough to see it. */
+  assert.equal(r.triple.buffTimer, r.triple.duration,
+    "three sevens put the whole " + r.triple.duration + "-frame clock on him; buffTimer " +
+    "read " + r.triple.buffTimer + " (this reading is taken inside payout(), before any " +
+    "step has spent a frame of it)");
   assert.equal(r.triple.canPull, false,
     "and he cannot feed the machine while he is standing in his own payout");
 

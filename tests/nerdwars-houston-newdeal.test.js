@@ -201,6 +201,15 @@ async function arena(foe, stage) {
 }
 const withEngine = (src) => { arena.engine = src; };
 
+/* WHERE A LANE ACTUALLY IS, in stage pixels. The roster keeps `laneX` in the
+   DRAWING's units -- 28 is half of Kel's 56-pixel lane -- and `spread` is
+   what carries it onto the stage along with the road's width and the cars.
+   Every test below that parks somebody in a lane, or asserts which lane a car
+   took, wants the product; asking for `laneX` alone measured the road Kel
+   drew rather than the one the game builds. */
+const laneOf = (run) => Number(run("ROSTER.houston.ult.laneX")) *
+                        Number(run("ROSTER.houston.ult.spread || 1"));
+
 /* Both fighters put somewhere known. `freezeFrames` is cleared deliberately:
    several moves set it, nothing else clears it, and a measurement that begins
    inside somebody else's freeze spends its one press on a frame where nothing
@@ -234,7 +243,7 @@ const RUN_ULT = (opts) => `(function () {
             meterAfter: -1, took: 0, hits: [], sizes: [], lanes: [], built: [],
             seen: {}, topHit: 0 };
   var born = {};
-  for (var f = 0; f < 300; f++) {
+  for (var f = 0; f < 400; f++) {
     me.hitstop = 0; foe.hitstop = 0;
     if (o.pin !== undefined) {
       foe.setState('idle'); foe.hitstun = 0; foe.invuln = 0;
@@ -256,11 +265,19 @@ const RUN_ULT = (opts) => `(function () {
       var p = projectiles[i];
       if (p.constructor.name === 'Roadway') road = p;
       if (p.constructor.name !== 'Oncoming') continue;
-      if (!born[p.tint]) {
-        born[p.tint] = 1;
-        r.cars.push({ tint: p.tint, lane: p.lane, bornAt: f });
+      /* Keyed on index, which is WHICH CAR, and not on tint, which is which
+         of the three paints it wears. Those were the same number while the
+         road sent three cars. It sends six, so tint wraps -- cars 0 and 3 are
+         the same color -- and a trace keyed on it saw three cars, called
+         that the whole queue, and asserted happily about half a move.
+
+         No backticks anywhere in here: this whole probe is a template
+         literal, so one inside a comment ends the string. */
+      if (!born[p.index]) {
+        born[p.index] = 1;
+        r.cars.push({ index: p.index, tint: p.tint, lane: p.lane, bornAt: f });
       }
-      if (p.tint === 0) {
+      if (p.index === 0) {
         r.sizes.push(+p.s.toFixed(4));
         /* The RATIO is computed in here at full precision rather than
            divided out afterwards: the two numbers it is made of are rounded
@@ -387,7 +404,7 @@ test("control: a road that is whole on the first frame fails the paving test", a
 });
 
 /* =====================================================================
-   3. THREE CARS, AND THE LANE HE IS FACING GETS TWO OF THEM
+   3. SIX CARS, AND THE LANE HE IS FACING GETS FOUR OF THEM
    ===================================================================== */
 
 /* The road is centred on him and he is usually looking at the other fighter,
@@ -395,29 +412,38 @@ test("control: a road that is whole on the first frame fails the paving test", a
    multiplied by his facing at the moment he broke ground, and this is the
    assertion that it is actually multiplied rather than merely written down. */
 function checkLanes(right, left, laneX) {
-  assert.equal(right.cars.length, 3, "three cars should come down the road");
-  assert.deepEqual(right.cars.map((c) => c.lane), [laneX, -laneX, laneX],
-    "facing right, two of the three should take the right-hand lane");
-  assert.deepEqual(left.cars.map((c) => c.lane), [-laneX, laneX, -laneX],
+  /* `laneX` here is the lane offset ON THE STAGE -- the roster's number times
+     `spread` -- because that is what the engine puts on the car and what a
+     player has to walk. Rounded to four places on both sides: the engine
+     multiplies three floats in one order and this test in another, and the
+     property under test is where the cars are, not which way the last bit
+     rounded. */
+  const lanes = (r) => r.cars.map((c) => +c.lane.toFixed(4));
+  const X = +laneX.toFixed(4);
+  assert.equal(right.cars.length, 6, "six cars should come down the road");
+  assert.deepEqual(lanes(right), [X, -X, X, -X, X, X],
+    "facing right, four of the six should take the right-hand lane");
+  assert.deepEqual(lanes(left), [-X, X, -X, X, -X, -X],
     "facing left, the mirror of that");
   const gaps = right.cars.slice(1).map((c, i) => c.bornAt - right.cars[i].bornAt);
   assert.deepEqual(new Set(gaps).size, 1,
     "the cars should be let on at an even spacing; gaps were " + gaps.join(", "));
 }
 
-test("three cars, and the lane he faces gets two of them", async () => {
+test("six cars, and the lane he faces gets four of them", async () => {
   const { run } = await arena("kel");
-  const laneX = Number(run("ROSTER.houston.ult.laneX"));
-  checkLanes(fire(run, { facing: 1 }), fire(run, { facing: -1 }), laneX);
+  checkLanes(fire(run, { facing: 1 }), fire(run, { facing: -1 }), laneOf(run));
 });
 
 test("control: lanes that ignore his facing fail the aiming test", async () => {
   withEngine(sabotage(
-    "    this.lane = road.spec.lanes[index] * road.spec.laneX * road.dir;\n",
-    "    this.lane = road.spec.lanes[index] * road.spec.laneX;\n"));
+    "    this.lane = road.spec.lanes[index] * road.spec.laneX *\n" +
+    "                (road.spec.spread || 1) * road.dir;\n",
+    "    this.lane = road.spec.lanes[index] * road.spec.laneX *\n" +
+    "                (road.spec.spread || 1);\n"));
   const { run } = await arena("kel");
-  const laneX = Number(run("ROSTER.houston.ult.laneX"));
-  expectToFail(() => checkLanes(fire(run, { facing: 1 }), fire(run, { facing: -1 }), laneX),
+  expectToFail(
+    () => checkLanes(fire(run, { facing: 1 }), fire(run, { facing: -1 }), laneOf(run)),
     "lanes that do not read his facing should fail checkLanes");
 });
 
@@ -461,7 +487,7 @@ function checkPerspective(r, laneX) {
 
 test("a car's size, its lane and its row are one number read three ways", async () => {
   const { run } = await arena("kel");
-  checkPerspective(fire(run), Number(run("ROSTER.houston.ult.laneX")));
+  checkPerspective(fire(run), laneOf(run));
 });
 
 test("control: a car that grows linearly fails the perspective test", async () => {
@@ -469,7 +495,7 @@ test("control: a car that grows linearly fails the perspective test", async () =
     "    return 1 / Math.max(1 / this.ult.maxSize, d0 + (1 - d0) * u);\n",
     "    return (1 / d0) + (1 - 1 / d0) * u;\n"));
   const { run } = await arena("kel");
-  expectToFail(() => checkPerspective(fire(run), Number(run("ROSTER.houston.ult.laneX"))),
+  expectToFail(() => checkPerspective(fire(run), laneOf(run)),
     "a linear ramp should fail checkPerspective");
 });
 
@@ -491,7 +517,15 @@ function checkStripe(sweep, laneX) {
     "a man standing in a lane should be run over");
   const safe = sweep.filter((s) => s.took === 0).map((s) => s.at);
   const widest = Math.max.apply(null, safe.filter((a) => Math.abs(a) < laneX));
-  assert.ok(widest >= 6 && widest <= 12,
+  /* 12 to 20, and the window moved because the road did. MEASURED with the
+     same sweep at every pixel out to 110: the three-car road was untouched
+     from -8 to +8 and this one is untouched from -15 to +15, because every
+     term in that gap -- the lane offset, the car's width, the road it is
+     painted on -- is multiplied by the same `spread`. Widening the road
+     widens the answer to it, which is the property this range is pinning:
+     a retune that made the road bigger WITHOUT the stripe following would
+     land under 12 and fail here. */
+  assert.ok(widest >= 12 && widest <= 20,
     "the safe stripe should be wide enough to stand on and narrow enough to " +
     "be a decision; it reaches " + widest + " pixels off the line");
 }
@@ -499,19 +533,19 @@ function checkStripe(sweep, laneX) {
 async function sweepStripe(run, offsets) {
   return offsets.map((at) => ({ at, took: fire(run, { pin: at }).took }));
 }
-const OFFSETS = [0, 2, 4, 6, 8, 10, 12, 14, 20];
+const OFFSETS = [0, 2, 4, 6, 8, 10, 12, 14, 15, 16, 18, 20, 26];
 
 test("the white line down the middle of the road is safe and the lanes are not", async () => {
   const { run } = await arena("kel");
-  const laneX = Number(run("ROSTER.houston.ult.laneX"));
+  const laneX = laneOf(run);
   checkStripe(await sweepStripe(run, OFFSETS.concat([laneX])), laneX);
 });
 
 test("control: lanes collapsed onto the centre line leave nowhere safe", async () => {
-  withEngine(sabotage("    laneX: 28, lanes: [1, -1, 1],\n",
-                      "    laneX: 4, lanes: [1, -1, 1],\n"));
+  withEngine(sabotage("    laneX: 28, lanes: [1, -1, 1, -1, 1, 1],\n",
+                      "    laneX: 4, lanes: [1, -1, 1, -1, 1, 1],\n"));
   const { run } = await arena("kel");
-  const laneX = Number(run("ROSTER.houston.ult.laneX"));
+  const laneX = laneOf(run);
   // The sweep is finished BEFORE expectToFail is called: its argument is an
   // arrow, and an await inside one that is not itself async is a syntax error.
   const sweep = await sweepStripe(run, OFFSETS.concat([laneX]));
@@ -541,15 +575,15 @@ function checkLaunch(rightSide, leftSide) {
 
 test("a car throws whoever it hits away from itself, either way", async () => {
   const { run } = await arena("kel");
-  const laneX = Number(run("ROSTER.houston.ult.laneX"));
+  const laneX = laneOf(run);
   checkLaunch(fire(run, { pin: laneX + 12 }), fire(run, { pin: laneX - 12 }));
 });
 
 test("control: a launch with no sideways component fails the throw test", async () => {
-  withEngine(sabotage("      damage: 13, base: 3.2, scale: 7.0, angle: 34,\n",
-                      "      damage: 13, base: 3.2, scale: 7.0, angle: 90,\n"));
+  withEngine(sabotage("      damage: 11, base: 3.4, scale: 7.0, angle: 34,\n",
+                      "      damage: 11, base: 3.4, scale: 7.0, angle: 90,\n"));
   const { run } = await arena("kel");
-  const laneX = Number(run("ROSTER.houston.ult.laneX"));
+  const laneX = laneOf(run);
   // 90 degrees is straight up, so kx below is deliberately left alone: the
   // control is the LAUNCH VECTOR, and kx is the half of it that does the work.
   run("ROSTER.houston.ult.traffic.kx = 0; ROSTER.houston.ult.traffic.ky = 1;");
@@ -719,19 +753,46 @@ test("the bundle ships the road, three cars, and the measured perspective", asyn
 /* The ROSTER's own numbers, which are the ones a tuning pass touches. Pinned
    loosely -- these are ranges, not values, because the point is to catch a
    decimal point rather than to forbid a retune. */
-test("the ult's shape is a road, three cars and a few seconds", async () => {
+test("the ult's shape is a road, six cars and a few seconds", async () => {
   const { run } = await arena("kel");
   const u = JSON.parse(run("JSON.stringify(ROSTER.houston.ult)"));
   assert.equal(u.kind, "newdeal");
   assert.equal(u.label, "FDR'S NEW DEAL");
   assert.equal(u.groundOnly, true);
-  assert.equal(u.lanes.length, 3, "three cars");
+  assert.equal(u.lanes.length, 6, "six cars");
+  /* The one number that makes the road bigger, and the only one: `spread`
+     multiplies the drawn width, the lane offsets and the cars together, so
+     nothing in the perspective can be enlarged on its own. Bounded rather
+     than pinned -- a retune may widen the road, and 2.5 of a 123-pixel road
+     is wider than the stage. */
+  assert.ok(u.spread >= 1 && u.spread <= 2,
+    "the road should be scaled by a spread between 1 and 2; it was " + u.spread);
   assert.ok(u.travel >= 60 && u.travel <= 140,
     "a car should take a second or two to arrive, not a blink: " + u.travel);
   assert.ok(u.pave > 0, "the road should take time to build");
   assert.ok(u.bite > 0 && u.bite < 1, "there should be a distance at which it is scenery");
-  assert.ok(u.traffic.damage * u.lanes.length <= 45,
-    "three cars should not out-damage the car ult that already exists");
+  /* The ceiling that can actually be STOOD in, which is the busiest lane
+     rather than the whole queue. `lanes` is which side of the white line
+     each car takes, and a man parked in one of them is run over by the cars
+     in that lane only: being hit by both needs a car to throw you across the
+     stripe, which is what the sideways launch is for and is not something
+     anybody can multiply out.
+
+     MEASURED against this, by parking a target at every pixel and running
+     the whole ult: the worst any offset takes is 32, which is exactly
+     `damage` times `busiest`. So this bound is the real one. */
+  const busiest = Math.max(u.lanes.filter((l) => l > 0).length,
+                           u.lanes.filter((l) => l < 0).length);
+  assert.ok(u.traffic.damage * busiest <= 45,
+    "the traffic in one lane should not out-damage the car ult that already " +
+    "exists; it is " + busiest + " cars at " + u.traffic.damage);
+  /* And one car is one hit per person, which is what `hitEvery` has always
+     claimed. It has to be longer than a car's whole life from the frame it
+     stops being scenery, or a tall car starts hitting twice -- which it
+     silently did at `spread` 1.6 until this was raised from 40. */
+  assert.ok(u.traffic.hitEvery >= u.travel + u.past - 40,
+    "hitEvery (" + u.traffic.hitEvery + ") has to outlast a car's approach, " +
+    "or a car hits the same person twice");
   const total = u.startup + u.active + u.recovery;
   assert.ok(total < u.pave + u.travel,
     "he should be free again well before the first car arrives; he is locked " +

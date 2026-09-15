@@ -96,7 +96,7 @@ function stubCanvas(w, h) {
   return el;
 }
 
-async function bootEngine() {
+async function bootEngine(engineSrc) {
   const view = stubCanvas(960, 540);
   const sandbox = {
     console, Math: seededMath(), JSON, Date, Promise, Object, Array, Map, Set, Number,
@@ -124,7 +124,8 @@ async function bootEngine() {
   vm.runInContext(
     "var SPRITES=window.NERDWARS_ASSETS.SPRITES,TILES=window.NERDWARS_ASSETS.TILES," +
       "UI=window.NERDWARS_ASSETS.UI;", sandbox);
-  vm.runInContext(readFileSync(ENGINE_PATH, "utf8"), sandbox, { filename: "nerdwars.js" });
+  vm.runInContext(engineSrc || readFileSync(ENGINE_PATH, "utf8"), sandbox,
+                  { filename: "nerdwars.js" });
   for (let i = 0; i < 5; i++) await Promise.resolve();
   return (src) => vm.runInContext(src, sandbox);
 }
@@ -141,8 +142,34 @@ const tapKey = (run, code) => run(`(function () {
 /* Kel in seat 0, Reese in seat 1, on the open arena, and past the 110-frame
    spawn invulnerability. Reese because he is the other character with a
    buff, which is exactly the thing that must not get tangled up. */
-async function kelVsReese() {
-  const run = await bootEngine();
+/* ONE LINE CHANGED IN MEMORY, never on disk. A test whose sabotage does not
+   fail it is measuring nothing, so every claim about the buff below has a
+   twin that breaks the engine in the one place the claim depends on and
+   checks that the SAME checker then fails. */
+function sabotage(needle, replacement) {
+  const src = readFileSync(ENGINE_PATH, "utf8");
+  const at = src.indexOf(needle);
+  assert.ok(at >= 0, "sabotage needle not found in the engine: " + JSON.stringify(needle));
+  assert.equal(src.indexOf(needle, at + 1), -1,
+    "sabotage needle is not unique in the engine: " + JSON.stringify(needle));
+  return src.slice(0, at) + replacement + src.slice(at + needle.length);
+}
+
+/* The other half of a negative control: the same checker, and it has to
+   throw an assertion. Anything else thrown is a broken checker rather than a
+   failed test, and is let through. */
+function expectToFail(check, why) {
+  try {
+    check();
+  } catch (e) {
+    if (e instanceof assert.AssertionError) return e.message;
+    throw e;
+  }
+  assert.fail(why);
+}
+
+async function kelVsReese(engineSrc) {
+  const run = await bootEngine(engineSrc);
   run("select.cursor=[2,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
@@ -218,13 +245,23 @@ const NO_HIT = "{ at: -1, stun: 0, freeze: 0, buffTimer: 0, damageMul: 1, speedM
    of range on the first active frame would make the second measurement
    quietly different from the first. `lost` is what the jab took. */
 const JAB = (frames) => `
-    var before = foe.health;
+    var before = foe.health, mulAtHit = 0;
     netplay.active = true;
     for (var i = 0; i < ${frames}; i++) {
       me.hitstop = 0; me.mana = 999;
       foe.x = me.x + 8; foe.vx = 0; foe.invuln = 0;
+      var hp0 = foe.health;
       netplay.framePads = [bitsToPad(i === 0 ? ${ATTACK} : 0), bitsToPad(0)];
       step();
+      /* The multiplier on the frame the jab CONNECTED, not the one it was
+         pressed on. It is read after the step, which is the same value
+         applyHit used: buffTimer is decremented at the top of Kel's update
+         and nothing touches it again before the frame ends, so this is the
+         number that was in force inside resolveCombat. It matters because
+         the buff fades -- four frames of startup is four frames of decay,
+         and comparing a landed jab against the multiplier at the press is
+         how you assert that a fading buff does not fade. */
+      if (!mulAtHit && foe.health < hp0) mulAtHit = me.damageMul;
     }
     netplay.active = false; netplay.framePads = null;
     var lost = before - foe.health;`;
@@ -329,10 +366,11 @@ test("landing LEG DAY makes him buff Kel: half again the damage, none of the spe
      faster Kel who also hits harder is a different character. */
   const run = await kelVsReese();
   const spec = run("(function(){ var b = ROSTER.kel.ult.buff;" +
-    " return { duration: b.duration, damageMul: b.damageMul, speedMul: b.speedMul }; })()");
+    " return { duration: b.duration, damageMul: b.damageMul, speedMul: b.speedMul," +
+    "          decay: b.decay, decayTo: b.decayTo }; })()");
   assert.equal(spec.duration, 600, "ten seconds of buff, as designed; got " + spec.duration);
   assert.equal(spec.damageMul, 1.5,
-    "half again the damage, as designed; got " + spec.damageMul);
+    "half again the damage at its peak, as designed; got " + spec.damageMul);
   assert.equal(spec.speedMul, undefined,
     "the buff must not name a speed multiplier -- damage was the ask");
 
@@ -352,7 +390,7 @@ test("landing LEG DAY makes him buff Kel: half again the damage, none of the spe
     return { plain: plain, buffed: buffed, hitAt: landed.at,
              buffTimer: landed.buffTimer, damageMul: landed.damageMul,
              speedMul: landed.speedMul, stillBuffed: stillBuffed,
-             mulNow: me.damageMul };
+             mulNow: mulAtHit };
   })()`);
 
   assert.ok(r.hitAt >= 0, "precondition: the ult should have landed on the grounded foe");
@@ -365,12 +403,166 @@ test("landing LEG DAY makes him buff Kel: half again the damage, none of the spe
     "his speed must be untouched -- speedMul read " + r.speedMul + " while buffed");
 
   assert.ok(r.plain > 0, "precondition: the plain jab should have connected; it took " + r.plain);
-  assert.ok(r.stillBuffed && r.mulNow === spec.damageMul,
-    "precondition: he should still be buffed for the second jab");
-  assert.ok(Math.abs(r.buffed - spec.damageMul * r.plain) < 1e-9,
-    "a jab from buffed Kel should take exactly " + spec.damageMul +
-    " times what a plain one does: plain took " + r.plain +
+  /* Against the multiplier IN FORCE on the frame the second jab landed, not
+     against the buff's peak. The multiplier fades now -- see the test below
+     -- so comparing to 1.5 would be asserting that it does not. */
+  assert.ok(r.stillBuffed && r.mulNow > 1,
+    "precondition: he should still be buffed for the second jab; it read " + r.mulNow);
+  assert.ok(Math.abs(r.buffed - r.mulNow * r.plain) < 1e-9,
+    "a jab from buffed Kel should take exactly the multiplier in force (" +
+    r.mulNow + ") times what a plain one does: plain took " + r.plain +
     ", buffed took " + r.buffed);
+});
+
+test("the buff FADES: full strength at the slam, down to its floor by the end", async () => {
+  /* The 2.78 nerf, aimed at the half of the ult nobody can see. It is read
+     off the getter every hit in the game already goes through, after a REAL
+     cast -- a probe that assembles its own buffStats measures the probe, and
+     that is exactly how a `decay` written into the roster and never copied
+     onto the fighter passed the first time it was written. */
+  const run = await kelVsReese();
+  const spec = run("(function(){ var b = ROSTER.kel.ult.buff;" +
+    " return { duration: b.duration, damageMul: b.damageMul," +
+    "          decay: b.decay, decayTo: b.decayTo }; })()");
+  assert.ok(spec.decay > 0,
+    "precondition: the buff should name the span it fades over; decay was " + spec.decay);
+  assert.ok(spec.decayTo > 1 && spec.decayTo < spec.damageMul,
+    "the floor must be a real multiplier and below the peak: decayTo " +
+    spec.decayTo + " against damageMul " + spec.damageMul);
+
+  const r = run(`(function(){
+    ${RESET} ${NO_BUFF}
+    ${LEG_DAY(80)}
+    var landed = hit || { damageMul: 0 };
+    var out = { at0: landed.damageMul, samples: [] };
+    var span = ROSTER.kel.ult.buff.duration;
+    netplay.active = true;
+    for (var i = 0; i < span + 30; i++) {
+      me.hitstop = 0; freezeFrames = 0;
+      netplay.framePads = [bitsToPad(0), bitsToPad(0)];
+      step();
+      /* Only while the buff is actually running. A sample taken after the
+         timer hits zero is a reading of an unbuffed Kel, which the formula
+         below has nothing to say about. */
+      if (me.buffTimer > 0 && (i % 120 === 0 || i === span - 2)) {
+        out.samples.push([i, me.buffTimer, me.damageMul]);
+      }
+    }
+    netplay.active = false; netplay.framePads = null;
+    out.after = me.damageMul;
+    out.timerAfter = me.buffTimer;
+    return out;
+  })()`);
+
+  assert.equal(r.at0, spec.damageMul,
+    "the frame the floor lands he should be at the full " + spec.damageMul +
+    "; he read " + r.at0);
+  /* Strictly falling at every step, and each step equal to what the roster's
+     own numbers say it should be. An endpoint-only check would pass a buff
+     that dropped to its floor on frame two and sat there. */
+  for (let i = 1; i < r.samples.length; i++) {
+    assert.ok(r.samples[i][2] < r.samples[i - 1][2],
+      "the multiplier should fall every step: frame " + r.samples[i][0] +
+      " read " + r.samples[i][2] + " against " + r.samples[i - 1][2] +
+      " at frame " + r.samples[i - 1][0]);
+    const want = spec.decayTo +
+      (spec.damageMul - spec.decayTo) * (r.samples[i][1] / spec.decay);
+    assert.ok(Math.abs(r.samples[i][2] - want) < 1e-9,
+      "at buffTimer " + r.samples[i][1] + " it should read " + want +
+      "; it read " + r.samples[i][2]);
+  }
+  /* And by the last sample it has covered most of the distance to its floor.
+     Stated as a fraction of the drop rather than as a number, because the
+     exact buffTimer the last sample lands on depends on which frame the slam
+     connected -- and the claim being made is about the SHAPE, not about one
+     reading. */
+  const last = r.samples[r.samples.length - 1];
+  const covered = (spec.damageMul - last[2]) / (spec.damageMul - spec.decayTo);
+  assert.ok(covered > 0.8,
+    "by the last frame of the buff it should be most of the way to its floor of " +
+    spec.decayTo + "; it read " + last[2] + ", which is " +
+    (100 * covered).toFixed(1) + "% of the way");
+  assert.equal(r.timerAfter, 0, "the buff should be over; buffTimer was " + r.timerAfter);
+  assert.equal(r.after, 1,
+    "and once it is over he hits for what he always did; damageMul read " + r.after);
+});
+
+test("negative control: a buff that ignores its own decay fails the fade test", async () => {
+  /* The failure this pins is the one that actually happened: the roster grew
+     a `decay` and the buff granted in runSpecial never copied it, so the
+     multiplier stayed flat at 1.5 and every probe that built its own
+     buffStats said the fade worked. */
+  const run = await kelVsReese(
+    sabotage("              decay: s.buff.decay || 0,", "              decay: 0,"));
+  const r = run(`(function(){
+    ${RESET} ${NO_BUFF}
+    ${LEG_DAY(80)}
+    var first = me.damageMul;
+    netplay.active = true;
+    for (var i = 0; i < 300; i++) {
+      me.hitstop = 0; freezeFrames = 0;
+      netplay.framePads = [bitsToPad(0), bitsToPad(0)];
+      step();
+    }
+    netplay.active = false; netplay.framePads = null;
+    return { first: first, later: me.damageMul, timer: me.buffTimer };
+  })()`);
+  assert.ok(r.timer > 0, "precondition: the sabotaged buff should still be running");
+  expectToFail(() => assert.ok(r.later < r.first,
+    "a buff that dropped its decay does not fade"),
+    "the fade test must fail when the decay never reaches the fighter");
+});
+
+test("LEG DAY does not multiply itself, however buffed he already is", async () => {
+  /* The ceiling test below measures his jab and his specials against the
+     roster's hardest single hit and never looked at the ult, because for as
+     long as the ult was 19 and the buff was granted AFTER the hit landed, the
+     ult could not be the thing that broke it. It can now: a second LEG DAY
+     inside the first one's ten seconds is the ult's damage times whatever
+     multiplier is still running. Measured over 10832 landings of CPU play,
+     10.4% of them landed on an already-buffed Kel, so this is a rule with
+     traffic on it. `noBuff` on the move is what closes it. */
+  const run = await kelVsReese();
+  const r = run(`(function(){
+    ${RESET} ${NO_BUFF}
+    ${LEG_DAY(80)}
+    foe.health = 100; foe.invuln = 0; foe.setState('idle');
+    var mul = me.damageMul, before = foe.health;
+    applyHit(me, foe, ROSTER.kel.ult, me.x);
+    var second = before - foe.health;
+    foe.health = 100; foe.invuln = 0; foe.setState('idle');
+    applyHit(me, foe, ROSTER.kel.jab, me.x);
+    var jab = 100 - foe.health;
+    return { second: second, mul: mul, jab: jab,
+             ultDamage: ROSTER.kel.ult.damage, jabDamage: ROSTER.kel.jab.damage,
+             noBuff: !!ROSTER.kel.ult.noBuff };
+  })()`);
+
+  assert.ok(r.noBuff, "the ult has to carry noBuff or nothing below means anything");
+  assert.ok(r.mul > 1, "precondition: he should still be buffed for the second cast");
+  assert.equal(r.second, r.ultDamage,
+    "a LEG DAY landed on top of a live buff should deal its plain " + r.ultDamage +
+    "; it dealt " + r.second);
+  assert.ok(Math.abs(r.jab - r.jabDamage * r.mul) < 1e-9,
+    "and the buff must still be running for everything else: the jab beside it took " +
+    r.jab + " at a multiplier of " + r.mul);
+});
+
+test("negative control: an ult that multiplies itself fails the ceiling", async () => {
+  const run = await kelVsReese(
+    sabotage("  let dmg = move.damage * (move.noBuff ? 1 : attacker.damageMul) *",
+             "  let dmg = move.damage * attacker.damageMul *"));
+  const r = run(`(function(){
+    ${RESET} ${NO_BUFF}
+    ${LEG_DAY(80)}
+    foe.health = 100; foe.invuln = 0; foe.setState('idle');
+    var before = foe.health;
+    applyHit(me, foe, ROSTER.kel.ult, me.x);
+    return { second: before - foe.health, ultDamage: ROSTER.kel.ult.damage };
+  })()`);
+  expectToFail(() => assert.equal(r.second, r.ultDamage,
+    "a self-multiplying ult deals more than its own number"),
+    "the noBuff test must fail when applyHit stops reading the flag");
 });
 
 test("the buff cannot lift one of his moves above the roster's hardest hit", async () => {

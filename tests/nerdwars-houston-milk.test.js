@@ -190,7 +190,7 @@ async function arena(engineSrc) {
     "  fighters.forEach(function (f) {",
     "    f.setState('idle'); f.timer = 0; f.hitstun = 0; f.hitstop = 0;",
     "    f.landLag = 0; f.invuln = 0; f.mana = 100; f.vx = 0; f.vy = 0;",
-    "    f.grounded = true; f.y = MAIN.y; f.slick = 0; f.stocks = 9;",
+    "    f.grounded = true; f.y = MAIN.y; f.slick = 0; f.slickFoe = 0; f.stocks = 9;",
     "    f.health = 100; f.eliminated = false; f.combo = 0;",
     "    f.sinceHitFrames = 999;",
     "  });",
@@ -433,27 +433,88 @@ test("the spill is drawn with edges, on the floor rather than above it", async (
     "whole of what a player has to read off it");
 });
 
-test("he slips in his own milk, and nobody slips over it", async () => {
-  /* A floor hazard you can stand in safely is a wall. The owner exemption
-     resolveCombat applies on principle is deliberately not applied here --
-     the slip is not a hit -- and the box is thin and sits ON the platform,
-     which is what makes it something you STEP in rather than something you
-     collide with. */
+test("he skates on his own milk: the stick back, the brakes not", async () => {
+  /* WHOSE FLOOR IT IS, and it is the half of this move that was missing.
+
+     A floor hazard its owner can stand on safely is a wall, so he is not
+     exempt from it -- `slick` is armed on him exactly as before and
+     stopping() still answers PHYS.slickFriction, which carries a walk 52
+     pixels and will carry him off the ledge behind his own spill. What he
+     gets back is grip: he can turn, accelerate and close through it, and
+     nobody else can.
+
+     The measurement that bought the split is in Fighter.slickFoe. Across a
+     hundred CPU matches he spent 345 frames a match with no traction and 339
+     of them were in milk he had thrown himself, against 386 for the man
+     opposite -- a move whose owner was very nearly its own best victim.
+
+     Turning round is what grip actually buys, so it is measured rather than
+     inferred: from a walk one way to a walk the other, inside the spill. */
+  const { run } = await arena();
+  const READ = "(function (mine) {\n" +
+    "  seat();\n" +
+    "  if (mine) projectiles.push(new Puddle(fighters[0], SPEC, fighters[0].x, MAIN.y));\n" +
+    "  else spill(fighters[0].x);\n" +
+    "  tick(0); tick(0);\n" +
+    "  return { slick: fighters[0].slick, foe: fighters[0].slickFoe,\n" +
+    "           grip: fighters[0].grip(), stop: fighters[0].stopping() };\n" +
+    "})";
+  const mine = run(READ + "(true)"), theirs = run(READ + "(false)");
+  const GRIP = run("PHYS.slickGrip"), FRIC = run("PHYS.slickFriction");
+
+  assert.ok(mine.slick > 0,
+    "he is still standing in milk in his own spill; his slick read " + mine.slick);
+  assert.equal(mine.stop, FRIC,
+    "and he still has no brakes in it -- that is the half he keeps paying; " +
+    "his friction read " + mine.stop);
+  assert.equal(mine.grip, 1,
+    "but the stick answers in his own milk; his grip read " + mine.grip);
+  assert.equal(mine.foe, 0,
+    "and slickFoe is what says whose it is, so his own must leave it at 0; " +
+    "it read " + mine.foe);
+
+  assert.equal(theirs.grip, GRIP,
+    "in somebody else's spill he loses the stick like everybody else; his " +
+    "grip read " + theirs.grip);
+  assert.equal(theirs.stop, FRIC,
+    "and the brakes with it; his friction read " + theirs.stop);
+  assert.ok(theirs.foe > 0,
+    "and slickFoe has to be armed for that to be true; it read " + theirs.foe);
+
+  /* The consequence, in frames, because two numbers off a getter are only
+     worth what they do to a body that is moving. */
+  const TURN = "(function (mine) {\n" +
+    "  seat();\n" +
+    "  var at = fighters[0].x + 40;\n" +
+    "  if (mine) projectiles.push(new Puddle(fighters[0], SPEC, at, MAIN.y));\n" +
+    "  else spill(at);\n" +
+    "  for (var i = 0; i < 40; i++) tick(" + RIGHT + ");\n" +
+    "  var n = 0;\n" +
+    "  for (; n < 200; n++) { tick(1); if (fighters[0].vx < -1) break; }\n" +
+    "  return n;\n" +
+    "})";
+  const own = run(TURN + "(true)"), foe = run(TURN + "(false)");
+  assert.ok(own < foe / 3,
+    "turning round in his own spill should cost a fraction of what it costs " +
+    "in somebody else's; it took " + own + " frames against " + foe);
+});
+
+test("a fighter in the air over the spill touches none of it", async () => {
+  /* The box is thin and sits ON the platform, which is what makes it
+     something you STEP in rather than something you collide with: a
+     fighter's hurtbox runs from their feet to fourteen above, so anyone on
+     the ground in it overlaps and anyone jumping it does not. */
   const { run } = await arena();
   const r = run("(function () {\n" +
-    "  seat();\n" +
-    "  projectiles.push(new Puddle(fighters[0], SPEC, fighters[0].x, MAIN.y));\n" +
-    "  tick(0); tick(0);\n" +
-    "  var owner = fighters[0].slick;\n" +
     "  seat();\n" +
     "  spill(fighters[0].x);\n" +
     "  fighters[0].grounded = false; fighters[0].y -= 22;\n" +
     "  tick(0);\n" +
-    "  return { owner: owner, over: fighters[0].slick, h: SPEC.h };\n" +
+    "  return { slick: fighters[0].slick, foe: fighters[0].slickFoe, h: SPEC.h };\n" +
     "})()");
-  assert.ok(r.owner > 0,
-    "Houston has to slip in his own spill; his slick read " + r.owner);
-  assert.equal(r.over, 0,
-    "and a fighter in the air over a " + r.h + "px-tall box must not; his " +
-    "slick read " + r.over);
+  assert.equal(r.slick, 0,
+    "a fighter in the air over a " + r.h + "px-tall box must not slip; his " +
+    "slick read " + r.slick);
+  assert.equal(r.foe, 0,
+    "and must not lose grip either; his slickFoe read " + r.foe);
 });
