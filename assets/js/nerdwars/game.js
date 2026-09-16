@@ -14701,47 +14701,219 @@ function drawWhip(g, f) {
 }
 
 
-/* THE OPEN MOUTH, and the bed he ends up in.
+/* THE OPEN MOUTH.
+
+   WHAT WAS WRONG WITH THE ONE THIS REPLACED, precisely, because "the old one
+   was ugly" is not what it was. drawFighter blits the 16x16 cell with
+   `drawImage(im, x + 8 - (d >> 1), y + 16 - d, d, d)` off `x = round(f.x) - 8`
+   and `y = round(f.y) - 16`, so CELL ROW r lands on screen row f.y - 16 + r.
+   The old drawMouth anchored at `f.y - 13 * sk`, which is CELL ROW 3, and its
+   tall rect ran from y-3 to y+2 -- CELL ROWS 0 THROUGH 5. His hair is rows 0
+   to 3. His face does not start until row 4 and his chin is row 7. So the
+   pale 4x1 "lip" landed on ROW 0, the crown of his head. Horizontally
+   `f.x + facing * 2` is col 10, off his center and a pixel past his
+   silhouette, which is why it also swallowed an eye. Neither #140a06 nor
+   #f2e6c8 appears anywhere on CobeusSpriteSheet.png; both were invented.
+
+   IT WAS NEVER AN UGLY MOUTH. It was a dark blob on his hair, four rows above
+   where a mouth goes, and that is the single most useful thing to know about
+   this function: anything below that draws on his FACE, and the test that
+   pins it (nerdwars-cobeus-mouth-art.test.js) asks exactly that question --
+   nothing this paints inside his cell may land above row 7.
+
+   WHAT THIS IS INSTEAD. An overlay in the SAME 16x16 cell space as the body,
+   blitted with drawFighter's identical d/x/y arithmetic, so it is rounded the
+   way the body is rounded and CANNOT drift against his face at any sizeMul.
+
+   ROWS 4, 5 AND 6 ARE HIS, and that is a RULE rather than how these cells
+   happened to come out. His brow, his two #FFFFFF eye whites and his two
+   #3D320E pupils are what is left of Cobeus at sixteen pixels; the moment art
+   paints over them he stops being a person and becomes a cartoon screamer.
+   The mouth therefore lives from ROW 7 -- his own chin, which becomes the
+   upper lip on every open cell -- downward. Row 4 is repainted by NOTHING,
+   ever. Row 5 is repainted only by a squint, and a squint is his own #F0E3CF
+   closed over his own white. Row 6 is repainted only on the conked cell, only
+   at the two pupil columns and only to his own #DAC8AB, because a man knocked
+   out has his eyes shut; on every other cell in the set his pupils survive
+   untouched. A future edit that breaks any of those four sentences is the old
+   bug coming back wearing better colors.
+
+   EVERY COLOR IS ONE HE ALREADY OWNS on CobeusSpriteSheet.png. The hole is
+   the one declared exception -- it is a hole, not a surface -- and it is
+   still his: #080420 is the darkest pixel on his sheet, off his own trousers.
 
    He has no `attack` sprite set, so the standing pose is what is on screen
-   for the whole of OPEN WIDE and the drawing has to be the only thing that
-   says the move is happening. Two crossed rects on his head cell -- a wide
-   one and a tall one, which at this size is the only way to draw a round
-   hole -- plus a pixel of cream at the top for a lip, and the `ring` fired
-   from runSpecial on the frame it opens.
+   for the whole of OPEN WIDE and this drawing is the only thing that says the
+   move is happening. */
 
-   Five rects a frame, in the same style and for the same reason as drawWhip
-   and drawMower: the numbers come off the MOVE, so the hole is drawn on the
-   head the catching box is built around rather than on a head position
-   written down here. */
+const MOUTH_PAL = {
+  S: '#F0E3CF',   // his skin        (238 px on the sheet) -- THE PALE LIP RING
+  s: '#DAC8AB',   // his skin shadow ( 72 px) -- the bolus, and a sleeping eye
+  r: '#EFDABA',   // his skin mid    ( 16 px) -- teeth, on the SNAP only
+  q: '#3D320E',   // HIS PUPIL       ( 16 px) -- the tongue, and the lip line
+  b: '#231C03',   // his hair        (128 px) -- the hard lip line
+  H: '#080420',   // his trousers    ( 30 px) -- the hole
+};
+
+/* THE PALE RING IS THE WHOLE TRICK, and it is worth one sentence: his jacket
+   is #111012, so a dark hole with no pale border is invisible against his own
+   clothes. One pixel of his own skin, closed all the way round the hole, is
+   what makes a gape read at x3. It is a RING and never a field -- pale laid
+   on in sheets turns his torso into bare chest. #111012 was tried as a second
+   interior tone and dropped: at x3 it and #080420 are one flat black. What
+   earns the interior instead is the tongue and the bolus, which are
+   value-distinct AND move. */
+const MOUTH_BLANK = '................';
+const MOUTH_ROWS = {
+  /* STARTUP, attackFrames 0..6. Mouth CLOSED -- see the gate below. */
+  A0: { 7: '.......qq.......' },
+  A1: { 7: '......qbbq......' },
+  /* The clamp: ONE dark bar with a PALE one under it, and both below his
+     eyes. Two dark bars across a face at this size is a blindfold, which is
+     what the first draft of this cell was and why it was thrown away. */
+  A2: { 7: '......bbbb......', 8: '......SSSS......' },
+
+  /* OPEN, attackFrames 7..66 -- exactly absorb [from, to]. */
+  O0: { 8: '.....SrrrrS.....', 9: '....SHHHHHHS....',      // the SNAP. Teeth:
+        10: '....SSHHHHSS....', 11: '......SSSS......' },  // no other cell has them.
+  H0: { 8: '.....SHHHHS.....', 9: '.....SHHHHS.....',      // draw   -- jaw up
+        10: '......SSSS......' },
+  H1: { 8: '.....SHHHHS.....', 9: '....SHHHHHHS....',      // gape   -- jaw DOWN,
+        10: '....SSqqqqSS....', 11: '......SSSS......' },  //           tongue low
+  H2: { 5: '......S..S......',                             // strain -- SQUINT,
+        8: '.....SqqqqS.....', 9: '....SHHHHHHS....',      //           tongue HIGH
+        10: '....SSHHHHSS....', 11: '......SSSS......' },
+  H3: { 5: '......S..S......',                             // gulp   -- jaw up,
+        8: '.....SHHHHS.....', 9: '.....SssssS.....',      //           bolus crossing
+        10: '......SSSS......' },
+  C0: { 7: '......bbbb......', 8: '.....SHHHHS.....',      // closing, still open
+        9: '......SSSS......' },
+  /* AND THE ONE NOBODY WOULD FIND BY READING THE MOVE DATA. runSpecial's
+     mouth case does `if (bedTimer > 0) this.attackFrame = s.startup + s.active`
+     -- 66 -- which is INSIDE absorb [7,66]. So after the eighth catch this
+     function keeps firing on a PINNED frame 66 for all 180 frames of the bed:
+     one cell, held for three seconds, while he lies there. A mid-close frozen
+     for three seconds is a stutter; a man conked out with his mouth hanging
+     open is the joke. bedded() is derived from bedTimer, which is already
+     snapshotted, so this adds NO new field for restoreSim to lose. */
+  Z0: { 5: '......S..S......', 6: '......s..s......',      // conked -- eyes shut
+        8: '.....SHHHHS.....', 9: '.....SHHHHS.....',
+        10: '......SSSS......' },
+
+  /* RECOVERY, attackFrames 67..77. Mouth CLOSED again. */
+  C1: { 7: '......qbbq......', 8: '......SSSS......' },
+};
+/* The seven cells that are drawn OPEN. The gate below is asserted against
+   this set rather than against a comment, so the invariant cannot rot. */
+const MOUTH_OPEN = { O0: 1, H0: 1, H1: 1, H2: 1, H3: 1, C0: 1, Z0: 1 };
+const MOUTH_HOLD = ['H0', 'H1', 'H2', 'H3'];
+
+/* THE SHEET DOES NOT MIRROR HIM, IT SLIDES HIM. standL is standR translated
+   +2 with ZERO differing pixels -- his eye whites sit at cols 6 and 9 facing
+   right and at 8 and 11 facing left -- so a FLIPPED overlay lands two columns
+   off his face and eats his cheek. jumpL is the opposite case: it IS an exact
+   mirror of jumpR, and because mirroring maps col 6 to col 9 its eyes stay at
+   6 and 9. The art above is symmetric about col 7.5, so mirror(art) == art
+   and jumpL wants the overlay UNSHIFTED. Hence: shift only when he is facing
+   left AND grounded, which is the same test sprite() uses to choose stand
+   over jump. walkL1/walkL2 never arrive -- the move is roots + grounded. */
+function mouthArt(pose, shift) {
+  const src = MOUTH_ROWS[pose], rows = [];
+  for (let y = 0; y < 16; y++) {
+    const r = src[y];
+    rows.push(!r ? MOUTH_BLANK : shift ? '..' + r.slice(0, 14) : r);
+  }
+  return pixelArt('mouth.' + pose + (shift ? 'L' : 'R'), rows, MOUTH_PAL, false);
+}
+
+/* THE FRAME INDEX COMES OFF attackFrame, which is snapshotted, so a rollback
+   replays the identical cell. No Math.random anywhere in the choice. */
+function mouthPose(f, af) {
+  if (af >= 66 && f.bedded()) return 'Z0';
+  if (af <= 2) return 'A0';
+  if (af <= 4) return 'A1';
+  if (af <= 6) return 'A2';
+  if (af <= 9) return 'O0';
+  /* FIFTY-FOUR FRAMES IS NEARLY A SECOND and a hold that does not move over a
+     second is the complaint this rewrite exists to answer. Four cells, six
+     frames each: the jaw drops a row and comes back, the tongue travels two
+     rows, the ring widens two columns, and he squints once a cycle. Two and
+     a quarter cycles across the hold. */
+  if (af <= 63) return MOUTH_HOLD[(((af - 10) / 6) | 0) % 4];
+  if (af <= 66) return 'C0';
+  return 'C1';
+}
+
 function drawMouth(g, f) {
   if (f.state !== 'special') return;
   const s = f.specialsNow && f.specialsNow.up;
   if (!s || s.kind !== 'mouth') return;
   if (f.moveFor('special') !== s) return;
-  /* THE CATCHING WINDOW, not the move's. `absorb.from` and `absorb.to` are
-     what sweepFrail asks, so they are what the picture has to answer -- the
-     same rule drawWhipArt has a paragraph about, and for the same reason: on
-     a move whose whole point is a read, a mouth drawn open on a frame nothing
-     can go into it is a lie about the only thing the player is timing. The
-     ring fired from runSpecial on the startup frame is the "it is opening"
-     tell; this is the "it is open" one. */
   const e = s.absorb;
   if (!e) return;
-  if (f.attackFrame < (e.from || 1) || f.attackFrame > (e.to || 9e9)) return;
+  const af = f.attackFrame;
+  const from = e.from || 1, to = e.to || 9e9;
+  const open = af >= from && af <= to;
+  const pose = mouthPose(f, af);
+  /* THE CATCHING WINDOW, not the move's -- unchanged in spirit from what this
+     replaced, and now enforced rather than promised. `absorb.from` and
+     `absorb.to` are what sweepFrail asks, so they are what the picture has to
+     answer: on a move whose whole point is a read, a mouth drawn OPEN on a
+     frame nothing can go into it is a lie about the only thing the player is
+     timing. The closed cells either side are not that lie -- a shut mouth
+     claims nothing -- so the startup and the recovery get to be drawn. */
+  if (MOUTH_OPEN[pose] && !open) return;
   /* `sk` rather than the `k` every other drawing here uses, and only because
      nerdwars-simon.test.js sabotages drawBling's size line BY ITS LITERAL
      TEXT, to prove the chain is sized off the man rather than off the buff.
      A second copy of that exact line anywhere in this file makes its needle
      ambiguous and the control silently stops controlling anything. */
   const sk = f.sizeMul;
-  const x = Math.round(f.x + f.facing * 2 * sk);
-  const y = Math.round(f.y - 13 * sk);
-  g.fillStyle = '#140a06';
-  g.fillRect(x - 3, y - 2, 6, 4);
-  g.fillRect(x - 2, y - 3, 4, 6);
-  g.fillStyle = '#f2e6c8';
-  g.fillRect(x - 2, y - 3, 4, 1);
+  /* THE SAME RECT THE BODY GOT. Not similar arithmetic -- the same, copied
+     from the blit in drawFighter, so the overlay is rounded the way the body
+     is rounded and the mouth cannot slide off his face at sizeMul 1.32 or at
+     sizeMul 4. */
+  const d = Math.round(16 * sk);
+  g.drawImage(mouthArt(pose, f.facing < 0 && f.grounded),
+              Math.round(f.x - 8) + 8 - (d >> 1),
+              Math.round(f.y - 16) + 16 - d, d, d);
+  if (!open) return;
+  /* AND THE AIR GOING IN. Nine dashes in three lanes, marching inward two
+     pixels a frame and converging on the mouth. They are the reason the move
+     reads as SUCKING rather than as a man with his mouth open, and they are
+     free in the sense that matters: they are drawn in the air in FRONT of
+     him, so they buy that read without spending a single pixel of his face.
+     A lane only climbs above row 7 once it is thirteen or more columns out,
+     which is five columns past the edge of his cell. At large sizeMuls the
+     rounding can drop a tip inside that column span a fraction above row 7 --
+     measured at fat 2 and fat 8 facing left -- so the guarantee is the one
+     that matters rather than the tidier one: a streak never lands on a pixel
+     of HIM. His body on those rows starts at column 4 facing left and the
+     strays are at column 1 or less. Both colors are his -- #DAC8AB off his own
+     shading, #231C03 off his hair. Phased on attackFrame, which is
+     snapshotted and hashed, so a rollback replays the identical stream
+     instead of re-rolling it. */
+  const dir = f.facing;
+  const th = Math.max(1, Math.round(sk));
+  const len = Math.max(2, Math.round(3 * sk));
+  for (let i = 0; i < 9; i++) {
+    const dd = 18 - ((af * 2 + i * 4) % 18);
+    if (dd < 3) continue;
+    const lane = (i % 3) - 1;
+    const row = 9 + Math.floor((lane * 5 * dd + 9) / 18);
+    const sy = Math.round(f.y - (16 - row) * sk);
+    const sx = Math.round(f.x + dir * (3 + dd) * sk);
+    g.fillStyle = '#DAC8AB';
+    /* The reflection, not an approximation of it. A rect at (x, w) spans
+       [x, x+w), so the mirror of the pale dash about him starts at
+       sx - len and the mirror of the leading tip starts at sx. Getting
+       this wrong is invisible in a still and obvious in motion: the
+       shipped version put the tip at sx + len, which left it floating a
+       dash-length clear of its own streak and on the trailing side. */
+    g.fillRect(dir > 0 ? sx : sx - len, sy, len, th);
+    g.fillStyle = '#231C03';
+    g.fillRect(dir > 0 ? sx - th : sx, sy, th, th);
+  }
 }
 
 /* And the bed, UNDER him: drawn before the body for the same reason the buff
@@ -24911,7 +25083,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'a3c47b10f6';
+const BUILD_ID = 'ec0aa49983';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -24922,7 +25094,7 @@ const BUILD_ID = 'a3c47b10f6';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.81';
+const VERSION = '2.82';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
