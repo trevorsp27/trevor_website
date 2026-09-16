@@ -3,7 +3,7 @@
  * A car on Houston's road turns whoever it hits into a chicken, and they stay
  * one until they land a GOLDEN egg on somebody else or lose a stock. While
  * they are one their entire moveset is replaced: two buttons, H to peck and J
- * to lay, ten damage each, and nothing else they own works at all.
+ * to lay, seven and five, and nothing else they own works at all.
  *
  * WHY IT NEEDS ITS OWN FILE. Nothing else in this game replaces a fighter.
  * Buffs change numbers, statuses change how the floor or the stick answers,
@@ -202,7 +202,7 @@ const withEngine = (src) => { arena.engine = src; };
    bit 10 is spDown, and each of them also carries `special` -- which is why
    they cannot be or-ed together: slotFor reads spUp first, then spDown, so a
    pad with all three set asks for the up special every time. */
-const B = { attack: 1 << 5, grab: 1 << 6, ult: 1 << 8,
+const B = { jump: 1 << 4, attack: 1 << 5, grab: 1 << 6, ult: 1 << 8,
             peck: 1 << 9, lay: 1 << 10, up: 1 << 11 };
 
 /* Both fighters put somewhere known, and a one-line way to make a bird. The
@@ -348,12 +348,13 @@ test("control: a transformation above the KO branch fails the corpse test", asyn
 });
 
 /* =====================================================================
-   2. TWO BUTTONS, TEN DAMAGE, AND NOTHING ELSE
+   2. TWO BUTTONS, SEVEN AND FIVE, AND NOTHING ELSE
    ===================================================================== */
 
 function checkMoveset(peck, egg, gates) {
   assert.equal(peck.kind, "peck", "H should be a peck");
-  assert.equal(peck.took, 10, "and it should do ten; it did " + peck.took);
+  assert.equal(peck.took, 7, "and it should do seven -- a jab's damage at " +
+    "worse than a jab's speed; it did " + peck.took);
   assert.ok(peck.poses.indexOf("peck") >= 0,
     "and the bird should be DRAWN pecking while it does: the head goes out " +
     "on the frame the box opens, and art that ran behind the box would be a " +
@@ -361,7 +362,8 @@ function checkMoveset(peck, egg, gates) {
 
   assert.equal(egg.kind, "egg", "J should lay an egg");
   assert.equal(egg.eggs, 1, "and there should be an egg in the air");
-  assert.equal(egg.took, 10, "and it should do ten; it did " + egg.took);
+  assert.equal(egg.took, 5, "and it should do five -- the egg is paid in " +
+    "range and in being the way home, not in damage; it did " + egg.took);
   assert.equal(egg.laid, 1, "and the bird should have counted it");
   assert.ok(egg.poses.indexOf("lay") >= 0,
     "and the bird should be drawn turned round to lay it -- the rear it lays " +
@@ -404,7 +406,7 @@ const moveset = (run) => [
                       .replace("B.grab", String(B.grab)))),
 ];
 
-test("H pecks, J lays, both do ten, and nothing else works", async () => {
+test("H pecks for seven, J lays for five, and nothing else works", async () => {
   const { run } = await arena("kel");
   const [peck, egg, gates] = moveset(run);
   checkMoveset(peck, egg, gates);
@@ -624,6 +626,228 @@ test("control: a respawn that forgets the feathers fails the stock test", async 
 });
 
 /* =====================================================================
+   4b. AND GOLD IS A COLOUR, NOT A DAMAGE NUMBER
+   ===================================================================== */
+
+/* There is one spec object and one damage number on it. A golden egg carries
+   a boolean and nothing else -- no `damage` of its own -- so the only thing
+   the colour may change is the way home and the way it is painted. This is
+   the assertion that stops somebody "balancing" the gold one by giving the
+   class a second number, which would want a constructor declaration for the
+   rollback and a fork in applyHit's payload, and would put the bird's whole
+   output on the press the player most wants to make anyway. */
+function checkGoldenDamage(g) {
+  assert.equal(g.white.took, 5,
+    "a white egg should take five off them; it took " + g.white.took);
+  assert.equal(g.golden.took, 5,
+    "and a golden one exactly the same -- the colour is the way home and " +
+    "the paint, and it is not a damage number. It took " + g.golden.took);
+  assert.equal(g.golden.cured, true,
+    "the golden one still has to be the way out, or this test could pass " +
+    "with two white eggs and prove nothing");
+  assert.equal(g.white.cured, false,
+    "and the white one still must not be");
+  assert.equal(g.sameSpec, true,
+    "both eggs must be carrying the SAME spec object -- CHICKEN.specials.down " +
+    "itself, not a copy -- because that identity is what maxAlive counts on");
+  assert.equal(g.ownDamageField, false,
+    "and neither instance may carry a `damage` key of its own: a second " +
+    "number is a second thing to keep in step, and restoreSim would eat it " +
+    "on the first rewind unless the constructor declared it too. Keys: " +
+    g.keys);
+}
+
+const GOLD_DAMAGE = `(function () {
+  function one(gold) {
+    var p = reset(60), me = p[0], foe = p[1];
+    me.becomeChicken();
+    projectiles.length = 0;
+    var e = new Egg(me, CHICKEN.specials.down);
+    e.golden = gold;
+    projectiles.push(e);
+    var keys = Object.keys(e).join(',');
+    var same = e.spec === CHICKEN.specials.down;
+    for (var f = 0; f < 60; f++) {
+      pin(foe, 200);
+      me.hitstop = 0;
+      step();
+      if (foe.health < 100) break;
+    }
+    var took = +(100 - foe.health).toFixed(4);
+    return { took: took, cured: !me.chicken, keys: keys, same: same };
+  }
+  var w = one(false), g = one(true);
+  return JSON.stringify({ white: w, golden: g, sameSpec: w.same && g.same,
+    ownDamageField: w.keys.split(',').indexOf('damage') >= 0 ||
+                    g.keys.split(',').indexOf('damage') >= 0,
+    keys: g.keys });
+})()`;
+
+test("a golden egg hits for five like any other, and only the colour differs",
+  async () => {
+    const { run } = await arena("kel");
+    checkGoldenDamage(JSON.parse(run(GOLD_DAMAGE)));
+  });
+
+test("control: a golden egg given a bite of its own fails the five test",
+  async () => {
+    /* The change this test exists to refuse, written the way somebody would
+       actually write it: not a second `damage` in the roster -- resolveCombat
+       would never read one -- but a damageScale on the instance, which it
+       does read, one line after the colour is decided. The keys assertion
+       still passes (there is no `damage` key) and the cure still works; what
+       breaks is the only thing that should, which is the number. */
+    withEngine(sabotage(
+      "    this.golden = eggIsGolden(battleFrames, owner.slot, spec.goldenOneIn);",
+      "    this.golden = eggIsGolden(battleFrames, owner.slot, spec.goldenOneIn);\n" +
+      "    this.damageScale = function () { return this.golden ? 2 : 1; };"));
+    const { run } = await arena("kel");
+    expectToFail(() => checkGoldenDamage(JSON.parse(run(GOLD_DAMAGE))),
+      "a golden egg that hits harder should fail checkGoldenDamage");
+  });
+
+/* =====================================================================
+   4c. ONE LESS JUMP THAN A PERSON
+   ===================================================================== */
+
+/* PHYS.airJumps is everybody's number and it did not move. What moved is that
+   there is now one method answering "how many does THIS body have", and five
+   places refill the counter off it: the ground jump, the jump out of a mobile
+   cast, the platform catch, the respawn and the constructor. Five copies of a
+   conditional would be five chances to miss one, and a missed one shows up
+   only as "sometimes the chicken gets two".
+ *
+ * The mid-air transition is the other half, in both directions, and it is
+ * carried across as what has been SPENT rather than clamped to the new
+ * ceiling -- clamping refunds a jump to anybody who had already used one,
+ * which is a punishment handing something back. */
+function checkJumps(j) {
+  assert.equal(j.airJumps, 2,
+    "PHYS.airJumps is everybody's number and this change must not touch it; " +
+    "it read " + j.airJumps);
+  assert.equal(j.personGrounded, 2,
+    "a person landing has to be refilled to two; he had " + j.personGrounded);
+  assert.equal(j.chickenGrounded, 1,
+    "and a chicken landing to one -- the refill has to ask the body rather " +
+    "than the global, or the bird gets its second jump back the moment it " +
+    "touches the floor. It had " + j.chickenGrounded);
+  assert.equal(j.personLifts, 3,
+    "driven through the pad: a person gets a ground jump and two in the air, " +
+    "so three of four presses should lift him. " + j.personLifts + " did");
+  assert.equal(j.chickenLifts, 2,
+    "and a chicken a ground jump and ONE in the air, so two of the same four " +
+    "presses. " + j.chickenLifts + " did");
+}
+
+function checkCarry(c) {
+  assert.equal(c.twoToBird, 1,
+    "a man caught at the top of a jump holding both must come down holding " +
+    "the bird's one; he held " + c.twoToBird);
+  assert.equal(c.oneToBird, 0,
+    "and a man who had already spent one must be left with none: what is " +
+    "invariant across the change is what has been SPENT, and a clamp here " +
+    "would REFUND him a jump for being run over. He held " + c.oneToBird);
+  assert.equal(c.oneCured, 2,
+    "the cure runs the same arithmetic the other way, so a bird who spent " +
+    "nothing lands on two; he held " + c.oneCured);
+  assert.equal(c.zeroCured, 1,
+    "and a bird who spent his one lands on one -- nobody comes out of the " +
+    "cure short, and nobody comes out of it ahead. He held " + c.zeroCured);
+  assert.equal(c.respawned, 2,
+    "and a stock is the other way out: respawn clears the feathers three " +
+    "lines above the refill, so a former chicken arrives on two. It had " +
+    c.respawned);
+}
+
+const JUMPS = `(function () {
+  function land(mk) {
+    var p = reset(), me = p[0];
+    if (mk) me.becomeChicken();
+    me.setState('idle'); me.hitstun = 0; me.landLag = 0;
+    me.grounded = false; me.dropThrough = 0;
+    me.prevY = __main.y - 8; me.y = __main.y + 1;
+    me.vy = 4; me.jumpsLeft = 0;
+    me.collidePlatforms();
+    return me.jumpsLeft;
+  }
+  function lifts(mk) {
+    var p = reset(), me = p[0];
+    if (mk) { me.becomeChicken(); me.setState('idle'); me.hitstun = 0;
+              me.grounded = true; me.y = __main.y; me.jumpsLeft = me.airJumpMax(); }
+    var n = 0;
+    for (var f = 0; f < 48; f++) {
+      var hit = (f % 8 === 0 && f <= 24);
+      var before = me.vy;
+      me.hitstop = 0; me.landLag = 0;
+      press(hit ? ${'B.jump'} : 0);
+      step();
+      if (hit && me.vy < before - 1) n++;
+    }
+    return n;
+  }
+  return JSON.stringify({ airJumps: PHYS.airJumps,
+    personGrounded: land(false), chickenGrounded: land(true),
+    personLifts: lifts(false), chickenLifts: lifts(true) });
+})()`;
+
+const CARRY = `(function () {
+  function go(startBird, left, cure) {
+    var p = reset(), me = p[0];
+    if (startBird) me.becomeChicken();
+    me.grounded = false; me.y = __main.y - 30; me.jumpsLeft = left;
+    if (cure) me.unchicken(); else me.becomeChicken();
+    return me.jumpsLeft;
+  }
+  var p = reset(), me = p[0];
+  me.becomeChicken();
+  me.respawn();
+  /* Read out BEFORE the four rows below, because every one of them calls
+     reset() on this same fighter -- an object literal evaluates in order and
+     this property would otherwise report whichever row ran last. */
+  var respawned = me.jumpsLeft;
+  return JSON.stringify({
+    twoToBird: go(false, 2, false), oneToBird: go(false, 1, false),
+    oneCured: go(true, 1, true), zeroCured: go(true, 0, true),
+    respawned: respawned });
+})()`;
+
+test("a chicken has one air jump and a person has two", async () => {
+  const { run } = await arena("kel");
+  checkJumps(JSON.parse(run(JUMPS.replace("B.jump", String(B.jump)))));
+});
+
+test("the count carries across the change in both directions", async () => {
+  const { run } = await arena("kel");
+  checkCarry(JSON.parse(run(CARRY)));
+});
+
+test("control: a landing that refills to PHYS.airJumps fails the chicken jump test",
+  async () => {
+    /* The platform catch put back the way it used to be, and only there. It
+       is the exact bug this method exists to make impossible: everything
+       else is right, and the bird gets its jump back by touching the floor. */
+    withEngine(sabotage(
+      "        this.grounded = true;\n        this.jumpsLeft = this.airJumpMax();",
+      "        this.grounded = true;\n        this.jumpsLeft = PHYS.airJumps;"));
+    const { run } = await arena("kel");
+    expectToFail(() => checkJumps(JSON.parse(run(JUMPS.replace("B.jump", String(B.jump))))),
+      "a landing refilled off the global should fail checkJumps");
+  });
+
+test("control: a transformation that clamps instead of carrying refunds a jump",
+  async () => {
+    /* The obvious wrong fix, and the reason the method is written in terms of
+       jumps SPENT: clamping to the new ceiling reads fine on a man holding
+       both and quietly hands one back to a man who had already used one. */
+    withEngine(sabotage(
+      "    this.jumpsLeft = Math.max(0, this.airJumpMax() - (wasMax - this.jumpsLeft));",
+      "    this.jumpsLeft = Math.min(this.jumpsLeft, this.airJumpMax());"));
+    const { run } = await arena("kel");
+    expectToFail(() => checkCarry(JSON.parse(run(CARRY))),
+      "a clamp instead of a carry should fail checkCarry");
+  });
+
+/* =====================================================================
    5. THE CPU COPES
    ===================================================================== */
 
@@ -642,9 +866,15 @@ function checkCPU(c) {
     "and it should lay: one egg in five is the way out, so the bird that " +
     "throws the most eggs is the bird that gets to be a person again. It " +
     "laid " + c.lays);
-  assert.ok(c.dealt > 20,
+  /* ONE LANDED PECK, and the bar is written as what it is rather than as an
+     output figure. This test exists to catch a CPU pressing both buttons
+     from across the stage, which deals nothing at all; it is not a damage
+     budget, and a threshold set high enough to double as one goes stale the
+     next time either number moves. It was 20 when both moves did ten. */
+  assert.ok(c.dealt >= 7,
     "and it has to actually CONNECT -- pressing buttons from across the " +
-    "stage is the failure this test exists for. It dealt " + c.dealt);
+    "stage is the failure this test exists for, so the bar is one landed " +
+    "peck and not an output figure. It dealt " + c.dealt);
   assert.ok(c.closest < 20,
     "which means walking in: the closest it ever got was " + c.closest +
     " pixels, and its peck reaches sixteen");
@@ -825,8 +1055,19 @@ test("the chicken's moveset is two free moves and no third", async () => {
     "request did not ask for and the drawing has no pose for");
   assert.equal(c.specials.neutral.kind, "peck");
   assert.equal(c.specials.down.kind, "egg");
+  assert.equal(c.specials.neutral.damage, 7,
+    "the peck should do seven; it did " + c.specials.neutral.damage);
+  assert.equal(c.specials.down.damage, 5,
+    "the egg should do five; it did " + c.specials.down.damage);
+  /* They were the same number and they are not any more, which is why this
+     cannot be one loop over one literal. The peck is the one you have to
+     walk in to land and the egg is the one that carries the way home, so the
+     peck is the harder hit. A single assertion over both would pass the day
+     somebody made them equal again. */
+  assert.ok(c.specials.neutral.damage > c.specials.down.damage,
+    "and the peck has to be the bigger of the two: " +
+    c.specials.neutral.damage + " against " + c.specials.down.damage);
   for (const k of ["neutral", "down"]) {
-    assert.equal(c.specials[k].damage, 10, k + " should do ten");
     /* FREE, and it has to be written down. The mana loop under ROSTER prices
        every move in the game and CHICKEN is deliberately not in ROSTER, so an
        absent `mana` is undefined: canSpecial waves it through and the

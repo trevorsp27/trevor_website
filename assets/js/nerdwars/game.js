@@ -1231,7 +1231,18 @@ const ROSTER = {
          tournament did. Pulling the other way: the CPU reached the finished
          tier in 17 of those 60 matches and spent 64% of its robot-frames at
          the first, so most of what was measured is a chassis and a claw
-         rather than the turret the third press buys. */
+         rather than the turret the third press buys.
+
+         AND IT WAS MEASURED AT `notice` 30 AND `fireEvery` 66. Both of
+         those are different below, so read this whole tournament as
+         evidence about DAMAGE -- 2/4/5 against 3/5/6, which is what it was
+         run to settle -- and not as evidence about the numbers underneath
+         it. Neither of those two moved a point of damage. The ladder cannot
+         resolve them in any case: the share of robot-frames spent at the
+         finished tier swings between 13% and 17% seed to seed, which moves
+         bolt damage more than either change does. Both were measured in
+         isolation instead, and the measurements are written where the
+         numbers are. */
       down: {
         kind: 'bot', label: 'BUILD-A-BOT',
         startup: 6, active: 1, recovery: 16,
@@ -1265,11 +1276,57 @@ const ROSTER = {
            a punch in progress. Hitting the robot has to do something you
            can see even on the hit that leaves the part on. */
         flinch: 9,
-        /* How far it will reach out. It cannot chase, so it has to at least
-           notice: a foe further than this across, or than `noticeY` up and
-           down, is somebody it politely ignores rather than swinging at the
-           air over. */
-        notice: 30, noticeY: 20,
+        /* How far it will reach out -- and this is now the arm rather than a
+           guess at one. The finished punch box ends eleven pixels forward of
+           the robot's center (`reach` 3 plus `boxW` 8), a hurtbox is HURT_W
+           9 across, and `target` measures CENTERS, so contact stops at a foe
+           whose center is fifteen and a half away. Sixteen is that number.
+           Twelve is the vertical equivalent: the finished box runs from
+           twelve above the floor down to three, against a hurtbox that
+           climbs fourteen.
+
+           IT WAS THIRTY AND TWENTY, which was double the arm across and
+           nearly double it up, and the cost was not that it swung too often.
+           It was that it swung at the WRONG TIME. A whiff spends a whole
+           `every` -- thirty-six frames at best, fifty-four at worst -- while
+           punch() charges only six for finding nobody in range, so the old
+           numbers threw the swing at air and then made whoever walked in
+           wait out the cooldown.
+
+           MEASURED, with a man parked twenty-two pixels away -- inside the
+           old notice, outside the arm at every tier -- and then stepped in.
+           The robot is the one the third press actually leaves standing,
+           `boot` and `flinch` untouched, because that is the only one a
+           player ever meets; a probe that zeroes those to get a clean
+           battery reads one swing higher at the top two tiers and says the
+           same thing.
+
+           At thirty it threw seven, nine and ten swings at him over a full
+           battery and landed not one of them, and when he finally stepped
+           into the arm he waited 24.6, 18.4 and 18.8 frames on average by
+           tier, and up to fifty-one. At sixteen it throws NONE at him, and
+           the step-in wait is three frames at every tier and never more than
+           six. The wait is counted to the first punch that LANDS and not to
+           the first swing, which is the only honest way to count it -- a
+           swing thrown on the frame he arrives and missing him is not a
+           shorter wait -- and it is averaged over every phase of the punch
+           clock so it is not one lucky alignment.
+
+           It swings less and lands more, and `hitEvery` below is untouched,
+           so it is still one hit per thirty frames and no amount of better
+           aim makes a stunlock.
+
+           ONE THING IS GENUINELY GIVEN UP. Because `target` measures
+           centers, a giant -- Simon on a jackpot, `sizeMul` 3, the only one
+           in the file -- has a hurtbox twenty-seven wide whose edge is
+           inside the arm at distances his center says it is not, and the
+           robot now ignores him between seventeen and twenty-four, which is
+           the band the probe reports. The fix would be subtracting half a
+           scaled hurtbox inside target(), which
+           the bolt's hundred-and-fifty-pixel sight also calls, and a shared
+           function is not worth spending on eight pixels of one buffed
+           character. */
+        notice: 16, noticeY: 12,
         /* THE THREE PARTS, as patches. They are merged over this spec into
            finished ones at load -- see the `build` loop below ROSTER, which
            is the same machinery the fart's three strengths use -- because
@@ -1308,8 +1365,23 @@ const ROSTER = {
                battery is seven of them if nobody interrupts it. Slower than
                anything a person throws, because the person had to walk up
                and press a button and this thing does it while he is
-               somewhere else. */
-            fireEvery: 66,
+               somewhere else.
+
+               SIXTY, BECAUSE SIXTY-SIX DELIVERED SIX. `fire` counts down
+               only on frames the robot is neither booting nor flinching, and
+               upgrade() re-arms it -- so the third press hands over a machine
+               with the gun loaded and sixteen frames of `boot` in front of
+               it, and those sixteen were enough to push the seventh shot past
+               the end of the battery for good. Measured on a robot left
+               exactly as that press leaves it, against a man standing a
+               hundred away so nothing interrupts: sixty-six threw six and
+               sixty throws seven. That is this paragraph being made true
+               rather than a bolt being added, and the distinction matters,
+               because fifty-four measures eight and eight is a different
+               move. It would cost punches as well: every bolt shoves the
+               victim about fourteen pixels, which is straight out of the
+               arm. */
+            fireEvery: 60,
             bolt: {
               /* How far it can SEE, which is a different and much longer
                  question than how far it can reach: `notice` above is an
@@ -3627,11 +3699,59 @@ ROSTER.houston = {
 
          Neither number touches `graze`, and that is still the load-bearing
          one: this is out for five and a half seconds and a floor that put
-         people in hitstun would be a combo rather than a floor. */
+         people in hitstun would be a combo rather than a floor.
+
+         THAT PARAGRAPH WAS WRITTEN WHEN THE FRESH HALF DID NOTHING. It does
+         something now -- see `heal` below -- so read the shortening as what
+         it was at the time: the armed half got longer because the armed half
+         was the only half doing any work. Shortening it again would cost him
+         the drink as well, which is a reason to leave 110 where it is rather
+         than a reason to come back to it. */
+      /* AND THE FRESH HALF PAYS HIM BACK. `heal` is a per-frame RATE, the
+         same shape as `poison.dps` two lines into the object below, and
+         deliberately not a total divided by a duration the way SLOUCH's
+         `heal: 40` is. The slouch can state a total because it is rooted for
+         its six hundred frames and is guaranteed every one of them; nobody
+         is guaranteed a single frame of standing in a puddle. A total here
+         would be a number the player never once receives.
+
+         0.05 A FRAME IS FIVE AND A HALF FOR A WHOLE FRESH SPILL, AND HE
+         CANNOT COLLECT IT. The carton flies forward -- it lands about
+         eighty-eight pixels ahead of where he threw it -- so a man who
+         throws and walks straight to his own milk arrives at about frame
+         thirty-four of a hundred and ten and drinks three and three
+         quarters. Against the poison on the other half, 0.045 for the same
+         hundred and ten, the two ends of this object are very nearly equal
+         and opposite: the fresh half gives him back about what the curdled
+         half's poison takes off them. That symmetry is the reason for the
+         number rather than something noticed afterwards.
+
+         AND IT CANNOT BE FARMED, WHICH IS ARITHMETIC AND NOT A RULE. There
+         is no ledger here and no cooldown, on purpose, because neither is
+         needed. `puddles` is one, so a second carton kills the first spill
+         and there is never more than one drip going. Mana is not the limiter
+         and must not be mistaken for one: twenty-six at half a mana a frame
+         pays for itself in fifty-two. What limits it is that he has to WALK
+         to it -- he cannot spill under his own feet, the carton always goes
+         forward. The tightest loop there is runs cast, flight, walk and
+         seventy-six frames of standing: about a hundred and forty frames for
+         three and three quarters, which is one and a half health a second,
+         and he deals nothing whatsoever for the whole of it. His own output
+         in a CPU match is a little over two a second. The man who does
+         nothing but drink loses the race to the man who does nothing but hit
+         him, and that is the entire safety argument.
+
+         TWICE THIS WAS MEASURED AND REJECTED FOR THE SAME REASON REVERSED.
+         At 0.1 the loop pays three a second, which is FASTER than he is hit,
+         and a Houston who refuses to fight would come out ahead. It is also
+         the wrong side of SLOUCH: an ult that roots him for six hundred
+         frames at half guard restores 0.0667 a frame, and a side effect of a
+         neutral special may not out-heal it. 0.05 is under both. */
       puddle: {
         w: 40, h: 3, life: 330, curdle: 110, slick: 10,
         hitEvery: 36, damage: 4, graze: true,
         poison: { frames: 110, dps: 0.045 },
+        heal: 0.05,
         base: 0, scale: 0, angle: 80,
         kx: 0.17364817766693041, ky: 0.984807753012208,
       },
@@ -4327,12 +4447,23 @@ ROSTER.houston = {
    move that silently does nothing, and a refused press is a move that
    visibly is not there.
 
-   WHY `damage: 10` TWICE AND NOTHING ELSE TO CHOOSE BETWEEN THEM. It is what
-   was asked for, and it is also the right shape: the peck is a fast poke you
-   have to walk into somebody to land, the egg is a slow lob you can throw
-   from across the stage, and the only reason to ever throw the egg is that
-   one in five of them is the way out. Making the egg hit harder would turn
-   the punishment into a kit.
+   WHY SEVEN AND FIVE, AND WHY THEY ARE NOT THE SAME NUMBER. They were both
+   ten, which was what was asked for then; seven and five is what is asked
+   for now, and it is the better shape besides. The peck is a fast poke you
+   have to walk into somebody to land, and it is the only thing a chicken
+   does on purpose. The egg is a slow lob you can throw from across the
+   stage, it comes two at a time, it arrives in its own time rather than
+   yours, and one in five of them is the way home. Range and a way out are
+   what the egg is paid in, so it is paid less in damage -- and the peck,
+   which is paid in nothing but the walk, is the bigger of the two.
+
+   SEVEN AND FIVE STILL ADD UP TO A PUNISHMENT AND NOT A KIT, which is the
+   line this whole object is drawn to. A bird can finish somebody who was
+   already hurt and can open on nobody: seven is a jab, five is less than
+   one, and neither of them throws you anywhere -- see `base` on both moves.
+   The old worry was that a harder egg would turn the punishment into a kit;
+   the change moves the egg the other way, so that wall is further off than
+   it was rather than nearer.
    ===================================================================== */
 const CHICKEN = {
   /* How long the transformation takes on screen. Nothing about the
@@ -4361,15 +4492,31 @@ const CHICKEN = {
        of a 16-row cell, which is eight above the feet, inside that window.
        The picture and the box are the same claim.
 
-       SLOW FOR WHAT IT DOES, and this is the number that took the most
-       measuring. Ten damage is twice a typical jab and it was given by the
-       request, so the price has to be somewhere else: 8 + 3 + 17 is 28
-       frames, against a jab's twenty-ish, which is about 21 damage a second
-       at point blank. THE FIRST DRAFT WAS 5 + 4 + 11 AND IT WAS A BUFF --
-       CPU-vs-CPU, Houston's own win rate fell from 47% to 26% over 600
-       matches, because a two-button kit with no mana cost is a kit the CPU
-       plays WELL and the eleven-button one it replaces is not. Slowing the
-       peck and shortening it by two pixels is most of what put that back.
+       A JAB'S DAMAGE AT WORSE THAN A JAB'S SPEED, and that is the shape on
+       purpose. Seven was what was asked for; the roster's jabs run five to
+       seven with a median of six, so the peck is one point over the middle
+       of them and level with the best of them. The frames did not move:
+       8 + 3 + 17 is still 28 against a jab's twenty-ish, which is 15 damage
+       a second at point blank where the jabs run 17 to 21. So the peck is
+       now strictly worse than a jab in both halves at once.
+
+       THAT IS THE CORRECT SHAPE AND IT WAS NOT THE OLD ONE. This is a
+       moveset nobody chose, handed over by a car, and the only ways out of
+       it are a golden egg or a stock. A punishment whose replacement kit
+       out-damages the one it took away is a punishment that plays as a
+       reward. At ten it sat close to that line and the frame count was the
+       only thing holding it off; at seven the damage holds it off too, and
+       the frames have stopped being load-bearing on their own.
+
+       THE FRAME COUNTS ARE STILL THE MEASURED ONES AND THE MEASUREMENT WAS
+       TAKEN AT TEN -- read it as evidence about FRAMES AND REACH, never as
+       evidence for seven. The first draft was 5 + 4 + 11 with a longer box,
+       and it was a buff: CPU-vs-CPU, Houston's own win rate fell from 47% to
+       26% over 600 matches, because a two-button kit with no mana cost is a
+       kit the CPU plays WELL and the eleven-button one it replaces is not.
+       Slowing the peck and shortening it by two pixels is most of what put
+       that back. Taking three damage off it pushes the same way, so nothing
+       in that run argues for speeding it up to compensate.
 
        Angle 20 is nearly flat -- it shoves rather than launches -- and the
        triple is one already verified in this file, which is the rule: a
@@ -4380,7 +4527,7 @@ const CHICKEN = {
         kind: 'peck', label: 'PECK',
         startup: 8, active: 3, recovery: 17,
         ox: 3, oy: -9, w: 7, h: 5,
-        damage: 10, base: 1.6, scale: 3.4, angle: 20,
+        damage: 7, base: 1.6, scale: 3.4, angle: 20,
         kx: 0.93969262078590843, ky: 0.34202014332566871,
         /* FREE, and priced here by hand rather than by moveCost.
 
@@ -4414,7 +4561,10 @@ const CHICKEN = {
        stage -- far enough to be the thing you throw when you cannot get
        close, short enough that it is not a better neutral than the peck, and
        it is the number aiDecide's egg range is set from rather than a
-       separate guess.
+       separate guess. The damage says that second part too now, five against
+       seven, so the spacing no longer has to carry the whole argument on its
+       own: the peck is the better hit and the egg is the longer one, which
+       is a choice rather than a coin.
 
        `maxAlive` 2 rather than a cooldown, and it is the existing machinery:
        canSpecial counts projectiles whose spec IS this object, so two in the
@@ -4425,14 +4575,32 @@ const CHICKEN = {
     down: {
       kind: 'egg', label: 'LAY',
       startup: 10, active: 3, recovery: 18,
-      damage: 10, base: 2.4, scale: 5.2, angle: 40,
+      damage: 5, base: 2.4, scale: 5.2, angle: 40,
       kx: 0.76604444311897801, ky: 0.64278760968653925,
       speed: 3.2, lift: -1.8, drop: 0.17, life: 90,
       maxAlive: 2,
       /* ONE IN FIVE IS GOLDEN, and a golden one that reaches an enemy is the
          way home. The number lives here rather than in eggIsGolden so that
          the odds are data next to the move they belong to, and the hash is
-         the hash. */
+         the hash.
+
+         IT HITS FOR FIVE, THE SAME AS A WHITE ONE, and that is a decision
+         rather than something nobody got round to. There is one spec object
+         and one number: an Egg carries `golden` and no damage of its own, so
+         a gold egg that hit differently would mean a new field on the class,
+         a declaration for it in that constructor so a rollback does not eat
+         it, a fork in applyHit's payload, and a second number to keep in
+         step with this one -- all of it invented on the back of a request
+         that named one number.
+
+         And it would pay the move twice over. The gold one is already the
+         rarer press and already the one that ends the punishment, and it
+         announces itself for the whole flight so it can be shielded or
+         walked away from. Loading damage onto it as well would put the
+         bird's whole output on the press the player most wants to make
+         anyway, which is precisely the kit this object is not allowed to be.
+         The only difference between the two eggs is the one the colour
+         announces, and it stays that way. */
       goldenOneIn: 5,
       mana: 0,
     },
@@ -5505,7 +5673,14 @@ class Fighter {
     this.stocks = COMBAT.stocks;
     this.eliminated = false;
 
-    this.jumpsLeft = PHYS.airJumps;
+    /* Two, via airJumpMax, which is the one place in the file that answers
+       this -- see the method for why a chicken gets one. The three chicken
+       fields are declared further down this constructor and `this.chicken`
+       is therefore still undefined on this line; undefined is falsy and the
+       answer is two, which is the only answer a fighter being built can
+       want. Said out loud rather than left to be rediscovered, because a
+       reader who reorders this constructor needs to know it is here. */
+    this.jumpsLeft = this.airJumpMax();
     this.state = 'idle';        // idle walk air attack special shield roll dodge hitstun ko break
     this.timer = 0;
     this.hitstun = 0;
@@ -5670,10 +5845,18 @@ class Fighter {
     this.confused = 0;
     /* NO TRACTION. Frames left standing in something spilt.
 
-       The only status in the file that takes nothing off you. Poison, burn
-       and the rest all end in health; this one only decides how the floor
-       answers a stick, and it is Houston's whole neutral special -- see
-       MILK and the Puddle class.
+       The only status in the file that takes nothing off you, and it still
+       is. Poison, burn and the rest all end in health; this one only decides
+       how the floor answers a stick, and it is Houston's whole neutral
+       special -- see MILK and the Puddle class.
+
+       The MILK is a different question and the answer changed. A fresh spill
+       now gives health back to the man who spilt it and a curdled one takes
+       it off everybody else, but neither of those rides on this field.
+       `slick` is armed identically on all of them, the owner included, and
+       it is the same number whether the milk is feeding him or biting them.
+       Anybody following the heal will find it in Puddle.update, in the same
+       loop that arms this, and not here.
 
        Re-armed every frame a hurtbox is in the spill rather than set once
        and counted down from a length, so it is genuinely "where your feet
@@ -5935,6 +6118,69 @@ class Fighter {
      to everybody standing in milk, including the boy who spilt it. */
   grip() { return this.slickFoe > 0 ? PHYS.slickGrip : 1; }
   stopping() { return this.slick > 0 ? PHYS.slickFriction : PHYS.groundFriction; }
+
+  /* HOW MANY AIR JUMPS THIS BODY HAS, asked in one place because it is
+     ANSWERED in five: the ground jump, the jump out of a mobile cast, the
+     platform catch, the respawn and this class's own constructor all refill
+     the same counter. Five copies of a conditional is five chances to miss
+     one, and a missed one would not show up until a player happened to land
+     in whichever state was forgotten -- and then only as "sometimes the
+     chicken gets two", which is the worst kind of bug to be handed.
+
+     A CHICKEN GETS ONE. PHYS.airJumps is still two and still everybody's
+     number; this is the only thing in the file that takes anything off it,
+     and it SUBTRACTS rather than naming a second constant, so moving the
+     global still moves the bird with it. A chicken with the same air as a
+     man recovers like a man, and the whole of being one is supposed to be
+     worse at everything except laying eggs.
+
+     A method and not a field, and that matters more than it looks: restoreSim
+     deletes any Fighter KEY a snapshot does not carry, and a prototype method
+     is not a key. `this.chicken` is constructor-declared and snapshotted, so
+     the answer is right on both machines on every frame of a rollback for
+     nothing. */
+  airJumpMax() { return this.chicken ? PHYS.airJumps - 1 : PHYS.airJumps; }
+
+  /* AND NO, A BIRD CANNOT GET ROUND THIS. Three moves hand a jump back with
+     `jumpsLeft = Math.max(jumpsLeft, 1)` -- SIDEARM's kick, Reese's dash and
+     the mower's exit -- and the question of whether a chicken may exceed its
+     own new maximum through one of them has an answer, twice over.
+
+     It cannot reach them. `specialsNow` -- a getter, so it is read rather
+     than called -- answers with CHICKEN.specials for a bird, and neither of
+     the two moves in there carries `kickX`, `kickY`, `airRise`, `air` or
+     `mobile`. Every one of those refunds sits behind a key a chicken's
+     moveset does not have, and so does the `mobile` refill in updateAttack.
+     A bird has a peck and an egg and nothing else.
+
+     And if it could, the line is already right. `Math.max(x, 1)` floors at
+     one, and one IS a chicken's maximum -- the refund hands back A jump, not
+     the jump count, so it cannot overfill a bird even if a future move put
+     one of those keys in CHICKEN.specials. That is the half of this worth
+     having: the guarantee does not depend on the moveset staying the shape
+     it is today. Left alone deliberately rather than wrapped in a Math.min
+     nobody would ever see run. */
+
+  /* AND WHAT HAPPENS WHEN THE ANSWER CHANGES MID-AIR, which it does, in both
+     directions: a car turns a man into a bird at the top of his jump, and a
+     golden egg turns him back on the way down.
+
+     `jumpsLeft` counts what is LEFT, so it means a different thing on either
+     side of a change in the maximum and cannot simply be clamped. What is
+     invariant across a transformation is what has already been SPENT, so
+     that is what this carries across. A man holding both who becomes a bird
+     has spent none and keeps the bird's one; a man holding one has spent one
+     and is left with none -- the change must not REFUND a jump, or being run
+     over would hand back the recovery it is supposed to take away. The cure
+     runs the same arithmetic the other way and therefore gives it back: a
+     bird who has spent nothing lands on two, a bird who spent his one lands
+     on one, and nobody comes out of the cure short.
+
+     Called with the maximum as it was BEFORE the flag moved, because that is
+     the only number this cannot work out for itself afterwards. */
+  carryJumpsSpent(wasMax) {
+    this.jumpsLeft = Math.max(0, this.airJumpMax() - (wasMax - this.jumpsLeft));
+  }
 
   /* ---- the active hitbox this frame, or null ---- */
   hitbox() {
@@ -6620,7 +6866,7 @@ class Fighter {
         this.vy = -d.jump;
         cue('jump', { slot: this.slot, x: this.x });
         this.grounded = false;
-        this.jumpsLeft = PHYS.airJumps;
+        this.jumpsLeft = this.airJumpMax();
       } else if (this.jumpsLeft > 0) {
         this.vy = -d.doubleJump;
         cue('airjump', { slot: this.slot, x: this.x });
@@ -7217,7 +7463,7 @@ class Fighter {
         if (this.grounded) {
           this.vy = -this.def.jump;
           this.grounded = false;
-          this.jumpsLeft = PHYS.airJumps;
+          this.jumpsLeft = this.airJumpMax();
           cue('jump', { slot: this.slot, x: this.x });
         } else if (this.jumpsLeft > 0) {
           this.vy = -this.def.doubleJump;
@@ -8882,7 +9128,7 @@ class Fighter {
         this.y = p.y;
         this.vy = 0;
         this.grounded = true;
-        this.jumpsLeft = PHYS.airJumps;
+        this.jumpsLeft = this.airJumpMax();
         if (!wasGrounded) {
           this.landLag = PHYS.landLag;
           addEffect('dust', this.x, this.y, '#ffffff');
@@ -9074,7 +9320,8 @@ class Fighter {
     this.invuln = COMBAT.respawnInvuln;
     this.hazardCd = 0;
     this.grounded = false;
-    this.jumpsLeft = PHYS.airJumps;
+    // Two, because the three lines above just made them a person again.
+    this.jumpsLeft = this.airJumpMax();
     this.setState('air');
   }
 
@@ -9108,9 +9355,17 @@ class Fighter {
        The one body on the stage that is nobody stays the shape it was. */
     if (this.def.dummy) return;
 
+    const wasMax = this.airJumpMax();
     this.chicken = true;
     this.chickenSince = battleFrames;
     this.chickenEggs = 0;
+    /* ONE LESS JUMP FROM THIS FRAME ON, and mid-air is the case this line is
+       for: a man caught at the top of a jump holding two must not come down
+       holding two. See carryJumpsSpent for why the count is carried across
+       as what he has SPENT rather than clamped to the new ceiling -- clamping
+       would refund a jump to anybody who had already used one, which is a
+       punishment handing something back. */
+    this.carryJumpsSpent(wasMax);
 
     /* EVERYTHING ELSE THEY OWN IS GONE, and these are the things a fighter
        CARRIES as against the things they have already put into the world. A
@@ -9120,9 +9375,15 @@ class Fighter {
 
        The buff is the one that would have bitten. buffStats carries sizeMul
        and damageMul, so a jackpot Simon caught by a car would have got up as
-       a chicken three times life size hitting for thirty a peck -- a
+       a chicken three times life size pecking for FOURTEEN -- `damageMul` is
+       2, which is the highest in the file, against the peck's seven. A
        punishment that plays as a reward, which is the worst thing a
-       punishment can do. */
+       punishment can do.
+
+       That number used to read thirty here, and thirty was never right at
+       any peck damage: it had picked up `sizeMul` on the way past. Corrected
+       while the paragraph was open, so nobody later derives anything from
+       it. */
     this.swordTimer = 0;
     this.swordSwing = false;
     this.buffTimer = 0;
@@ -9168,9 +9429,16 @@ class Fighter {
      air off it -- the two states respawn already chooses between. */
   unchicken() {
     if (!this.chicken) return;
+    const wasMax = this.airJumpMax();
     this.chicken = false;
     this.chickenSince = -1;
     this.chickenEggs = 0;
+    /* And the jump back, for the airborne case this method already handles
+       everywhere else. The cure lands people off the ground as often as on
+       it, and a man cured in mid-air must not be left with a bird's ceiling.
+       carryJumpsSpent gives back what the transformation took and nothing
+       more: spent none, holds two; spent his one, holds one. */
+    this.carryJumpsSpent(wasMax);
     this.setState(this.grounded ? 'idle' : 'air');
     this.attackFrame = 0;
     this.hasHit = true;
@@ -15451,7 +15719,17 @@ class Bot {
 
      Nobody in range is not a rest: the clock is set short so it keeps
      checking, rather than to the full interval, which would have it staring
-     at the wall for most of a second after somebody walked past. */
+     at the wall for most of a second after somebody walked past.
+
+     AND THAT SIX IS THE WHOLE OF WHY A TIGHT `notice` IS A BUFF, which is
+     worth writing down here because the number it depends on is fifteen
+     thousand lines away. Finding nobody costs six frames; swinging and
+     missing costs a full `every`, which is thirty-six at best and fifty-four
+     at worst. So a `notice` wider than the arm does not make the robot swing
+     more, it makes the robot swing EARLY and then be on cooldown when
+     somebody finally steps in. Narrowing it to the arm turns every one of
+     those wasted swings into a six-frame re-check, and the machine is
+     waiting rather than recovering when it matters. */
   punch() {
     const f = this.target(this.move.notice, this.move.noticeY);
     if (!f) { this.idle = true; this.clock = 6; return; }
@@ -16441,10 +16719,23 @@ class Carton {
 
 /* THE SPILL.
 
-   A flat patch of floor that stops answering the stick. It is the only thing
-   in the game whose first half does no damage at all: for a hundred and
-   ninety frames it is pure control -- see Fighter.slick and PHYS.slickGrip --
-   and then it curdles and starts costing health as well.
+   A flat patch of floor that stops answering the stick, and it is two things
+   wearing one box. For its first hundred and ten frames it is MILK: it takes
+   the footing off everybody standing in it, it costs nobody any health, and
+   it slowly gives health back to the one man who spilt it. Then it CURDLES,
+   and for the remaining two hundred and twenty it stops feeding him and
+   starts biting them. See Fighter.slick and PHYS.slickGrip for the footing,
+   `heal` in the roster for the drink, and curdled() for the line between the
+   two.
+
+   The halves do not overlap, and that is the design rather than wherever the
+   checks happened to land. A square of floor that healed its owner AND hurt
+   everybody else at once would be a wall, and this move is supposed to cost
+   him the ground as well as theirs. So the ring it throws when it turns is
+   one event carrying two meanings -- the bite is armed, and his drink is
+   over -- which is one thing for a player to learn instead of two. (The
+   figure here used to read a hundred and ninety, which `curdle` has not been
+   for some time.)
 
    Built on the three fields the glass and the smoke already use -- `pierce`,
    `hitAt` and `hitEvery` -- so resolveCombat needs no new code, plus `live`,
@@ -16496,19 +16787,53 @@ class Puddle {
        could be made to do, for two reasons that both matter.
 
        It is not a hit: it applies while fresh milk is doing no damage at
-       all, it costs no health, and it is not blocked by a shield -- a shield
-       is not footwear.
+       all, it costs the man standing in it no health, and it is not blocked
+       by a shield -- a shield is not footwear.
 
        And it lands on the OWNER. Houston slips in his own milk exactly like
        everybody else, which is deliberate: a floor hazard you can stand in
        safely is a wall, and this move is supposed to cost him the ground as
        well. resolveCombat skips `shot.owner` on principle and should.
 
+       AND SO DOES THE DRINK, in this same pass, for that last reason. It is
+       not a hit either -- no shield stops it, no state is asked about, and
+       resolveCombat could not deliver it at all, because that loop skips
+       `shot.owner` before it reads anything on the shot. So the one loop
+       that already knows which of these bodies is his is the loop that hands
+       him the health, and the fork below is the only place in the whole move
+       that has to ask whose milk this is.
+
+       "NO STATE IS ASKED ABOUT" IS LITERAL, and it is a decision rather than
+       an omission. The only two the loop below skips are `eliminated` and
+       `ko`, so he drinks while shielding and he drinks while he is being
+       hit, and both were measured rather than assumed -- a full second of
+       shield over his own spill is three points, a full second of hitstun is
+       2.45. Neither is worth a state test, because neither can exceed what
+       the spill was already going to pay: a fresh puddle is `curdle` times
+       `heal` and nothing else, five and a half points, whether he spends
+       them standing, blocking or being knocked about. A guard would make the
+       ceiling harder to reach without moving it, and "milk you are standing
+       in works on you" is a simpler thing to learn than a list of postures
+       in which it does not.
+
        Re-armed to the spec's value rather than counted down from it, so what
        the number means is "frames of skid after you leave" rather than "how
        long it lasts", which is the thing that makes the far edge of a puddle
        worth more than the puddle. */
     const b = this.box();
+    /* Read off `wasCurdled` rather than asking curdled() again, and that is
+       not a shortcut. wasCurdled was taken BEFORE this.t++, so the fresh
+       window is exactly `curdle` frames -- a hundred and ten of them, from
+       the frame it lands to the frame the ring fires -- rather than a
+       hundred and nine or a hundred and eleven depending on which side of
+       the increment somebody asked. "A whole fresh spill is worth `curdle`
+       times `heal`" is then arithmetic and not an estimate.
+
+       `s.heal` is tested as well as read because a puddle spec without the
+       key would otherwise add undefined to a health bar, and NaN in
+       `f.health` is a desync on the next stateHash rather than a bug
+       anybody sees. */
+    const drink = !wasCurdled && s.heal > 0;
     for (const f of fighters) {
       if (f.eliminated || f.state === 'ko') continue;
       if (!overlap(b, f.hurtbox())) continue;
@@ -16517,7 +16842,8 @@ class Puddle {
          entry -- the frame they step in, or the frame they step back in
          after the tail ran out -- and a cue here fires once instead of sixty
          times a second at somebody standing still. */
-      if (f.slick === 0) cue('slip', { slot: f.slot, x: f.x });
+      const stepped = f.slick === 0;
+      if (stepped) cue('slip', { slot: f.slot, x: f.x });
       if (f.slick < s.slick) f.slick = s.slick;
       /* AND THE GRIP, which goes only if the milk is not yours. Re-armed off
          the same number as `slick`, so the tail past the far edge is exactly
@@ -16526,6 +16852,32 @@ class Puddle {
          Fighter.slickFoe for why the owner is let off this half and not the
          other one. */
       if (f !== this.owner && f.slickFoe < s.slick) f.slickFoe = s.slick;
+      /* AND THE DRINK, which is the other side of that same fork.
+         `f === this.owner` is Fighter IDENTITY and not a spec test, which is
+         what makes four players work with nothing written about them: two
+         Houstons share one spec object out of ROSTER and each drinks only
+         his own, and each is `slickFoe` in the other's.
+
+         The health test before the add is not tidiness. At full health the
+         add would be nothing, and a gulp and a spray of droplets that moved
+         no number is feedback for an event that did not happen -- worse than
+         silence. The clamp is written out by hand because nothing downstream
+         clamps: every one of the four heals in this file writes its own
+         Math.min and this is the fifth.
+
+         Twenty frames between droplets is not a taste number. At 0.05 a
+         frame twenty frames is exactly one point of health, so one drop
+         appears for each point the HUD counts up, and the art and the
+         readout stay in step by construction rather than by being tuned to
+         look like they do. `this.t` is snapshotted, which is why the cadence
+         is keyed off it rather than off a counter that would have to be. */
+      if (drink && f === this.owner && f.health < COMBAT.maxHealth) {
+        f.health = Math.min(COMBAT.maxHealth, f.health + s.heal);
+        if (stepped) cue('drink', { slot: f.slot, x: f.x });
+        if (this.t % 20 === 0) {
+          addEffect('milk', f.x + rand(-4, 4), f.y - rand(2, 9), '#eef4f2');
+        }
+      }
     }
 
     // It turns. One ring so the moment is legible -- a hazard that changes
@@ -19361,7 +19713,7 @@ function aiDecide(me, foe) {
      that is still whatever the person it used to be had in that slot. A
      chicken Houston would stand off at milk range -- 55 pixels, because the
      carton is `ranged` -- and press a button that is now a peck reaching
-     sixteen. It would never touch anybody again.
+     fourteen. It would never touch anybody again.
 
      That is exactly the "presses buttons it no longer has and stands there"
      failure, and it is not hypothetical: it is what this function does to a
@@ -19439,8 +19791,19 @@ function aiDecide(me, foe) {
   /* `milk` is here for the same reason the cookie is: it is a thing you
      throw at a piece of floor some distance away, and a CPU that stands on
      top of somebody with it spills the puddle under its own feet -- which
-     works, since Houston slips in his own milk, and is the exact opposite of
-     the move. */
+     works, since Houston slips in his own milk, and throws away the denial
+     the move is bought for.
+
+     IT IS NO LONGER THE EXACT OPPOSITE OF THE MOVE, and the line stays
+     anyway. A fresh spill under his own feet is the one thing that heals
+     him, so standing in it on purpose is a real play now -- it is simply not
+     a play this function knows how to make. Nothing in aiDecide walks a
+     Houston back to his own milk, so whatever health a CPU gets out of it is
+     whatever he happened to be standing in. Teaching it would be a change to
+     the AI rather than to the move, and it would have to be argued against
+     the arithmetic in the roster rather than bolted on here. Worth knowing
+     when reading any ladder number for this change: the CPU UNDER-rates it,
+     which is the opposite of the usual caution. */
   const ranged = s.kind === 'projectile' || s.kind === 'pizza' ||
                  s.kind === 'hotdog' || s.kind === 'cookie' ||
                  s.kind === 'star' || s.kind === 'milk';
@@ -22613,7 +22976,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '38ac0ee661';
+const BUILD_ID = '8ab25328f3';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -22624,7 +22987,7 @@ const BUILD_ID = '38ac0ee661';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.79';
+const VERSION = '2.80';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

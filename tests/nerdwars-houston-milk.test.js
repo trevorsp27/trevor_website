@@ -517,4 +517,398 @@ test("a fighter in the air over the spill touches none of it", async () => {
     "slick read " + r.slick);
   assert.equal(r.foe, 0,
     "and must not lose grip either; his slickFoe read " + r.foe);
+
+  /* AND THE OWNER GETS NOTHING EITHER, which is the cheapest possible guard
+     on the drink: it rides in the same loop off the same overlap, so a box()
+     that ever grew tall enough to catch a jumping man would start feeding
+     Houston in mid-air, and this is the one line that would say so. */
+  const own = run(`(function () {
+    seat();
+    fighters[1].x = MAIN.x + 180;
+    fighters[0].health = 40;
+    projectiles.push(new Puddle(fighters[0], SPEC, fighters[0].x, MAIN.y));
+    var up = 0;
+    for (var i = 0; i < 60; i++) {
+      fighters[0].grounded = false; fighters[0].y = MAIN.y - 22; fighters[0].vy = 0;
+      var was = fighters[0].health;
+      tick(0);
+      if (fighters[0].health > was + 1e-12) up++;
+    }
+    return { up: up, health: fighters[0].health };
+  })()`);
+  assert.equal(own.up, 0,
+    "the man who spilt it must not drink it from the air either; he gained " +
+    "on " + own.up + " frames and ended on " + own.health);
 });
+
+/* =====================================================================
+   THE DRINK
+   ===================================================================== */
+
+/* Fresh milk pays its owner back, slowly, and only until it turns. It is the
+   fifth heal in the file and the first one that happens because of where
+   somebody is STANDING rather than because of an event -- so what is worth
+   pinning is the four things that stop it being a fountain: it is his and
+   nobody else's, it lasts exactly the fresh window and not a frame longer, it
+   stops at full health, and one man only ever has one spill going.
+ *
+ * The arithmetic those four hold up: `curdle` times `heal` is 5.5 for a whole
+ * spill drunk end to end, and he cannot even collect that, because the carton
+ * always flies forward and he has to walk to it.
+ *
+ * EVERY PROBE BELOW PARKS THE OTHER MAN at MAIN.x + 180. seat() leaves him at
+ * +260, which is past the right edge of the main floor: he walks off, loses a
+ * stock, and the KO freeze then eats a quarter of the frames of anything that
+ * runs longer than a second. The tests above are all short enough not to care;
+ * these count frames, so they do. */
+function checkDrink(d) {
+  assert.equal(d.rates.length, 1,
+    "the drink is one flat rate and nothing modulates it; the frames it " +
+    "healed on moved the bar by " + d.rates.join(", "));
+  assert.ok(Math.abs(d.rates[0] - d.heal) < 1e-9,
+    "and that rate is the roster's `heal`, " + d.heal + " a frame; it moved " +
+    d.rates[0]);
+  assert.equal(d.frames, d.curdle,
+    "it lasts exactly the FRESH window -- `curdle` frames, " + d.curdle +
+    " of them -- and not one more. This is the anti-fountain assertion: the " +
+    "spill is on the floor for " + d.life + " frames and only the first " +
+    d.curdle + " of them feed him. It healed on " + d.frames);
+  assert.ok(Math.abs(d.total - d.curdle * d.heal) < 1e-9,
+    "so a whole fresh spill stood in end to end is worth " +
+    (d.curdle * d.heal).toFixed(2) + " and nothing beats it; he got " + d.total);
+  assert.equal(d.last + 1, d.curdledFrom,
+    "and the last point of health lands on the frame before it turns -- the " +
+    "ring that says the bite is armed is the same ring that says the drink " +
+    "is over, which is one thing for a player to learn instead of two. Last " +
+    "drink on " + d.last + ", first curdled frame " + d.curdledFrom);
+}
+
+const DRINK = `(function () {
+  seat();
+  fighters[1].x = MAIN.x + 180;
+  fighters[0].health = 40;
+  var p = new Puddle(fighters[0], SPEC, fighters[0].x, MAIN.y);
+  projectiles.push(p);
+  var d = { frames: 0, first: 0, last: 0, curdledFrom: 0, total: 0, rates: [] };
+  var prev = fighters[0].health;
+  for (var i = 1; i <= SPEC.life + 10; i++) {
+    var was = p.curdled();
+    fighters[0].vx = 0;
+    tick(0);
+    if (was && !d.curdledFrom) d.curdledFrom = i;
+    var hp = fighters[0].health;
+    if (hp > prev + 1e-12) {
+      d.frames++; if (!d.first) d.first = i; d.last = i;
+      d.total += hp - prev;
+      var r = +(hp - prev).toFixed(9);
+      if (d.rates.indexOf(r) < 0) d.rates.push(r);
+    }
+    prev = hp;
+  }
+  d.total = +d.total.toFixed(9);
+  d.curdle = SPEC.curdle; d.heal = SPEC.heal; d.life = SPEC.life;
+  return d;
+})()`;
+
+test("he drinks his own fresh milk, slowly, and stops when it turns", async () => {
+  const { run } = await arena();
+  checkDrink(run(DRINK));
+});
+
+test("control: a drink handed to everybody but the owner fails the drink test",
+  async () => {
+    /* The fork written backwards. It is the one line in the whole move that
+       asks whose milk this is, and it sits two lines under the `slickFoe`
+       fork that asks the same question the other way round -- which is
+       exactly the kind of neighbourhood a sign gets flipped in. */
+    const { run } = await arena(sabotage(
+      "      if (drink && f === this.owner && f.health < COMBAT.maxHealth) {",
+      "      if (drink && f !== this.owner && f.health < COMBAT.maxHealth) {"));
+    expectToFail(() => checkDrink(run(DRINK)),
+      "a drink that skips its owner should fail checkDrink");
+  });
+
+test("control: a drink that ignores the curdle fails the fresh-window test",
+  async () => {
+    /* The gate dropped, so the spill feeds him for all 330 frames instead of
+       110: three times the ceiling, and a square of floor that heals its
+       owner AND bites everybody else at once, which is the wall this move is
+       not allowed to be. */
+    const { run } = await arena(sabotage(
+      "    const drink = !wasCurdled && s.heal > 0;",
+      "    const drink = s.heal > 0;"));
+    expectToFail(() => checkDrink(run(DRINK)),
+      "milk that never stops feeding him should fail checkDrink");
+  });
+
+/* The other side of the same fork, and the assertion that catches it being
+   written backwards in the direction checkDrink cannot see on its own. */
+function checkForeign(f) {
+  assert.equal(f.up, 0,
+    "the man standing in somebody else's milk gains nothing from it, ever; " +
+    "his health rose on " + f.up + " frames");
+  assert.ok(f.down > 0,
+    "and once it turns it costs him -- the fresh half feeding its owner must " +
+    "not have cost the curdled half its bite. It took health off him on " +
+    f.down + " frames");
+  assert.ok(f.downStart >= f.curdle,
+    "and not a frame before: while it is fresh it does nothing to him at all. " +
+    "The first frame he lost health was " + f.downStart + ", and it turns at " +
+    f.curdle);
+}
+
+const FOREIGN = `(function () {
+  seat();
+  fighters[1].x = fighters[0].x; fighters[1].health = 60;
+  projectiles.push(new Puddle(fighters[0], SPEC, fighters[0].x, MAIN.y));
+  var r = { up: 0, down: 0, downStart: 0, curdle: SPEC.curdle };
+  var prev = fighters[1].health;
+  for (var i = 1; i <= SPEC.life; i++) {
+    fighters[1].x = fighters[0].x; fighters[1].vx = 0; fighters[1].hitstun = 0;
+    if (fighters[1].health < 60) fighters[1].health = 60;
+    prev = fighters[1].health;
+    tick(0);
+    var hp = fighters[1].health;
+    if (hp > prev + 1e-12) r.up++;
+    if (hp < prev - 1e-12) { r.down++; if (!r.downStart) r.downStart = i; }
+    prev = hp;
+  }
+  return r;
+})()`;
+
+test("the other man drinks nothing, and then gets bitten", async () => {
+  const { run } = await arena();
+  checkForeign(run(FOREIGN));
+});
+
+test("control: a drink handed to everybody but the owner also fails the foe test",
+  async () => {
+    const { run } = await arena(sabotage(
+      "      if (drink && f === this.owner && f.health < COMBAT.maxHealth) {",
+      "      if (drink && f !== this.owner && f.health < COMBAT.maxHealth) {"));
+    expectToFail(() => checkForeign(run(FOREIGN)),
+      "a drink handed to the victim should fail checkForeign");
+  });
+
+/* A FULL MAN STANDING IN HIS OWN MILK IS STANDING ON A FLOOR, and there are
+   two separate lines holding that up rather than one.
+
+   The health test in front of the add is what stops a gulp and a spray of
+   droplets firing for an event that did not happen -- feedback for nothing is
+   worse than silence.
+
+   The clamp behind it is what stops the LAST point overshooting, and it has to
+   be written out by hand because nothing downstream clamps: every one of the
+   heals in this file writes its own Math.min and this is the fifth. So the
+   probe stands him in it twice, once at exactly full and once with less room
+   than a single frame's worth, because each of those two lines is invisible in
+   the other's case. */
+function checkFull(f) {
+  assert.equal(f.full.health, f.max,
+    "he was already full and has to end exactly full: not 100.0000001, and " +
+    "not NaN, which f.health being one of the numbers in stateHash would turn " +
+    "into a desync rather than a bug anybody can see. He ended on " +
+    f.full.health);
+  assert.equal(f.full.drinks, 0,
+    "and no gulp, because nothing was drunk. It fired " + f.full.drinks +
+    " times");
+  assert.equal(f.brim.health, f.max,
+    "and a man with " + f.room + " of room left, standing in a spill worth " +
+    f.heal + " a frame, ends on exactly " + f.max + " -- the clamp is this " +
+    "move's own and there is nothing behind it. He ended on " + f.brim.health);
+  assert.equal(f.brim.drinks, 1,
+    "with one gulp, because that time there WAS something to drink; it " +
+    "fired " + f.brim.drinks + " times");
+}
+
+const FULL = `(function () {
+  function stand(health) {
+    seat();
+    fighters[1].x = MAIN.x + 180;
+    fighters[0].health = health;
+    projectiles.push(new Puddle(fighters[0], SPEC, fighters[0].x, MAIN.y));
+    var drinks = 0, real = cue;
+    cue = function (k, o) { if (k === 'drink') drinks++; return real(k, o); };
+    for (var i = 0; i < 200; i++) { fighters[0].vx = 0; tick(0); }
+    cue = real;
+    return { health: fighters[0].health, drinks: drinks };
+  }
+  var room = SPEC.heal / 2;
+  return { full: stand(COMBAT.maxHealth), brim: stand(COMBAT.maxHealth - room),
+           max: COMBAT.maxHealth, heal: SPEC.heal, room: room };
+})()`;
+
+test("a full man standing in his own milk is standing on a floor", async () => {
+  const { run } = await arena();
+  checkFull(run(FULL));
+});
+
+test("control: a drink written without its own clamp overfills him", async () => {
+  /* Half a frame's worth of room and a whole frame's worth of milk. With the
+     Math.min gone he lands above the maximum and stays there -- and then the
+     health test in front stops him, so it is one point of overshoot that
+     never comes back rather than a runaway, which is exactly the kind of
+     thing that survives being looked at. */
+  const { run } = await arena(sabotage(
+    "        f.health = Math.min(COMBAT.maxHealth, f.health + s.heal);",
+    "        f.health = f.health + s.heal;"));
+  expectToFail(() => checkFull(run(FULL)),
+    "an unclamped heal should fail checkFull");
+});
+
+test("control: a drink that does not ask whether there is room gulps at full health",
+  async () => {
+    /* The other line. The clamp keeps the number right, so nothing on the
+       health bar moves -- what breaks is that he drinks, audibly and
+       visibly, for an event that did not happen. */
+    const { run } = await arena(sabotage(
+      "      if (drink && f === this.owner && f.health < COMBAT.maxHealth) {",
+      "      if (drink && f === this.owner) {"));
+    expectToFail(() => checkFull(run(FULL)),
+      "a gulp at full health should fail checkFull");
+  });
+
+/* THE MOWER SPENDS THE DRINK TO BUY THE BITE, which is the best thing in the
+   change and was not designed into it: `mulch` turns his own fresh spill
+   early, and turning it is exactly what ends the drink. It is the only place
+   two of his own moves trade against each other, and it trades in a direction
+   a player can feel -- five and a half seconds of armed floor, paid for with
+   whatever was left of the drink. */
+function checkMulch(m) {
+  assert.ok(m.before > 20,
+    "he has to have been drinking first, or this test measures nothing; he " +
+    "gained on " + m.before + " frames before the mower");
+  assert.equal(m.curdled, true,
+    "the mower has to turn it, and quickly: it turned after " + m.turnedAt +
+    " frames");
+  assert.ok(m.turnedAt < 20,
+    "within the mower's own startup and a frame to reach it -- ten plus " +
+    "change, not a hundred. It took " + m.turnedAt);
+  assert.ok(m.mid <= 15,
+    "so the drink survives the press by about the mower's startup and then " +
+    "stops dead; it kept feeding him for " + m.mid + " more frames");
+  assert.equal(m.after, 0,
+    "and nothing after that at all: " + m.after + " frames of drinking from " +
+    "a spill that has already turned");
+  assert.ok(m.life >= m.full - 2,
+    "while the spill's life is refreshed to the full " + m.full + " -- one " +
+    "frame of decay is the Puddle updating after the Mower on the frame it " +
+    "turns, and nothing more. It read " + m.life);
+}
+
+const MULCH = `(function () {
+  seat();
+  fighters[1].x = MAIN.x + 180;
+  fighters[0].health = 40; fighters[0].mana = 999;
+  var p = new Puddle(fighters[0], SPEC, fighters[0].x + 18, MAIN.y);
+  projectiles.push(p);
+  var m = { before: 0, mid: 0, after: 0, life: 0, turnedAt: -1, full: SPEC.life };
+  var prev = fighters[0].health;
+  for (var i = 0; i < 40; i++) {
+    fighters[0].vx = 0; tick(0);
+    if (fighters[0].health > prev + 1e-12) m.before++;
+    prev = fighters[0].health;
+  }
+  for (var i = 0; i < 200 && m.turnedAt < 0; i++) {
+    tick(i < 2 ? 1024 : 0);
+    if (fighters[0].health > prev + 1e-12) m.mid++;
+    prev = fighters[0].health;
+    if (p.curdled()) { m.turnedAt = i; m.life = p.life; }
+  }
+  m.curdled = p.curdled();
+  prev = fighters[0].health;
+  for (var i = 0; i < 200; i++) {
+    fighters[0].vx = 0; tick(0);
+    if (fighters[0].health > prev + 1e-12) m.after++;
+    prev = fighters[0].health;
+  }
+  return m;
+})()`;
+
+test("the mower spends the drink to buy the bite", async () => {
+  const { run } = await arena();
+  checkMulch(run(MULCH));
+});
+
+test("control: a mower that refreshes the spill instead of turning it keeps feeding him",
+  async () => {
+    /* The one-character version of the wrong fix: mulch that resets the clock
+       rather than running it out. The spill comes back fresh, so the mower
+       stops being the thing that ends the drink and becomes the thing that
+       tops it up -- which is the loop the roster's arithmetic says cannot be
+       allowed to exist. */
+    const { run } = await arena(sabotage(
+      "          p.t = pud.curdle - 1;",
+      "          p.t = 0;"));
+    expectToFail(() => checkMulch(run(MULCH)),
+      "a mower that refreshes the spill should fail checkMulch");
+  });
+
+/* TWO CARTONS ARE ONE DRIP, and this is the structural half of the anti-farm
+   argument -- the half that is arithmetic rather than a rule. There is no
+   ledger on the drink and no cooldown, on purpose, because `puddles` is one:
+   a second carton kills the first spill, so there is never more than one
+   source and no window of `curdle` frames can be worth more than `curdle`
+   times `heal` however the presses are spaced. */
+function checkOneDrip(o) {
+  assert.equal(o.mostAtOnce, 1,
+    "he may only ever have one spill of his own on the floor; at one point " +
+    "he had " + o.mostAtOnce);
+  assert.ok(o.window <= o.ceiling + 1e-9,
+    "so no " + o.curdle + " frames anywhere in the run can be worth more " +
+    "than " + o.ceiling.toFixed(2) + " health, however the presses fall. The " +
+    "best window was " + o.window.toFixed(4));
+  assert.ok(o.total > 0,
+    "and the measurement has to have measured something: he gained " +
+    o.total + " over the whole run");
+}
+
+const ONE_DRIP = `(function () {
+  seat();
+  fighters[1].x = MAIN.x + 180;
+  fighters[0].health = 10;
+  var o = { mostAtOnce: 0, window: 0, total: 0, curdle: SPEC.curdle,
+            ceiling: SPEC.curdle * SPEC.heal };
+  var gains = [], prev = fighters[0].health;
+  for (var i = 0; i < 500; i++) {
+    fighters[0].mana = 999;
+    var n = 0, mine = null;
+    for (var k = 0; k < projectiles.length; k++) {
+      var q = projectiles[k];
+      if (q instanceof Puddle && !q.dead && q.owner === fighters[0]) { n++; mine = q; }
+    }
+    if (n > o.mostAtOnce) o.mostAtOnce = n;
+    /* Stood on whichever spill is his, which is the ONLY way to make this
+       measurement non-vacuous: played honestly he gains nothing here at all,
+       because the carton flies forward and he would have to walk. */
+    if (mine) { fighters[0].x = mine.x; fighters[0].vx = 0; }
+    tick(i === 0 || i === 220 ? 512 : 0);
+    var g = fighters[0].health - prev; prev = fighters[0].health;
+    gains.push(g > 0 ? g : 0);
+  }
+  var sum = 0;
+  for (var i = 0; i < gains.length; i++) {
+    sum += gains[i];
+    if (i >= SPEC.curdle) sum -= gains[i - SPEC.curdle];
+    if (sum > o.window) o.window = sum;
+  }
+  o.total = +(prev - 10).toFixed(4);
+  return o;
+})()`;
+
+test("two cartons are one drip", async () => {
+  const { run } = await arena();
+  checkOneDrip(run(ONE_DRIP));
+});
+
+test("control: a second spill allowed to live beside the first doubles the drip",
+  async () => {
+    /* The cap lifted in Carton.shatter, which is where it lives -- `maxAlive`
+       cannot do this job, because a puddle's spec is the payload rather than
+       the move. Two spills is two drips, and the ceiling stops being one. */
+    const { run } = await arena(sabotage(
+      "    if (mine >= (s.puddles || 1)) {",
+      "    if (false) {"));
+    expectToFail(() => checkOneDrip(run(ONE_DRIP)),
+      "two spills at once should fail checkOneDrip");
+  });
