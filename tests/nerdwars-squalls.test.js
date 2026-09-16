@@ -220,7 +220,7 @@ const SETUP = `
   me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.vy = 0;
   me.grabbing = -1; me.grabbedBy = -1; me.grounded = true; me.facing = 1;
   me.ultMeter = 999; me.x = main.x + 24; me.y = main.y; me.specialSpawned = false;
-  me.dream = 0; me.wakeUp = false; me.health = 100;
+  me.dream = 0; me.health = 100;
   foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
   foe.stocks = 3; foe.eliminated = false; foe.health = 100; foe.hasHit = true;
   foe.grounded = true; foe.vx = 0; foe.vy = 0; foe.y = main.y;
@@ -231,6 +231,10 @@ const SETUP = `
 // The pad bits, as netplay packs them.
 const ULT = 256;
 const SP_NEUTRAL = 512, SP_DOWN = 1024, SP_UP = 2048;
+/* And the HELD half of the down button, which the bakery is now made of: the
+   press is an edge and the hold is a level, and netplay sends them as two
+   separate bits precisely so a test can hand over one without the other. */
+const HOLD_DOWN = 8192;
 
 // Where each fighter sits in ORDER. Positions, not names, because that is
 // what select.cursor takes.
@@ -1005,16 +1009,27 @@ test("negative control: a sweet spot out past the box fails the whip test", asyn
    not the one that happened. */
 const dreamProbe = (run) => {
   const s = JSON.parse(run("JSON.stringify(ROSTER.squalls.specials.down)"));
-  // Two consecutive frames from the middle of the stand, where the meter is
-  // certainly still climbing and certainly not yet clamped.
-  const mid = s.startup + Math.floor(s.active / 2);
+  /* HOW LONG THE BUTTON IS DOWN, which is the move now. `active` is 1 and is
+     only what keeps napping() true while the charge pins attackFrame on
+     `startup`; the length of the daydream is `charge.hold`. A probe that
+     went on reading `active` would hold the button for one frame, bake
+     nothing, and pass the loaf-spacing assertion vacuously. */
+  const hold = (s.charge && s.charge.hold) || s.active;
+  // Two consecutive frames from the middle of the hold, where the meter is
+  // certainly still climbing and certainly not yet done.
+  const mid = s.startup + Math.floor(hold / 2);
   // And well after the last loaf lands, so nothing is still being baked
   // while the eating is counted -- see the note below.
-  const eat = s.startup + s.active + s.recovery + 20;
+  const eat = s.startup + hold + s.recovery + 20;
   /* Long enough for every loaf to go stale and be eaten. `mine` is how
      long a fresh one is his alone, and a probe that stopped before the
      last one ripened would count it as bread nobody wanted. */
-  return { mid: mid, eat: eat, total: eat + (s.loaf.mine || 0) + 140 };
+  /* And how many frames the BUTTON is down for, which is not the same
+     number: the pin does not engage until attackFrame reaches `startup`, so
+     a probe that let go after `hold` frames would be nine frames short of
+     the cap and bank 63.45 of the 67.5 the move advertises. */
+  return { hold: hold, holdFor: s.startup + hold, mid: mid, eat: eat,
+           total: eat + (s.loaf.mine || 0) + 140 };
 };
 
 const daydream = (run) => run(`(function () {
@@ -1025,7 +1040,12 @@ const daydream = (run) => run(`(function () {
      falls off the world -- which is a real thing the move does on a ledge
      and useless for counting who ate what. */
   me.x = main.x + main.w / 2;
-  foe.invuln = 9999; foe.x = main.x + main.w - 8; foe.health = 40;
+  /* TWENTY, not forty. Five loaves at thirteen is sixty-five, and from forty
+     the last two run into the health cap -- which is a real rule (see the
+     full-health guard in Loaf.update) and would make the heal-per-loaf
+     assertion below measure the ceiling instead of the loaf. Low enough that
+     the whole batch fits, which is what is being counted. */
+  foe.invuln = 9999; foe.x = main.x + main.w - 8; foe.health = 20;
   /* Both counts are kept BY IDENTITY -- every loaf object is remembered the
      frame it first appears, and counted eaten when it leaves the live set.
 
@@ -1068,7 +1088,18 @@ const daydream = (run) => run(`(function () {
       foe.invuln = 0; foe.x = loaves[0].x; foe.y = loaves[0].y;
       foe.vx = 0; foe.vy = 0; foe.grounded = true;
     }
-    netplay.framePads = [bitsToPad(i === 0 ? ${SP_DOWN} : 0), bitsToPad(0)];
+    /* PRESSED ONCE AND THEN HELD, which is the whole move. The press is the
+       edge bit; every frame after it is the level bit and nothing else, so
+       the cast happens once and the daydream runs for exactly as long as the
+       button is down. He is also NOT given a direction -- the charge lets him
+       WALK now, and a held direction would take him off the platform inside a
+       hundred and fifty frames, which is a real thing the move does and
+       useless for counting who ate what. (No backticks in here: this comment
+       lives inside a template literal and one would end the probe silently,
+       which is the trap the note below already carries.) */
+    netplay.framePads = [bitsToPad(i === 0 ? ${SP_DOWN}
+                                 : i < P.holdFor ? ${HOLD_DOWN} : 0),
+                         bitsToPad(0)];
     var h0 = foe.health;
     /* Read off the loaf's OWN clock rather than off i, and with a frame in
        hand: the loaf ages inside the step below, so a loaf one frame short
@@ -1112,9 +1143,22 @@ function checkBakery(run, r) {
   assert.ok(Math.abs(d2 - d1 - s.dream) < 1e-6,
     "standing there should add `dream` (" + s.dream + ") a frame; two " +
     "consecutive frames went " + d1 + " -> " + d2);
-  assert.equal(r.dream, u.dreamMax,
-    "and a full stand should fill the meter the dragon reads (" + u.dreamMax +
+  /* A FULL HOLD BANKS WHAT IT STOOD FOR, and that is no longer the whole
+     meter. It never actually was -- the old move advertised a hundred and
+     delivered 19.2 live, because a sticky wake flag shut two casts in five
+     on dreaming frame ten. 2.81 says the true number out loud instead:
+     `dream` a frame for `charge.hold` frames, which is 67.5 of the dragon's
+     hundred, so no single press fills it and the dragon is paid for in
+     bakeries plus the stars that land. Asserted against the two spec numbers
+     rather than against 67.5, so retuning either one moves this with it. */
+  const bank = s.dream * ((s.charge && s.charge.hold) || s.active);
+  assert.ok(Math.abs(r.dream - bank) < 1e-6,
+    "a full hold should bank `dream` x `charge.hold` (" + bank +
     "); he finished on " + r.dream);
+  assert.ok(bank < u.dreamMax,
+    "and that has to be LESS than the meter the dragon reads (" + u.dreamMax +
+    "), or one press fills it again and the stars stop mattering; it banks " +
+    bank);
 
   /* The bread. Counted rather than assumed, and spaced against `every`
      rather than against a frame number written down here -- the interval IS

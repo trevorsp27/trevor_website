@@ -218,7 +218,7 @@ const SETUP = `
   me.landLag = 0; me.invuln = 0; me.mana = 100; me.vx = 0; me.vy = 0;
   me.grabbing = -1; me.grabbedBy = -1; me.grounded = true; me.facing = 1;
   me.ultMeter = 999; me.x = main.x + 24; me.y = main.y; me.specialSpawned = false;
-  me.dream = 0; me.wakeUp = false; me.health = 100;
+  me.dream = 0; me.health = 100;
   foe.setState('idle'); foe.timer = 0; foe.hitstun = 0; foe.hitstop = 0;
   foe.stocks = 3; foe.eliminated = false; foe.health = 100; foe.hasHit = true;
   foe.grounded = true; foe.vx = 0; foe.vy = 0; foe.y = main.y;

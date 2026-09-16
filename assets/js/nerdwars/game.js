@@ -657,11 +657,18 @@ const ROSTER = {
          216 instrumented matches the CPU threw 1.6 rainbows a match, landed
          0.2, detonated one twelve times in the whole run and hit nobody with
          a burst, not once. The rainbow is half a percent of his connections.
-         So the balance run is blind to this change, and nobody should read
+         So the balance run was blind to this change, and nobody should read
          "15.3 to 15.4" as evidence that the nerf is free: what it costs is
          what the payload above says it costs, and it is a person -- who
          throws this constantly, because at range it is all he has -- who
          will pay it. He is dead last before and dead last after.
+
+         THAT BLINDNESS IS OVER as of 2.81 and the run above was made in it.
+         The CPU presses the second button now -- see the closing note on
+         `burst` below -- so a tournament run today sees a move it could not
+         see when these numbers were taken. Read every figure in this
+         paragraph as a measurement of the SHOT, made by a yardstick that
+         never burst one.
 
          The arc is untouched. Tuned against the stage, not by feel -- apex is
          lift^2/(2*drop) at speed*lift/drop away: ~40px up, ~78px out. The
@@ -738,15 +745,6 @@ const ROSTER = {
              the same press (11 -> 10 -> 9 damage, 34 -> 24 -> 20 radius), so
              the only defensible size for it is a small one.
 
-             What it will cost in a balance run is approximately nothing, and
-             that is not a defence of the change so much as a warning about
-             reading one. The instrumented run beside the damage note above
-             is the reason: over 216 matches the CPU detonated twelve times
-             in total and caught nobody in a burst, not once. A number the
-             measurement cannot see is a number only a person pays, and the
-             person who pays this one is the one who throws this constantly
-             because at range it is all he has.
-
              AND RAW DAMAGE IS NOT WHY THE BURST IS STRONG, which is worth
              writing down where the next person to nerf it will find it. What
              makes it strong is that it is the only way in his kit to apply a
@@ -756,7 +754,76 @@ const ROSTER = {
              press was already paid for by the shot. A stun on somebody who
              was not obliged to be hit is worth several times the point of
              damage taken off here. It is left alone anyway -- he is last, the
-             ask was damage, and the statuses are the reason to throw this. */
+             ask was damage, and the statuses are the reason to throw this.
+
+             THE CPU PRESSES IT NOW, and until 2.81 it never did. Over 720 seeded
+             matches on the shipping file: 1201 rainbows thrown, 32 detonated, and
+             not one burst touched anybody -- a zero measured twice, at 216
+             matches and again at 720.
+
+             THE REASON WAS NEVER THE ANIMATION. It paints about two hundred
+             rects in SEVEN colours on its first painted frame and peaks near
+             five hundred three frames later; across six different burst ages
+             that reads 196-202 rects and seven colours on the first painted
+             frame, 494-501 at the peak, and six colours on every frame after
+             the first, because the wheel is six wide and the seventh ink is
+             the flash. The frame it is BORN it paints two. Read those as a
+             scale rather than as constants -- they move a little with the hue
+             the ball had reached -- and note that two earlier drafts of this
+             sentence quoted 203-in-eight and 184-in-eight, and had the colour
+             count wrong in both.
+
+             THE REASON WAS THAT THE SECOND PRESS IS `spUp`, which aiDecide
+             reaches for about once every seven hundred and seventy frames,
+             fired at a shot that is alive for fifty-five. So a person playing
+             against him never saw the half of the move the other half is
+             bought for.
+
+             See worthBursting, beside detonate. It asks detonate's own question one
+             frame ahead and leaves a shot that is about to land alone, because the
+             ball is free and "is anybody in the disc" would otherwise trade a hit for
+             a hit. No spec number changed: this is a CPU that can finally do
+             what a person could always do.
+
+             WHAT IT IS ACTUALLY WORTH, measured on the release gate rather
+             than predicted. Full ordered round robin, six stages, six
+             independent seeds, 7920 matches an arm, identical seeds both
+             ways, and the only variable is this rule -- the ablation forces
+             worthBursting to false and leaves everything else in place:
+
+               worthBursting off    autisnick 14.5%    spread 55.4
+               worthBursting on     autisnick 18.7%    spread 54.1
+
+             +4.2 to the character and 1.3 points off the spread. An earlier
+             reading of this ablation, taken before the rest of the release
+             had landed, said +3.4 and -2.4; the direction held and the
+             magnitudes moved, which is why this table is re-measured on the
+             finished file and not on the one the item was built in. The plan
+             for 2.81 said +5.3 and -5.3, and it was read as paying for the
+             Reese damage landing in the same release. It pays for about a
+             third of it: see the note on `damage` in
+             ROSTER.reese.specials.neutral, where that arithmetic is written
+             out with the ladder that settles it.
+
+             WHAT IT STILL CANNOT DO. Only just over HALF of his rainbows ever
+             get within burst reach of anybody -- 53 to 59 per cent across
+             three seeds of 360 CPU matches, asked with detonate's own test
+             (the radius off the spec against the nearest point of a live
+             non-owner hurtbox) rather than a looser one. The detonations that
+             do happen connect 91 to 94 per cent of the time, against ONE
+             connection in sixty-nine detonations over the same population on
+             2.80. Those are the two numbers that say what this change is:
+             not more bursts, but bursts aimed at somebody.
+
+             The rest go into the fifty-to-a-hundred-and-twenty pixel band
+             where the arc is over everyone's head and neither half of the
+             move can reach. That is a property of the arc, not of the rule,
+             and the hue bias that comes with it -- 85-90% RED across those
+             same three seeds, median burst age one frame -- is
+             the same fact read from the other end: GREEN, BLUE and PURPLE are
+             geometrically unreachable against a man standing on your own floor.
+             Forbidding an early burst was tried and moved the peg to 94.7% ORANGE
+             for 1.3 points of win rate. Only a change to the arc changes that. */
           radius: 20, damageMul: 1.1,
           base: 4.2, scale: 7.6, angle: 68,
           kx: 0.37460659341591196, ky: 0.9271838545667874,
@@ -978,6 +1045,9 @@ const ROSTER = {
       // with it. Anything above him is in the way of the bar.
       up: {
         kind: 'uppercut', label: 'CLEAN & JERK', overhead: '#9aa0b4',
+        // See aiDecide's recovery branch: this is the flag that tells a
+        // falling CPU the button is worth pressing. Data, not a kind.
+        recovers: true,
         startup: 6, active: 12, recovery: 15,
         rise: -6.1, drift: 0.8,
         damage: 11, base: 2.6, scale: 6.6, angle: 82, kx: 0.13917310096006547, ky: 0.9902680687415704,
@@ -1215,11 +1285,17 @@ const ROSTER = {
            that would have to learn the difference between a shot and a thing
            somebody built, which is a change to his move and not to this one.
 
-           IT WAKES SQUALLS UP. SOMEDAY, A BAKERY is eighty frames of him
-           rooted on the floor daydreaming, and a machine standing over him
-           does not care that he is having a moment. Measured with him parked
-           beside a finished robot: the daydream lasted 30 frames instead of
-           101 and cost him 25 health.
+           AND IT ENDS A DAYDREAM. This used to read "IT WAKES SQUALLS UP",
+           which named a flag -- `wakeUp` -- that 2.81 deleted from the engine
+           entirely, and it described a move that no longer exists: SOMEDAY, A
+           BAKERY is no longer eighty frames of him rooted on the floor, it is
+           a button he HOLDS for up to a hundred and fifty and walks around
+           while he holds (`charge: { walk: true }`). What survives is the
+           interaction, which is the part that mattered: a robot standing over
+           him does not care that he is having a moment, and a hit still ends
+           the special through ordinary hitstun. It is the hitstun that does
+           it now and not a flag, so there is nothing left here for anybody to
+           go looking for.
 
          READ THE TOURNAMENT WITH BOTH THUMBS ON THE SCALE, in opposite
          directions. Over 60 CPU matches a robot was on the stage about 1,575
@@ -1418,6 +1494,8 @@ const ROSTER = {
          would have been free. */
       up: {
         kind: 'uppercut', label: 'HIGH NOTE', blade: '#b06cf0',
+        // See aiDecide's recovery branch.
+        recovers: true,
         startup: 5, active: 15, recovery: 22,
         rise: -6.2, drift: 1.0, multi: 3,
         damage: 4, base: 0.9, scale: 1.9, angle: 80, kx: 0.17364817766693041, ky: 0.98480775301220802,
@@ -1427,39 +1505,160 @@ const ROSTER = {
     // "the strokes starts playing in background spiky music notes start
     // falling from ceiling to deal damage."
     //
-    // He puts the song on and then plays through it. The cast is half a
-    // second; `duration` is how long the notes keep coming afterwards, and he
-    // is completely free for all of it -- moving, jumping, hitting people
-    // while the ceiling comes down on them.
+    // He puts the song on and then plays through it. `duration` is how long
+    // the notes keep coming, and he is completely free for the whole of it --
+    // moving, jumping, hitting people while the ceiling comes down on them.
+    // It is the PRESS that costs now, and that is all this move pays: see
+    // `recovery`.
     ult: {
       kind: 'rain', label: 'THE STROKES', noMeter: true,
-      startup: 12, active: 1, recovery: 18,
-      duration: 200,
-      /* Was a note every 2 frames -- a hundred of them -- so many that the
-         screen stopped reading as music and started reading as static. And
-         standing still under a shield answered all of it anyway.
+      /* FORTY-SIX, up from eighteen, and it is the payment for everything
+         below. A full meter used to buy the song and zero commitment, which
+         is the over-reach rather than the note count; three quarters of a
+         second on the front of it is what makes casting it a decision. It
+         buys him nothing -- the shower outlives the recovery three and a half
+         times over -- so this is a cost and only a cost. It is also the first
+         lever if this move stacks too high, ahead of `duration` and well
+         ahead of `per`. */
+      startup: 12, active: 1, recovery: 46,
+      /* A HUNDRED AND SIXTY-TWO, AND IT DIVIDES. 162 = 54 x 3, so `every: 3`
+         goes into it exactly 54 times and 162 notes arrive.
 
-         Two and a half times fewer now, and every one breaks a shield
-         outright instead. Hiding was the whole counterplay; the song is a
-         reason to MOVE now, which is what it was always meant to be. Fewer
-         frightening notes beat a lot of harmless ones. */
-      every: 5, stride: 13, offset: 6, fallSpeed: 3.3,
-      drop: 0.02, life: 200, shape: 'note', ghost: true, shieldBreak: true,
+         WHAT THE DIVISION PROTECTS is not what an earlier draft of this
+         paragraph said. It claimed the last volley lands on the last frame of
+         the song; it does not -- `rainTimer` runs 162 frames so `rainStep`
+         is 0..161 and volleys fire at 0, 3, ... 159, two frames before the
+         end. What breaks when the division fails is that the count this
+         object ADVERTISES stops matching the count it delivers: at
+         `duration: 160` this object still says 160 while 162 notes arrive,
+         and the only evidence is a number that is wrong in a document. Check
+         it every single time either number moves; there is a test that does.
+
+         FEWER-AND-HARDER WAS TRIED TWICE; THIS IS THE THIRD TRADE AND IT
+         GOES THE OTHER WAY. A hundred notes at 9 read as static. Forty at 15
+         read as a drip, and a drip is not music. A hundred and sixty-two
+         arriving in CHORDS OF THREE, at 6 apiece, is the first version of
+         this that sounds like the thing it is named after.
+
+         "RANDOMIZED" IS A TRAP IN A REQUEST LIKE THIS ONE, because these
+         positions are HITBOXES. Every note's lane, its height off the ceiling
+         and its fall speed come out of noteRoll -- the dragon's Math.imul
+         mixer, keyed on the note's own index across the whole song and on
+         `rainSeed`, the single number the cast draws -- so two machines build
+         the identical shower from identical state and a rollback replays it
+         to the pixel. Math.random in here would be a desync sixty times a
+         second.
+
+         WHAT THE SCATTER IS WORTH, against the belt it replaces: over 3,000
+         distinct casts the lag-1 autocorrelation of consecutive spawn
+         positions is -0.006 where the belt's was +0.78, and the mean step
+         between them is 102.6 px where the belt's was 20.8.
+
+         THE WIDEST EMPTY LANE IS A DISTRIBUTION AND NOT A BOUND, which an
+         earlier draft got wrong by quoting its own p10 and p90 as if they
+         were limits. Over those same 3,000 casts it runs
+
+              min 6.3   p10 8.7   p50 10.5   p90 14.1   p99 18.3   max 25.6
+
+         against the 15 px a body needs, and 6.6% of casts do leave one lane
+         at least that wide for the whole song. So "there is nowhere to stand"
+         is true nineteen times in twenty and not always, and the honest claim
+         is the median: half of all casts leave no gap bigger than ten and a
+         half pixels anywhere on a 308-pixel stage. The belt left 25.
+
+         Zero repeated opening sequences, and two Ladeanes casting on the same
+         frame get different showers. */
+      duration: 162,
+      every: 3, per: 3, margin: 6, slow: 2.4, fast: 4.2,
+      /* THREE, AND IT IS NOT A SECOND NOTE COUNT. `count` is applyHit's gate
+         for the volley falloff -- `if (move.count && move.count > 1)` -- and
+         it is the whole reason a chord of three is safe: a target being hit
+         over and over by the same move inside forty frames takes 1, 0.7,
+         0.5, 0.35, 0.25 then 0.2 of it. Without this key the gate is false
+         and every one of a hundred and sixty-two notes lands for a flat six.
+         Measured on a pinned target through one whole song, a hundred and
+         twenty trials over all six stages: 52.5 damage with the key absent
+         against 25.6 with it, off the identical 8.5 notes that actually
+         connect -- so the key is worth a factor of two on the number this
+         move was calibrated by, and the comment below has been claiming the
+         falloff was doing that work since the day it was written. Read this
+         paragraph and the `base` one together before touching `per`. */
+      count: 3,
+      drop: 0.02, life: 200, shape: 'note', ghost: true,
       tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
-      /* 9 was priced for a hundred notes. At forty it made him the worst
-         character in the game by a distance -- 18.3% over 1200 CPU matches,
-         against 43.5% with the old note count -- and ablating the two changes
-         separately put all of it here and none of it on the uppercut.
+      /* `margin` is 6 because the quaver is 6 px wide drawn centred, so six
+         keeps every note wholly on screen and leaves no lane at the wall.
 
-         So each note hits two and a half times harder, which is the trade
-         the change was always supposed to be: fewer, and worth dodging.
-         Back to 45.3%, within noise of where he started. */
-      /* 22, not the 20 it was remembered as, and 15 now. The note count and
-         the per-note damage have been traded against each other twice in this
-         move's life -- see the two comments above -- so it is worth saying
-         which way this one went: fewer, harder notes stays, they are just
-         less hard. */
-      damage: 15, base: 2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+         `slow` and `fast` are set by WARNING TIME rather than by feel, and
+         warning time is a property of the STAGE. Measured from the spawn row
+         to the top of a standing hurtbox, across all six stages:
+
+              a main floor       33-40 frames at `slow`, 22-27 at `fast`
+              a mid platform     19-27 / 13-18
+              THE MATRIX's top        4 / 4
+
+         Four frames is not reactable and this comment is not going to pretend
+         otherwise -- the answer on the high ground is positional, which is to
+         drop through, and dropping through is instant. The ult takes the high
+         ground away; it does not ask you to read it up there.
+
+         `ghost` STAYS TRUE and it is load-bearing. Without it, standing under
+         a platform is immunity, and which spots were safe differed on all six
+         stages. */
+      /* SIX, AND THE FALLOFF ABOVE IS HALF OF WHAT MAKES IT SIX -- read
+         `count` before this paragraph. Every point of the buff is aimed at
+         the target who MOVES, and the measured table says it landed there:
+
+           120 trials, 6 stages x 20 start positions, one whole song each,
+           no health resets and no pinning; the dodger is an oracle that
+           steps away from the nearest note above it, which is the best a
+           reading player could do.
+
+                                          2.80          2.81
+            stand still                   34.6          26.3
+            walk one way blind             7.0          21.4
+            dodge, reading the shower      4.3          22.1
+            hold shield the whole song    13.6           7.5
+
+         Dodging used to take 88% off and now takes 36% off. THAT is the
+         payoff: two and a half seconds in which the other player is playing a
+         different game and reading it is worth a quarter of what it was.
+         Walking one way blind is worse than standing still now and it was
+         much better before -- and it is worse again for a reason the table
+         cannot show, which is that a man holding one direction for a whole
+         song walks off the stage in 75 of 120 trials.
+
+         A TARGET THAT STANDS STILL TAKES A FIFTH LESS THAN IT DID, not the
+         parity an earlier draft predicted, and that is the falloff doing its
+         work: eight or nine notes land on a man who never moves and after the
+         first they are worth 0.7, 0.5, 0.35, 0.25 and 0.2 of six. A single
+         note on somebody who is dodging is still worth all six.
+
+         `base` IS 1.2 AND IT IS THE SAFETY NUMBER. A hundred and sixty-two
+         near-vertical pops is exactly where a juggle lock would come from.
+         Measured worst unbroken hitstun 48 frames over 480 trials, against 35
+         today: no lock exists. The volley falloff inside 40 frames is the
+         other half of that, and it is also why adding MORE notes from here
+         would buy pressure and almost no damage. It only runs because `count`
+         is set; without that key every one of the 162 lands for a flat six
+         and a standing man takes 52.5 instead of 26.3.
+
+         `shieldBreak` IS GONE, and that is required rather than a taste. It
+         took shieldMax x 2 and handed a 90-frame break stun out UNDER the
+         shower: measured, holding shield broke 100% of the time, 33% of the
+         window was spent stunned, worst unbroken stun 109 frames. At four
+         times the note count, hiding was not counterplay, it was a guaranteed
+         stun. Without it a note takes 14.4 shield and seven break a full one,
+         which is a shield that runs out rather than one that betrays you.
+
+         THE SHOWER OUTLIVES A KO AND A CHICKEN TRANSFORMATION, and that is
+         noted here rather than fixed. Neither respawn() nor becomeChicken()
+         clears `rainTimer`, and the rain block in Fighter.update sits below
+         the `eliminated` return: measured, 47 notes still spawning 40 frames
+         after he is knocked out. It is the rule becomeChicken already states
+         -- what you started keeps running -- but with forty notes nobody
+         could see it and with a hundred and sixty-two they will. */
+      damage: 6, base: 1.2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -1524,8 +1723,13 @@ const ROSTER = {
            startup  4 -> 6. Two more frames of him visibly filling up before
                     anything is live. It is also the animation: the cheek has
                     to have somewhere to go.
-           damage   7 -> 6 level, 5 up. Only `down` keeps the old 7, and it
-                    buys that with the thinnest box of the three.
+           damage   7 -> 6 level, 5 up. Only `down` kept the old 7, and it
+                    bought that with the thinnest box of the three.
+
+                    READ THAT ROW AS HISTORY. It is 7 / 7 / 9 now and the
+                    order has inverted: the two aims are worth MORE than the
+                    default rather than less. The reasoning is on the
+                    `damage` line below, where the numbers are.
            mana    36 -> 46. At half a mana a frame that is 92 frames of
                     regen between burps instead of 72 -- a second and a half
                     rather than a second and a fifth. The meter is the only
@@ -1554,11 +1758,67 @@ const ROSTER = {
            place to pay for a safe move: it is the window in which somebody
            can walk into him and take the turn away. */
         startup: 6, active: 5, recovery: 12,
-        /* 7 before, and 8 before that. See the aiming note above: the reach
-           went from 43 to 56 and he gained two aims, so a point comes off
-           the default one. `down` keeps the 7 because it is the aim that
-           whiffs on anybody who is off the ground. */
-        damage: 6, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
+        /* 6 before, 7 before that, 8 before that. The 6 was the point that
+           came off this default to pay for the two aims arriving, and that
+           trade is history rather than the rule the file now keeps.
+
+           THE POINT IS BACK ON THE DEFAULT, and the two aims are worth more
+           than it now rather than less. That inversion is deliberate and it is a
+           measurement, not a preference: over 240 CPU matches `belchAim` was
+           `level` on every single cast -- up 0, down 0 -- so a build with only the
+           two aims changed produces a BYTE-IDENTICAL tournament. Not "about the
+           same": 474/134/112 and 3.033 dps to three decimals, the same 348
+           timeouts. They are free on the yardstick and they are not free to a
+           person, which is exactly why the damage went there.
+
+           `up` cannot touch anybody standing on the same floor -- its bottom edge
+           sits sixteen above his feet and a standing hurtbox is fourteen tall -- so
+           a move that whiffs on everything grounded should not also be his weakest
+           hit. `down` is the same argument mirrored: it cannot reach anything
+           airborne, which in this game is most of what is happening, so nine is
+           what it costs to make standing still a mistake.
+
+           THE JAB DID NOT MOVE and that is the load-bearing half of this. It is
+           62.6% of his damage on its own, he throws 24,828 of them a tournament
+           against 3,766 burps, and one point on it is worth +9.3 points of win
+           rate by itself -- nearly three times everything on this list put
+           together. If he ever has to be evened out, `jab.damage` 5 -> 4 is the
+           one integer, measured at -8.4, and it over-pays on purpose so there is
+           room to stop partway. It is not his mana: that has been tried three
+           times and come back inert twice and INVERTED once.
+
+           AND THE SPREAD WIDENED. This shipped on the argument that the
+           AutisNick change landing beside it would raise the floor by more
+           than this raises the ceiling. Measured on the gate that argument
+           named -- the full ordered round robin, six stages, six independent
+           seeds, 7920 matches an arm, the same seed set every arm:
+
+             2.80                              reese 67.0   spread 52.6
+             2.81 with these five numbers out  reese 67.2   spread 49.7
+             2.81 as it ships                  reese 71.0   spread 54.1
+
+           These five integers are worth +3.8 to him on their own -- which is
+           very close to the +3.3 that was predicted -- and +4.4 on the
+           spread. The rainbow beside them is worth +4.2 to AutisNick and
+           -1.3 on the spread, so it pays for about a third of this and not
+           for all of it, which is what the plan assumed. The FLOOR DID RISE:
+           the worst character on the roster went from 14.4% to 16.9%. The
+           ceiling rose further, and that is the whole of the widening --
+           +4.0 at the top against +2.5 at the bottom, for +1.5 of spread.
+
+           (Both ablation rows are measured on the FINISHED file with the
+           identical six seeds, not on the half-built one this item landed
+           in. A mid-release reading of the same ablation said +6.4 and +7.2;
+           it was honest and it was taken before the AI charge clause and the
+           other nine items existed. Re-measure on the whole file or do not
+           quote a number.)
+
+           That is not an argument for undoing this -- more damage is what
+           was asked for, and it was asked for with the number that answers
+           it already identified -- it is the reason the answer is written
+           down twice. The lever is the jab, above. It has not been
+           pulled. */
+        damage: 7, base: 2.6, scale: 6.4, angle: 55, kx: 0.57357643635104605, ky: 0.81915204428899180,
         /* 36 before, and moveCost said 21 before that. The formula prices
            damage and knockback; what it cannot see is that this one is safe,
            fast, long and now aimable, so the ceiling on it has to be the
@@ -1569,7 +1829,18 @@ const ROSTER = {
            these numbers and a constant buried in a switch statement is how
            the two drift apart. `spawnX` is forward from his center, `spawnY`
            is up from his feet: his mouth moves when he tips his head. */
-        spawnX: 9, spawnY: -11, waveSpeed: 3.9, waveLife: 13,
+        /* `waveLife` 13 -> 14, and it is the whole of the reach change: one
+           more step of 3.9 for every aim at once, because it sits on the base
+           spec and neither patch below overrides it. The three boxes below are
+           re-derived from it by the arithmetic written out under `ox` -- they
+           are not four pixels of slack added by hand.
+
+           `waveSpeed` was the other candidate and it was tried and rejected.
+           3.9 -> 4.2 lands on the identical connect ranges and ALSO changes
+           the spacing of the three consecutive waves, which is a pacing change
+           smuggled into a range request. The frame is the honest lever: it
+           makes the shout last longer, not travel faster. */
+        spawnX: 9, spawnY: -11, waveSpeed: 3.9, waveLife: 14,
         /* The direction the noise travels, as a unit vector. Screen y points
            DOWN, so `climb` is the sign that turns sin into "up" or "down"
            and nothing else. Spelled angle/kx/ky on purpose: build.py greps
@@ -1591,15 +1862,27 @@ const ROSTER = {
            the last frame anybody sees it on is t = life - 1 and it has taken
            life - 1 steps -- NOT life. The comment that used to sit here said
            thirteen and meant twelve: it claimed the furthest wave was 42.8
-           ahead when a probe finds it at 40.2. Twelve steps of 3.9 is 46.8,
-           so per aim, in pixels from his center and from his feet:
+           ahead when a probe finds it at 40.2. `waveLife` is 14 now, so that
+           is THIRTEEN steps of 3.9 = 50.7, and per aim, in pixels from his
+           center and from his feet:
 
-             level  spawn ( 9, -11) + 46.8 at  0 deg      -> (55.8, -11.0)
-                    box x -1..56, y -22..-4
-             up     spawn ( 6, -16) + 46.8 at 40 deg up   -> (41.9, -46.1)
-                    box x -1..42, y -47..-16
-             down   spawn (10,  -7) + 46.8 at 12 deg down -> (55.8,  +2.7)
-                    box x -1..56, y  -8..+3
+             level  spawn ( 9, -11) + 50.7 at  0 deg      -> (59.7, -11.0)
+                    box x -1..60, y -22..-4
+             up     spawn ( 6, -16) + 50.7 at 40 deg up   -> (44.8, -48.6)
+                    box x -1..45, y -49..-16
+             down   spawn (10,  -7) + 50.7 at 12 deg down -> (59.6,  +3.5)
+                    box x -1..60, y  -8..+4
+
+           Four pixels on a fifty-six pixel reach, which is under half a body
+           width. Measured after: furthest wave 59.70 / 44.84 / 59.59 against
+           box far edges of 60 / 45 / 60, and connects at -5..64 / -5..49 /
+           -5..64. The slack between the art and the box is 0.30 / 0.16 / 0.41
+           against the 1.5 the platforms test allows.
+
+           THE MANA DID NOT MOVE and it is not an oversight. moveCost has no
+           term for reach at all -- reach is free in this engine -- so the
+           meter is the only thing that has ever bounded how often a longer
+           burp happens, and it is still 46.
 
            Measured at the wave's CENTER, which is the convention this box
            has always been matched against. The drawn arc opens out to about
@@ -1612,37 +1895,71 @@ const ROSTER = {
            BECAUSE the aims exist now: a neutral shout no longer has to cover
            every height by itself, and if it did, nobody would ever press a
            direction. Change any of this and re-run the probe. */
-        ox: -1, oy: -13, w: 57, h: 18,
+        ox: -1, oy: -13, w: 61, h: 18,
         /* Over his head. Short, tall, and lifted clear of the floor: its
            bottom edge is 16 above his feet and a standing hurtbox is 14
            tall, so a man on the same ground as him is completely safe from
-           it. That is the trade for 30 pixels of vertical coverage and an
-           80-degree launch. Less damage than either of the others because a
-           juggle starter is paid for in what it sets up, not in what it
-           does. */
+           it. That is the trade for 33 pixels of vertical coverage and an
+           80-degree launch.
+
+           IT USED TO BE HIS WEAKEST HIT AT FIVE, on the argument that a
+           juggle starter is paid for in what it sets up. The argument was
+           right about juggles and wrong about this box: it cannot touch
+           ANYBODY standing on the same floor, so it is already paying for
+           itself by whiffing on the commonest thing in the game. Seven, the
+           same as the default, and the man who presses up is no longer
+           choosing the worse number as well as the narrower window.
+
+           The box grew with `waveLife` -- see the arithmetic above -- and
+           only the TOP of it moved. `oy` is the box's CENTRE, so -31.5 ->
+           -32.5 with `h` 31 -> 33 holds the bottom edge at exactly -16 and
+           lifts the top from -47 to -49. That bottom edge is the line that
+           makes a man on the same floor safe from it, and it must not move. */
         up: {
-          damage: 5, base: 2.7, scale: 6.8, angle: 80,
+          damage: 7, base: 2.7, scale: 6.8, angle: 80,
           kx: 0.17364817766693041, ky: 0.984807753012208,
           spawnX: 6, spawnY: -16,
           wave: { angle: 40, kx: 0.766044443118978, ky: 0.6427876096865393, climb: -1 },
           words: ['WHEEP', 'YOIK', 'HEEEP', 'BLIP'],
-          ox: -1, oy: -31.5, w: 43, h: 31,
+          ox: -1, oy: -32.5, w: 46, h: 33,
         },
         /* Along the floor. Eleven pixels tall and slung under him -- it
            reaches as far as the level one does (12 degrees costs almost
            nothing forward: cos 12 is 0.978) but it cannot touch anything
            that has left the ground, which in this game is most of what is
-           happening most of the time. It keeps the old 7 damage and launches
-           at 8 degrees, nearly flat, with LESS growth than level: it is not
-           the aim that kills, it is the aim that puts somebody over the
-           ledge and makes them come back. */
+           happening most of the time. It launches at 8 degrees, nearly flat,
+           with LESS growth than level: it is not the aim that kills, it is
+           the aim that puts somebody over the ledge and makes them come
+           back.
+
+           NINE, and it is the hardest single thing he has that is not the
+           jab. It used to be seven -- the only aim that kept the old default
+           -- and seven was the price of a box this thin. The box has not got
+           any thicker: eleven pixels slung under him still means a man who
+           has left the ground at all is untouched, which is most of what is
+           happening most of the time. So nine is what it costs to make
+           standing still on his floor a mistake, and the aim that whiffs on
+           everything airborne is the aim that is allowed to hurt.
+
+           THE TOP EDGE IS WHAT MUST NOT MOVE, and it has not: `oy` is the
+           box's CENTRE, so -2.5 by 11 and -2.0 by 12 are the same -8.0 up
+           top. That edge is the rule this aim keeps -- it cannot reach
+           anything that has left the ground -- and it is pinned to the
+           pixel. What moved is the BOTTOM, +3.0 -> +4.0, and it moved
+           because the fourteenth frame of wave life carries the down wave to
+           y +3.54: at +3.0 the box would have been painting half a pixel of
+           noise it could not hit with, which is the exact lie the reach
+           arithmetic above exists to prevent and which the platforms test
+           catches by name. The spec for this release left it at 11 and the
+           test proved the spec wrong. `w` moved with `waveLife` like the
+           other two. */
         down: {
-          damage: 7, base: 2.3, scale: 5.6, angle: 8,
+          damage: 9, base: 2.3, scale: 5.6, angle: 8,
           kx: 0.9902680687415704, ky: 0.13917310096006544,
           spawnX: 10, spawnY: -7,
           wave: { angle: 12, kx: 0.9781476007338057, ky: 0.20791169081775934, climb: 1 },
           words: ['BLORRP', 'GLUMP', 'WOMP', 'BRUMP'],
-          ox: -1, oy: -2.5, w: 57, h: 11,
+          ox: -1, oy: -2.0, w: 61, h: 12,
         },
       },
       /* The fart. Same class as John's smoke and the same hitEvery pacing --
@@ -1739,6 +2056,12 @@ const ROSTER = {
            rest of it rather than being smuggled in free because the yardstick
            happens to be blind to it. */
         charge: { hold: 72, drain: 0.8, walk: true },
+        /* AND HE CAN TAKE IT WITH HIM. `trailSpecial: 'down'` on JITTERS
+           already lets him vent a fart DURING the dash; this is that same
+           pair named from the other end, so neither one can be retuned in
+           isolation without the reader seeing the other. Each points at the
+           other and there is no third place that knows they are a pair. */
+        carryTo: 'up',
         speed: 0.6, lift: -0.15, drop: 0.01, friction: 0.86,
         life: 210, ahead: -8, high: 5, r0: 4, r1: 12,
         hitEvery: 45, cue: 'belch',
@@ -1814,7 +2137,15 @@ const ROSTER = {
             tints: ['#7fae14', '#a8d62c', '#55780a'],
             poison: { frames: 150, dps: 0.09, tell: 'gas' } },
         ],
-        damage: 2, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
+        /* 2 before. The contact hit is the smallest number on the move and
+           always was -- the cloud's whole payload is `poison` -- so a third
+           point on it is a third more of the part nobody notices and nothing
+           at all of the part they do. `poison.dps` is untouched at every
+           tier, deliberately: a 30% cut to it measured +3.5 points, which is
+           indistinguishable from leaving it alone, so it is a cliff and not
+           a dial. Note that this line re-prices the move, 19 -> 20, because
+           CROP DUST is the one Reese special with no `manaOverride`. */
+        damage: 3, base: 1.5, scale: 3, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832,
       },
       /* JITTERS keeps its name and moves to `up`, because BOUNCE was his
          recovery and this now has to be. It gains a vertical kick that only
@@ -1909,7 +2240,19 @@ const ROSTER = {
            past the end of it. checkBlastZones is where the three sides it
            covers and the toll each catch pays are written down. */
         wrapFor: 100,
-        /* SIX BEFORE, AND THIS IS WHAT PAYS FOR ALL THREE BUFFS.
+        /* FIVE NOW, AND THE THREE BUFFS BELOW ARE STILL PAID FOR. Read the
+           whole of the next section as the record of how this landed on
+           three, because it is: 3 is what the tournament priced the box
+           extension at, and none of that arithmetic has been withdrawn. What
+           changed is the ask. He was asked for more damage across the kit,
+           and a recovery that connects three quarters of the time for three
+           is the move on this character that is hardest to feel. Two points,
+           on the smallest number in his specials, against the +9.3 a single
+           point on the jab is worth -- which is the number that decides
+           whether he is a runaway, and which did not move. If he has to come
+           down, it comes down there and not here.
+
+           SIX BEFORE THAT, AND THIS IS WHAT PAID FOR ALL THREE BUFFS.
 
            The box now covers 102.6 pixels of travel where it covered 48.6, so
            the move connects about twice as often: measured against an
@@ -1968,7 +2311,7 @@ const ROSTER = {
            hit push somebody off a ledge, and the dash is a positioning move.
 
            Mana was tried first and is also inert -- see manaOverride above. */
-        damage: 3, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
+        damage: 5, base: 1.9, scale: 5, angle: 30, kx: 0.8660254037844387, ky: 0.49999999999999994,
         ox: -4, oy: -9, w: 14, h: 12,
       },
     },
@@ -2245,11 +2588,21 @@ function moveCost(m) {
   // Worth more per frame than `punish`: that one has to catch somebody
   // mid-swing, this one only has to land.
   if (m.stun) power += m.stun * 0.25;
-  /* Levelling two health bars, priced at TWICE the cap. The cap is how much
-     health changes hands; the scoreline moves by twice it, because every
-     point the attacker gains is a point the defender lost. Pricing it at
-     `cap` once would have charged half what the move does, which is the
-     mistake the grab branch above documents in the other direction. */
+  /* Levelling two health bars, priced at TWICE the cap: the scoreline moves
+     by twice whatever changes hands, because every point the attacker gains
+     is a point the defender lost. Pricing it at `cap` once would have
+     charged half what the move does, which is the mistake the grab branch
+     above documents in the other direction.
+
+     THE CAP IS NO LONGER WHAT THE MOVE DOES, though, so this term is an
+     over-estimate rather than an estimate. The hammer takes four TENTHS of
+     the gap now instead of levelling it, and its `cap` is a guard rail that
+     the arithmetic cannot reach -- see ROSTER.houston.specials.up.share.
+     There is exactly one `share` move in the file and it carries a
+     manaOverride, so nothing is actually priced by this line. It is kept
+     because a second one would otherwise be priced by nothing at all, and an
+     over-estimate is the safe direction for a move that moves health in both
+     directions. */
   if (m.share) power += m.share.cap * 2;
   if (m.shieldBreak) power += 8;
   if (m.quake) power += m.quake.damage * 2;   // it lands twice, one each way
@@ -2286,13 +2639,21 @@ function moveCost(m) {
 /* COBEUS.
    Drawn now rather than in 2016, off a single sheet instead of eight files.
 
-   Only two of his five moves are real. The bottle is the one that was asked
-   for and the car is the ult; the jab, `down` and `up` are placeholders with
-   honest numbers and no personality, waiting to be replaced. `up` is a
-   deliberate exception to that: it is the recovery slot for every other
-   character, and a fighter who cannot get back to the stage is not a
-   placeholder, he is unplayable. So it is a plain rising hop -- boring, but
-   boring on purpose and functional. */
+   Three of his five moves are real now. The bottle is the one that was asked
+   for, the car is the ult, and `up` has stopped being the last PLACEHOLDER
+   label in this file -- it is OPEN WIDE, which is a mouth and a recovery in
+   the same button. The jab and `down` are still placeholders with honest
+   numbers and no personality, waiting to be replaced.
+
+   THE MOUTH HAD TO BE THE RECOVERY and that constraint made the move rather
+   than limiting it. `up` is how every character in this game gets home, and
+   the note above this paragraph used to say so because the slot once shipped
+   with a POSITIVE `rise` that drove him into the floor -- a fighter who
+   cannot get back to the stage is not a placeholder, he is unplayable. So
+   the two things are one thing: he inhales, and a fat man full of air
+   floats. It is also what makes it a decision at the moment a decision
+   costs the most, because the frames he spends reading a shot are frames he
+   is not spending getting back. */
 ROSTER.cobeus = {
   name: 'COBEUS',
   origin: 'fresh',
@@ -2397,17 +2758,192 @@ ROSTER.cobeus = {
          to miss and that has not changed. */
       damage: 3, base: 2.0, scale: 4.6, angle: 18, kx: 0.95105651629515353, ky: 0.309016994374947451,
     },
-    /* PLACEHOLDER, but a working recovery: every other character's `up` is
-       how they get home, and a fighter who cannot is not playable. */
+    /* OPEN WIDE. He opens his mouth for a second and swallows whatever is
+       thrown at it, and if he does it too often he falls asleep.
+
+       THE CATCH IS THE PRIZE, NOT THE MEAL. `heal` is a flat five whatever
+       goes in, and that is the one place this deliberately parts company
+       with Houston's HAMMER & SICKLE, which heals what the shot was carrying
+       up to a cap. The mean damage of a projectile entering this box is
+       5.67, which is why five, but the SPREAD runs from nought to the
+       dragon's 999 -- so `min(cap, damage)` would make catching a Salamence
+       worth three times catching a pellet on a move whose whole point is the
+       read. Eating an instant kill is already the best thing that can happen
+       here: you live through an execution. It does not also have to pay
+       better than eating a bullet.
+
+       AND HE GETS FATTER EVERY TIME. Eight is the number, because the ask
+       was "more than seven", and `fat` 0.04 a catch puts him at sizeMul 1.28
+       on the seventh and 1.32 on the eighth: hurtbox 11.9 by 18.5 against a
+       normal 9 by 14, which is 1.74 times the area to be hit in. That is
+       arithmetic rather than a sample, and it is the cost of the move being
+       good -- a man who keeps eating becomes a man who is easy to hit, and
+       then he lies down for three seconds and you get to do it.
+
+       THE COUNTER IS A STOCK, NOT A MATCH, and it is the only per-use tally
+       in this file that is reset on death, so it is written out in respawn()
+       by hand -- chickenEggs is per transformation and nothing in the
+       simulation reads it, and ultMeter is not reset at all. A counter that
+       survived a stock would put him to bed for something he did two lives
+       ago, and the eighth catch is supposed to be a thing he did to himself
+       just now.
+
+       THE BED IS A PUNISHMENT AND NOT A PROP. There is no `rouse` -- SLOUCH
+       can be woken by thirty damage because it is a six-hundred-frame ult he
+       CHOSE, and a punishment the opponent can shorten by hitting you is one
+       they are incentivised not to deliver. `lethal` is left undefined,
+       which means true: he can be killed in it. A sleep you cannot die in is
+       not a risk, it is a nap. `guard` 0.6 is the fraction that gets
+       through, the same key SLOUCH uses at 0.5, and `shrink` eases his size
+       back over the last twenty frames so he gets up a normal man rather
+       than snapping twenty-one blit pixels down to sixteen on one frame.
+
+       MEASURE IT BEFORE YOU BELIEVE IT, which is the same warning the
+       mower's `feeds` carries: the number that decides whether this is a
+       wall or a read is the FOOD RATE, and that is a property of the match
+       rather than of anything on this object. Over 120 unassisted CPU
+       matches -- every opponent, both seats, all six stages -- counting a
+       cast as a transition INTO the up special and an open frame as one
+       frame inside `absorb`'s own window:
+
+           casts a match                     2.9
+           frames a match with it open       129    (of about 7,200)
+           catches a match                   1.15
+           catches per stock taken           0.60
+           the eighth reached            1 match in 17
+
+       It is a read, not a wall, and the arithmetic to redo before anybody
+       widens `pad` is that one. (This table was challenged at close-out by a
+       probe reading 25.8 casts a match, which would be a cast every seven
+       frames on a seventy-eight-frame move costing twenty-four mana -- it was
+       counting frames and calling them casts. Re-measured from scratch it
+       came back at the rows above, so the paragraph stands. If you ever get
+       an answer ten times this, count your casts.)
+
+       AND THE LADDER CANNOT SEE THE MOVE IN EITHER DIRECTION. aiDecide holds
+       him at thirteen pixels and throws bottles from there, so a CPU Cobeus
+       never plays at a range where a catching box means anything. What a
+       ladder run DOES see is that he gave up a six-damage hitbox: 25.0% ->
+       17.5% over 7,920 matches, almost all of it his own damage per match
+       falling from 197 to 133. That is the price of the slot, honestly
+       measured, and it is not a measurement of the mouth.
+
+       PART OF THAT DROP WAS A BUG AND IS NOW FIXED, and it is worth knowing
+       which part. The rework also silently took his RECOVERY away from the
+       CPU: aiDecide has one branch that presses a special to get home, it
+       asked `kind === 'uppercut'`, and this slot stopped being one. The
+       three-arm table is under `recovers` below -- 54 stocks lost off the
+       lip at 2.80, 86 with the branch blind to him, 62 with the flag on --
+       so the button is back and the mouth is a slightly worse way home than
+       the hop was, not a better one. Call it a point of the drop, not none
+       of it and not much of it. Re-run at close-out with the
+       whole 2.80 up spec dropped back in as the ablation, the same six
+       seeds: 23.4% -> 16.9%, so the slot costs him six and a half points and
+       not seven and a half. Same answer, different ablation, and neither
+       of them is a measurement of the mouth.
+
+       THE ONE RIDER THAT WAS REJECTED was adding `'bottle'` to aiDecide's
+       `ranged` list, which would stand a CPU Cobeus off at throwing distance
+       instead of thirteen pixels. Filed rather than shipped, because it is
+       the next thing to fix and is an AI change rather than a move change:
+       a CPU that stands at bottle range would both throw better and have
+       something to catch. Until it lands, no CPU number for this character
+       means very much in either direction.
+
+       Twenty-four mana, against Houston's fifty for his eater, and the
+       difference is that his is an aimed melee swing and this one has to
+       double as the way home. Four opens a bar. A recovery he cannot afford
+       is exactly the bug the old `rise` was patched for. */
     up: {
-      kind: 'uppercut', label: 'PLACEHOLDER',
-      startup: 5, active: 14, recovery: 18,
-      /* -6.2 matches HIGH NOTE, which is the shortest of the real recoveries.
-         It was 5.4 -- POSITIVE, which drives him down -- so the one slot that
-         had to work was the one that worked backwards. */
-      rise: -6.2, drift: 0.9,
-      damage: 6, base: 2.2, scale: 5.2, angle: 76, kx: 0.24192189559966773, ky: 0.97029572627599647,
-      ox: -6, oy: -20, w: 13, h: 24,
+      kind: 'mouth', label: 'OPEN WIDE',
+      /* Sixty open frames, and six of telegraph in front of them. A mouth
+         that opens instantly cannot be read, and `recovery` is the price of
+         opening it at nothing -- between them they are what make this a
+         guess the other player gets to win. */
+      startup: 6, active: 60, recovery: 12,
+      /* Grounded only, and said in DATA rather than by adding 'mouth' to
+         updateAttack's kind list: `roots` already reads as `roots &&
+         grounded`, which is exactly what the float below needs. */
+      roots: true,
+      /* The recovery half, and it is a GLIDE rather than a hop -- which is
+         not quite what this was designed as, so here is what it measures.
+
+         The placeholder's -6.2 matched HIGH NOTE, the shortest of the real
+         recoveries, and peaked 37 pixels above the cast point. This peaks
+         22.8. The design said the float would make "the total height
+         comparable" and it does NOT: `hang` is written before applyGravity
+         adds its 0.40, exactly as Houston's air mower writes it, so a 0.35
+         here is 0.75 a frame on the screen, and thirty frames of that is
+         twenty pixels of sink rather than ten.
+
+         The reason it ships anyway is that height is not what the envelope
+         turned out to be made of. Dropped off the left lip with no jumps
+         left and the stick held toward the stage, the grid of offsets he can
+         still get home from (c281_recover2.mjs, both engines, same grid):
+
+              out ->    10  20  30  40  50  60  70  80
+           level        YY  YY  YY  YY  YY  YY  ..  ..     OPEN WIDE
+           10 below     YY  YY  YY  YY  YY  ..  ..  ..
+           20 below     YY  YY  ..  ..  ..  ..  ..  ..
+           30 below     ..  ..  ..  ..  ..  ..  ..  ..
+
+           level        YY  YY  ..  ..  ..  ..  ..  ..     the placeholder
+           10 below     YY  YY  ..  ..  ..  ..  ..  ..
+           20 below     YY  YY  ..  ..  ..  ..  ..  ..
+           30 below     YY  YY  ..  ..  ..  ..  ..  ..
+
+         THREE TIMES AS FAR OUT AND TEN PIXELS LESS FAR DOWN. The float is
+         half a second of air control he did not have, so being knocked AWAY
+         from the stage is now survivable where it was not, and being knocked
+         straight DOWN is ten pixels worse. That is the shape of a man full
+         of air rather than a man jumping, it is a bigger envelope in total,
+         and it is the trade to re-read before anybody retunes `hang`: the
+         number to reach for is `air.active`, which is what buys the width. */
+      rise: -5.4, drift: 0.6,
+      /* AND THE CPU REACHES FOR IT. aiDecide has exactly one branch that
+         presses a special to get home and until this flag existed it asked
+         `kind === 'uppercut'` -- so the moment this slot stopped being an
+         uppercut, a falling CPU Cobeus had nothing at all. Ninety trials off
+         the lip of six stages, jumps spent, driven by the real aiPad:
+
+              2.80, the uppercut        171 presses   54 of 90 lost
+              2.81 without this flag       1 press     86 of 90 lost
+              2.81 with it, as shipped   163 presses   62 of 90 lost
+
+         (One grid, re-run at close-out: six stages x five distances off the
+         lip x three depths. Earlier drafts of this note quoted 145/65 and
+         174/54 off two other grids, which is how a claim that is TRUE ends
+         up looking unreliable. There is one table now and the branch points
+         at it rather than carrying a second.)
+
+         A human still had the button; the machine did not, on the one move
+         in his kit whose own design note says it IS the recovery. Kel is the
+         control and reads 180, 179 and 180 presses for 55 stocks in all
+         three arms, which is what isolates this to him.
+
+         THE MOUTH IS A SLIGHTLY WORSE RECOVERY THAN THE HOP WAS, and that is
+         the honest reading of the third row against the first: 62 stocks
+         against 54 on the same grid. It gets him home from three times as
+         far OUT and one row less far DOWN -- see the envelope under `rise` --
+         and this grid is weighted towards straight-down falls, which is the
+         half the glide is worse at. The flag restores the button; it does
+         not make the move the old one. See the branch. */
+      recovers: true,
+      air: { hang: 0.35, active: 30 },
+      /* `from` and `to` are exactly the sixty open frames. Houston's absorb
+         spans his whole swing because his IS a swing; a held mouth must not
+         catch before it is open. `pad` is his fourteen, for his stated
+         reason: a flat shot crosses an unpadded twenty-pixel box in about
+         three frames, so the pad is what turns a coin flip into a read.
+         Catching box -20..+28 by -34..+8. */
+      absorb: { pad: 14, from: 7, to: 66, heal: 5, fat: 0.04, bite: 8 },
+      bed: 180, guard: 0.6, shrink: 20,
+      manaOverride: 24,
+      damage: 0, base: 0, scale: 0,
+      /* His head and his chest: relBox returns -6..+14 forward and y -20..-6,
+         authored against the standing pose he is drawn in, because he has no
+         `attack` sprite set to author against. */
+      ox: -6, oy: -13, w: 20, h: 14,
     },
   },
   /* He gets in the car and drives. It comes in off the edge behind him and
@@ -3041,67 +3577,93 @@ ROSTER.squalls = {
               kx: 0.96126169593831889, ky: 0.27563735581699916,
               climb: 1.55, life: 110, dream: 3 },
     },
-    /* SOMEDAY, A BAKERY. He wants to own one. He is thinking about it now.
+    /* SOMEDAY, A BAKERY -- and he walks while he dreams it now.
 
-       This is where the DREAM the dragon is made of comes from in bulk, and
-       the bargain is the one it always was: he stops dead in the middle of a
-       fight and commits to something that pays later. He is not asleep. He
-       is picturing the shop.
+       The joke is untouched: he stops fighting to think about a shop, and
+       the daydream leaves real bread on the floor that is his for a hundred
+       and ten frames and anybody's after that. What changed is that it is a
+       button you HOLD rather than a sentence you are committed to, and that
+       he is no longer nailed to the floor while it runs.
 
-       And the daydream leaves crumbs. Every `every` frames a loaf he has
-       imagined lands BEHIND him and stays there, warm, as something anybody
-       can pick up: he heals for it, and so does whoever else gets there
-       first. The joke is intact -- standing and dreaming about bread in the
-       middle of a fight puts bread in the middle of a fight, and it is not
-       your bread until you have eaten it. What changed is whose side of him
-       it lands on. See runSpecial: it used to land thirteen to thirty-four
-       pixels FORWARD, which is the opponent's half of the floor, and across
-       480 measured matches the man he was fighting ate twice as many of them
-       as he did.
+       WHY, and it is a bug rather than a preference. The old move ended
+       itself behind the player's back. `wakeUp` was written on any frame
+       jump, attack, shield or grab was down -- including during startup,
+       before the move was old enough to be cancelled -- and spent the
+       instant the guard opened on frame nineteen. So you pressed
+       down-special, kept playing for a third of a second the way you would
+       in any fight, and the move silently evaporated with thirteen dream
+       and no bread. Measured over 1259 real casts: 40.3% snapped shut that
+       way at a mean dreaming frame of 21.3, 55.8% were broken by a hit, and
+       3.9% ran the whole eighty. The bar advertised a hundred and delivered
+       19.2. The wake flag is gone entirely: the button that ends the
+       daydream is the button that started it, which is not a rule anybody
+       has to be told.
 
-       WHY THE STAND IS A THIRD AS LONG. The old one dreamed for 245 frames
-       and it never once got there. `wakeUp` fired on any input at all, and
-       the input that fired it was THE DIRECTION HE WAS ALREADY HOLDING when
-       he cast it -- so the move cancelled itself on dreaming frame ten,
-       every time, and neither the player nor the bar had any way to see why.
-       Measured over 2077 real casts: an average of 4.5 dream banked out of a
-       hundred, and TWELVE loaves baked in total. A move advertising four
-       seconds and four loaves was delivering a sixth of a second and
-       nothing, which is the whole reason the dragon has spent its life at
-       its floor speed.
+       `active` IS ONE, and that is not a typo. The charge machinery pins
+       attackFrame at `startup` for as long as the button is down, so
+       `active` is no longer how long the move runs -- it is only what keeps
+       napping() true while pinned, which is what carries the knockback
+       softener and the sleeping pose. Anything larger is a tail he has to
+       sit through AFTER letting go: at eighty it is ninety-one frames, and
+       at the two hundred this was nearly shipped as, two hundred and
+       twelve.
 
-       So the wake is a button now rather than any input at all (see
-       updateAttack), and the stand is eighty frames rather than 245 -- a
-       length you can honestly ask somebody to commit to. The meter is paid
-       per dreaming frame, so a daydream broken up early still banks what it
-       stood for. `knockbackTakenMul` is the rest of the deal: a hit still
-       ends the dream, because applyHit puts him in hitstun like anybody
-       else, but a heavy man standing still thinking about bread should not
-       also be launched across the stage for it. */
+       THE ARITHMETIC LANDS ON ONE NUMBER TWICE. Ten up front and six
+       tenths a frame drained against a bar that does not refill inside a
+       special is ninety over a hundred and fifty frames, which is exactly
+       the hold cap; and a loaf every thirty for five puts the last one on
+       the last held frame. One full daydream is one full mana bar and five
+       loaves, with no dead time at either end and nothing decorative.
+
+       WHAT IT OWES THE DRAGON. `dream` is 0.45 rather than 1.3 because a
+       full stand no longer fills the meter -- and it never did: the live
+       figure was a fifth of what it advertised. At six casts a match held a
+       mean of thirty frames this supplies 81 dream against the 80.7 the
+       broken move actually delivered. THAT CADENCE IS AN ASSUMPTION AND THE
+       ONLY ONE IN HERE. If the real mean hold comes in nearer forty-five,
+       the supply is half again as large and the lever is `dreamSpeed` in
+       the ult, 3.0 -> 2.1, which restores parity exactly. It is not this
+       number, which is what everything else is calibrated on. */
     down: {
       kind: 'bakery', label: 'SOMEDAY, A BAKERY',
-      /* 80 rather than 78, and the two frames are load-bearing. A loaf drops
-         when `t % every === 0` and `t / every <= loaves`, so the third one
-         needs t to REACH 78 -- and a 78-frame window only ever counts 0..77.
-         The move used to advertise four loaves and bake three for exactly
-         this reason, which is the sort of off-by-one that never announces
-         itself because three loaves looks perfectly deliberate. */
-      startup: 10, active: 80, recovery: 12,
-      dream: 1.3,               // per dreaming frame; a full stand fills it
-      every: 26, loaves: 3,
+      /* ONE. See the paragraph above -- this is the number most likely to be
+         read as a typo and reverted, and reverting it is the bug. `active`
+         is not the length of the daydream any more; `charge.hold` is. All
+         `active` does is keep napping() true for the frames attackFrame is
+         pinned on `startup`, and every frame of it past the first is a tail
+         he has to sit through after letting the button go. */
+      startup: 10, active: 1, recovery: 12,
+      /* `walk` is what makes it a button rather than a sentence: see the
+         chargeWalk flag in updateAttack. `drain` and `manaOverride` are one
+         piece of arithmetic written in two places -- ten up front leaves
+         ninety, and ninety at six tenths a frame is a hundred and fifty
+         frames exactly, which is this cap. One full daydream is one full
+         bar, to the frame, so neither number can be retuned without the
+         other. */
+      charge: { hold: 150, walk: true, drain: 0.6 },
+      dream: 0.45,              // per dreaming frame; a full hold banks 67.5
+      /* Thirty and five, keyed off `chargeTimer` rather than off attackFrame
+         -- see the bakery case in runSpecial, where the pin freezes
+         attackFrame and would otherwise freeze the oven with it. A loaf at
+         30, 60, 90, 120 and 150: the fifth lands on the LAST held frame, so
+         there is no dead payout time at either end, and at his walk they are
+         34.4 pixels apart -- measured, three consecutive gaps -- which is a
+         trail of bread across the stage. Not 41.4: that is how far HE walks
+         in thirty frames, and the drop point retreats seven pixels further
+         behind him with every loaf (`this.x - this.facing * (6 + (t /
+         s.every) * 7)`), so the bread lands 41.4 minus 7 apart. The test
+         asserts the derived number rather than the walk. */
+      every: 30, loaves: 5,
       /* `mine` is how long it is HIS before it is anybody's -- see Loaf. A
-         hundred and ten frames is just under two seconds, which is what it
-         takes him to come out of the daydream and walk the thirteen pixels
-         back to the first one at 1.38 a step. Measured, and it is the number
-         the rest of the move already set: the first loaf lands 26 dreaming
-         frames in and he is rooted for another 54 of those plus 12 of
-         recovery, so it is already SIXTY-SIX frames old the first moment he
-         is allowed to take a step toward it. Anything at or under that hands
-         it to whoever is standing over him while he cannot move, and the
-         walk back is ten frames on top. */
+         hundred and ten frames is just under two seconds. It was derived
+         from a move that rooted him for eighty frames and it survives a move
+         that does not, because what it is really measuring is how long the
+         man standing over him gets to help himself: he is walking now, but
+         he is walking at 1.38 a step with a loaf every thirty frames landing
+         behind him, so he is never standing on a fresh one himself. */
       loaf: { heal: 13, life: 420, w: 9, h: 6, mine: 110 },
       knockbackTakenMul: 0.45,
-      manaOverride: 16,
+      manaOverride: 10,
       damage: 0, base: 0, scale: 0,
     },
     /* THE WHIP. Long, and worth twice as much at the far end of it.
@@ -3185,7 +3747,16 @@ ROSTER.squalls = {
      itself on dreaming frame ten (see it above), so across 1376 real ults
      the dragon flew at its floor speed essentially every time: the whole
      upper half of this move was machinery nobody had ever watched run. It
-     runs now, off a bakery that finishes and off every star that lands. */
+     runs now, off a bakery that finishes and off every star that lands.
+
+     AND `dreamSpeed` IS THE BAKERY'S LEVER, not the bakery's `dream`. The
+     rework above is calibrated on an ASSUMPTION -- six casts a match held a
+     mean of thirty frames -- and it is the only unmeasured number in this
+     character. If the real mean hold comes in nearer forty-five the supply
+     is half again as large, and the correction is this number, 3.0 -> 2.1,
+     which restores parity exactly and touches nothing else. Reaching for
+     `dream` instead would re-price the loaves, the walk and the mana drain,
+     all of which are balanced against it. */
   ult: {
     kind: 'salamence', label: 'SALAMENCE',
     startup: 14, active: 1, recovery: 26,
@@ -3590,10 +4161,12 @@ ROSTER.houston = {
        Nothing else in the file does this, and it is the one thing on the
        roster that beats a person rather than a health bar.
 
-       AND THEN IT GOES OFF. Left alone it curdles at 190 frames, a little
-       over half its life, and from then on it also bites: four damage and a
-       poison tick every forty-two frames, and it is still just as
-       slippery. That is the cookie's trick -- a thing that lands and then
+       AND THEN IT GOES OFF. Left alone it curdles at 64 frames, well under a
+       quarter of its life, and from then on it also bites: four damage and a
+       poison tick every thirty-six frames, and it is still just as
+       slippery. (That figure has now moved twice -- 190, then 110, then 64 --
+       and both times this paragraph was the one nobody remembered to change.
+       It is `puddle.curdle` in the spec below and nowhere else.) That is the cookie's trick -- a thing that lands and then
        has a second life -- pointed at the one move that otherwise does no
        damage at all. The reason it is on a clock rather than on contact is
        that a puddle nobody stepped in should still have been worth
@@ -3686,9 +4259,12 @@ ROSTER.houston = {
          floor away -- and a count across a hundred CPU matches said what
          that cost: a spill was on the stage 1090 frames a match and was
          armed for 416 of them, and the whole move dealt 11.5 damage against
-         his jab's 173. At 110 it is fresh for under two seconds and armed
-         for nearly four, which is the same move with the dead half taken
-         out of it rather than a different move.
+         his jab's 173. At the 64 it is now, it is fresh for barely a second
+         and armed for four and a half, which is the same move with the dead
+         half taken out of it rather than a different move. It went 190 to
+         110 in one release and 110 to 64 in the next, for two different
+         reasons: the first was the dead half, the second was his own drink,
+         and the second one is argued out under `heal` below.
 
          And the bite comes round at 36 rather than 42. The rule that number
          was written to keep is intact -- it is still slower than anybody's
@@ -3701,12 +4277,90 @@ ROSTER.houston = {
          one: this is out for five and a half seconds and a floor that put
          people in hitstun would be a combo rather than a floor.
 
-         THAT PARAGRAPH WAS WRITTEN WHEN THE FRESH HALF DID NOTHING. It does
-         something now -- see `heal` below -- so read the shortening as what
-         it was at the time: the armed half got longer because the armed half
-         was the only half doing any work. Shortening it again would cost him
-         the drink as well, which is a reason to leave 110 where it is rather
-         than a reason to come back to it. */
+         EVERYTHING ABOVE IS THE HISTORY OF THE 190 -> 110 CUT and it is
+         still the reasoning that got it there. It stopped being the current
+         number. Read the block below, which is. */
+      /* SIXTY-FOUR, and the fresh half survived the cut by getting denser
+         rather than by being protected.
+
+         THERE ARE TWO EDGES AND THIS SITS BETWEEN THEM, and both were swept
+         rather than reasoned about. `life` is 330 and `hitEvery` is 36, so
+         an EIGHTH bite only fits if the spill arms at or before 77 -- 76 and
+         77 land eight, 78 lands seven, and the edge is exactly there. A
+         whole extra bite and a whole extra application of poison, for free,
+         and it is the best thing cutting this number buys. Underneath, he
+         first STANDS in his own milk on puddle age 43, measured from a
+         standing cast on the main floor, so anything under 44 is a fresh
+         half he is never inside. Forty-four to seventy-seven is the usable
+         band; sixty-four has thirteen frames of slack under the top edge and
+         twenty-one under the bottom one, and the only thing a higher number
+         would buy is his own drink.
+
+         WHAT THE DRINK PAID FOR IT. The rate went UP to 0.0625 while the
+         total came down from 5.50 to 4.00, which is the opposite of the
+         obvious move. It is not a softener. 0.0625 is the largest rate that
+         stays under SLOUCH's 0.0667 -- see below -- and whose reciprocal is
+         a whole number, and that reciprocal is the droplet cadence in
+         Puddle.update, so one drop is still exactly one point of health. The
+         rate is as high as it is allowed to be and the window is what got
+         cut.
+
+         THE CAMPING NUMBER, which is the one that matters, and THE METHOD IS
+         WRITTEN DOWN BESIDE IT because this figure has now been measured four
+         times and come back four different answers. It is extremely sensitive
+         to two things nobody was stating: the age at which he re-casts, and
+         whether the parked opponent is somewhere he can be knocked out of --
+         a probe that parks him outside the stage spends most of its frames
+         inside the twelve-frame KO freeze and reads low.
+
+         THE METHOD. Houston alone on DEEP SPACE. The other man stands on the
+         same floor, inside the blast zone, frozen and healed every frame so
+         nobody is ever knocked out. Houston casts, walks to his own spill and
+         brakes to stay inside it, and re-casts at puddle age A. A is swept
+         from 20 to `curdle` + 60 in steps of two and the BEST arm is taken,
+         because a ceiling is the best a person could manage and not the
+         average. Twelve thousand frames an arm, real mana regen, health
+         counted as health GAINED so healing into the 100 cap counts nothing.
+         He is made invulnerable for the duration, because a respawn reads as
+         ninety-nine points of healing and that alone was worth a factor of
+         ten in an earlier pass.
+
+           0.05   at 110   best at re-cast age 78   1.609 health/s
+           0.0625 at  64   best at re-cast age 50   0.856 health/s
+
+         RE-DERIVED FROM THAT PARAGRAPH BY SOMEBODY WHO HAD ONLY THAT
+         PARAGRAPH, which is the test a written-down method has to pass. The
+         old pair came back at 1.634 at re-cast age 74 -- within one and a
+         half per cent, so the rig is reproducible. The new pair came back
+         between 0.27 and 0.66 depending on ONE thing the method above does
+         not pin down: which spill he walks to when two of his are alive at
+         once. Chasing the nearest is worth twice chasing the youngest. So
+         0.856 is the most generous reading of the new pair anybody has got
+         and the honest way to state the row is "under nine tenths"; every
+         measurement of it, across five now, lands under one.
+
+         AND THE THING IT IS A FRACTION OF. Over 120 unassisted CPU matches
+         -- every opponent, both seats, all six stages -- Houston himself
+         deals about two health a second. Read that as "about two" and not as
+         a decimal: three runs of that same probe on each build gave 1.73,
+         1.79 and 1.97 at 2.80 and 1.77, 1.92 and 2.11 at 2.81, because the
+         arena is unseeded and 120 matches is not enough to separate the two.
+         The farm is therefore paying somewhere near nine tenths of his own
+         output at the old pair and between a sixth and four tenths at this
+         one. THAT is the margin, and it at least halved -- which is the
+         claim this number exists to support, and it survives every reading
+         of it.
+
+         ON THE 0.856 ROW it did not get worse by the full factor of two and
+         a bit the plan for this release predicted, and the reason is worth
+         keeping whichever row you believe: that plan held the loop length
+         fixed at about a hundred and forty-five frames for both pairs and
+         the loop is NOT fixed -- the shorter window also lets him re-cast
+         sooner, which hands part of the cut back. The re-derivation above
+         gets a bigger cut than the plan did precisely because it lets the
+         loop find its own length. If somebody needs the farm cut further,
+         the honest lever is `manaOverride` on the carton, which lengthens the
+         loop, and not this number, which shortens the drink as well. */
       /* AND THE FRESH HALF PAYS HIM BACK. `heal` is a per-frame RATE, the
          same shape as `poison.dps` two lines into the object below, and
          deliberately not a total divided by a duration the way SLOUCH's
@@ -3715,43 +4369,69 @@ ROSTER.houston = {
          is guaranteed a single frame of standing in a puddle. A total here
          would be a number the player never once receives.
 
-         0.05 A FRAME IS FIVE AND A HALF FOR A WHOLE FRESH SPILL, AND HE
-         CANNOT COLLECT IT. The carton flies forward -- it lands about
-         eighty-eight pixels ahead of where he threw it -- so a man who
-         throws and walks straight to his own milk arrives at about frame
-         thirty-four of a hundred and ten and drinks three and three
-         quarters. Against the poison on the other half, 0.045 for the same
-         hundred and ten, the two ends of this object are very nearly equal
-         and opposite: the fresh half gives him back about what the curdled
-         half's poison takes off them. That symmetry is the reason for the
-         number rather than something noticed afterwards.
+         0.0625 A FRAME IS FOUR FOR A WHOLE FRESH SPILL, AND HE STILL CANNOT
+         COLLECT IT. The carton flies forward -- it lands about eighty-eight
+         pixels ahead of where he threw it -- so a man who throws and walks
+         straight to his own milk is not standing in it until PUDDLE AGE 43,
+         measured, and twenty-one frames of window are left when he gets
+         there. Playing it perfectly -- braking against the skid to stay
+         inside the box for every frame that is left -- he drinks 1.38 of the
+         four. It was 0.05 over a hundred and ten, which is 5.50 on paper and
+         3.40 the same way in his hand. So the paper total lost 27% and what
+         he can actually take lost 59%, which is the honest shape of this cut
+         and it is bigger than the one that was planned for.
 
-         AND IT CANNOT BE FARMED, WHICH IS ARITHMETIC AND NOT A RULE. There
-         is no ledger here and no cooldown, on purpose, because neither is
-         needed. `puddles` is one, so a second carton kills the first spill
-         and there is never more than one drip going. Mana is not the limiter
-         and must not be mistaken for one: twenty-six at half a mana a frame
-         pays for itself in fifty-two. What limits it is that he has to WALK
-         to it -- he cannot spill under his own feet, the carton always goes
-         forward. The tightest loop there is runs cast, flight, walk and
-         seventy-six frames of standing: about a hundred and forty frames for
-         three and three quarters, which is one and a half health a second,
-         and he deals nothing whatsoever for the whole of it. His own output
-         in a CPU match is a little over two a second. The man who does
-         nothing but drink loses the race to the man who does nothing but hit
-         him, and that is the entire safety argument.
+         (An earlier pass wrote 33 here and 1.94 there, off a probe that let
+         the walk begin before the carton had landed. Forty-three is what the
+         engine does: cast, walk, and read the puddle's own `t` on the first
+         frame his health moves.)
 
-         TWICE THIS WAS MEASURED AND REJECTED FOR THE SAME REASON REVERSED.
-         At 0.1 the loop pays three a second, which is FASTER than he is hit,
-         and a Houston who refuses to fight would come out ahead. It is also
-         the wrong side of SLOUCH: an ult that roots him for six hundred
-         frames at half guard restores 0.0667 a frame, and a side effect of a
-         neutral special may not out-heal it. 0.05 is under both. */
+         WHY THE RECIPROCAL IS A WHOLE NUMBER, because it is load-bearing
+         twice over. One over 0.0625 is exactly 16, and 16 is the droplet
+         cadence in Puddle.update -- one drop for each point the HUD counts
+         up, by construction rather than by being tuned to look like it. And
+         0.0625 is the LARGEST rate with that property that still sits under
+         SLOUCH's 0.0667: an ult that roots him for six hundred frames at
+         half guard restores 0.0667 a frame, and a side effect of a neutral
+         special may not out-heal it. Both caps land on the same number.
+
+         Against the poison on the other half, 0.045 for a hundred and ten,
+         the two ends of this object are still very nearly equal and
+         opposite: 4.95 taken off them, 4.00 given back to him. The symmetry
+         was the reason for the old number and it survived the cut, which is
+         part of why this pair and not another.
+
+         AND IT CANNOT BE FARMED, WHICH IS ARITHMETIC AND NOT A RULE, AND THE
+         ARITHMETIC GOT STRICTER. There is no ledger here and no cooldown, on
+         purpose, because neither is needed. `puddles` is one, so a second
+         carton kills the first spill and there is never more than one drip
+         going. Mana is not the limiter and must not be mistaken for one:
+         twenty-six at half a mana a frame pays for itself in fifty-two. What
+         limits it is that he has to WALK to it -- he cannot spill under his
+         own feet, the carton always goes forward. The tightest loop there is
+         runs cast, flight, walk and the twenty-one frames of fresh window
+         left when he gets there. Swept properly -- see THE CAMPING NUMBER
+         above for the method -- the best a person can hold is 0.856 health a
+         second against 1.609 at the old pair, while his own output in a CPU
+         match is 1.755. The man who does nothing but drink still loses the
+         race to the man who does nothing but hit him, and he loses it by
+         twice as much as he used to: 49% of his own damage rate where it was
+         82%.
+
+         TWICE THIS WAS MEASURED AND REJECTED FOR THE SAME REASON REVERSED,
+         and a third time on the way to this pair. At 0.1 the old loop paid
+         three a second, which is FASTER than he is hit, and a Houston who
+         refuses to fight would come out ahead. Holding the TOTAL at 5.50
+         across the shorter window wants 0.0833, which is over SLOUCH.
+         Holding what he actually DRINKS at 3.40 wants 0.145, which beats his
+         own 2.00 dps outright. Both rejected. 0.0625 is under everything it
+         has to be under and its reciprocal is a whole number, which is the
+         only rate in the band that is both. */
       puddle: {
-        w: 40, h: 3, life: 330, curdle: 110, slick: 10,
+        w: 40, h: 3, life: 330, curdle: 64, slick: 10,
         hitEvery: 36, damage: 4, graze: true,
         poison: { frames: 110, dps: 0.045 },
-        heal: 0.05,
+        heal: 0.0625,
         base: 0, scale: 0, angle: 80,
         kx: 0.17364817766693041, ky: 0.984807753012208,
       },
@@ -3878,6 +4558,123 @@ ROSTER.houston = {
          matchups it is for, not a refund, and it is not what pays for this
          move: the damage is. */
       feeds: 12,
+      /* AND HE CAN LET GO OF THE HANDLE. Two follow-ups out of one cast,
+         both on the same button that started the move -- see the press in
+         updateAttack, where the whole of the fork is one boolean read on the
+         press frame.
+
+         TWELVE, and it is one of only two new numbers in the item. One full
+         `hitEvery` cycle (nine) with three frames spare, so a deck he never
+         actually mowed with cannot be thrown; and 12 x 2.8 = 33.6 px, two
+         body lengths, so the machine is visibly out in front of him when it
+         comes off the handle. Measured at the boundary rather than near it:
+         a press on attackFrame 21 is refused and one on 22 is taken, with
+         `startup` 10 and `after` 12.
+
+         TAP IT AND THE DECK CARRIES ON AT `push`. It stops at a kerb, it
+         does not turn and it does not fall: it sits at the lip, still
+         spinning, still biting, until its life runs out -- which is what the
+         drawn object does and what he already does. `ledgeAhead` and
+         `overFloor` on Mower are the whole of that rule, and `ledgeAhead` is
+         the half that buys the behaviour: without it a released deck rolls
+         over the lip and `overFloor` deletes it, 36 of 36, after a mean of
+         5.8 frames of a 26-frame remainder. It is not what keeps HOUSTON
+         alive -- that is his own kerb brake in runSpecial, and the ablation
+         is written out beside the press.
+
+         HOLD FORWARD AND HE SHOVES IT INSTEAD, at `shove`, and the shove is
+         not the same machine going faster. It is the kerb rule taken OFF the
+         machine: a heaved deck rolls off the lip, falls, lands on whatever
+         floor is underneath and keeps mowing there. It is the only hitbox
+         Houston has that arrives on a floor he is not standing on -- the air
+         cast descends WITH him and the plain release stops at his own edge.
+         Measured on Deep Space, him mowing the left shelf and the victim on
+         the main floor below: plain mow 0, release 0, shove 4, at three
+         separate victim positions.
+
+         FOUR, and it is the second and last new number. The deck spawns on
+         `startup` with `life` = `active` = 40 and the press opens twelve
+         frames later, so a deck heaved on the first legal frame has 28
+         frames of life left, and 28 x 4.0 = 112 px -- exactly the distance
+         the `push` paragraph above says the escorted move covers over its
+         whole forty active frames. The machine's last twenty-eight frames
+         alone cover the lane its sixty-two committed frames used to.
+
+         AND FOUR IS OVER THE BITE LINE ON PURPOSE, which is what it pays
+         with. The deck's box is 20 wide and a standing hurtbox is 9, so a
+         pass overlaps over 29 px of relative travel; `hitEvery` is 9; and
+         29 / 9 = 3.22 px a frame is the speed at which one bite per pass
+         stops being guaranteed. `push` 2.8 sits thirteen per cent UNDER that
+         line -- which is the paragraph above, read from the other end. 4.0
+         sits twenty-four per cent over it: 7.25 frames of overlap against a
+         nine-frame cooldown, so a heaved deck passing a standing man bites
+         once if his cooldown happens to be ready and not at all if it is
+         not. Do NOT reach for `shove` as a balance lever. Lowering it toward
+         3.22 removes the only cost the shove has and makes it strictly
+         better than the release; `hitEvery` 9 -> 12 is the lever.
+
+         WHAT THE FOLLOW-UPS ARE WORTH, measured with the button released the
+         moment the deck comes off the handle so that no cell is two mowers,
+         over nine gaps from 20 to 150 px:
+
+              victim             mow    let go    shove
+              stands still       8.4      7.6      6.7  (9 of 9 connect)
+              walks into it     10.2      8.9      7.1
+              backs away         3.6      3.1      3.6  (6 of 9, against 3)
+              on the floor below   0        0        4
+              furthest reach   +118     +123     +156 px
+
+         NEITHER FOLLOW-UP IS A DAMAGE UPGRADE, and an earlier draft of this
+         paragraph said the release lands four bites for sixteen where the
+         escorted deck lands two for eight. That was a measurement artifact
+         and it is worth writing down, because it reads as rigor: the probe
+         mashed the button for ninety frames and did not stop when the deck
+         came off the handle, the first deck expired around frame fifty,
+         `maxAlive` was satisfied again, and he cast a SECOND mower. Two
+         bites each, from two casts. Stopped at the release, one cast lands
+         two bites and eight damage at every gap from 20 to 180 -- the same
+         as the escorted mow, which it is BEHIND on both non-retreating
+         victims above.
+
+         What the release actually buys, and it is plenty, is FORTY-FIVE
+         FRAMES OF HIS OWN LIFE: free on frame 23 against frame 68, plus
+         17-25 px more deck travel and a machine parked live at the lip. What
+         the shove buys is the floor he is not standing on, and it pays in
+         damage and in the machine itself, which is gone for good afterwards
+         -- over the ledge sweep it left the platform on 106 casts of 108.
+         Neither is more damage, which is precisely why the second one had to
+         be about REACH.
+
+         IT STILL SHREDS AND IT DOES NOT STILL FEED HIM. `feeds` above is
+         priced as a discount on walking into a volley yourself, and a deck
+         he is not standing behind costs him none of that -- so onShred
+         hoists its effects above the pay and returns on `released`, and a
+         shot still dies visibly with nothing changing hands. Measured:
+         escorted 22.5 -> 34.5 mana, released 22.5 -> 23.0. This is the line
+         that stops a let-go shredder being free.
+
+         IT DOES NOT GET ITS OWN LIFETIME. `life` already counts down from
+         `active` and the `life <= 0` kill already runs, so a released deck
+         keeps the countdown it was born with. That is one fewer number and
+         it is the whole answer to the objection written into class Mower
+         about a projectile-eater that outlived the man pushing it: it does
+         not outlive HIM, it outlives his COMMITMENT.
+
+         `maxAlive` falls out for free. canSpecial filters on owner AND spec
+         and a released deck is still `spec === s`, so he cannot cast a
+         second until the first one expires.
+
+         THE AIR CAST MAY NOT BE RELEASED, guarded twice: `grounded` on him
+         and `!b.air` on the deck. An air deck that touches down converts and
+         is releasable from that frame -- measured, landed 18, released 22.
+         And a CONFUSED Houston cannot shove toward his own machine: the
+         left/right swap happens in Fighter.update BEFORE updateAttack is
+         called, so the pad this rule reads is the effective one, and holding
+         toward the deck gives him the plain release. That is the file's own
+         rule about confusion arriving for free, and it costs damage rather
+         than a stock -- a misfired follow-up is a worse cast, never a lost
+         one. */
+      release: { after: 12, shove: 4.0 },
       /* AND IT MULCHES HIS OWN MILK. The deck over one of his own fresh
          spills turns it on the spot and starts its life over -- see
          Mower.update, where it is a handful of lines.
@@ -3893,7 +4690,13 @@ ROSTER.houston = {
          it.
 
          Only his own, only while it is fresh, and it does not widen
-         anything. The point is the timing, not more floor. */
+         anything. The point is the timing, not more floor.
+
+         AND THE WINDOW HALVED WHEN `curdle` DID, 53...143 to 53...97, so
+         mulching is worth proportionately less than it was -- the clock it
+         skips is closer. That is correct and it is the point: the move he
+         is short-cutting got faster on its own, so the short cut is worth
+         less. It is not a reason to lengthen either one. */
       mulch: true,
       /* IN THE AIR IT IS A DESCENT. Four numbers and a box, nested here the
          way the guillotine keeps its air half, so there is still exactly one
@@ -3964,58 +4767,61 @@ ROSTER.houston = {
          see that it lands five times, and it certainly cannot see that the
          thing also deletes projectiles and turns his milk.
 
-         TWENTY-EIGHT, and it is two under the carton on purpose. aiDecide
-         gates every special cast on `me.mana >= specials.neutral.mana` and
-         then picks a slot at random, so a Houston holding between the two
-         costs reaches for the mower; were this the dearer of the two, the
-         press would be thrown away, the cooldown spent, nothing cast.
-         Pricing the down special below the neutral one means that branch
-         cannot exist. It is the honest direction as well -- sixty-two frames
-         he cannot turn out of should not also be the most expensive thing he
-         does in neutral.
-
-         UNCHANGED through this rework, on purpose. The move just gained
-         ledge safety, air legality and forty per cent more push, and three
-         buffs and a price cut at once is not a measurement, it is a guess.
-         Price is the safest knob in the file to turn and it is the SECOND
-         one to reach for after a ladder run; `hitEvery` is the first. */
+         TWENTY-EIGHT, which is two OVER the carton's twenty-six and not
+         under it, and the paragraph that used to stand here claimed the
+         opposite. The branch it said could not exist does: aiDecide gates
+         every special cast on `me.mana >= specials.neutral.mana` and then
+         picks a slot separately, so a Houston holding between the two costs
+         reaches for the mower, canSpecial refuses, and the press and the
+         rand(24,50) cooldown are both spent for nothing. It is four frames
+         wide at half a point of regen and it is written down here rather
+         than fixed because fixing it is a price cut on a move that just
+         gained a release, and three buffs at once is not a measurement.
+         `hitEvery` 9 -> 12 is the first lever after a ladder run; this is
+         the second. */
       manaOverride: 28,
     },
     /* HAMMER & SICKLE. He swings the emblem up over his head, and whoever
        it lands on ends the swing with the same health he has.
 
        THE MOVE IS REDISTRIBUTION. Four damage, which is less than his jab,
-       and then the two health bars are levelled: up to `share.cap` points
-       move from whichever of them has more to whichever has less. Nothing
-       else on this roster equalizes anything -- every other move in the
-       file takes health off somebody and that is the end of it -- and this
-       is the one that asks what the DIFFERENCE between the two bars is.
+       and then the DIFFERENCE between the two health bars is closed to a
+       fifth of what it was -- or levelled outright, when levelling moves
+       less than fifteen. Nothing else on this roster equalizes anything;
+       every other move in the file takes health off somebody and that is
+       the end of it, and this is the one that asks what the difference
+       between the two bars is. Four tenths of the gap, and see `share`
+       below for where the four tenths came from, which is a worked example
+       rather than a preference.
 
        IT POLICES ITSELF, which is the reason to build it this way rather
        than as a drain. Behind, it is the best comeback tool in the game.
        Ahead, it is a gift to the man he is beating, and he cannot help
        casting it, because -- see below -- it is also the only way he gets
        back on stage. A move that is a mistake exactly when you are winning
-       needs no nerf written for it; it comes with one.
+       needs no nerf written for it; it comes with one, and the nerf got
+       four times bigger at the same moment the buff did.
 
-       It can never take a stock and it can never save one. Health only
-       moves TOWARD the midpoint, so the richer man is left at the midpoint
-       at worst, which is at least what the poorer one had, which is above
-       zero -- there is no arithmetic here that ends at a KO. The other
-       direction is a deliberate guard in applyHit: if the four damage was
-       lethal, the sharing does not run at all, because a recovery that
-       heals a man out of the KO he just took reads as the game glitching
-       rather than as a joke landing.
+       IT CAN SAVE A STOCK NOW, and that is the change rather than a side
+       effect of it: one against a hundred walks away from the swing on
+       forty. What it still cannot do is TAKE one. Health only ever moves
+       toward the midpoint, so the richer man is left at the midpoint at
+       worst, which is at least what the poorer one had, which is above zero
+       -- there is no arithmetic here that ends at a KO. And if the four
+       damage was itself lethal the sharing does not run at all, which is a
+       deliberate guard in applyHit: a recovery that heals a man out of the
+       KO he just took reads as the game glitching rather than as a joke
+       landing.
 
-       THE CAP IS THE WHOLE SAFETY VALVE. Fifteen points change hands, so
-       the gap between the two bars closes by THIRTY -- already the biggest
-       single swing any non-ult move in the file can produce, and that is
-       with the cap on. Uncapped it is an average, and an average decides a
-       match the first time it connects: 12 against 100 becomes 56 and 56,
-       and the man who spent a stock earning that lead has it taken back by
-       one button. Capped, erasing a full bar's deficit takes three landed
-       swings and three mana bars, which is a comeback somebody has to
-       actually play out.
+       HALF THE GAP IS THE WHOLE SAFETY VALVE, and it always was -- the
+       fifteen-point cap was only ever what kept the move small. Unhalved it
+       is an AVERAGE, and an average decides a match the first time it
+       connects: 12 against 100 becomes 56 and 56, and the man who spent a
+       stock earning that lead has it taken back by one button. At four
+       tenths, 12 and 100 becomes 47 and 65: still a comeback somebody has
+       to play out, in two landed swings and two mana bars rather than in
+       three, and with eighteen points still between them at the end of
+       it.
 
        AND IT IS THE RECOVERY, because `up` is the recovery slot and a
        fighter who cannot get home is not playable. That is why the hammer
@@ -4034,6 +4840,9 @@ ROSTER.houston = {
        this is priced as a hit plus half a health bar's worth of swing. */
     up: {
       kind: 'uppercut', label: 'HAMMER & SICKLE',
+      // See aiDecide's recovery branch. It is his only way home, which is
+      // half of why `manaOverride` stays where it is.
+      recovers: true,
       /* AND IT EATS WHAT IS THROWN AT HIM, which is the same joke the sharing
          is: what you aimed at him is now his. Any enemy shot that touches the
          swing's box is destroyed, and he keeps the damage it was carrying as
@@ -4081,20 +4890,95 @@ ROSTER.houston = {
          8 above his feet to 32 above them: his own head and the whole arc
          over it, which is where a two-handed swing actually is. */
       ox: -7, oy: -20, w: 15, h: 24,
-      /* Read in applyHit, priced in moveCost. Fifteen is the argument at
-         the top of this comment; nothing else in here reads it. */
-      share: { cap: 15 },
-      /* moveCost prices the sharing at twice the cap, because twice the cap
-         is what it does to the scoreline, and lands on 49. That is an honest
-         number for the best case and the wrong number for the move, because
-         the best case is the one where he is losing and the common case is
-         the one where the CPU fires his recovery at whatever health he
-         happens to be on. It is also his ONLY way home: a recovery he cannot
-         afford is not an expensive move, it is a stock.
+      /* MUCH MORE COMMUNIST, and the number came off his own example. One
+         against a hundred should be forty and sixty; the midpoint is 50.5,
+         so forty is four fifths of the way to it, and four tenths of the
+         GAP is the whole rule. It lands at 39 / 58 rather than 40 / 60
+         because the fist's own four damage goes first, which is the only
+         part of his arithmetic that was not already true.
 
-         40 is the compromise. Four bars' worth of sharing is still a whole
-         health bar, so the comeback is intact; it just costs him the milk
-         and the mower for as long as he is paying for it.
+         `least` is the fifteen this used to cap at, kept as the LEAST it
+         will do rather than the most, because four tenths of a small gap is
+         less than levelling it and he asked for more, not less. Piecewise:
+         under thirty it levels them, exactly as before; over thirty-seven
+         and a half it takes four tenths and leaves them a fifth apart,
+         where before it took fifteen.
+
+         WHY NEITHER CLAMP EXISTS, still. The outer min against half the gap
+         IS the invariant: nothing can pass the midpoint, so nothing can
+         overflow a bar and nothing can finish a man the four damage did not
+         already finish. Swept over the whole hundred-by-hundred grid, and
+         the four counts add up to it: 10,000 pairs, 9,600 firings, and the
+         other 400 are exactly the ones the fist's own four damage KOs, where
+         the share is refused outright and leaves him untouched. Zero
+         overflow, zero midpoint crossings, nobody killed by it, lowest bar
+         left standing 1.0.
+
+         That holds for any `take` at or below one half and any `least`,
+         which is what makes a much bigger number safe. It holds wider than
+         that, measured: the min binds before the multiplier does, so even
+         `take: 0.6` crosses the midpoint zero times in ten thousand pairs.
+         What a bigger `take` actually costs is not safety, it is that the
+         move becomes an AVERAGE again -- anything over a half levels every
+         gap, and an average decides a match the first time it connects.
+         That is the sentence to read before anybody retunes `take`.
+
+         `cap` IS FORTY AND CANNOT BIND at a maxHealth of 100 -- the largest
+         transfer the arithmetic allows is 0.4 x 99.5 = 39.8. It is a guard
+         rail for the day maxHealth moves, and it is what keeps moveCost's
+         `share.cap * 2` term from reading undefined.
+
+         IT IS THE BUTTON OF A MAN WHO IS LOSING, and it self-polices. At
+         parity it deals four and hands two straight back. At a hundred
+         against five it GIVES thirty-nine point six. Two landed swings now
+         erase a full bar where three or four used to, and a third is a net
+         loss of two -- it destroys its own value, which is why no further
+         gate is needed.
+
+         AND THE LADDER CANNOT SEE ANY OF THAT, which is stated here rather
+         than papered over with a win-rate number. Over 120 unassisted CPU
+         matches -- every opponent, both seats, all six stages -- the share
+         fired FIVE times in total, 0.04 firings a match, and the net health
+         it moved was MINUS 41 to Houston, because four of those five landed
+         while he was the one ahead. An earlier draft of this paragraph
+         quoted "+4.3 points when pressed while behind, -16.4 when pressed
+         whenever it can be". Those two figures came off an instrumented AI
+         that is not in this file and cannot be reproduced from it, so they
+         are gone. What is measurable on the shipping AI is the firing rate
+         above and the grid below, and anybody quoting a ladder number for
+         this move should say which AI produced it.
+
+         AND A RAISED SHIELD REFUSES IT OUTRIGHT -- the redistribution sits
+         below the shield branch, so it is stopped exactly the way the burn
+         is. 24 pixels of standing room, 39 committed frames, 51 from the
+         press to being idle on the floor again, and he leaves the ground
+         doing it.
+
+         ALL THREE NUMBERS LIVE IN THIS OBJECT LITERAL and nowhere else,
+         which is why this item adds no field to anything: simFrozen keeps
+         the ROSTER by reference, `health` is already snapshotted and already
+         in the desync hash, and the entire rule is four lines inside
+         applyHit. That is the reason to build it there rather than as a
+         bespoke counter, and it is the property that has to survive the next
+         rewrite. All three are REQUIRED -- applyHit reads `take` and `least`
+         without a default, deliberately, so a second share move that forgot
+         one would fail loudly rather than quietly halve itself. */
+      share: { take: 0.4, least: 15, cap: 40 },
+      /* moveCost prices the sharing at twice the cap. It landed on 49 when
+         the cap was fifteen and lands on 106 now that it is forty, and BOTH
+         are fiction: `manaOverride` below has pinned this move's price since
+         before either number existed, and forty can never bind at all (see
+         `share` -- the largest transfer arithmetic allows is 39.8).
+
+         What the formula cannot price is the thing the move is for. The best
+         case is the one where he is losing; the common case is a CPU firing
+         its recovery at whatever health it happens to be on; and it is his
+         ONLY way home, so a recovery he cannot afford is not an expensive
+         move, it is a stock. The number that is actually charged is below,
+         and unlike Reese's, mana here IS a lever and is exactly the right
+         size: twenty mana buys the whole change back, 58.0% to 54.0% on a
+         press-when-behind ladder. `manaOverride` 50 -> 70 is the
+         pre-authorized lever if this item stacks too high.
 
          AND THE HONEST PART, because the usual yardstick did not settle
          this and should not be quoted as though it had. Over 80 CPU-vs-CPU
@@ -4626,6 +5510,32 @@ const CHICKEN = {
    frame. Added, slot 1 on frame 100 and slot 0 on frame 101 would be the
    same input and therefore the same egg, which is a coincidence nobody would
    ever notice and exactly the kind that makes a bug look like magic. */
+/* THREE NUMBERS PER NOTE, out of the dragon's own mixer.
+
+   Salamence's wander takes one number off `(t + seed)` and reads the top ten
+   bits, which are the well-mixed ones. A note needs three -- a lane, a height
+   off the ceiling and a fall speed -- and asking one hash three times with
+   one input gives the same answer three times, so a second argument is folded
+   in first and the mixer is lifted out here and named. That is cheaper and
+   far more honest than bolting a stride onto the rain, which is exactly what
+   the belt this replaces was.
+
+   Math.imul rather than `*`, for the reason every other hash in this file
+   gives: it is the one multiply JavaScript defines to 32 bits exactly, where
+   `*` on two large integers goes through a double and loses the low bits --
+   and the low bits are the ones being read. A hash rather than Math.random
+   because these numbers decide HITBOXES: two machines have to build the
+   identical shower, and a rollback has to replay it to the pixel.
+
+   Returns 0..1023, off the top ten bits, the same as the dragon's. */
+function noteRoll(a, b) {
+  let h = Math.imul((a + Math.imul(b + 1, 0x7feb352d)) >>> 0, 0x9e3779b1) >>> 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x85ebca6b) >>> 0;
+  h ^= h >>> 13;
+  return h >>> 22;
+}
+
 function eggIsGolden(frame, slot, oneIn) {
   let h = Math.imul(frame + 0x9e3779b9, 0x85ebca6b);
   h ^= h >>> 13;
@@ -5762,13 +6672,15 @@ class Fighter {
     this.starSplit = false;
     // Frames of specials that cost nothing. See the slouch.
     this.manaFree = 0;
-    /* How much Remy has slept, and whether he has been told to get up.
-       Both here rather than assigned on first use, because restoreSim
-       deletes any key a snapshot does not carry -- and a dream meter that
-       came back empty after a rewind would change what his dragon is made
-       of on one machine and not the other. */
+    /* How much he has daydreamed. Here rather than assigned on first use,
+       because restoreSim deletes any key a snapshot does not carry -- and a
+       dream meter that came back empty after a rewind would change what his
+       dragon is made of on one machine and not the other.
+
+       There was a `wakeUp` beside it and it is gone: see the bakery case in
+       runSpecial. A sticky flag written by four buttons and read a dozen
+       frames later ended two casts in five behind the player's back. */
     this.dream = 0;
-    this.wakeUp = false;
     // Frames spent in somebody's slouch. Grows inside the aura, decays out.
     this.drowsy = 0;
     /* The guillotine links two fighters. Both ends are SLOT INDICES rather
@@ -5934,6 +6846,21 @@ class Fighter {
        this one is read every active frame to decide whether he may turn
        again, so a vanished one is a dash that ping-pongs forever. */
     this.dashTurns = 0;
+    /* THE FART HE IS CARRYING INTO A DASH, and it has three states because
+       two were not enough. -1 is "this dash has nothing to do with the
+       fart", which is also what leaves the old spDown vent available. A
+       number at or above zero is the charge step the carried cloud will
+       come out at. -2 is "it came out already", and that third state is not
+       decoration: with -1 doing double duty for never-carried and
+       already-released, runSpecial's dash case re-zeroes dashGassed on its
+       startup frame, the old vent re-opens behind the release, and mashing
+       spDown through a carrying dash lays TWO clouds for one fart. It was
+       measured doing exactly that.
+
+       Declared here rather than written on demand because restoreSim
+       deletes any Fighter key a snapshot does not carry, which is the same
+       reason the three fields above it are here. */
+    this.dashFart = -1;
     this.walkAnim = 0;
     // Trev's ult hands him a sword for ten seconds. While swordTimer is
     // running the ult button swings it instead of casting anything.
@@ -5943,6 +6870,19 @@ class Fighter {
     this.rainTimer = 0;
     this.rainSpec = null;
     this.rainStep = 0;
+    /* WHICH SHOWER THIS IS. One number per cast, and it has to be stored
+       rather than derived, which was not obvious. battleFrames climbs by
+       one a frame and rainTimer falls by one, so their sum looks like a
+       per-cast constant that costs nothing and cannot survive a rollback
+       wrong -- except update() returns on hitstop ABOVE the rain block, so
+       rainTimer freezes while battleFrames runs on. Measured: getting
+       punched gave thirteen, twenty and twenty-five different seeds inside
+       one song. Deterministic, rollback-safe, and still wrong.
+
+       NOT reset in respawn(), deliberately. Neither rainTimer nor rainStep
+       is either, and the shower is meant to outlive a KO; zeroing the seed
+       halfway through would put a visible seam in the song. */
+    this.rainSeed = 0;
 
     /* A CHICKEN. Houston's traffic turns whoever it hits into one, and they
        stay one until a golden egg of theirs reaches somebody or they lose a
@@ -5972,6 +6912,19 @@ class Fighter {
     this.chicken = false;
     this.chickenSince = -1;
     this.chickenEggs = 0;
+
+    /* How many shots he has swallowed this stock, and how long he has left
+       lying down for the eighth. See OPEN WIDE in ROSTER.cobeus.
+
+       In the constructor for the reason everything above is -- restoreSim
+       deletes any Fighter key a snapshot does not carry -- and BOTH of them
+       are written out again in respawn(), which is the unusual half. Nothing
+       else in this file counts a move's uses and resets them on death:
+       chickenEggs is per transformation and nothing in the simulation reads
+       it, and ultMeter is not reset at all. Neither of those gives you this
+       for free. */
+    this.fat = 0;
+    this.bedTimer = 0;
 
     this.ai = { timer: 0, plan: 'approach', cooldown: 0, jumpCd: 0,
                 aggression: rand(0.5, 0.9) };
@@ -6004,12 +6957,20 @@ class Fighter {
     const end = b.decayTo || 1;
     return end + (b.damageMul - end) * (this.buffTimer / b.decay);
   }
-  /* How many times life size he is drawn AND hit at.
+  /* How many times life size he is drawn AND hit at -- the ONE getter every
+     part of this file asks, which is the only reason growing anybody is
+     honest: the drawing, the hurtbox and relBox cannot disagree about how
+     big he is.
 
-     It rides on buffStats beside damageMul and speedMul rather than on a
-     field of its own, so one object says everything a buff does to a fighter
-     and restoreSim -- which replaces buffStats wholesale -- can never put
-     half of a buff back.
+     Two independent factors, multiplied, and they are separate because they
+     come from different places and can both be true at once. `buffSize` is
+     the jackpot, which rides on buffStats. `fatMul` is Cobeus' mouth, which
+     rides on a field of its own for the reason written on it.
+
+     The BUFF half rides on buffStats beside damageMul and speedMul rather
+     than on a field of its own, so one object says everything a buff does to
+     a fighter and restoreSim -- which replaces buffStats wholesale -- can
+     never put half of a buff back.
 
      It RAMPS. buffStats.since is the battleFrame the buff landed on, and
      battleFrames is snapshotted, so a rollback recomputes the same swell
@@ -6017,6 +6978,51 @@ class Fighter {
      THIS, which is the only reason growing him is honest: the drawing, the
      hurtbox and relBox cannot disagree about how big he is. */
   get sizeMul() {
+    return this.fatMul() * this.buffSize();
+  }
+  /* HOW FAT HE IS, as a multiplier, and it is its own field for a reason
+     that is easy to get wrong.
+
+     `buffStats.sizeMul` is the obvious place to put this -- it is where
+     Simon's jackpot puts his three times life size, and the getter below
+     already ramps it. It is also taken: Cobeus DRINKS, and the drink writes
+     buffTimer and buffStats. Expressing fat through the buff means fat and
+     drunk overwrite each other, and which one you get depends on the order
+     they happened in. So the fat lives in a field of its own and the two
+     multiply here, which is the only place either of them is read from.
+
+     It asks `specialsNow` and not `def.specials`, so A CHICKEN IS NEVER FAT
+     -- a chicken's moveset is CHICKEN.specials and has no mouth in it -- and
+     un-chickening hands him his belly straight back, because `this.fat` was
+     never touched. One rule, two behaviours, and no second field.
+
+     `shrink` is the last frames of the bed, over which he eases back to
+     normal: without it he pops from twenty-one blit pixels to sixteen on the
+     single frame he stands up. Derived from bedTimer, which is snapshotted,
+     so a rollback across the last twenty frames recomputes the same size
+     instead of restarting the ramp. */
+  fatMul() {
+    const m = this.specialsNow && this.specialsNow.up;
+    const e = m && m.kind === 'mouth' ? m.absorb : null;
+    if (!e || !e.fat || !(this.fat > 0)) return 1;
+    const swell = this.fat * e.fat;
+    if (this.bedTimer > 0 && m.shrink && this.bedTimer < m.shrink) {
+      return 1 + swell * (this.bedTimer / m.shrink);
+    }
+    return 1 + swell;
+  }
+  /* FLAT ON HIS BACK AFTER THE EIGHTH, and the move spec if he is -- null if
+     he is not. Shaped like slouching() above deliberately: applyHit asks the
+     two of them with one `||`, and forty proven lines there already know
+     what to do with a sleeping man. It returns the MOVE because the caller
+     wants what THAT sleep says -- `guard`, and the absent `rouse` and
+     `lethal` that make this one a punishment rather than an ult. */
+  bedded() {
+    if (!(this.bedTimer > 0)) return null;
+    const m = this.specialsNow && this.specialsNow.up;
+    return m && m.kind === 'mouth' ? m : null;
+  }
+  buffSize() {
     const b = this.buffTimer > 0 ? this.buffStats : null;
     if (!b || !b.sizeMul) return 1;
     /* A snapshot taken before since existed, or a buff that never set one:
@@ -6275,6 +7281,22 @@ class Fighter {
              chest while he works would be a second, invisible attack
              nobody authored. */
           s.kind === 'bot' ||
+          /* AND THE MOUTH, which is the whole of OPEN WIDE and is not a
+             swing. Its `ox/oy/w/h` are a CATCHING box -- sweepFrail pads
+             them and asks what is inside -- so the melee box this function
+             would otherwise grow out of the same four numbers is a second
+             hitbox nobody authored, on a move whose entire point is that it
+             does not hurt you.
+
+             It deals nought damage and nought knockback, which is exactly
+             what makes it hard to notice and what made it worth this
+             paragraph. Measured over 120 CPU matches an arm on the same
+             seed: with the box, 80% of Cobeus' matches ran to the time cap,
+             the two fighters sat at a mean gap of 0.0 pixels and he was idle
+             73% of every match, because a free connecting hit every cast
+             resets the starve clock both AIs use to break a stalemate.
+             Without it: 33% timed out, mean gap 23 pixels, idle 23.5%. */
+          s.kind === 'mouth' ||
           s.kind === 'newdeal') return null;
       if (this.attackFrame < s.startup) return null;
       /* `hitActive` is how long the BOX lives, where `active` is how long the
@@ -6518,20 +7540,36 @@ class Fighter {
     if (this.rainTimer > 0) {
       this.rainTimer--;
       const r = this.rainSpec;
+      /* A CHORD, NOT A DRIP. `per` notes every `every` frames, and all three
+         of the numbers a note needs -- its lane, its height off the ceiling
+         and how fast it falls -- come out of noteRoll on the note's own index
+         and this cast's `rainSeed`. What was here before was an even sweep at
+         one constant speed with a small stride bolted on: it lined every note
+         up on a single diagonal, which reads as a conveyor belt rather than
+         as something falling. Lag-1 +0.78 and a mean step of 20.8 px is that
+         belt, measured.
+
+         `n` is the index across the WHOLE song rather than within the volley,
+         so no two notes in one shower ever share a seed.
+
+         AND `n` IS PASSED TO THE PELLET, which is the one free visual fix in
+         here. Pellet seeds its tint from `n * 2 + owner.slot + battleFrames`
+         and the rain had always passed nothing, so `n` was 0 and every note
+         on a frame came out the same colour. One argument, and the busiest
+         frame of a shower measures 22 / 19 / 19 across the three tints. */
       if (r && this.rainStep % r.every === 0) {
-        const n = this.rainStep / r.every;
-        // An even sweep dropped at one constant speed lines every note up on
-        // a single diagonal, which reads as a conveyor belt rather than as
-        // something falling. This scatters them off it -- derived from the
-        // note index, so it is the same shower on both machines.
-        const j = (n * 37) % 11;
-        projectiles.push(new Pellet(this, r, 0, {
-          x: (n * r.stride + r.offset + (j % 5) * 3) % VW,
-          y: (STAGE.ceilingY || 0) + 2 + (j % 3) * 6,
-          vx: 0,
-          vy: r.fallSpeed * (0.82 + (j % 7) * 0.06),
-          shape: 'note',
-        }));
+        const first = (this.rainStep / r.every) * r.per;
+        for (let q = 0; q < r.per; q++) {
+          const n = first + q;
+          const s0 = this.rainSeed * 977 + n;
+          projectiles.push(new Pellet(this, r, 0, {
+            x: r.margin + noteRoll(s0, 0) * (VW - 2 * r.margin) / 1024,
+            y: (STAGE.ceilingY || 0) + 2 + (noteRoll(s0, 2) & 7),
+            vx: 0,
+            vy: r.slow + (r.fast - r.slow) * (noteRoll(s0, 1) / 1024),
+            shape: 'note',
+          }, n));
+        }
       }
       this.rainStep++;
     }
@@ -6947,6 +7985,10 @@ class Fighter {
     this.attackFrame = 0;
     this.hasHit = false;
     this.specialSpawned = false;
+    /* A NEW MOVE CARRIES NOTHING. carryDash sets this AFTER calling in here
+       for exactly that reason, and every other way into a move -- including
+       a plain JITTERS -- gets the -1 that leaves the old vent open. */
+    this.dashFart = -1;
     if (this.grounded) this.vx *= 0.4;
   }
 
@@ -7215,10 +8257,82 @@ class Fighter {
     cue('throw', { slot: this.slot, x: this.x });
   }
 
+  /* THE PRESS THAT WAS NEVER HEARD. Pressing the dash while holding a
+     charged fart does not currently get refused -- refusal implies
+     something looked. Nothing looks: updateAttack reads five things off the
+     pad and `spUp` is not one of them, a special is only ever cast from
+     updateFree, and update() returns before updateFree for anybody in
+     `special`. So the button went nowhere, with no dash, no tell and no
+     cue, and the player was given no evidence the game had noticed.
+
+     It opens on the move's own `startup`, which is the first frame the
+     charge actually engages and the same rule the existing vent uses: you
+     cannot dash out of a fart before the fart has begun. It closes at the
+     `hold` cap, where the pin releases and the cloud resolves itself.
+
+     `pad.spUp` is an EDGE, so holding the key does not retry, does not spam
+     the tell, and does not fire late the moment the bar refills. Out of
+     mana it is refused with the same manaDenied tell an out-of-mana cast
+     gets in updateFree, and the charge is left running so he can keep
+     holding it. Returns true when it has taken the frame.
+
+     A METHOD RATHER THAN A BLOCK, and that is the whole reason the rule
+     lives out here: a prototype method is not a key, so restoreSim's
+     key-deletion pass cannot reach it, and the only thing the simulation
+     has to carry across a rewind is the one number it writes. */
+  carryDash(pad, m) {
+    if (this.state !== 'special') return false;
+    if (!m.charge || !m.carryTo) return false;
+    if (this.specialSpawned) return false;
+    if (!(this.chargeTimer > 0)) return false;
+    if (this.attackFrame < m.startup) return false;
+    if (!pad || !pad.spUp) return false;
+    const to = this.specialsNow[m.carryTo];
+    if (!to) return false;
+    /* Refused, and SAID so. The charge is deliberately left running: the
+       press was a request to leave, not a request to stop holding it, and a
+       Reese who cannot afford the dash yet can keep filling up and ask
+       again.
+
+       IT RETURNS FALSE, AND THAT WORD IS THE WHOLE OF IT. `true` means "I
+       have taken this frame", and the caller is one line at the top of
+       updateAttack that returns on it -- so a refusal returning true skips
+       the charge pin, the vent, the cap AND the move's own exit, every
+       frame the button is held. Handed a pad that reports spUp on
+       consecutive frames it never leaves the move at all: measured,
+       attackFrame climbed to 3004 with chargeTimer frozen at 4 and mana
+       stuck at 5.0, neither draining nor refilling, where the same setup on
+       2.80 walks out at 22 and refills. Nothing the engine itself builds
+       can reach it -- readPad, the gamepad path and bitsToPad all make
+       spUp an edge, and aiDecide's two presses are both behind a cooldown
+       -- but "refused" must mean the frame carries on without the dash, not
+       that the move stops running, and those are different sentences. */
+    if (this.mana < to.mana) { this.manaDenied = 18; return false; }
+    /* Read BEFORE startAttack, which zeroes nothing of the sort but will
+       hand chargeTimer to the next charge that wants it. The step is the
+       whole of what is carried -- which of the three clouds he had paid for
+       -- and stinkOf turns it back into a spec at the other end. */
+    const step = this.chargeTimer;
+    this.mana -= to.mana;
+    this.startAttack('special', pad);
+    // AFTER the call: startAttack clears this to -1, the way it does for
+    // every other way into a move.
+    this.dashFart = step;
+    return true;
+  }
+
   updateAttack(pad) {
     const m = this.moveFor(this.state);
     const total = m.startup + m.active + m.recovery;
     this.attackFrame++;
+
+    /* The one line the carry needs here. It returns true ONLY when it has
+       converted the fart into a dash, at which point every block below
+       would be reading the wrong move. A refusal returns false and the
+       frame carries on as an ordinary frame of CROP DUST -- see the note on
+       the price check, which is the one place this distinction is a bug if
+       you get it backwards. */
+    if (this.carryDash(pad, m)) return;
 
     /* A multi-hit move re-arms its hitbox as it runs. resolveCombat stops a
        melee connecting twice by latching hasHit, which is right for every
@@ -7262,7 +8376,7 @@ class Fighter {
        is meant to keep every pixel of the dash and leave the gas behind him.
        So the cloud is spawned here, by hand, and the state is not touched.
 
-       Three things stop it being free, and all three are needed:
+       Four things stop it being free, and all four are needed:
 
          mana       the fart's own price, paid in full. A dash plus a vent is
                     17 + 19 = 36 of a 100 bar, and the bar refills at half a
@@ -7274,12 +8388,22 @@ class Fighter {
                     away behind a wall of gas.
          startup    nothing before the dash has actually left, so this cannot
                     be used to vent out of a JITTERS that is still winding up.
+         dashFart   and this is the one that arrived with the carry. A dash
+                    he entered CARRYING a fart already owes a cloud, so the
+                    vent is shut for the whole of it -- including after the
+                    carried one has come out, which is what the -2 state is
+                    for. Without this clause the release and the vent are two
+                    separate clouds for one charge, because runSpecial's dash
+                    case re-arms dashGassed on the dash's own startup frame
+                    and hands the vent a clean slate behind the carry's back.
+                    Measured doing exactly that before the clause existed.
 
        It cannot be chained into anything: the cloud is spawned, not queued,
        and neither the dash nor the fart is refreshed by it. The worst case is
        one extra cloud per dash at the ordinary price of a cloud. */
     if (pad && pad.spDown && m.kind === 'dash' && m.trailSpecial &&
-        !this.dashGassed && this.attackFrame >= m.startup) {
+        !this.dashGassed && this.dashFart === -1 &&
+        this.attackFrame >= m.startup) {
       const gas = this.def.specials[m.trailSpecial];
       if (gas && this.mana >= gas.mana) {
         this.dashGassed = true;
@@ -7305,34 +8429,124 @@ class Fighter {
       }
     }
 
+    /* AND THE CARRIED ONE COMES OUT. Two ways, and neither of them is a new
+       button:
+
+         let go     of the same key he has been holding since the charge
+                    began. `holdDown` is the fart's own hold bit -- the one
+                    the pin reads -- so the whole of the carry is one press
+                    of the dash in the middle of a fart he was already
+                    holding, and the cloud lands where he stops holding it.
+         frame 12   startup + active, the last frame the dash is live. After
+                    that he is coasting through recovery on momentum the
+                    active window set, and a cloud laid by coasting is not a
+                    decision anybody made. It also means a player who never
+                    lets go still gets his fart, at the far end, rather than
+                    being quietly charged for one that never existed.
+
+       There is no `grounded` test and there deliberately is not one. He can
+       already do this in two presses in the air -- cast, land, cast -- and
+       all the carry saves him is twenty-two frames; a rule the player cannot
+       see refusing a press the player can see is the exact failure mode the
+       vent above and the bakery's wake flag are both written up for.
+
+       WHERE IT LANDS IS THE CLOUD'S OWN BUSINESS, and no code here. Cloud's
+       constructor reads owner.x + owner.facing * ahead and gives itself
+       vx = facing * speed, which is 0.6. It does NOT inherit his 5.4. A
+       cloud is a place, not a shot, and a fart that flew would be a
+       different move. */
+    if (m.kind === 'dash' && this.dashFart >= 0) {
+      const gas = this.def.specials[m.trailSpecial || 'down'];
+      const letGo = !!pad && !pad.holdDown;
+      if (gas && (letGo || this.attackFrame >= m.startup + m.active)) {
+        const stink = stinkOf(gas, this.dashFart);
+        projectiles.push(new Cloud(this, stink));
+        addEffect('puff', this.x + this.facing * (stink.ahead || -8), this.y - 10,
+                  (stink.tints && stink.tints[0]) || '#9aa0a6');
+        cue(stink.cue || 'hit', { slot: this.slot, x: this.x });
+        // Spent. Not -1: see the field in the constructor for what the third
+        // state is holding shut.
+        this.dashFart = -2;
+      }
+    }
+
+    /* AND THE MACHINE GOES ON WITHOUT HIM. One press, two follow-ups, and
+       the button is the one that cast the move -- `pad.spDown` is an EDGE
+       (readPad builds it with anyTap), so it cannot fire on the frame that
+       cast the move and there is no sticky flag of the kind that ate the
+       bakery's daydream.
+
+       `heave` is the fork and it is decided ONCE, before the walk, so there
+       is no ordering question and no path where a deck is released and then
+       shoved. Forward wins: holding the way he is already pointed shoves the
+       deck over the lip, and anything else -- neutral, or back -- lets it go
+       at `push` and keeps the kerb. That is not an arbitrary assignment of
+       keys. Over 2,160 CPU matches there were 30 legal mid-mow presses and on
+       29 of them the enemy was BEHIND the deck, because the mow drives him
+       past people; the steering was holding back 28 times and forward once.
+       The direction you have to hold to throw the machine further is the
+       direction it is already pointed, which is exactly the case where
+       throwing it further means anything.
+
+       Spec identity rather than instanceof, the way canSpecial's maxAlive
+       does it. `attackFrame` jumps to the last recovery frame and the
+       engine's own exit at the bottom of updateAttack ends the move -- one
+       exit from a special, the same line the air stall-out uses -- and BOTH
+       follow-ups end it, on the same frame. An earlier build charged the
+       shove by leaving him rooted for the remaining forty frames; measured,
+       that made it 4 damage against the release's 8 AND free on frame 65
+       against 23, which is not a second option, it is a mistake with a
+       button. It also keeps drawMower honest: he leaves the move on the same
+       frame either way, so there is never a man pushing an invisible mower
+       while his deck is a hundred pixels away.
+
+       `this.vx = 0` is here because he ends the move standing still rather
+       than coasting at 2.8 into a lip the move's brake is no longer watching.
+
+       AND HERE IS WHAT ACTUALLY KEEPS HIM ALIVE, because the release's own
+       design note got this wrong and the next person to tidy a line will get
+       it wrong the same way. Every platform on every stage, both lips, nine
+       start distances, escorted and released and shoved -- 552 trials --
+       reads ZERO stocks lost, and it reads zero under every single-clause
+       ablation except one. Turn off the brake in runSpecial (the
+       `groundAhead(s.reach + s.boxW / 2)` test that stops the MAN at a kerb)
+       and it is 46 of 184. Turn off the deck's own `ledgeAhead` and it is
+       still zero.
+
+       So `ledgeAhead` is not a safety clause, it is a BEHAVIOUR clause, and
+       it is the one that makes the release look like the thing the roster
+       describes. Measured on 36 releases walked at a lip: shipped, 36 of 36
+       decks stop at the kerb and spin out their whole remaining 26 frames;
+       with `ledgeAhead` gone, 36 of 36 roll over the lip and are deleted by
+       `overFloor` after a mean of 5.8. Houston keeps his stock either way and
+       loses four fifths of the machine he just let go of. Delete it to save a
+       line and the ledge sweep will still come back green.
+
+       See `release` in the ROSTER for the two numbers. */
+    if (pad && pad.spDown && m.kind === 'mower' && m.release && this.grounded &&
+        this.attackFrame >= m.startup + m.release.after) {
+      const heave = !!m.release.shove &&
+        !!(this.facing > 0 ? pad.right : pad.left);
+      for (const b of projectiles) {
+        if (b.dead || b.owner !== this || b.spec !== m) continue;
+        if (b.released || b.air) continue;
+        b.released = true;
+        addEffect('dust', b.x, b.y, '#9ec46a');
+        cue('mower', { slot: this.slot, x: b.x });
+        b.shoved = heave;
+        b.vx = b.dir * (heave ? m.release.shove : m.push);
+        if (heave) addEffect('spark', b.x, b.y - m.boxH / 2, '#9ec46a');
+        this.vx = 0;
+        this.attackFrame = m.startup + m.active + m.recovery - 1;
+      }
+    }
+
     /* Stopping a reel. runSpecial gets no pad, so the presses are counted
        here and spent there. Only presses AFTER the one that pulled the lever:
        that one was an edge on the cast frame, which is before this state. */
     if (pad && pad.spDown && m.kind === 'slots' && this.specialSpawned &&
         this.reels.indexOf(-1) >= 0) {
       this.reelStops++;
-    }
-
-    /* Snapping out of it. A BUTTON -- and deliberately not a direction, and
-       not the special button that started it.
-
-       It used to be any input at all, on the reasoning that a man should
-       stand up for whatever you press. The reasoning was fine and the move
-       was dead. You cast a DOWN special, so on the next frame you are still
-       holding down, and `down` woke him; cast it while walking and the
-       direction woke him. Measured over 2077 real casts, the daydream ended
-       on dreaming frame ten essentially every time and banked 4.5 of the
-       hundred it advertises -- and nothing on screen ever said that the
-       thing cancelling it was the stick nobody had let go of.
-
-       Jump, attack, grab and shield are four presses somebody made on
-       purpose. He cannot walk out of the move anyway -- `vx` is pinned at
-       zero for every frame of it -- so a direction was never going to take
-       him anywhere; all it ever did was throw the daydream away. */
-    if (m.kind === 'bakery' && pad) {
-      if (pad.jump || pad.attack || pad.shield || pad.grab) {
-        this.wakeUp = true;
-      }
     }
 
     /* The soul's controls. runSpecial gets no pad -- that is the rule this
@@ -8056,19 +9270,34 @@ class Fighter {
         }
         break;
 
-      // Notes fall from the ceiling, sweeping across the stage. Deterministic
-      // because the simulation has to stay in step online, and a sweep rather
-      // than a scattered pattern because a sweep is something you can move
-      // around: it threatens every position in turn instead of leaving fixed
-      // blind spots where standing still happens to be safe.
-      // Start the song. The notes fall on their own timer from here, so the
-      // cast is over in half a second and he is free for the rest of it.
+      /* Notes fall from the ceiling, SCATTERED across the stage -- which is
+         the opposite of what this comment said until 2.81, and it said the
+         opposite for a release and a half after the sweep was replaced. A
+         sweep threatened every position in turn and left the space behind it
+         safe for a known number of frames, which is a pattern you learn once
+         and then stand in; the scatter leaves no lane empty for the whole
+         song. See the ROSTER for the measurement, which is the lag-1
+         autocorrelation of consecutive lanes going +0.78 to about zero.
+
+         Deterministic either way, because the simulation has to stay in step
+         online and every one of these positions is a hitbox. That is what
+         rainSeed and noteRoll are for.
+
+         Start the song. The notes fall on their own timer from here, so the
+         cast is over in half a second and he is free for the rest of it. */
       case 'rain':
         if (this.attackFrame === s.startup && !this.specialSpawned) {
           this.specialSpawned = true;
           this.rainTimer = s.duration;
           this.rainSpec = s;
           this.rainStep = 0;
+          /* ONE NUMBER, DRAWN ONCE, and every note in the song is a pure
+             function of it and of its own index. See the field in the
+             Fighter constructor for why it is stored rather than derived from
+             battleFrames on the spawning frame -- the short version is that
+             hitstop returns above the rain block, so a derived seed changes
+             every time he is punched. */
+          this.rainSeed = (battleFrames * 31 + this.slot) | 0;
           addEffect('ring', this.x, this.y - 8, s.tints[0]);
           cue('ult-strokes', { slot: this.slot, x: this.x });
         }
@@ -8234,6 +9463,22 @@ class Fighter {
         this.dashWrap = s.wrapFor || 100;
         if (this.attackFrame >= s.startup &&
             this.attackFrame < s.startup + s.active) {
+          /* GREEN WHILE HE IS LOADED. The streak is the fart's own tint for
+             whichever of the three he is carrying -- #9dc25a, #86b53a,
+             #7fae14 for CROP DUST, RIPE and RANCID, measured against his own
+             #ed821a -- and it snaps back to orange the instant he drops it,
+             with both colours on screen for a moment as the old trail fades.
+
+             Nothing new is drawn for this: it is the streak the dash already
+             painted, wearing the colour of the thing he is holding. And
+             drawFartCharge stops on its own without being told, because it
+             returns early on chargeKey !== 'down' and startAttack has just
+             written 'up' there. */
+          const carried = this.dashFart >= 0 &&
+            this.def.specials[s.trailSpecial || 'down'];
+          const tint = carried
+            ? (stinkOf(carried, this.dashFart).tints || [])[0] || this.accent
+            : this.accent;
           // A dash that starts on the ground stops at the ledge instead of
           // launching its owner into the blast zone -- "closes distance
           // instantly" shouldn't cost a stock. The cancel latches, because
@@ -8299,7 +9544,7 @@ class Fighter {
               this.facing = -this.facing;
               // A scuff where he changed his mind, so the turn has a frame of
               // its own instead of the sprite silently facing the other way.
-              addEffect('trail', this.x, this.y - 7, this.accent);
+              addEffect('trail', this.x, this.y - 7, tint);
             } else {
               this.dashStopped = true;
             }
@@ -8311,7 +9556,7 @@ class Fighter {
             this.vy = Math.min(this.vy, 0.4);
           }
           if (this.attackFrame % 3 === 0) {
-            addEffect('trail', this.x, this.y - 7, this.accent);
+            addEffect('trail', this.x, this.y - 7, tint);
           }
         }
         break;
@@ -8570,15 +9815,35 @@ class Fighter {
         break;
 
       case 'bakery': {
+        /* The charge counter belongs to this cast and nothing else. Every
+           other charged move in the file zeroes it on its own first frame
+           for the same reason: startAttack does not, so a bakery cast out of
+           the same fighter as a half-wound fart would start its oven
+           wherever the fart had got to. */
+        if (this.attackFrame === 1) this.chargeTimer = 0;
         const dreaming = this.attackFrame >= s.startup &&
                          this.attackFrame < s.startup + s.active;
-        this.vx = 0;
+        /* HIS vx IS NOT PINNED HERE ANY MORE, and that is the walk. There
+           was a `this.vx = 0` on this line for every frame of the move.
+           `charge.walk` is read in updateAttack, which sets chargeWalk and
+           hands him the ordinary walking arm for the frames the button is
+           down -- and that block runs AFTER this one, so a zero written here
+           would be overwritten by a fraction of a walk every frame and he
+           would lean across the stage at a crawl. The startup and the tail
+           are damped by the same friction arm every other committed move
+           uses. */
         if (dreaming) {
           this.dream = Math.min(100, this.dream + s.dream);
-          /* A loaf every `every` frames, up to `loaves`. Counted off
-             attackFrame rather than a tally of its own so a rollback bakes
-             the same bread on the same frames. */
-          const t = this.attackFrame - s.startup;
+          /* A loaf every `every` frames, up to `loaves`, KEYED ON THE CHARGE
+             COUNTER and not on attackFrame. attackFrame is pinned at
+             `startup` for the whole hold -- that is what the pin IS -- so
+             counting off it bakes one loaf at most and then nothing.
+             chargeTimer is 0 on the cast and 1..150 while pinned, which is
+             why the `t > 0` guard below is still here and is now load-bearing
+             for a different reason: without it a loaf drops on the frame of
+             the cast, before he has dreamed anything. Both are snapshotted,
+             so a rollback bakes the same bread on the same frames. */
+          const t = this.chargeTimer;
           if (t > 0 && t % s.every === 0 && t / s.every <= s.loaves) {
             /* BEHIND him, and the minus sign is the whole of it. It used
                to be `+ this.facing`, which put every loaf on the opponent's
@@ -8593,14 +9858,22 @@ class Fighter {
                                       this.y));
             cue('land', { slot: this.slot, x: this.x, gain: 0.4 });
           }
-          /* Out of it on anything at all. `wakeUp` is written in updateAttack,
-             which is the only place with a pad -- and it is cleared here so a
-             single press cannot end the daydream twice. */
-          if (this.wakeUp && this.attackFrame > s.startup + 8) {
-            this.wakeUp = false;
-            this.attackFrame = s.startup + s.active;
-          }
-          if (this.attackFrame % 20 === 0) {
+          /* NOTHING ENDS THIS BUT THE BUTTON THAT STARTED IT. There was a
+             `wakeUp` flag here, written in updateAttack on any frame jump,
+             attack, shield or grab was down and read once attackFrame got
+             past startup + 8 -- and because it was sticky, a press made
+             during the startup was remembered and spent the instant the
+             guard opened. It snapped 40.3% of live casts shut on dreaming
+             frame ten, and because the wake set attackFrame to the end of
+             the window a cancelled cast read back exactly like a completed
+             one, which is why the first measurement of this move reported
+             45% running the full eighty when the true figure was 3.9%. Both
+             halves are gone and there is nothing in their place.
+
+             Keyed on chargeTimer for the same reason the oven is: the pin
+             freezes attackFrame, so sparks counted off it would have been
+             one puff at the start and nothing afterwards. */
+          if (this.chargeTimer % 20 === 0) {
             addEffect('spark', this.x + rand(-6, 6), this.y - rand(10, 20), '#ffe4b0');
           }
         }
@@ -8635,6 +9908,75 @@ class Fighter {
           cue('throw', { slot: this.slot, x: this.x });
         }
         break;
+
+      /* ---- COBEUS ---- */
+
+      /* OPEN WIDE. Three things happen in here and none of them is the
+         catching, which is sweepFrail's -- this move has no hitbox at all.
+
+         THE POP AND THE FLOAT are the recovery half. `roots` on the spec
+         keeps him still on the ground; off it he leaves at `rise` and then
+         his fall is CLAMPED at `air.hang` for `air.active` frames, which is
+         about ten pixels of sink over half a second. A man full of air does
+         not jump home, he stops coming down, and that is a different picture
+         from every other recovery in the file for a character who now has a
+         reason to be different.
+
+         THE BED is the only thing here that writes simulation state, and it
+         is three lines: pin attackFrame on the last open frame so the move
+         cannot end underneath him, spend a frame of the timer, and hand him
+         his appetite back on the frame he stands up. The pin runs whatever
+         is being done to him -- applyHit's nap branch returns before it can
+         touch his state -- so the hundred and eighty frames are a hundred
+         and eighty frames. `fat` is cleared HERE rather than on the eighth
+         catch, because the swelling is what he is being punished for and it
+         has to still be on him while he lies there.
+
+         "HE CANNOT ACT" IS EXACTLY TRUE ON THE FLOOR AND NOT IN THE AIR, and
+         that is the `roots` convention doing what it says rather than an
+         oversight. Measured over forty bedded frames: on the ground, holding
+         left, right, jump or nothing all move him 0.00 px. Bedded in the air
+         -- which you reach by catching the eighth during the recovery -- he
+         keeps the ordinary air-drift arm, so nothing comes OUT but he still
+         steers: +60.7 px holding toward the stage, -8.2 holding away, +24 on
+         no input, and the jump refused. That is deliberately the same rule
+         Houston's air mower is written around, for the reason its own
+         comment gives: an airborne commitment you cannot steer out of is a
+         stock rather than a punishment, and this is meant to be a
+         punishment. It does mean catching your eighth off the ledge is
+         survivable if you hold toward home and fatal if you do not.
+
+         AND HE IS NOT CATCHING WHILE HE IS DOWN -- see the `bedded()` line at
+         the top of sweepFrail's absorbBox. Without it the pin parks him
+         inside his own `absorb` window and every shot fired at a sleeping
+         man feeds him and re-arms the whole hundred and eighty. */
+      case 'mouth': {
+        if (this.attackFrame === s.startup) {
+          addEffect('ring', this.x + this.facing * 6, this.y - 13, '#ffe4b0');
+          cue('drink', { slot: this.slot, x: this.x });
+          if (!this.grounded) {
+            this.vy = s.rise || 0;
+            this.vx = this.facing * (s.drift || 0);
+          }
+        }
+        /* The float. `hang` is written BEFORE applyGravity adds its 0.40 --
+           the same convention Houston's air mower uses and says so in its
+           own comment -- so 0.35 here is 0.75 a frame on the screen, which
+           is under a third of maxFall and is what half a second of hang time
+           actually costs him in altitude. Thirty frames, measured at twenty
+           pixels of sink. */
+        const air = s.air;
+        if (air && !this.grounded && this.attackFrame >= s.startup &&
+            this.attackFrame < s.startup + (air.active || 0)) {
+          if (this.vy > air.hang) this.vy = air.hang;
+        }
+        if (this.bedTimer > 0) {
+          this.attackFrame = s.startup + s.active;
+          this.bedTimer--;
+          if (this.bedTimer === 0) this.fat = 0;
+        }
+        break;
+      }
 
       /* ---- HOUSTON ---- */
 
@@ -9294,6 +10636,8 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.dashWrap = 0;
+    // And he does not come back holding a fart from the stock before.
+    this.dashFart = -1;
     this.poison = 0;
     this.burn = 0;
     this.confused = 0;
@@ -9314,6 +10658,13 @@ class Fighter {
     this.chicken = false;
     this.chickenSince = -1;
     this.chickenEggs = 0;
+    /* AND HE COMES BACK HUNGRY AND AWAKE. The mouth's catch count is per
+       STOCK, which is the whole reason a fresh life has to say so out loud:
+       nothing else in this reset is a move's own tally, so there is no rule
+       that would have swept these up. Eight catches spread over three lives
+       is not a man who over-ate. */
+    this.fat = 0;
+    this.bedTimer = 0;
     this.evadeCd = 0;
     this.mana = COMBAT.manaMax;
     this.hitstun = 0;
@@ -9389,6 +10740,23 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.chargeTimer = 0;
+    /* A CARRIED FART IS CARRIED, so it goes with the rest of it. He is not
+       in `special` by the time this runs -- the block below hands him back
+       to idle -- so nothing would ever have released it anyway; it is
+       cleared here rather than left as a stale number for the same reason
+       chargeTimer above is, which is that the next reader should not have to
+       prove the dead value is unreachable. */
+    this.dashFart = -1;
+    /* AND THE BED IS OVER, which is NOT the same decision as `fat` below it.
+       bedded() already answers no for a bird -- it asks specialsNow, the
+       same rule fatMul uses -- but the countdown is spent in the mouth's own
+       case in runSpecial, and a bird is not in it. Left alone the timer
+       would simply stop, and he would stand up out of the transformation
+       still holding whatever was left of it and never spend it. `fat` is
+       deliberately NOT cleared: being run over should not settle his
+       stomach, and a bird is not fat because fatMul cannot see a mouth in a
+       chicken's moveset. */
+    this.bedTimer = 0;
     if (this.grabbing >= 0) releaseGrab(this);
 
     /* Whatever they were mid-swing on is over, and it has to be, because
@@ -10473,6 +11841,37 @@ const HAMMER_SICKLE_ART = [
   '......ooorrrrrrrooo......',
   '........ooooooooo........',
 ];
+
+/* THE BED Cobeus wakes up in after his eighth mouthful, and it is PURE
+   DECORATION. That is a decision rather than a shortcut and it is written
+   down because the two obvious upgrades are both traps.
+
+   NOT A PLATFORM. platformsNow() is read by every projectile's floor test,
+   by dashLandingAhead, groundAhead and floorBeneath, by the loaf's landing,
+   by the puddle's floorUnder and by the mower's kerb rule -- so a piece of
+   stage geometry that appears for three seconds and vanishes is something
+   the AI, the rollback snapshot and six separate physics tests would all
+   have to agree about, for a joke.
+
+   NOT A HITBOX. Furniture that hurts is a free move on a man who is supposed
+   to be helpless, which is the opposite of what the bed is for.
+
+   So it is one pixelArt grid in the HAMMER_SICKLE_ART idiom: 260 cells, 114
+   of them inked, rasterised once per cache key and a drawImage every frame
+   after that. `.` is in no palette, so the blanks cost nothing. */
+const BED_ART = [
+  '.ww.......................',
+  '.ww.......................',
+  '.ww.......................',
+  '.ww....................ww.',
+  '.wwppppbbbbbbbbbbbbbbbbww.',
+  '.wwppppbbbbbbbbbbbbbbbbww.',
+  '.wwwwwwwwwwwwwwwwwwwwwwww.',
+  '.wwwwwwwwwwwwwwwwwwwwwwww.',
+  '.dd....................dd.',
+  '.dd....................dd.',
+];
+const BED_PAL = { w: '#8a6a45', p: '#f2ece0', b: '#7c5aa8', d: '#3a2c1c' };
 
 /* Gym equipment. A dumbbell is two weights and a short bar; a barbell
    is the same idea with a much longer one, which is the whole joke. */
@@ -11975,6 +13374,51 @@ class Rainbow {
     return true;
   }
 
+  /* IS THERE A REASON TO. A prototype method, so restoreSim's key-deletion
+     pass never sees it, and it stores nothing: the answer is re-derived from
+     `fighters` and this shot's own position every time it is asked, which is
+     the same question burstRainbows already asks one function down.
+
+     The geometry is detonate()'s own, copied nowhere: the same nearest-point
+     -of-the-hurtbox test against the same `s.radius` off the same spec, and
+     the same two skips for a corpse and an invulnerable man. `radius` has
+     been moved 34 -> 24 -> 20 in three passes, so a number written out here
+     would have gone stale three times. The hurtbox comes from hurtbox(), so
+     a giant is seen as a giant.
+
+     AND THEN THE ONE CLAUSE THAT IS NOT DETONATE'S: it refuses a shot that
+     is about to land anyway. The ball is free, so "is anybody inside the
+     disc" on its own would happily trade a direct hit for a burst -- and
+     that is not a hypothetical, it is what the first version did. Measured:
+     567 detonations, 40 of them pre-empting a connect that was already
+     landing, and 0.6 points of win rate WORSE than leaving the shot alone.
+     One frame of look-ahead -- the box where it will be next frame, against
+     the same hurtbox -- turns the press from a thing you always do into a
+     thing you sometimes do.
+
+     There is exactly one literal in here and it is not one: the shot's
+     three-pixel half-width comes out of box(). */
+  worthBursting() {
+    if (this.dead) return false;
+    const s = this.base.burst;
+    if (!s) return false;
+    const r2 = s.radius * s.radius;
+    for (const f of fighters) {
+      if (f === this.owner || f.eliminated) continue;
+      if (f.state === 'ko' || f.invulnerable) continue;
+      const b = f.hurtbox();
+      const nx = clamp(this.x, b.x, b.x + b.w);
+      const ny = clamp(this.y, b.y, b.y + b.h);
+      const dx = nx - this.x, dy = ny - this.y;
+      if (dx * dx + dy * dy > r2) continue;
+      const ahead = this.box();
+      ahead.x += this.vx; ahead.y += this.vy;
+      if (overlap(ahead, b)) continue;
+      return true;
+    }
+    return false;
+  }
+
   box() {
     return { x: this.x - 3, y: this.y - 3, w: 6, h: 6 };
   }
@@ -12932,7 +14376,27 @@ const WHIP_SNAP = '#ffffff';   // ...and the one frame it cracks on
    arriving at the far end with the tip still caught inside it, and 14 is the
    frame it runs out of whip. Everything either side of those is telegraph or
    punish and is drawn to look like it -- nothing on those frames is allowed
-   to be bright. */
+   to be bright.
+
+   AND THE TIP WALKS DOWN THE BAND, once, in one direction. The `ey` column
+   on 14-18 used to read -9, -18, -6, -13, -8: a zigzag inside a box whose
+   own band is y -15.5 to -6.5, so the lash flicked up and down four times
+   across six frames and left the band twice. Nothing about the move said it
+   should -- a whip is a fold running out of whip, which is one motion -- and
+   at sixty frames a second four reversals in a tenth of a second read as a
+   drawing that cannot decide where it is. It is -15, -13, -11, -9, -8 now:
+   two pixels a frame down the middle of the band, inside it on all six live
+   frames, with ZERO sign changes in the tip's vertical motion against four.
+   Forward motion has one, at k16, which is the frame it stops travelling and
+   begins to lay down -- that one is the move.
+
+   `c2x` is 32-34 everywhere for the same reason. Two of those CONTROL points
+   used to sit at 46, outside the `s.reach` clamp the rasteriser applies to
+   every sample, so frames 15 and 16 were flattened against the clamp while
+   their neighbours arced -- the pose table asking for something the drawing
+   is not allowed to give it. Row 19, the first dead frame, retreats seven
+   painted pixels rather than one, so the frame the box goes away looks like
+   the frame the box goes away. */
 const WHIP_POSE = [
   //  k    c1x  c1y   c2x  c2y    ex   ey   fold  gap  coil
   [  1,     6,  -8,     8,  -5,    7,  -2, 1.00,   0, 1.00 ],
@@ -12942,12 +14406,12 @@ const WHIP_POSE = [
   [ 10,    -2, -18,   -14, -23,  -22, -16, 0.76,   4, 0.10 ],
   [ 11,    -6, -20,    -2, -31,   13, -29, 0.80,   4, 0.04 ],
   [ 12,     2, -25,    13, -30,   28, -25, 0.78,   4, 0.00 ],
-  [ 13,    16, -21,    33, -20,   45, -13, 0.86,   5, 0.00 ],
-  [ 14,    11, -20,    31, -18,   44,  -9, 1.00,   3, 0.00 ],
-  [ 15,    13, -18,    46, -15,   43, -18, 1.00,   3, 0.00 ],
-  [ 16,    13, -16,    46, -12,   44,  -6, 1.00,   3, 0.00 ],
-  [ 17,    13, -15,    34, -15,   44, -13, 1.00,   3, 0.00 ],
-  [ 18,    12, -12,    33,  -9,   42,  -8, 0.96,   2, 0.00 ],
+  [ 13,    16, -22,    33, -21,   45, -17, 0.86,   4, 0.00 ],
+  [ 14,    14, -20,    34, -18,   45, -15, 1.00,   3, 0.00 ],
+  [ 15,    14, -18,    34, -16,   45, -13, 1.00,   3, 0.00 ],
+  [ 16,    14, -17,    34, -14,   44, -11, 1.00,   3, 0.00 ],
+  [ 17,    13, -15,    33, -12,   43,  -9, 1.00,   2, 0.00 ],
+  [ 18,    13, -14,    32, -11,   42,  -8, 0.98,   2, 0.00 ],
   /* And the gather, re-keyed for a fourteen-frame recovery rather than the
      twenty-two it was drawn for. The poses are untouched -- this is the same
      gesture at 22/14 of the speed -- and the keys are the old ones mapped
@@ -12955,11 +14419,11 @@ const WHIP_POSE = [
      LAST one has to land exactly on startup + active + recovery, because
      drawWhipArt returns on anything past `total` and a tail that ran long
      would simply vanish mid-sag with the lash still twenty pixels out. */
-  [ 19,    13, -12,    32,  -8,   41,  -7, 0.95,  -2, 0.00 ],
-  [ 20,    14,  -7,    30,  -3,   38,  -3, 0.93,  -3, 0.00 ],
-  [ 22,    15,  -3,    29,   0,   34,  -1, 0.90,  -3, 0.00 ],
-  [ 24,    14,  -1,    25,   0,   27,   0, 0.90,  -3, 0.04 ],
-  [ 26,    11,  -2,    18,   0,   17,   0, 0.90,  -3, 0.24 ],
+  [ 19,    13, -12,    29,  -9,   35,  -6, 0.95,  -2, 0.00 ],
+  [ 20,    14,  -9,    26,  -5,   31,  -4, 0.93,  -3, 0.00 ],
+  [ 22,    15,  -5,    24,  -2,   25,  -2, 0.90,  -3, 0.00 ],
+  [ 24,    14,  -2,    20,   0,   20,   0, 0.90,  -3, 0.04 ],
+  [ 26,    11,  -2,    16,   0,   15,   0, 0.90,  -3, 0.24 ],
   [ 29,     8,  -4,    10,  -1,    5,  -1, 0.92,  -2, 0.58 ],
   [ 32,     6,  -8,     8,  -5,    7,  -2, 1.00,   0, 1.00 ],
 ];
@@ -13112,14 +14576,25 @@ function drawWhipArt(g, ax, ay, facing, k, s) {
     }
   };
 
-  /* Where it was last frame, faintly, on the frames it is moving fastest.
-     Six active frames at sixty is a tenth of a second, and without this the
-     crack is a thing you can only see by pausing -- the tip covers about a
-     dozen pixels between 13 and 14 and nothing on the screen says so. */
-  if (heat > 0.8) {
+  /* Where it was last frame, faintly, on the two frames it actually MOVED.
+     Six active frames at sixty is a tenth of a second, and without something
+     the crack is a thing you can only see by pausing -- the tip covers
+     twenty-four pixels between the throw and the first live frame and five
+     more into the crack, and nothing else on the screen says so.
+
+     It used to be gated on `heat > 0.8`, which is the first three live
+     frames, and that was the right gate for a pose table that zigzagged:
+     with the table walking the tip down the band two pixels a frame instead,
+     the k14 and k15 ghosts land TWO PIXELS from the main pass. Two pixels of
+     white at 0.18 alpha under a line that is already there is a blur, not
+     motion -- it reads as the whip being out of focus. The two that survive
+     are the two whose distance is real, and they are the first two frames of
+     the box rather than a brightness threshold, so retuning WHIP_HEAT cannot
+     silently move them. Net about forty-eight fewer rects over the move. */
+  if (live && k - s.startup <= 1) {
     // The pose one frame ago, which is build(kf) now the table is read at kf+1.
     const gn = build(kf, false);
-    g.globalAlpha = heat > 0.97 ? 0.40 : 0.18;
+    g.globalAlpha = k === s.startup ? 0.14 : 0.40;
     g.fillStyle = WHIP_SNAP;
     pass(gn, -1, 0);
     g.globalAlpha = 1;
@@ -13225,6 +14700,70 @@ function drawWhip(g, f) {
   });
 }
 
+
+/* THE OPEN MOUTH, and the bed he ends up in.
+
+   He has no `attack` sprite set, so the standing pose is what is on screen
+   for the whole of OPEN WIDE and the drawing has to be the only thing that
+   says the move is happening. Two crossed rects on his head cell -- a wide
+   one and a tall one, which at this size is the only way to draw a round
+   hole -- plus a pixel of cream at the top for a lip, and the `ring` fired
+   from runSpecial on the frame it opens.
+
+   Five rects a frame, in the same style and for the same reason as drawWhip
+   and drawMower: the numbers come off the MOVE, so the hole is drawn on the
+   head the catching box is built around rather than on a head position
+   written down here. */
+function drawMouth(g, f) {
+  if (f.state !== 'special') return;
+  const s = f.specialsNow && f.specialsNow.up;
+  if (!s || s.kind !== 'mouth') return;
+  if (f.moveFor('special') !== s) return;
+  /* THE CATCHING WINDOW, not the move's. `absorb.from` and `absorb.to` are
+     what sweepFrail asks, so they are what the picture has to answer -- the
+     same rule drawWhipArt has a paragraph about, and for the same reason: on
+     a move whose whole point is a read, a mouth drawn open on a frame nothing
+     can go into it is a lie about the only thing the player is timing. The
+     ring fired from runSpecial on the startup frame is the "it is opening"
+     tell; this is the "it is open" one. */
+  const e = s.absorb;
+  if (!e) return;
+  if (f.attackFrame < (e.from || 1) || f.attackFrame > (e.to || 9e9)) return;
+  /* `sk` rather than the `k` every other drawing here uses, and only because
+     nerdwars-simon.test.js sabotages drawBling's size line BY ITS LITERAL
+     TEXT, to prove the chain is sized off the man rather than off the buff.
+     A second copy of that exact line anywhere in this file makes its needle
+     ambiguous and the control silently stops controlling anything. */
+  const sk = f.sizeMul;
+  const x = Math.round(f.x + f.facing * 2 * sk);
+  const y = Math.round(f.y - 13 * sk);
+  g.fillStyle = '#140a06';
+  g.fillRect(x - 3, y - 2, 6, 4);
+  g.fillRect(x - 2, y - 3, 4, 6);
+  g.fillStyle = '#f2e6c8';
+  g.fillRect(x - 2, y - 3, 4, 1);
+}
+
+/* And the bed, UNDER him: drawn before the body for the same reason the buff
+   aura and the shield bubble are, because he is lying in it rather than on
+   top of a picture of it. Its own mirrored cache key so the headboard is
+   behind his head whichever way he fell over, and three Zs off battleFrames
+   -- SPRITES.zzz has been loaded since the nap and referenced by nothing
+   since the nap was deleted. */
+function drawBed(g, f) {
+  if (!f.bedded()) return;
+  const flip = f.facing < 0;
+  drawArt(g, pixelArt('bed' + (flip ? 'L' : 'R'), BED_ART, BED_PAL, flip),
+          f.x, f.y - 5);
+  for (let i = 0; i < 3; i++) {
+    const im = IMG['zzz.' + i];
+    if (!im) break;
+    const t = (Math.floor(battleFrames / 6) + i * 5) % 15;
+    g.globalAlpha = 1 - t / 15;
+    g.drawImage(im, Math.round(f.x) + 6 + i * 3, Math.round(f.y) - 22 - t);
+  }
+  g.globalAlpha = 1;
+}
 
 /* Thirteen points along an arc, sixty degrees either side of straight
    ahead, as unit offsets ten degrees apart. Written out rather than computed
@@ -13815,6 +15354,16 @@ class Loaf {
        the baker's; stale bread is anybody's. */
     for (const f of fighters) {
       if (f.eliminated || f.state === 'ko') continue;
+      /* AND NOBODY EATS BREAD THEY CANNOT USE. A loaf was consumed by
+         whoever walked over it whether or not it healed them, so a full bar
+         ate the thing and threw all thirteen away. That is not a corner
+         case: 31.7% of live casts are made at 88 health or better, and
+         across the same sample 33 loaves healed nobody at all while another
+         325 health went into the cap. Walking over bread at full health now
+         leaves it on the floor for later, which is the only reading of "it
+         is not your bread until you have eaten it" that survives being at a
+         hundred. */
+      if (f.health >= COMBAT.maxHealth) continue;
       if (f !== this.owner && this.t < this.mine) continue;
       if (Math.abs(f.x - this.x) > 9) continue;
       if (Math.abs(f.y - this.y) > 14) continue;
@@ -16720,12 +18269,13 @@ class Carton {
 /* THE SPILL.
 
    A flat patch of floor that stops answering the stick, and it is two things
-   wearing one box. For its first hundred and ten frames it is MILK: it takes
-   the footing off everybody standing in it, it costs nobody any health, and
-   it slowly gives health back to the one man who spilt it. Then it CURDLES,
-   and for the remaining two hundred and twenty it stops feeding him and
-   starts biting them. See Fighter.slick and PHYS.slickGrip for the footing,
-   `heal` in the roster for the drink, and curdled() for the line between the
+   wearing one box. For its first SIXTY-FOUR frames it is MILK: it takes the
+   footing off everybody standing in it, it costs nobody any health, and it
+   gives health back to the one man who spilt it at a sixteenth of a point a
+   frame. Then it CURDLES, and for the remaining two hundred and sixty-six it
+   stops feeding him and starts biting them. See Fighter.slick and
+   PHYS.slickGrip for the footing, `heal` in the roster for the drink and for
+   why the two halves moved together, and curdled() for the line between the
    two.
 
    The halves do not overlap, and that is the design rather than wherever the
@@ -16734,8 +18284,9 @@ class Carton {
    him the ground as well as theirs. So the ring it throws when it turns is
    one event carrying two meanings -- the bite is armed, and his drink is
    over -- which is one thing for a player to learn instead of two. (The
-   figure here used to read a hundred and ninety, which `curdle` has not been
-   for some time.)
+   figure here has read a hundred and ninety and then a hundred and ten, and
+   `curdle` has not been either for some time. If it disagrees with the
+   roster again, the roster is right.)
 
    Built on the three fields the glass and the smoke already use -- `pierce`,
    `hitAt` and `hitEvery` -- so resolveCombat needs no new code, plus `live`,
@@ -16823,10 +18374,10 @@ class Puddle {
     const b = this.box();
     /* Read off `wasCurdled` rather than asking curdled() again, and that is
        not a shortcut. wasCurdled was taken BEFORE this.t++, so the fresh
-       window is exactly `curdle` frames -- a hundred and ten of them, from
-       the frame it lands to the frame the ring fires -- rather than a
-       hundred and nine or a hundred and eleven depending on which side of
-       the increment somebody asked. "A whole fresh spill is worth `curdle`
+       window is exactly `curdle` frames -- sixty-four of them, from the
+       frame it lands to the frame the ring fires -- rather than sixty-three
+       or sixty-five depending on which side of the increment somebody
+       asked. "A whole fresh spill is worth `curdle`
        times `heal`" is then arithmetic and not an estimate.
 
        `s.heal` is tested as well as read because a puddle spec without the
@@ -16865,16 +18416,24 @@ class Puddle {
          clamps: every one of the four heals in this file writes its own
          Math.min and this is the fifth.
 
-         Twenty frames between droplets is not a taste number. At 0.05 a
-         frame twenty frames is exactly one point of health, so one drop
+         Sixteen frames between droplets is not a taste number. At 0.0625 a
+         frame sixteen frames is exactly one point of health, so one drop
          appears for each point the HUD counts up, and the art and the
          readout stay in step by construction rather than by being tuned to
          look like they do. `this.t` is snapshotted, which is why the cadence
-         is keyed off it rather than off a counter that would have to be. */
+         is keyed off it rather than off a counter that would have to be.
+
+         IT IS THE RECIPROCAL OF `heal` AND IT MOVES WITH IT. It read twenty
+         while the rate was 0.05. If somebody changes the rate to a value
+         whose reciprocal is not a whole number, this line cannot be made
+         honest at all -- which is half of why the rate is chosen from the
+         whole-reciprocal values in the first place. See the note beside
+         `heal` in the roster, and the test that pins 1/heal to this
+         modulus. */
       if (drink && f === this.owner && f.health < COMBAT.maxHealth) {
         f.health = Math.min(COMBAT.maxHealth, f.health + s.heal);
         if (stepped) cue('drink', { slot: f.slot, x: f.x });
-        if (this.t % 20 === 0) {
+        if (this.t % 16 === 0) {
           addEffect('milk', f.x + rand(-4, 4), f.y - rand(2, 9), '#eef4f2');
         }
       }
@@ -16969,6 +18528,37 @@ class Puddle {
      it destroys any enemy projectile the deck touches. Nothing else on this
      roster can delete a shot that did not volunteer to be deletable.
    ===================================================================== */
+/* THE DECK ON ITS OWN, for the frames after he lets go of it. Twelve wide
+   and eight tall, cut out of attack_houston_lawnmower.png -- frame columns
+   11 to 22, rows 8 to 15 -- with his hand taken off the handle, and every
+   one of the twelve inks sampled off the sheet rather than picked, so the
+   thing that rolls away is plainly the thing he was pushing. Two rows of
+   wheel greys and nothing else differs between the phases. */
+const DECK_INK = {
+  f: '#b2b2b2', j: '#cfcbcb', k: '#871212', l: '#ea5e5e', o: '#494848',
+  q: '#cb1d1d', r: '#737272', s: '#8c8b8b', w: '#9e9b9b', z: '#646464',
+  W: '#ffffff', A: '#0c0000',
+};
+const DECK_ART = [[
+  'f...........',
+  '.f...kkll...',
+  '..f...oo....',
+  '..kqqqllo...',
+  'jrskqqqqkrs.',
+  'rwWskkkkrwWs',
+  'zWwrAAAAzWwr',
+  '.zr......zr.',
+], [
+  'f...........',
+  '.f...kkll...',
+  '..f...oo....',
+  '..kqqqllo...',
+  'jrzkqqqqkrz.',
+  'rWwzkkkkrWwz',
+  'swWrAAAAswWr',
+  '.sr......sr.',
+]];
+
 class Mower {
   constructor(owner, spec) {
     this.owner = owner;
@@ -16994,6 +18584,21 @@ class Mower {
     this.y = owner.y;
     this.t = 0;
     this.life = spec.active;
+    /* Whether he has let go of the handle, whether he SHOVED it when he did,
+       and what it does about both. All four here rather than written on the
+       frame he lets go, because restoreSim rebuilds projectiles with
+       Object.create and a key the snapshot does not carry simply will not
+       exist on the other side of a rewind.
+
+       `shoved` cannot be folded into either of the others: a shoved deck
+       sitting on a floor has `vy === 0` and a `vx` of the same sign as a
+       plainly released one. And it is emphatically not a borrow of `this.air`
+       -- `air` moves the box down by `sink` and changes reachNow(), which is
+       two things a heaved deck must not do. */
+    this.released = false;
+    this.shoved = false;
+    this.vx = 0;
+    this.vy = 0;
     this.pierce = true;
     this.shreds = true;
     this.hitAt = new Array(MAX_PLAYERS).fill(0);
@@ -17007,12 +18612,42 @@ class Mower {
     for (let i = 0; i < this.hitAt.length; i++) {
       if (this.hitAt[i] > 0) this.hitAt[i]--;
     }
-    // Wherever he has got to, in front of him -- or under him, in the air.
-    // No velocity of its own: the push and the fall are both his, in
-    // runSpecial, and there is one place that says how fast this thing
-    // travels rather than two that have to agree.
-    this.x = this.owner.x + this.dir * this.reachNow();
-    this.y = this.owner.y;
+    /* THREE WAYS IT MOVES, and only the last of them is the weld.
+
+       SHOVED, it asks the floor nothing at all -- that is the whole of what
+       the shove is. It falls every frame and is caught by the same one-way
+       test collidePlatforms uses, on platformsNow(), so a deck rolling along
+       flat floor writes vy 0.4, moves 0.4 down and is snapped straight back
+       to p.y on the same frame, while a deck that has just crossed a lip is
+       caught by nothing and goes. platformsNow() means an open trapdoor is a
+       hole to it too. The `p.x - 3 / p.x + p.w + 3` skirt is the one
+       floorBeneath and dashLandingAhead already use.
+
+       RELEASED, it keeps the kerb: it stops at a lip, it does not turn and
+       it does not fall.
+
+       WELDED, it is wherever he has got to -- in front of him, or under him
+       in the air. No velocity of its own: the push and the fall are both
+       his, in runSpecial, and there is one place that says how fast this
+       thing travels rather than two that have to agree. */
+    if (this.shoved) {
+      this.x += this.vx;
+      const was = this.y;
+      this.vy = Math.min(this.vy + PHYS.gravity, PHYS.maxFall);
+      this.y += this.vy;
+      for (const p of platformsNow()) {
+        if (this.x < p.x - 3 || this.x > p.x + p.w + 3) continue;
+        if (was <= p.y + 0.6 && this.y >= p.y) { this.y = p.y; this.vy = 0; break; }
+      }
+      if (this.y > STAGE.blast.bottom) { this.dead = true; return; }
+    } else if (this.released) {
+      if (!this.overFloor()) { this.dead = true; return; }
+      if (!this.ledgeAhead()) this.vx = 0;
+      this.x += this.vx;
+    } else {
+      this.x = this.owner.x + this.dir * this.reachNow();
+      this.y = this.owner.y;
+    }
 
     /* It has wheels, and three ways to end.
 
@@ -17034,10 +18669,17 @@ class Mower {
        and the fishing rod both give: specialSlot is assigned in startAttack
        and is not a constructor field, so restoreSim is entitled to delete it
        on a rewind past his first special of the match. */
-    if (this.air && this.owner.grounded) this.air = false;
-    if (!this.owner.grounded && !this.air) this.dead = true;
-    if (this.owner.state !== 'special' ||
-        this.owner.moveFor('special') !== s) this.dead = true;
+    /* ALL THREE ARE ABOUT THE WELD, so a deck that is off the handle is
+       exempt from all three. It does not outlive him; it outlives his
+       commitment, and the countdown it was born with is what ends it -- see
+       `release` in the ROSTER, and the `life <= 0` line four rows down,
+       which is the only clock a released deck has. */
+    if (!this.released) {
+      if (this.air && this.owner.grounded) this.air = false;
+      if (!this.owner.grounded && !this.air) this.dead = true;
+      if (this.owner.state !== 'special' ||
+          this.owner.moveFor('special') !== s) this.dead = true;
+    }
     if (this.life <= 0) this.dead = true;
     if (this.x < -24 || this.x > VW + 24) this.dead = true;
 
@@ -17106,12 +18748,39 @@ class Mower {
      deck reaches a volley, and a sound per shot would be a rattle. */
   onShred() {
     const s = this.spec;
-    if (!s.feeds) return;
-    this.owner.mana = Math.min(COMBAT.manaMax, this.owner.mana + s.feeds);
     addEffect('ring', this.x, this.y - s.boxH / 2, '#9ec46a');
     for (let i = 0; i < 3; i++) {
       addEffect('spark', this.x + this.dir * (i * 3 - 3), this.y - 4, '#0a84ff');
     }
+    /* THE EFFECTS ARE ABOVE THE PAY, and that order is the rule rather than
+       tidiness: a released deck eats shots and is paid nothing for them, so
+       the shot still has to die VISIBLY when nothing is changing hands.
+       `feeds` is priced as a discount on walking into a volley yourself --
+       see the ROSTER -- and a deck he is not standing behind costs him none
+       of that. This one line is what stops a let-go shredder being free. */
+    if (!s.feeds || this.released) return;
+    this.owner.mana = Math.min(COMBAT.manaMax, this.owner.mana + s.feeds);
+  }
+
+  /* THE KERB, asked by the machine rather than by the man. runSpecial's
+     brake is on HIS vx and a deck off the handle no longer reads it, so the
+     released deck carries its own copy of the same question: is there floor
+     under my own front edge, a couple of pixels further on. It cannot be
+     wrong about a fall because it does not model one -- which is the same
+     argument groundAhead won over dashLandingAhead for the man. */
+  ledgeAhead() {
+    const probe = this.x + this.dir * (this.spec.boxW / 2 + 2);
+    return platformsNow().some(
+      (p) => probe >= p.x && probe <= p.x + p.w && Math.abs(this.y - p.y) < 2);
+  }
+
+  /* And whether it is standing on anything at all, which is the clause that
+     cleans up a deck whose floor went away underneath it -- a trapdoor, or a
+     stage whose platforms move. Not read by a SHOVED deck: falling is what
+     that one is for. */
+  overFloor() {
+    return platformsNow().some(
+      (p) => this.x >= p.x && this.x <= p.x + p.w && Math.abs(this.y - p.y) < 2);
   }
 
   /* The deck. `this.y` is his FEET, and the box grows upward from them on
@@ -17128,11 +18797,27 @@ class Mower {
              w: s.boxW, h: s.boxH };
   }
 
-  /* NOTHING. The mower is drawn as part of the man -- the art is one picture
-     of both of them -- by drawMower, over his sprite, the way the axe is.
-     Drawing it here as well would paint a second mower underneath him, one
-     frame behind, because this runs before the fighters do. */
-  draw() {}
+  /* NOTHING, WHILE HE IS STILL HOLDING IT. The mower is drawn as part of
+     the man -- the art is one picture of both of them -- by drawMower, over
+     his sprite, the way the axe is. Drawing it here as well would paint a
+     second mower underneath him, one frame behind, because this runs before
+     the fighters do.
+
+     OFF THE HANDLE THERE IS NO MAN, so this is where the deck gets its own
+     picture: DECK_ART, cut pixel for pixel out of the same sheet with his
+     hand removed, at the deck's OWN hitbox rather than at a man who is no
+     longer there. Two wheel phases off `this.t` at the sheet's own
+     five-frame cadence, and `t` is snapshotted, so a rollback replays the
+     identical phase instead of an animation that jumps. Fifty-five fillRects
+     per phase once, then a drawImage forever. */
+  draw(g) {
+    if (!this.released) return;
+    const ph = (Math.floor(this.t / 5) % 2) ? 1 : 0;
+    const flip = this.dir < 0;
+    const art = pixelArt('deck.' + ph + (flip ? 'L' : 'R'),
+                         DECK_ART[ph], DECK_INK, flip);
+    drawArt(g, art, this.x, this.y - 4);
+  }
 }
 
 /* =====================================================================
@@ -18628,9 +20313,15 @@ function drawEffects(g) {
          mirror image of it is not it. */
       case 'emblem': {
         g.globalAlpha = Math.min(1, k * 1.8);
-        drawArt(g, pixelArt('hammersickle', HAMMER_SICKLE_ART,
-                            { '#': EMBLEM_GOLD, r: EMBLEM_RED,
-                              o: EMBLEM_EDGE }), e.x, e.y);
+        /* TWICE THE SIZE ON A BAR-EMPTYING SHARE, and nothing else moves:
+           drawArtBig at s = 1 is byte-identical to drawArt, so the emblem the
+           uppercut holds over his head is the same rectangles it always was.
+           `big` rides on the effect's own spec, and effects are deliberately
+           not snapshotted -- see addEffect -- so this cannot desync. */
+        drawArtBig(g, pixelArt('hammersickle', HAMMER_SICKLE_ART,
+                               { '#': EMBLEM_GOLD, r: EMBLEM_RED,
+                                 o: EMBLEM_EDGE }), e.x, e.y,
+                   (e.spec && e.spec.big) || 1);
         g.globalAlpha = 1;
         break;
       }
@@ -19046,7 +20737,15 @@ function applyHit(attacker, defender, move, sourceX, scale) {
 
      `dmg` is what the tally counts -- the buffed, scaled number that actually
      came off the bar -- so thirty damage means thirty damage. */
-  const nap = defender.slouching();
+  /* AND THE SAME FORTY LINES ANSWER THE BED. Cobeus' eighth catch lays him
+     out for three seconds with no `rouse` and no `lethal: false`, so every
+     sentence above is already true of him: he takes the damage scaled by
+     `guard`, he does not flinch, he cannot be grabbed or poisoned or
+     shield-broken, and a bar reaching zero still takes his stock. The pin
+     in runSpecial keeps holding him and the hundred and eighty frames run
+     down whatever anybody does to him. One `||` rather than a second copy of
+     this block, because two copies is two things that can drift. */
+  const nap = defender.slouching() || defender.bedded();
   if (nap) {
     /* SOFTENED, the same way Remy's nap softens knockback and for the same
        reason: a body slack on the floor does not take a hit the way a man on
@@ -19251,18 +20950,57 @@ function applyHit(attacker, defender, move, sourceX, scale) {
      recovery special that refuses to finish anyone off, and looks from the
      outside exactly like the game failing to register a kill. The blow
      lands or it shares; it does not do both. */
+  let bigShare = false;
   if (move.share && defender.health > 0 && attacker.health > 0 &&
       !defender.eliminated && !attacker.eliminated) {
     const gap = defender.health - attacker.health;
-    const moved = Math.min(Math.abs(gap) / 2, move.share.cap) * Math.sign(gap);
+    /* FOUR TENTHS OF THE GAP, never less than `least`, never more than half
+       the gap. The outer min against half the gap IS the invariant and it is
+       written literally rather than propped up by two clamps -- nothing can
+       pass the midpoint, so nothing can overflow a bar and nothing can
+       finish a man the four damage did not already finish. It is the `min`
+       that makes that true rather than the size of `take` -- measured, even
+       six tenths crosses the midpoint zero times in ten thousand pairs. See
+       ROSTER.houston.specials.up.share, where the four tenths came from and
+       where what a bigger `take` DOES cost is written down. */
+    const moved = Math.sign(gap) * Math.min(Math.abs(gap) / 2, move.share.cap,
+                    Math.max(move.share.least, Math.abs(gap) * move.share.take));
     if (moved !== 0) {
       attacker.health += moved;
       defender.health -= moved;
-      // One ring on each of them, the same color the emblem is drawn in, so
-      // what happened reads as an exchange between two people rather than as
-      // a number quietly changing on the HUD.
-      addEffect('ring', attacker.x, attacker.y - 8, EMBLEM_GOLD);
-      addEffect('ring', defender.x, defender.y - 8, EMBLEM_GOLD);
+      /* WHICH WAY IT WENT, DRAWN. Two gold rings meant "I took thirty-eight"
+         and "I gave thirty-eight" with the same picture, which for a move
+         that is a gift exactly when you are winning is the one thing the
+         tell had to say. Gold on whoever gained, red on whoever gave -- both
+         are the emblem's own two inks -- and a stream of sparks between the
+         two chests, as many as the amount is worth, aimed from the giver to
+         the gainer. */
+      const gainer = moved > 0 ? attacker : defender;
+      const giver = moved > 0 ? defender : attacker;
+      addEffect('ring', gainer.x, gainer.y - 8, EMBLEM_GOLD);
+      addEffect('ring', giver.x, giver.y - 8, EMBLEM_RED);
+      const beads = 1 + Math.min(7, Math.round(Math.abs(moved) / 5));
+      const flow = Math.sign(gainer.x - giver.x) || 1;
+      for (let i = 0; i < beads; i++) {
+        const t = (i + 1) / (beads + 1);
+        const e = addEffect('spark', giver.x + (gainer.x - giver.x) * t,
+                            giver.y - 8 + (gainer.y - giver.y) * t, EMBLEM_GOLD);
+        // addEffect seeds every spark on a random drift and hands it back so
+        // the caller can aim it; this is the same idiom the `wave` branch
+        // uses, and null while resimulating is the signal to leave it alone.
+        if (e) { e.vx = flow * 2.4; e.vy = -0.4; }
+      }
+      /* AND THE EMBLEM ITSELF, at the midpoint, at twice the size, when the
+         swing moved thirty or more -- which is twice the whole of what this
+         move could ever do before, and a number the move already owns.
+         Measured at 5.8% of firings, so it stays an event. drawArtBig at
+         s = 1 is byte-identical to drawArt, so nobody else's emblem moves. */
+      if (Math.abs(moved) >= move.share.least * 2) {
+        bigShare = true;
+        addEffect('emblem', (attacker.x + defender.x) / 2,
+                  (attacker.y + defender.y) / 2 - 16, EMBLEM_GOLD, 1,
+                  { big: 2 });
+      }
       cue('promote', { slot: attacker.slot, x: attacker.x, gain: 0.5 });
     }
   }
@@ -19380,6 +21118,21 @@ function applyHit(attacker, defender, move, sourceX, scale) {
   const stop = kb > 7 ? COMBAT.hitstopHeavy : COMBAT.hitstopLight;
   attacker.hitstop = stop;
   defender.hitstop = stop;
+  /* A BAR-EMPTYING SWING LANDS AS AN EVENT. Four extra frames, symmetric, on
+     the 7% of firings that moved thirty or more -- the hammer's own knockback
+     is far under the kb > 7 line above, so without this the biggest thing in
+     the game reads with the same three frames as a poke. It is the only part
+     of this move's tell that touches simulation, and it is deterministic and
+     needs no field: `bigShare` is a local, decided from `moved`, which is
+     decided from two healths that are both already in the desync hash.
+
+     HERE rather than up in the share block, because that block runs a long
+     way above this line and the assignment two rows up would simply overwrite
+     it. That was measured doing exactly that. */
+  if (bigShare) {
+    attacker.hitstop = COMBAT.hitstopHeavy;
+    defender.hitstop = COMBAT.hitstopHeavy;
+  }
   // Same kb > 7 the hitstop splits on, so what you hear and what you feel
   // agree about which blows were the big ones.
   cue(kb > 7 ? 'hit-big' : 'hit', { slot: defender.slot, x: defender.x });
@@ -19446,6 +21199,31 @@ function sweepFrail(fighters) {
      everybody else, on every frame. */
   const absorbBox = (f) => {
     if (f.eliminated || f.hitstop > 0) return null;
+    /* A MAN ASLEEP IS NOT CATCHING, and without this line he is -- which was
+       the worst bug in 2.81 and it was invisible on an empty stage.
+
+       The bed pins attackFrame at `startup + active`, which is 66, and the
+       mouth's absorb window is `from: 7, to: 66`. The pin therefore parks
+       him on the last frame the box is open, so every shot thrown at a
+       sleeping Cobeus was swallowed instead of landing, healed him five, and
+       -- because `fat` is already past `bite` -- re-armed the whole hundred
+       and eighty. Shooting a helpless man was the single worst thing you
+       could do to yourself.
+
+       Measured in unassisted CPU play, three seeds of a hundred and twenty
+       matches: nine of twelve beds were extended, the worst ran 968 frames
+       instead of 180, and he reached `fat` 78 -- sizeMul 4.12, drawn 66
+       pixels tall on a 180-pixel stage, bigger than the jackpot Simon the
+       relBox clamp exists because of. The feeder is in this same release:
+       Ladeane's shower is a hundred and sixty-two notes and an open mouth
+       under it is unbounded.
+
+       Asked here rather than by moving `to` to 65 or pinning at 67, because
+       "he is asleep" is the rule and an off-by-one in the window is a
+       coincidence that happens to hold today. The catch that CAUSES the bed
+       is unaffected: this box is built before the eating loop counts the
+       fat, so the eighth one still lands. */
+    if (f.bedded()) return null;
     if (f.state !== 'special' && f.state !== 'ult') return null;
     const m = f.moveFor(f.state);
     const ab = m && m.absorb;
@@ -19454,8 +21232,14 @@ function sweepFrail(fighters) {
     if (k < (ab.from || 1) || k > (ab.to || 9e9)) return null;
     const p = ab.pad || 0;
     const b = f.relBox(m);
+    /* `heal`, `fat`, `bite` and `bed` travel with the box for the same
+       reason `cap` does: the eating loop below has the catcher and the shot
+       and no longer has the move. `bed` is lifted off the MOVE rather than
+       out of `absorb` because it is how long he is asleep and not part of
+       what he is eating with. */
     return { box: { x: b.x - p, y: b.y - p, w: b.w + p * 2, h: b.h + p * 2 },
-             cap: ab.cap };
+             cap: ab.cap, heal: ab.heal, fat: ab.fat, bite: ab.bite,
+             bed: m.bed || 0 };
   };
   let absorbing = false;
   for (const f of fighters) {
@@ -19476,6 +21260,16 @@ function sweepFrail(fighters) {
          eats. A shredder is not food -- two answers to projectiles should not
          cancel each other out. */
       if (!shot.frail && !(eats && !shot.shreds)) continue;
+      /* AND ONLY THINGS THAT COULD HAVE HURT HIM. `live()` is this file's own
+         word for "is it a hitbox right now", and without asking it a mouth
+         opened on an empty stage eats a LOAF off the floor, a stretch of
+         Houston's road, a puddle of milk that has not curdled yet and a bot
+         standing idle -- all of which answer false and none of which is
+         food. A man eating a loaf of bread with his projectile-catching
+         mouth is a different move. One clause in the vocabulary the sweep
+         below already uses, rather than a list of classes that goes stale
+         the next time somebody adds one. */
+      if (shot.live && !shot.live()) continue;
       /* A frail shot dies to the swing itself; anything else has to be inside
          the wider catching box. Two boxes, because they mean two different
          things and only one of them is allowed to be generous. */
@@ -19488,7 +21282,16 @@ function sweepFrail(fighters) {
          hands applyHit, so this is the damage it would actually have done
          rather than a number off the roster that a half or a tint might have
          patched. */
-      const worth = Math.min(eats.cap, (shot.spec && shot.spec.damage) || 0);
+      /* FLAT, IF THE MOVE SAYS SO. Houston's eater has a `cap` and no `heal`,
+         so he keeps taking what the shot was carrying up to fifteen and
+         nothing about him moves. Cobeus' mouth names a flat five instead,
+         and the difference is the point of his move rather than a tuning
+         choice: the spread of what enters a catching box runs from nought to
+         the dragon's 999, so `min(cap, damage)` would pay three times as
+         much for catching a Salamence as for catching a pellet on a move
+         whose prize is the catch. See OPEN WIDE. */
+      const worth = eats.heal != null ? eats.heal
+                  : Math.min(eats.cap, (shot.spec && shot.spec.damage) || 0);
       if (worth > 0) {
         a.health = Math.min(COMBAT.maxHealth, a.health + worth);
         addEffect('ring', shot.x, shot.y, EMBLEM_GOLD);
@@ -19496,6 +21299,16 @@ function sweepFrail(fighters) {
           addEffect('spark', shot.x + rand(-5, 5), shot.y + rand(-5, 5), EMBLEM_RED);
         }
         cue('drink', { slot: a.slot, x: a.x });
+      }
+      /* AND THE CATCH COUNTS. Optional the way `onShred` below is optional:
+         Houston's eater has no `fat` and nothing here happens to him. The
+         eighth one puts Cobeus to bed -- see OPEN WIDE and the mouth's case
+         in runSpecial, which is what actually spends `bedTimer`. Counted on
+         the frame the shot dies rather than on the frame the mouth opens,
+         because what is being counted is meals and not presses. */
+      if (eats.fat) {
+        a.fat++;
+        if (a.fat >= eats.bite) a.bedTimer = eats.bed || 0;
       }
     }
   }
@@ -19638,6 +21451,44 @@ function aiDecide(me, foe) {
   a.starve = (a.starve || 0) + 1;
   const desperate = a.starve > 420;   // ~7 seconds with nothing landing
 
+  /* THE SECOND PRESS, AND THIS IS THE FIRST RELEASE IN WHICH IT IS EVER
+     MADE. Until 2.81 a CPU threw 1201 rainbows over 720 seeded matches,
+     detonated 32 of them by accident, and caught nobody -- a zero measured
+     twice. See the closing note on `burst` in ROSTER.autisnick for why, and
+     worthBursting beside detonate for the question being asked here.
+
+     THREE THINGS ABOUT THIS BLOCK ARE LOAD-BEARING.
+
+     It is ABOVE the recovery branch and ABOVE the chicken branch, both of
+     which `return pad`. A man falling to his death still owns the ball he
+     threw, and so does a bird: the shot is a Rainbow with an owner, and
+     what its owner has since become is not its business.
+
+     It sets `spUp` AND NOT `special`. updateFree's entire cast branch is
+     gated on pad.special, so a bare spUp is a press that can do exactly one
+     thing. It cannot come out of the far side as a second rainbow, and for
+     a chicken -- whose slotFor maps `up` onto a moveset with no up slot --
+     it cannot come out as a beak thrown at the sky. Measured: Nick idle at
+     100 mana with a shot in the air, handed a bare spUp pad, goes
+     {idle, mana 70.5, rainbows 1} -> {idle, mana 71, rainbows 0}.
+
+     It does not touch `a.cooldown`. It spends no mana, enters no state and
+     takes no decision away from anything below it, so the rest of this
+     function reads exactly as it did.
+
+     The kind gate is a skip and not a rule: it is byte-identical over 720
+     matches with and without it, and it is here so the projectile list is
+     not walked for the ten characters who can never answer the question. */
+  const upMove = me.def.specials && me.def.specials.up;
+  if (upMove && upMove.kind === 'rainbow') {
+    for (const b of projectiles) {
+      if (b instanceof Rainbow && b.owner === me && !b.dead && b.worthBursting()) {
+        pad.spUp = true;
+        break;
+      }
+    }
+  }
+
   // A human's jump is edge-triggered by a key press. The AI rebuilds its
   // pad from scratch every frame, so without this guard an "I want to be
   // higher" intent would spend the ground jump and the double jump on two
@@ -19685,17 +21536,35 @@ function aiDecide(me, foe) {
       pad.jump = true;
       a.jumpCd = 9;
     }
-    /* Trev's uppercut doubles as a recovery -- unless he is a bird, in which
-       case he does not have it. This is the ONE place above the chicken
-       branch below that reaches for a special, and left alone it would spend
-       a falling chicken's last frames on a peck: slotFor maps the up button
-       to `neutral` for a moveset that has no up slot, so the press comes out
-       as a beak thrown at the sky, and entering `special` mid-fall halves his
-       air control on the way down. A chicken has no recovery move. Double
-       jumps and drift are the whole of getting home, which is a real part of
-       being one. */
+    /* THE ONLY PLACE IN THIS FILE WHERE THE AI PRESSES A BUTTON TO GET HOME,
+       and it is gated on a flag the move carries rather than on its kind.
+
+       It used to ask `kind === 'uppercut'`, and that went stale the first
+       time anybody reworked an up slot: 2.81 turned Cobeus' into a mouth and
+       the branch stopped seeing him, on a move whose own design note says
+       "the mouth IS the recovery". A whole character's recovery, deleted by
+       a string: the three-arm table is in ROSTER.cobeus.specials.up beside
+       the flag, on one grid, and is deliberately NOT copied here -- two
+       copies off two grids is how this claim came to look unreliable when it
+       was true both times. `recovers: true` is the same question asked of
+       the data, so the next rework either keeps the flag or drops it on
+       purpose.
+
+       CHRISTIAN IS DELIBERATELY NOT FLAGGED even though FROG ARMY has a
+       negative `rise`, which is why this is not simply `up.rise < 0`:
+       seventy-five mana is not a plan you make while falling, and turning it
+       on is a buff to a character this release did not otherwise touch. It
+       is a lever, measured and filed, not a bug.
+
+       The chicken clause is unchanged and still load-bearing: left alone
+       this would spend a falling bird's last frames on a peck, because
+       slotFor maps the up button to `neutral` for a moveset with no up slot,
+       so the press comes out as a beak thrown at the sky and entering
+       `special` mid-fall halves his air control on the way down. A chicken
+       has no recovery move. Double jumps and drift are the whole of getting
+       home, which is a real part of being one. */
     if (!me.chicken &&
-        me.def.specials.up && me.def.specials.up.kind === 'uppercut' && me.vy > 1.5 && me.jumpsLeft <= 0 &&
+        me.def.specials.up && me.def.specials.up.recovers && me.vy > 1.5 && me.jumpsLeft <= 0 &&
         a.cooldown <= 0) {
       pad.special = true;
       pad.spUp = true;
@@ -19767,6 +21636,68 @@ function aiDecide(me, foe) {
       }
     }
     return pad;
+  }
+
+  /* IT CAN HOLD A BUTTON NOW. Three moves in this file are charges and the
+     CPU has never held one: aiDecide rebuilds the pad off NEUTRAL every
+     frame, so the deepest fart charge any CPU Reese reached in 240 matches
+     was zero frames and a CPU Squalls would cast a daydream and drop it on
+     the next -- zero held frames over 523 live bakery casts, measured. This
+     is derived rather than remembered: it asks what he is already doing.
+
+     NOT gated on the kind. A string check against a kind list is the failure
+     mode napping() has a paragraph about -- it goes quietly stale and the
+     move it names stops working with nothing on screen to say so. Six tenths
+     of the cap because the whole cap is a full mana bar, and because a CPU
+     that held to the cap would be a CPU that has decided to stand still
+     until its meter is empty.
+
+     IT IS GATED ON `charge.walk`, THOUGH, and that gate is the difference
+     between this helping and this being the worst change in the release.
+     `walk` already means "you may keep playing the game while the meter
+     fills" -- it is the flag chargeWalk reads in updateAttack -- so it is
+     exactly the question worth asking before a CPU agrees to hold anything:
+     is holding this button the same as standing still? For the fart and the
+     daydream it is not. For Cobeus' bottle it is, and his is the NEUTRAL
+     special, which aiDecide throws from thirteen pixels away, over and over.
+     Four arms on the finished file, full ordered round robin, six stages,
+     six identical seeds, 7920 matches an arm:
+
+                                   reese  squalls  cobeus  spread
+       no clause at all             73.1     48.3    18.1    55.2
+       the clause ungated           73.2     49.9     1.5    71.7
+       gated, held to the full cap  71.1     45.3    16.5    54.7
+       GATED AT SIX TENTHS, SHIPPED 71.0     46.7    16.9    54.1
+
+     Ungated it freezes Cobeus at point-blank for seventy-two frames a cast
+     and takes him from 18.1% to ONE AND A HALF, and the roster spread from
+     55.2 to 71.7 -- four times the effect of anything else in this release.
+     Holding to the full cap instead is no better for him (16.5%) and costs
+     Squalls the clause's whole point, because the freeze is the cost and the
+     drink is not worth it at that range. Gated at six tenths he is untouched
+     and Squalls gets what this is for, and it is the narrowest of the four.
+
+     IT COSTS REESE TWO POINTS, which is worth saying out loud because the
+     paragraph above says this un-blinds his charges and that sounds like a
+     buff. It is not: 73.1% without the clause, 71.0% with it. Holding a
+     button is standing still, and standing still is not how he wins -- see
+     the jab note in his own roster entry.
+
+     BELOW THE RECOVERY BRANCH ON PURPOSE, and this is the other placement
+     decision. A pinned charge withholds the JUMP -- see chargeWalk in
+     updateAttack, which borrows the walking half of `mobile` and not the
+     jumping half -- so a CPU that keeps holding while it falls has no way
+     home. Above the recovery branch it lost two stocks in 190 mid-charge
+     over 120 matches; below it, none, and it holds slightly LONGER (38.7
+     frames a cast against 36.8) because the frames it gives up are the ones
+     it was falling through anyway. Falling to your death outranks finishing
+     a thought. */
+  if (me.state === 'special') {
+    const cm = me.moveFor('special');
+    if (cm && cm.charge && cm.charge.walk &&
+        me.chargeTimer < cm.charge.hold * 0.6) {
+      pad[HOLD_FOR_SLOT[me.chargeKey] || 'holdNeutral'] = true;
+    }
   }
 
   // Re-plan periodically so behavior isn't perfectly reactive.
@@ -22201,6 +24132,9 @@ function drawFighter(g, f) {
      for a 21-tall body over a 14-tall hurtbox is seven pixels lower down. Left that way on purpose: the
      hurtbox is what is actually being hit, and a second dummy-only rule up
      there would undo what this whole change is for. */
+  /* The last thing drawn BEHIND a body, and it has to be behind: he is lying
+     in it. Everything below the seam is on him or in front of him. */
+  if (!f.chicken) drawBed(g, f);
   if (f.chicken) {
     drawChicken(g, f);
   } else if (dummy) {
@@ -22262,6 +24196,7 @@ function drawFighter(g, f) {
     drawAxe(g, f);
     drawMower(g, f);
     drawWhip(g, f);
+    drawMouth(g, f);
     /* After the sprite, like the sword and the rod: a swollen cheek is drawn
        ON him, and drawn under the body it would be a man with a lump behind
        his face. */
@@ -22976,7 +24911,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '8ab25328f3';
+const BUILD_ID = 'a3c47b10f6';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -22987,7 +24922,7 @@ const BUILD_ID = '8ab25328f3';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.80';
+const VERSION = '2.81';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

@@ -552,9 +552,10 @@ test("a fighter in the air over the spill touches none of it", async () => {
    nobody else's, it lasts exactly the fresh window and not a frame longer, it
    stops at full health, and one man only ever has one spill going.
  *
- * The arithmetic those four hold up: `curdle` times `heal` is 5.5 for a whole
- * spill drunk end to end, and he cannot even collect that, because the carton
- * always flies forward and he has to walk to it.
+ * The arithmetic those four hold up: `curdle` times `heal` is 4.00 for a whole
+ * spill drunk end to end -- 64 frames at a sixteenth of a point, and the two
+ * moved together on purpose -- and he cannot even collect that, because the
+ * carton always flies forward and he has to walk to it.
  *
  * EVERY PROBE BELOW PARKS THE OTHER MAN at MAIN.x + 180. seat() leaves him at
  * +260, which is past the right edge of the main floor: he walks off, loses a
@@ -912,3 +913,181 @@ test("control: a second spill allowed to live beside the first doubles the drip"
     expectToFail(() => checkOneDrip(run(ONE_DRIP)),
       "two spills at once should fail checkOneDrip");
   });
+
+/* =====================================================================
+   THE SPOIL -- 2.81 brought `curdle` down from 110 to 64
+   ===================================================================== */
+
+/* Three facts, and each of them is an EDGE rather than a preference. The
+ * window is not sixty-four because sixty-four felt right: it is the round
+ * number between the two places the move changes shape.
+ *
+ * Above 77 the spill loses its eighth bite. `life` is 330 and `hitEvery` is
+ * 36, so the bites land at curdle + 36n and the eighth only fits if the milk
+ * arms at or before 77 -- 77 lands eight, 78 lands seven, swept.
+ *
+ * Below 34 the fresh half is a window he is never standing in. The carton
+ * flies forward about eighty-eight pixels and he has to walk to it, so his
+ * own milk is not under his feet until it is 33 frames old.
+ *
+ * And the drip is one drop a point, by construction: one over `heal` is the
+ * droplet modulus in Puddle.update, which is why the rate is chosen from the
+ * values whose reciprocal is a whole number.
+ */
+
+function checkSpoil(s) {
+  assert.ok(s.armedAt > 0,
+    "precondition: the spill has to arm at all; it never did in " +
+    s.frames + " frames");
+  assert.ok(s.armedAt < 100,
+    "the whole point of the cut is that the bite arrives inside the exchange " +
+    "that caused it rather than long after. From the press to armed milk on " +
+    "the floor is " + s.armedAt + " frames, which has to be under a hundred " +
+    "-- at the old hundred and ten it could not be");
+  /* And all of it above the flight is `curdle` itself, which is what makes
+     this a test about the spoil rather than about the arc. Within a frame:
+     the puddle has already stepped its own clock once by the time the probe
+     first sees it. */
+  assert.ok(Math.abs((s.armedAt - s.spillAt) - s.curdle) <= 1,
+    "the carton took " + s.spillAt + " frames to land and the milk should " +
+    "turn " + s.curdle + " frames later; it turned after " +
+    (s.armedAt - s.spillAt));
+}
+
+const SPOIL = `(function () {
+  seat();
+  // The other man at +180, the way every probe in this file parks him: at the
+  // +260 seat() leaves him at, the carton flies past him and lands twelve
+  // frames later, which measures the arc rather than the spoil.
+  fighters[1].x = MAIN.x + 180;
+  var me = fighters[0];
+  me.mana = 999;
+  var armedAt = -1, spillAt = -1, frames = 260;
+  tick(512);
+  for (var i = 1; i < frames; i++) {
+    tick(0);
+    for (var k = 0; k < projectiles.length; k++) {
+      var q = projectiles[k];
+      if (q instanceof Puddle && !q.dead) {
+        if (spillAt < 0) spillAt = i;
+        if (q.curdled() && armedAt < 0) armedAt = i;
+      }
+    }
+    if (armedAt >= 0) break;
+  }
+  return { armedAt: armedAt, frames: frames, curdle: SPEC.curdle,
+           spillAt: spillAt };
+})()`;
+
+test("the milk arms inside the exchange that caused it", async () => {
+  const { run } = await arena();
+  checkSpoil(run(SPOIL));
+});
+
+test("control: the old hundred-and-ten arms too late", async () => {
+  const { run } = await arena(sabotage(
+    "        w: 40, h: 3, life: 330, curdle: 64, slick: 10,",
+    "        w: 40, h: 3, life: 330, curdle: 110, slick: 10,"));
+  expectToFail(() => checkSpoil(run(SPOIL)),
+    "a spill that takes a hundred and ten frames to turn should fail checkSpoil");
+});
+
+/* The bites, counted off a target pinned in the middle of the spill with its
+   health restored every frame. Its knockback and its footing are real; only
+   the health and the poison are held, so what is counted is `hitEvery`
+   re-arming rather than a man surviving eight bites. */
+function checkBites(b) {
+  assert.equal(b.bites, 8,
+    "a whole spill has to land EIGHT bites now. The bite comes round every " +
+    b.hitEvery + " frames from `curdle` " + b.curdle + " until `life` " +
+    b.life + " runs out, and the eighth only fits below seventy-eight -- " +
+    "which is the whole reason this number came down rather than up. It " +
+    "landed " + b.bites + " at " + b.at.join(", "));
+  assert.ok(Math.abs(b.damage - 8 * b.per) < 1e-9,
+    "for " + (8 * b.per) + " damage before any poison; it dealt " + b.damage);
+}
+
+const BITES = `(function () {
+  seat();
+  var v = fighters[1];
+  var p = new Puddle(fighters[0], SPEC, v.x, MAIN.y);
+  projectiles.push(p);
+  var bites = 0, at = [], damage = 0;
+  for (var f = 0; f < 500; f++) {
+    v.x = p.x; v.y = MAIN.y; v.grounded = true; v.vx = 0; v.vy = 0;
+    v.hitstun = 0; v.hitstop = 0; v.invuln = 0; v.poison = 0; v.health = 100;
+    var t0 = p.t;
+    tick(0);
+    if (v.health < 100) { bites++; at.push(t0); damage += (100 - v.health); }
+    if (p.dead) break;
+  }
+  return { bites: bites, at: at, damage: +damage.toFixed(3), per: SPEC.damage,
+           curdle: SPEC.curdle, hitEvery: SPEC.hitEvery, life: SPEC.life };
+})()`;
+
+test("a whole spill lands eight bites", async () => {
+  const { run } = await arena();
+  checkBites(run(BITES));
+});
+
+test("control: seventy-eight is one frame past the eighth bite", async () => {
+  /* The edge itself, and the reason the band has a top to it. 76 and 77 land
+     eight; 78 lands seven, because the eighth would fall on frame 330 of a
+     330-frame life. This is the assertion that stops somebody nudging
+     `curdle` back up for feel and quietly paying a bite for it. */
+  const { run } = await arena(sabotage(
+    "        w: 40, h: 3, life: 330, curdle: 64, slick: 10,",
+    "        w: 40, h: 3, life: 330, curdle: 78, slick: 10,"));
+  expectToFail(() => checkBites(run(BITES)),
+    "a spill that arms at 78 lands seven bites and should fail checkBites");
+});
+
+/* The invariant the comment beside `heal` claims and nothing checked. */
+function checkDrop(d) {
+  assert.ok(Math.abs(1 / d.heal - Math.round(1 / d.heal)) < 1e-9,
+    "`heal` has to be a rate whose reciprocal is a WHOLE number of frames, " +
+    "because that reciprocal is the droplet cadence: one drop for each point " +
+    "the HUD counts up, by construction rather than by being tuned to look " +
+    "like it. One over " + d.heal + " is " + (1 / d.heal));
+  assert.equal(Math.round(1 / d.heal), d.modulus,
+    "and the cadence in Puddle.update has to BE that number. One over " +
+    d.heal + " is " + Math.round(1 / d.heal) + " and the source says " + d.modulus);
+  assert.ok(d.heal < d.slouch,
+    "and the rate has to stay under SLOUCH's " + d.slouch + " a frame: an ult " +
+    "that roots him for six hundred frames at half guard restores that much, " +
+    "and a side effect of a neutral special may not out-heal it. It is " + d.heal);
+  assert.ok(Math.abs(d.curdle * d.heal - 4) < 1e-9,
+    "which lands the whole fresh spill on exactly four points of health: " +
+    d.curdle + " frames at " + d.heal + " is " + (d.curdle * d.heal));
+}
+
+test("one droplet is exactly one point of health", async () => {
+  const { run } = await arena();
+  const src = readFileSync(ENGINE_PATH, "utf8");
+  const m = src.match(/if \(this\.t % (\d+) === 0\) \{\s*\n\s*addEffect\('milk'/);
+  assert.ok(m, "the droplet cadence should be findable in Puddle.update");
+  checkDrop({
+    heal: Number(run("SPEC.heal")),
+    curdle: Number(run("SPEC.curdle")),
+    // SLOUCH's own rate, derived rather than typed: a total over the frames
+    // it is guaranteed. It is the ceiling this one has to stay under.
+    slouch: Number(run("ROSTER.simon.ult.heal / ROSTER.simon.ult.active")),
+    modulus: Number(m[1]),
+  });
+});
+
+test("control: a rate whose reciprocal is not the cadence fails it", async () => {
+  /* The two literals are a PAIR and the comment beside `heal` says so. This
+     is what happens when somebody moves one of them: the art keeps painting
+     a drop every sixteen frames and the bar stops counting a point every
+     sixteen frames, and nothing else in the file notices. */
+  const { run } = await arena(sabotage("        heal: 0.0625,", "        heal: 0.05,"));
+  const src = readFileSync(ENGINE_PATH, "utf8");
+  const m = src.match(/if \(this\.t % (\d+) === 0\) \{\s*\n\s*addEffect\('milk'/);
+  expectToFail(() => checkDrop({
+    heal: Number(run("SPEC.heal")),
+    curdle: Number(run("SPEC.curdle")),
+    slouch: Number(run("ROSTER.simon.ult.heal / ROSTER.simon.ult.active")),
+    modulus: Number(m[1]),
+  }), "a heal whose reciprocal is not the droplet cadence should fail checkDrop");
+});

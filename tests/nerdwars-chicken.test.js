@@ -223,6 +223,17 @@ function reset(gap) {
     f.y = __main.y; f.attackFrame = 0; f.ultMeter = 0;
     f.chicken = false; f.chickenSince = -1; f.chickenEggs = 0;
     f.buffTimer = 0; f.buffStats = null; f.swordTimer = 0;
+    /* AND EVERY STATUS THE WARMUP MAY HAVE LEFT ON THEM. The 130 CPU frames
+       in arena() are a real fight on a real stage, so whoever is in seat 1
+       can arrive here poisoned, burning or still sliding -- and a poison tick
+       is 0.045 a frame, which is enough to fail a probe that breaks on the
+       first frame the target's health moves. It measured the milk rather than
+       the peck exactly once, when the milk's curdle time came down and the
+       spill started arming inside the warmup. (No backticks in here: this
+       whole block is a template literal and one would end the string.)
+       Everything else in this list is cleared for the same reason; these
+       were simply missing. */
+    f.poison = 0; f.burn = 0; f.confused = 0; f.slick = 0; f.slickFoe = 0;
   });
   me.x = 140; me.facing = 1;
   foe.x = 140 + (gap === undefined ? 20 : gap); foe.facing = -1;
@@ -617,9 +628,16 @@ test("control: an egg that cures whatever its color fails the way-out test", asy
 });
 
 test("control: a respawn that forgets the feathers fails the stock test", async () => {
+  /* The three feather lines out of respawn(), and nothing else out of it.
+     They stopped being adjacent to `evadeCd` when 2.81 put Cobeus' two
+     mouth counters between them, and the three lines on their own appear
+     TWICE -- respawn() and the constructor -- so the needle carries the
+     first words of the comment that only follows the respawn copy, and
+     puts that comment back. Nothing else in the reset is disturbed, which
+     is the whole point of a control. */
   withEngine(sabotage("    this.chicken = false;\n    this.chickenSince = -1;\n" +
-                      "    this.chickenEggs = 0;\n    this.evadeCd = 0;",
-                      "    this.evadeCd = 0;"));
+                      "    this.chickenEggs = 0;\n    /* AND HE COMES BACK HUNGRY",
+                      "    /* AND HE COMES BACK HUNGRY"));
   const { run } = await arena("kel");
   expectToFail(() => checkCure(JSON.parse(run(CURE.replace("B.lay", String(B.lay))))),
     "a respawn that leaves them a chicken should fail checkCure");
@@ -1019,9 +1037,13 @@ test("the chicken is snapshotted, frozen, hashed and survives a rollback", async
 });
 
 test("control: a field assigned outside the constructor fails the snapshot test", async () => {
+  /* The three CONSTRUCTOR declarations, and only those. 2.81 put Cobeus'
+     `fat` and `bedTimer` between them and the `ai` literal, so the needle
+     no longer runs down to `this.ai`; it stops at the blank line that was
+     always after them, and the fields below stay declared. */
   withEngine(sabotage("    this.chicken = false;\n    this.chickenSince = -1;\n" +
-                      "    this.chickenEggs = 0;\n\n    this.ai = {",
-                      "\n    this.ai = {"));
+                      "    this.chickenEggs = 0;\n\n",
+                      "\n"));
   const { run } = await arena("kel");
   expectToFail(() => checkNetcode(JSON.parse(run(NETCODE.replace("B.lay", String(B.lay))))),
     "undeclared fields should fail checkNetcode");

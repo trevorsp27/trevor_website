@@ -923,3 +923,759 @@ test("the deck goes with the man, and does not eat another deck", async () => {
   assert.equal(r.mine, 0,
     "and a deck must not outlive the man pushing it; " + r.mine + " did");
 });
+
+/* =====================================================================
+   HE CAN LET GO OF THE HANDLE, AND HE CAN THROW IT.
+
+   Two follow-ups out of one cast, both on the button that started the move.
+   Everything above this line is about a machine welded to a man; everything
+   below is about the frames after it is not.
+
+   THE TEST ABOVE STILL HOLDS AND IS NOT WEAKENED. "the deck goes with the
+   man" never presses the button twice, so the guarantee it protects -- a
+   deck that outlived its owner would be a free screen clear off any trade --
+   is exactly preserved. What is added here is its sibling: a deck he LET GO
+   of outlives his commitment, which is a different sentence, and the control
+   for it is withholding the press on the same engine.
+
+   THE FRAME ARITHMETIC, once, because every probe below depends on it.
+   updateAttack increments `attackFrame` at the top and the release gate reads
+   it afterwards, so a press made on the tick where it still reads T-1 is a
+   press "on frame T" -- the frame `after` is counted in. Measured on the
+   shipping engine: refused at 21, taken at 22, with startup 10 and after 12.
+
+   AND THE LEDGE GUARANTEE IS A MERGE GATE, not a data point. The two probes
+   above -- "he mows at the lip" and "he mows at the edge of a floating shelf"
+   -- read 0 of 60 and 0 of 60 on this engine, unchanged. What is added is the
+   release-specific sweep: the machine may go over a lip, HE may not, and the
+   shove is the only thing in his kit that puts a hitbox on a floor he is not
+   standing on.
+   ===================================================================== */
+
+const LEFT = 1, RIGHT = 2;
+
+/* Casts the mower, holds everything neutral until the frame asked for, then
+   presses the special again with whatever direction bit is handed in. The
+   foe is parked out of reach and made invulnerable, because a bite pauses
+   `attackFrame` through hitstop and every probe here counts frames. */
+const RELEASE_HARNESS = [
+  "function clear(gap) {",
+  "  seat(gap == null ? 150 : gap);",
+  "  fighters[1].invuln = 9999;",
+  "  fighters[1].x = MAIN.x + MAIN.w - 12;",
+  "}",
+  "function armed(T, extra) {",
+  "  tick(1024, 0);",
+  "  var guard = 0;",
+  "  while (fighters[0].attackFrame < T - 1 && guard++ < 300) tick(0, 0);",
+  "  var before = fighters[0].attackFrame;",
+  "  tick(1024 | (extra || 0), 0);",
+  "  var d = decks()[0];",
+  "  return { before: before, af: fighters[0].attackFrame,",
+  "           released: d ? !!d.released : null, shoved: d ? !!d.shoved : null,",
+  "           vx: d ? d.vx : null, x: d ? d.x : null, y: d ? d.y : null,",
+  "           alive: decks().length };",
+  "}",
+].join("\n");
+
+async function relArena(foeKey, engineSrc) {
+  const booted = await arena(foeKey, engineSrc);
+  booted.run(RELEASE_HARNESS);
+  return booted;
+}
+
+/* --------------------------------------------------------------------
+   1. THE GATE
+   -------------------------------------------------------------------- */
+
+function checkGate(r) {
+  assert.equal(r.early.alive, 1,
+    "precondition: a deck has to be on the stage before either press");
+  assert.equal(r.early.released, false,
+    "a press one frame before `after` must be refused -- twelve is one whole " +
+    "hitEvery cycle with three frames spare, so a deck he never actually " +
+    "mowed with cannot be thrown. It was taken on frame " + r.early.before);
+  assert.ok(r.early.af < r.last,
+    "and a refused press must leave the move running; attackFrame jumped to " +
+    r.early.af + " of " + r.last);
+  assert.equal(r.onTime.released, true,
+    "and the press on frame " + r.at + " has to be taken; it was not");
+  assert.equal(r.onTime.af, r.last,
+    "which ends the move through the engine's own exit -- attackFrame jumps " +
+    "to the last recovery frame rather than any new way out of a special. It " +
+    "read " + r.onTime.af + " against " + r.last);
+  assert.equal(r.onTime.vx, r.push,
+    "and a plain release carries on at `push`; it left at " + r.onTime.vx);
+  assert.equal(r.hisVx, 0,
+    "`this.vx = 0` is load-bearing: he ends the move standing still rather " +
+    "than coasting at " + r.push + " into a lip the move's brake is no " +
+    "longer watching. He was doing " + r.hisVx);
+}
+
+const GATE = "(function () {\n" +
+  "  var A = MOW.startup + MOW.release.after;\n" +
+  "  clear(); var early = armed(A - 1, 0);\n" +
+  "  clear(); var onTime = armed(A, 0);\n" +
+  "  return { at: A, early: early, onTime: onTime, push: MOW.push,\n" +
+  "           hisVx: fighters[0].vx,\n" +
+  "           last: MOW.startup + MOW.active + MOW.recovery - 1 };\n" +
+  "})()";
+
+test("the release is refused before its twelfth frame and taken on it",
+  async () => {
+    const { run } = await relArena();
+    checkGate(run(GATE));
+  });
+
+test("control: a release with no window at all is taken on the cast frame",
+  async () => {
+    const off = await relArena("reese", sabotage(
+      "      release: { after: 12, shove: 4.0 },",
+      "      release: { after: 0, shove: 4.0 },"));
+    expectToFail(() => checkGate(off.run(GATE)),
+      "with `after` at zero the early press should be taken and the gate " +
+      "test should have failed");
+  });
+
+/* --------------------------------------------------------------------
+   2. IT OUTLIVES HIS COMMITMENT, NOT HIM
+   -------------------------------------------------------------------- */
+
+function checkOutlives(r) {
+  assert.equal(r.released, true,
+    "precondition: the press has to have come off the handle");
+  assert.equal(r.alive, 1,
+    "a deck he has let go of has to survive him being knocked out of the " +
+    "move -- it does not outlive HIM, it outlives his COMMITMENT, and the " +
+    "countdown it was born with is the only clock it has. " + r.alive +
+    " were left");
+  assert.ok(r.life > 0 && r.life <= MOWER_ACTIVE,
+    "and it keeps the countdown it was born with rather than getting a " +
+    "lifetime of its own: " + r.life + " frames left of " + MOWER_ACTIVE);
+  assert.equal(r.everDies, true,
+    "and it must still run out; it was alive " + r.lastSeen + " frames after " +
+    "the press, against a spec active window of " + MOWER_ACTIVE);
+}
+
+let MOWER_ACTIVE = 0;
+
+const OUTLIVES = "(function (press) {\n" +
+  "  clear();\n" +
+  "  tick(1024, 0);\n" +
+  "  var guard = 0, A = MOW.startup + MOW.release.after;\n" +
+  "  while (fighters[0].attackFrame < A - 1 && guard++ < 300) tick(0, 0);\n" +
+  "  tick(press ? 1024 : 0, 0);\n" +
+  "  var d = decks()[0];\n" +
+  "  var rel = d ? !!d.released : null, life = d ? d.life : 0;\n" +
+  /* Hit out of the move: off the floor and in hitstun, which is the exact
+     pair of facts the three owner clauses in Mower.update read. */
+  "  fighters[0].setState('hitstun'); fighters[0].hitstun = 40;\n" +
+  "  fighters[0].grounded = false; fighters[0].vy = -3;\n" +
+  "  tick(0, 0); tick(0, 0);\n" +
+  "  var alive = decks().length, lastSeen = 0;\n" +
+  "  for (var i = 0; i < 120; i++) { if (decks().length) lastSeen = i; tick(0, 0); }\n" +
+  "  return { released: rel, alive: alive, life: life, lastSeen: lastSeen,\n" +
+  "           everDies: decks().length === 0, active: MOW.active };\n" +
+  "})";
+
+test("the machine goes on without him, and runs out on its own clock",
+  async () => {
+    const { run } = await relArena();
+    const r = run(OUTLIVES + "(true)");
+    MOWER_ACTIVE = r.active;
+    checkOutlives(r);
+
+    /* NEGATIVE CONTROL, and it is the press rather than a mutant engine:
+       the same probe with the button withheld has to lose the deck, because
+       that is the guarantee the test above this block protects and it must
+       not have been loosened for everybody. */
+    const q = run(OUTLIVES + "(false)");
+    expectToFail(() => checkOutlives(q),
+      "an ESCORTED deck must die with the man pushing it; withholding the " +
+      "press left " + q.alive + " on the stage");
+  });
+
+/* --------------------------------------------------------------------
+   3. THE KERB, WITH THE HANDLE LET GO
+   -------------------------------------------------------------------- */
+
+function checkRelLedge(r) {
+  assert.ok(r.saw > 0, "precondition: a deck has to have existed at all");
+  assert.equal(r.released, true, "precondition: and it has to have been let go");
+  assert.equal(r.lost, 0,
+    "letting the machine go at a lip must not cost him a stock -- his 0% " +
+    "ledge death rate is a property two releases were built to guarantee, " +
+    "and the release hands a deck its own velocity for the first time");
+  assert.equal(r.off, false,
+    "and a PLAINLY released deck stops at the kerb: it does not turn and it " +
+    "does not fall. It got " + r.overhang.toFixed(1) + "px past the edge");
+  /* AND IT SITS THERE, STILL SPINNING, which is the half that makes the
+     control fire. A deck with no kerb rule does not sail off into the blast
+     zone -- `overFloor` kills it the frame its wheels leave the floor -- so
+     what a missing `ledgeAhead` actually costs is the rest of its life at the
+     lip, where it is still a hitbox. */
+  assert.ok(r.saw >= r.life - 1,
+    "and it has to live out the countdown it was born with, parked live at " +
+    "the lip: " + r.life + " frames were left at the press and it existed " +
+    "for " + r.saw + " of them");
+}
+
+const REL_LEDGE = "(function (bits) {\n" +
+  "  seat();\n" +
+  "  fighters[0].x = MAIN.x + MAIN.w - 40; fighters[0].facing = 1;\n" +
+  "  fighters[1].x = MAIN.x + 20; fighters[1].facing = 1;\n" +
+  "  fighters[1].invuln = 9999;\n" +
+  "  var s0 = fighters[0].stocks, A = MOW.startup + MOW.release.after;\n" +
+  "  tick(1024, 0);\n" +
+  "  var guard = 0;\n" +
+  "  while (fighters[0].attackFrame < A - 1 && guard++ < 300) tick(0, 0);\n" +
+  "  tick(1024 | (bits || 0), 0);\n" +
+  "  var d = decks()[0];\n" +
+  "  var rel = d ? !!d.released : false, shoved = d ? !!d.shoved : false;\n" +
+  "  var life = d ? d.life : 0;\n" +
+  "  var saw = 0, overhang = 0, edge = MAIN.x + MAIN.w;\n" +
+  "  for (var i = 0; i < 220; i++) {\n" +
+  "    var k = decks()[0];\n" +
+  "    if (k) { saw++; overhang = Math.max(overhang, k.x - edge); }\n" +
+  "    tick(0, 0);\n" +
+  "  }\n" +
+  "  return { lost: s0 - fighters[0].stocks, saw: saw, released: rel,\n" +
+  "           life: life, shoved: shoved, overhang: overhang,\n" +
+  "           off: overhang > 11 };\n" +
+  "})";
+
+test("a deck he lets go of stops at the kerb, and he keeps his stock",
+  async () => {
+    const { run } = await relArena();
+    checkRelLedge(run(REL_LEDGE + "(0)"));
+  });
+
+test("control: a released deck that never asks about the floor drives off",
+  async () => {
+    /* The mutant deletes the deck's own copy of the question. runSpecial's
+       brake is on HIS vx and a deck off the handle no longer reads it, so
+       without ledgeAhead there is nothing left watching the lip at all. */
+    const off = await relArena("reese", sabotage(
+      "      if (!this.ledgeAhead()) this.vx = 0;",
+      "      if (false) this.vx = 0;"));
+    expectToFail(() => checkRelLedge(off.run(REL_LEDGE + "(0)")),
+      "a released deck with no kerb rule should have driven off the platform");
+  });
+
+/* --------------------------------------------------------------------
+   4. IT STILL SHREDS. IT DOES NOT STILL FEED HIM.
+   -------------------------------------------------------------------- */
+
+test("a deck he has let go of still eats a shot and is paid nothing for it",
+  async () => {
+    /* `feeds` is priced at the ROSTER as a discount on walking into a volley
+       YOURSELF. A deck he is not standing behind costs him none of that, and
+       this is the line that stops a let-go shredder being free.
+
+       THE ESCORTED CASE IS THE CONTROL and it is in the same engine, which
+       is the better control here: a broken probe pays nothing either way and
+       the difference is what is being asserted. */
+    const { run } = await relArena("cobeus");
+    const FEED = "(function (letGo) {\n" +
+      "  seat(200);\n" +
+      "  fighters[1].mana = 999; fighters[0].invuln = 9999;\n" +
+      "  tick(0, 512);\n" +
+      "  for (var i = 0; i < 18; i++) tick(0, 0);\n" +
+      "  function shots() { return projectiles.filter(function (p) {\n" +
+      "    return !p.dead && p.spec !== MOW; }).length; }\n" +
+      "  var born = shots();\n" +
+      "  projectiles.forEach(function (p) {\n" +
+      "    if (p.spec === MOW) return;\n" +
+      "    p.x = fighters[0].x + 110; p.y = MAIN.y - 6; p.vx = 0; p.vy = 0;\n" +
+      "  });\n" +
+      "  fighters[0].mana = 60;\n" +
+      "  tick(1024, 0);\n" +
+      "  var guard = 0, A = MOW.startup + MOW.release.after;\n" +
+      "  while (fighters[0].attackFrame < A - 1 && guard++ < 300)\n" +
+      "    { fighters[0].hitstop = 0; tick(0, 0); }\n" +
+      "  tick(letGo ? 1024 : 0, 0);\n" +
+      "  var d = decks()[0];\n" +
+      "  var rel = d ? !!d.released : false;\n" +
+      "  var was = shots(), gain = null, atShred = null;\n" +
+      "  for (var j = 0; j < 70; j++) {\n" +
+      "    fighters[0].hitstop = 0;\n" +
+      "    var m0 = fighters[0].mana;\n" +
+      "    tick(0, 0);\n" +
+      "    if (shots() < was && gain === null) {\n" +
+      "      gain = fighters[0].mana - m0;\n" +
+      "      atShred = d && !d.dead ? !!d.released : null;\n" +
+      "    }\n" +
+      "    was = shots();\n" +
+      "  }\n" +
+      "  return { born: born, left: shots(), released: rel, gain: gain,\n" +
+      "           atShred: atShred, regen: COMBAT.manaRegen, feeds: MOW.feeds };\n" +
+      "})";
+    const go = run(FEED + "(true)");
+    const held = run(FEED + "(false)");
+    assert.ok(go.born > 0 && held.born > 0,
+      "precondition: the foe should have put a shot on the stage both times");
+    assert.equal(go.released, true, "precondition: the deck was let go");
+    assert.equal(held.released, false, "precondition: the other one was not");
+    assert.equal(go.left, 0,
+      "a released deck must still destroy the enemy shot it drives through; " +
+      go.left + " survived");
+    assert.equal(held.left, 0,
+      "precondition: so must an escorted one; " + held.left + " survived");
+    assert.equal(go.atShred, true,
+      "precondition: the shot has to die AFTER the deck came off the handle, " +
+      "or this measures the weld rather than the release");
+    assert.equal(held.atShred, false,
+      "precondition: and the other deck has to still be on the handle");
+    assert.equal(held.gain, held.feeds,
+      "an ESCORTED deck has to pay him exactly `feeds` on the frame it eats " +
+      "a shot -- that is the discount the ROSTER prices for walking into a " +
+      "volley yourself. It paid " + held.gain);
+    assert.ok(go.gain !== null && go.gain <= go.regen,
+      "and a deck he has LET GO of has to pay him nothing at all: it is not " +
+      "a volley he walked into. The most it may move on that frame is the " +
+      "regen tick of " + go.regen + "; it moved " + go.gain);
+  });
+
+/* --------------------------------------------------------------------
+   5. MAXALIVE FALLS OUT FOR FREE
+   -------------------------------------------------------------------- */
+
+test("he cannot cast a second mower while the one he let go is still rolling",
+  async () => {
+    /* canSpecial filters on owner AND spec, and a released deck is still
+       `spec === s`, so the budget the ROSTER writes down is unchanged by the
+       release with no second rule written for it. */
+    const { run } = await relArena();
+    const r = run("(function () {\n" +
+      "  clear();\n" +
+      "  var a = armed(MOW.startup + MOW.release.after, 0);\n" +
+      "  fighters[0].setState('idle'); fighters[0].attackFrame = 0;\n" +
+      "  fighters[0].mana = 100; fighters[0].specialSpawned = false;\n" +
+      "  var whileAlive = fighters[0].canSpecial(bitsToPad(1024));\n" +
+      "  var n = 0;\n" +
+      "  while (decks().length && n++ < 200) {\n" +
+      "    fighters[0].setState('idle'); fighters[0].attackFrame = 0;\n" +
+      "    fighters[0].mana = 100; tick(0, 0);\n" +
+      "  }\n" +
+      "  fighters[0].setState('idle'); fighters[0].attackFrame = 0;\n" +
+      "  fighters[0].mana = 100; fighters[0].specialSpawned = false;\n" +
+      "  return { released: a.released, whileAlive: !!whileAlive,\n" +
+      "           afterwards: !!fighters[0].canSpecial(bitsToPad(1024)),\n" +
+      "           waited: n, max: MOW.maxAlive };\n" +
+      "})()");
+    assert.equal(r.released, true, "precondition: the deck came off the handle");
+    assert.equal(r.max, 1, "precondition: the ROSTER still budgets one deck");
+    assert.equal(r.whileAlive, false,
+      "a second cast has to be refused while the released one is still " +
+      "alive, or letting go is a way of doubling the move");
+    assert.equal(r.afterwards, true,
+      "and allowed the moment it expires; it was still refused after " +
+      r.waited + " frames");
+  });
+
+/* --------------------------------------------------------------------
+   6. THE AIR CAST MAY NOT BE LET GO
+   -------------------------------------------------------------------- */
+
+function checkAirRelease(mid, land) {
+  assert.equal(mid.wasAir, true,
+    "precondition: the deck has to have been born an AIR deck");
+  assert.equal(mid.airborne, false,
+    "precondition: and his feet still off the floor at the press");
+  assert.equal(mid.inAir, false,
+    "an air deck may not be released while he is off the floor: a deck he is " +
+    "holding UNDER himself is not a machine he can push away");
+  /* TWO GUARDS, AND THIS IS THE FRAME THAT TELLS THEM APART. `grounded` on
+     him answers the press above; `!b.air` on the deck answers this one.
+     Fighters update before projectiles do, so on the tick his feet touch
+     down he is already grounded while the deck is still an air deck, and
+     without the second guard the box under his feet -- dropped by `sink`,
+     with its own reach -- would be launched forward from there. */
+  assert.equal(land.onLanding, false,
+    "and it may not be released on the frame he lands either, while the deck " +
+    "is still an air deck: `!b.air` is the guard that answers that frame and " +
+    "`grounded` cannot");
+  assert.equal(mid.converted, true,
+    "precondition: an air deck that touches down has to convert to a ground " +
+    "deck, which is the rule that already existed and needs no new code");
+  assert.equal(mid.afterLanding, true,
+    "and from the frame after it converts it is releasable like any other; " +
+    "it was still refused on attackFrame " + mid.af);
+}
+
+const AIR_RELEASE = "(function (sameFrame) {\n" +
+  "  seat(200);\n" +
+  "  fighters[1].invuln = 9999;\n" +
+  "  fighters[0].x = MAIN.x + MAIN.w / 2;\n" +
+  "  fighters[0].y = MAIN.y - 60; fighters[0].grounded = false; fighters[0].vy = 0;\n" +
+  "  tick(1024, 0);\n" +
+  "  var guard = 0, A = MOW.startup + MOW.release.after;\n" +
+  "  while (fighters[0].attackFrame < A - 1 && guard++ < 90) tick(0, 0);\n" +
+  "  var d = decks()[0];\n" +
+  "  var wasAir = d ? d.air === true : null;\n" +
+  "  var airborne = fighters[0].grounded;\n" +
+  "  tick(1024, 0);\n" +
+  "  d = decks()[0];\n" +
+  "  var inAir = d ? !!d.released : null;\n" +
+  "  fighters[0].y = MAIN.y; fighters[0].grounded = true; fighters[0].vy = 0;\n" +
+  "  tick(sameFrame ? 1024 : 0, 0);\n" +
+  "  d = decks()[0];\n" +
+  "  var onLanding = d ? !!d.released : null;\n" +
+  "  var converted = d ? d.air === false : null;\n" +
+  "  fighters[0].y = MAIN.y; fighters[0].grounded = true; fighters[0].vy = 0;\n" +
+  "  tick(1024, 0);\n" +
+  "  d = decks()[0];\n" +
+  "  return { wasAir: wasAir, airborne: airborne, inAir: inAir,\n" +
+  "           onLanding: onLanding, converted: converted,\n" +
+  "           af: fighters[0].attackFrame,\n" +
+  "           afterLanding: d ? !!d.released : false };\n" +
+  "})";
+
+test("the air cast may not be let go, and converts when it lands",
+  async () => {
+    const { run } = await relArena();
+    checkAirRelease(run(AIR_RELEASE + "(false)"), run(AIR_RELEASE + "(true)"));
+  });
+
+test("control: without the deck's own `air` guard it comes off on the landing frame",
+  async () => {
+    /* Removing `this.grounded` alone changes nothing, and neither does
+       removing `!b.air` alone for a press made in mid-air -- either guard
+       refuses it. The landing frame is the one place they disagree, which is
+       why the probe above asks about it and why this is the mutant. */
+    const off = await relArena("reese", sabotage(
+      "        if (b.released || b.air) continue;",
+      "        if (b.released) continue;"));
+    expectToFail(
+      () => checkAirRelease(off.run(AIR_RELEASE + "(false)"),
+                            off.run(AIR_RELEASE + "(true)")),
+      "an air deck launched on the landing frame should have failed the test");
+  });
+
+/* --------------------------------------------------------------------
+   7. IT SURVIVES A REWIND
+   -------------------------------------------------------------------- */
+
+function checkRelRollback(r) {
+  for (const k of ['released', 'shoved', 'vx', 'vy']) {
+    assert.equal(r.fresh[k], true,
+      "`" + k + "` has to be declared in Mower's CONSTRUCTOR, so a deck that " +
+      "has never been let go already has it: restoreSim rebuilds projectiles " +
+      "with Object.create and a key the snapshot does not carry simply will " +
+      "not exist on the other side of a rewind");
+    assert.equal(r.inSnap[k], true,
+      "and a snapshot taken while it is still welded to him has to carry `" +
+      k + "` as well, or a rewind has nothing to put back");
+    assert.equal(r.afterRestore[k], true,
+      "and `" + k + "` has to still be there after a restore; it was deleted");
+  }
+  assert.equal(r.restored, r.snapped,
+    "and the deck comes back exactly as it was: " + r.snapped + " against " +
+    r.restored);
+  assert.equal(r.h2, r.h1,
+    "and fourteen frames replayed across the release have to be " +
+    "bit-identical. State hash " + r.h1 + " first time, " + r.h2 + " after");
+  assert.equal(r.flew2, r.flew,
+    "with the deck in the same place going the same speed at the end of both");
+}
+
+const REL_ROLLBACK = "(function () {\n" +
+  "  clear();\n" +
+  "  var A = MOW.startup + MOW.release.after, guard = 0;\n" +
+  "  tick(1024, 0);\n" +
+  "  while (fighters[0].attackFrame < A - 1 && guard++ < 300) tick(0, 0);\n" +
+  "  var d = decks()[0], fresh = {};\n" +
+  "  ['released', 'shoved', 'vx', 'vy'].forEach(function (k) {\n" +
+  "    fresh[k] = Object.prototype.hasOwnProperty.call(d, k); });\n" +
+  "  var snap = saveSim(), inSnap = {};\n" +
+  "  var cell = snap.projectiles.filter(function (p) { return p.spec === MOW; })[0];\n" +
+  "  ['released', 'shoved', 'vx', 'vy'].forEach(function (k) {\n" +
+  "    inSnap[k] = cell ? Object.prototype.hasOwnProperty.call(cell, k) : false; });\n" +
+  "  function shot() { var p = decks()[0];\n" +
+  "    return p ? [+p.x.toFixed(4), +p.y.toFixed(4), p.vx, p.vy, p.life,\n" +
+  "                !!p.released, !!p.shoved] : null; }\n" +
+  "  var snapped = JSON.stringify(shot());\n" +
+  "  function play() {\n" +
+  "    tick(1024 | " + RIGHT + ", 0);\n" +
+  "    for (var i = 0; i < 13; i++) tick(0, 0);\n" +
+  "    return stateHash();\n" +
+  "  }\n" +
+  "  var h1 = play(), flew = JSON.stringify(shot());\n" +
+  "  restoreSim(snap);\n" +
+  "  var back = decks()[0], afterRestore = {};\n" +
+  "  ['released', 'shoved', 'vx', 'vy'].forEach(function (k) {\n" +
+  "    afterRestore[k] = back ? Object.prototype.hasOwnProperty.call(back, k) : false; });\n" +
+  "  var restored = JSON.stringify(shot());\n" +
+  "  var h2 = play(), flew2 = JSON.stringify(shot());\n" +
+  "  return { fresh: fresh, inSnap: inSnap, afterRestore: afterRestore,\n" +
+  "           snapped: snapped, restored: restored, flew: flew, flew2: flew2,\n" +
+  "           h1: h1, h2: h2 };\n" +
+  "})()";
+
+test("a rewind across the release replays bit-identically", async () => {
+  const { run } = await relArena();
+  const r = run(REL_ROLLBACK);
+  assert.equal(JSON.parse(r.flew)[6], true,
+    "precondition: the replay HEAVES the deck, so the rewind crosses both " +
+    "new fields and not merely `released`");
+  checkRelRollback(r);
+});
+
+test("control: deck fields written on the frame he lets go vanish on a rewind",
+  async () => {
+    const off = await relArena("reese", sabotage(
+      "    this.released = false;\n    this.shoved = false;\n" +
+      "    this.vx = 0;\n    this.vy = 0;\n",
+      ""));
+    expectToFail(() => checkRelRollback(off.run(REL_ROLLBACK)),
+      "fields that are not constructor keys must fail the snapshot test");
+  });
+
+/* --------------------------------------------------------------------
+   8. THE FORK: FORWARD SHOVES IT, ANYTHING ELSE LETS IT GO
+   -------------------------------------------------------------------- */
+
+function checkFork(r) {
+  assert.equal(r.neutral.released, true, "precondition: a neutral press lets go");
+  assert.equal(r.neutral.shoved, false,
+    "a press with no direction on it must be the plain release; it shoved");
+  assert.equal(r.neutral.vx, r.push,
+    "and carry on at `push`; it left at " + r.neutral.vx);
+  assert.equal(r.fwd.shoved, true,
+    "holding the way he is already pointed has to shove it -- that is the " +
+    "one case where throwing the machine further means anything, and it is " +
+    "where the stick already is");
+  assert.equal(r.fwd.vx, r.shove,
+    "at `shove`; it left at " + r.fwd.vx);
+  assert.equal(r.back.shoved, false,
+    "and holding BACK is a plain release, not a shove: the mow drives him " +
+    "past people, so a Houston whose target has got behind him is holding " +
+    "back and wants his forty frames to turn round with");
+  assert.equal(r.bothWays, true,
+    "and the same must be true facing left, where forward is the other bit");
+}
+
+const FORK = "(function () {\n" +
+  "  var A = MOW.startup + MOW.release.after;\n" +
+  "  clear(); var neutral = armed(A, 0);\n" +
+  "  clear(); var fwd = armed(A, " + RIGHT + ");\n" +
+  "  clear(); var back = armed(A, " + LEFT + ");\n" +
+  "  clear(); fighters[0].facing = -1;\n" +
+  "  fighters[0].x = MAIN.x + MAIN.w - 60;\n" +
+  "  var leftFwd = armed(A, " + LEFT + ");\n" +
+  "  clear(); fighters[0].facing = -1;\n" +
+  "  fighters[0].x = MAIN.x + MAIN.w - 60;\n" +
+  "  var leftBack = armed(A, " + RIGHT + ");\n" +
+  "  return { neutral: neutral, fwd: fwd, back: back, push: MOW.push,\n" +
+  "           shove: MOW.release.shove,\n" +
+  "           bothWays: leftFwd.shoved === true && leftBack.shoved === false };\n" +
+  "})()";
+
+test("forward shoves the machine and anything else lets it go", async () => {
+  const { run } = await relArena();
+  checkFork(run(FORK));
+});
+
+test("control: reading the pad without `facing` shoves him the wrong way",
+  async () => {
+    /* The mutant reads `right` whichever way he is pointed, which is the
+       obvious way to write this line and is wrong for exactly half the
+       game. */
+    const off = await relArena("reese", sabotage(
+      "        !!(this.facing > 0 ? pad.right : pad.left);",
+      "        !!pad.right;"));
+    expectToFail(() => checkFork(off.run(FORK)),
+      "a heave that ignores which way he is facing should fail the fork test");
+  });
+
+test("a confused Houston holding toward his machine gets the plain release",
+  async () => {
+    /* The left/right swap happens in Fighter.update BEFORE updateAttack is
+       called, so the pad this rule reads is the effective one. That is the
+       file's own rule about confusion arriving for free, and it costs
+       damage rather than a stock: a misfired follow-up is a worse cast,
+       never a lost one. */
+    const { run } = await relArena();
+    const r = run("(function () {\n" +
+      "  var A = MOW.startup + MOW.release.after;\n" +
+      "  clear(); fighters[0].confused = 600;\n" +
+      "  var pressed = armed(A, " + RIGHT + ");\n" +
+      "  clear(); fighters[0].confused = 600;\n" +
+      "  var swapped = armed(A, " + LEFT + ");\n" +
+      "  return { pressed: pressed, swapped: swapped };\n" +
+      "})()");
+    assert.equal(r.pressed.released, true,
+      "precondition: the press still comes off the handle while confused");
+    assert.equal(r.pressed.shoved, false,
+      "holding toward the deck while confused gives the plain release, " +
+      "because confusion turns every input and nothing compensates");
+    assert.equal(r.swapped.shoved, true,
+      "and holding AWAY from it shoves it, which is the same rule read from " +
+      "the other end and is how a player finds out they are confused");
+  });
+
+/* --------------------------------------------------------------------
+   9. THE SHOVE TAKES THE KERB RULE OFF THE MACHINE
+   -------------------------------------------------------------------- */
+
+function checkShoveLedge(r) {
+  assert.equal(r.shoved, true, "precondition: the deck has to have been heaved");
+  assert.equal(r.lost, 0,
+    "the thing that goes over the lip is the MACHINE. He writes nothing to " +
+    "his own vx except the release's `this.vx = 0`, and he ends the move on " +
+    "the same frame either way, so his 0% ledge death rate is untouched");
+  assert.equal(r.off, true,
+    "and the deck has to actually cross the lip -- that is the whole of what " +
+    "the shove is. It got " + r.overhang.toFixed(1) + "px past the edge");
+  assert.equal(r.everDies, true,
+    "and it must clean itself up: the `life` countdown it was born with " +
+    "cannot outlast his commitment, and the blast floor takes whatever is " +
+    "left. It was still alive " + r.lastSeen + " frames later");
+}
+
+const SHOVE_LEDGE = "(function () {\n" +
+  "  seat();\n" +
+  "  fighters[0].x = MAIN.x + MAIN.w - 40; fighters[0].facing = 1;\n" +
+  "  fighters[1].x = MAIN.x + 20; fighters[1].facing = 1;\n" +
+  "  fighters[1].invuln = 9999;\n" +
+  "  var s0 = fighters[0].stocks, A = MOW.startup + MOW.release.after;\n" +
+  "  tick(1024, 0);\n" +
+  "  var guard = 0;\n" +
+  "  while (fighters[0].attackFrame < A - 1 && guard++ < 300) tick(0, 0);\n" +
+  "  tick(1024 | " + RIGHT + ", 0);\n" +
+  "  var d = decks()[0];\n" +
+  "  var shoved = d ? !!d.shoved : false;\n" +
+  "  var overhang = 0, edge = MAIN.x + MAIN.w, lastSeen = -1;\n" +
+  "  for (var i = 0; i < 220; i++) {\n" +
+  "    var k = decks()[0];\n" +
+  "    if (k) { lastSeen = i; overhang = Math.max(overhang, k.x - edge); }\n" +
+  "    tick(0, 0);\n" +
+  "  }\n" +
+  "  return { lost: s0 - fighters[0].stocks, shoved: shoved, overhang: overhang,\n" +
+  "           off: overhang > 11, lastSeen: lastSeen,\n" +
+  "           everDies: decks().length === 0, active: MOW.active };\n" +
+  "})()";
+
+test("a shoved deck goes over the lip and he does not", async () => {
+  const { run } = await relArena();
+  const r = run(SHOVE_LEDGE);
+  checkShoveLedge(r);
+  assert.ok(r.lastSeen < r.active,
+    "and it cannot outlive his commitment: the last frame it existed was " +
+    r.lastSeen + " after the press, against an active window of " + r.active);
+});
+
+test("control: without its own fall a shoved deck is just a fast release",
+  async () => {
+    /* The mutant sends the heave down the released branch, which keeps the
+       kerb. It is the honest control for "the shove is not `push: 4`": the
+       speed is unchanged and only the floor rule is gone. */
+    const off = await relArena("reese", sabotage(
+      "    if (this.shoved) {\n      this.x += this.vx;",
+      "    if (false) {\n      this.x += this.vx;"));
+    expectToFail(() => checkShoveLedge(off.run(SHOVE_LEDGE)),
+      "a heaved deck that still stops at the kerb should fail the shove test");
+  });
+
+/* --------------------------------------------------------------------
+   10. THE ONLY HITBOX HE HAS ON A FLOOR HE IS NOT STANDING ON
+   -------------------------------------------------------------------- */
+
+function checkOtherFloor(r) {
+  assert.equal(r.mow, 0,
+    "precondition: the plain mow cannot touch a man on the floor below -- " +
+    "it stopped at the lip and dealt " + r.mow);
+  assert.equal(r.release, 0,
+    "precondition: nor can the plain release, for the same reason: " + r.release);
+  assert.ok(r.shove > 0,
+    "and the shove has to reach him, which is the whole case for it being a " +
+    "second follow-up rather than a bigger number on the first: the air cast " +
+    "descends WITH him and the release stops at his own edge. It dealt " +
+    r.shove);
+}
+
+const OTHER_FLOOR = "(function (bits) {\n" +
+  /* Deep Space's left side platform, with the victim on the main floor
+     below and out past its lip -- a place nothing else in his kit reaches. */
+  "  restage(0); seat();\n" +
+  "  var shelf = null;\n" +
+  "  for (var i = 0; i < STAGE.platforms.length; i++) {\n" +
+  "    var p = STAGE.platforms[i];\n" +
+  "    if (!p.main && p.y < MAIN.y && p.x < MAIN.x + MAIN.w / 2) { shelf = p; break; }\n" +
+  "  }\n" +
+  "  if (!shelf) return { noShelf: true };\n" +
+  "  fighters[0].x = shelf.x + shelf.w - 20; fighters[0].y = shelf.y;\n" +
+  "  fighters[0].grounded = true; fighters[0].vy = 0; fighters[0].facing = 1;\n" +
+  "  var fx = shelf.x + shelf.w + 50;\n" +
+  "  fighters[1].x = fx; fighters[1].y = MAIN.y; fighters[1].facing = -1;\n" +
+  "  var A = MOW.startup + MOW.release.after, dealt = 0, guard = 0;\n" +
+  "  tick(1024, 0);\n" +
+  "  while (fighters[0].attackFrame < A - 1 && guard++ < 300) {\n" +
+  "    var h = fighters[1].health; tick(0, 0);\n" +
+  "    dealt += Math.max(0, h - fighters[1].health);\n" +
+  "    fighters[1].x = fx; fighters[1].y = MAIN.y; fighters[1].vx = 0;\n" +
+  "    fighters[1].vy = 0; fighters[1].grounded = true;\n" +
+  "    fighters[1].setState('idle'); fighters[1].hitstun = 0;\n" +
+  "    fighters[1].health = 100;\n" +
+  "  }\n" +
+  "  tick(1024 | (bits || 0), 0);\n" +
+  "  for (var i = 0; i < 90; i++) {\n" +
+  "    var h2 = fighters[1].health; tick(0, 0);\n" +
+  "    dealt += Math.max(0, h2 - fighters[1].health);\n" +
+  "    fighters[1].x = fx; fighters[1].y = MAIN.y; fighters[1].vx = 0;\n" +
+  "    fighters[1].vy = 0; fighters[1].grounded = true;\n" +
+  "    fighters[1].setState('idle'); fighters[1].hitstun = 0;\n" +
+  "    fighters[1].health = 100;\n" +
+  "  }\n" +
+  "  return { dealt: dealt };\n" +
+  "})";
+
+const NO_PRESS = "(function (bits) {\n" +
+  "  restage(0); seat();\n" +
+  "  var shelf = null;\n" +
+  "  for (var i = 0; i < STAGE.platforms.length; i++) {\n" +
+  "    var p = STAGE.platforms[i];\n" +
+  "    if (!p.main && p.y < MAIN.y && p.x < MAIN.x + MAIN.w / 2) { shelf = p; break; }\n" +
+  "  }\n" +
+  "  fighters[0].x = shelf.x + shelf.w - 20; fighters[0].y = shelf.y;\n" +
+  "  fighters[0].grounded = true; fighters[0].vy = 0; fighters[0].facing = 1;\n" +
+  "  var fx = shelf.x + shelf.w + 50, dealt = 0;\n" +
+  "  fighters[1].x = fx; fighters[1].y = MAIN.y; fighters[1].facing = -1;\n" +
+  "  tick(1024, 0);\n" +
+  "  for (var i = 0; i < 140; i++) {\n" +
+  "    var h = fighters[1].health; tick(0, 0);\n" +
+  "    dealt += Math.max(0, h - fighters[1].health);\n" +
+  "    fighters[1].x = fx; fighters[1].y = MAIN.y; fighters[1].vx = 0;\n" +
+  "    fighters[1].vy = 0; fighters[1].grounded = true;\n" +
+  "    fighters[1].setState('idle'); fighters[1].hitstun = 0;\n" +
+  "    fighters[1].health = 100;\n" +
+  "  }\n" +
+  "  return { dealt: dealt };\n" +
+  "})";
+
+test("the shove is the only thing he has that lands on a floor below him",
+  async () => {
+    const { run } = await relArena();
+    const plain = run(NO_PRESS + "(0)");
+    const letGo = run(OTHER_FLOOR + "(0)");
+    const heave = run(OTHER_FLOOR + "(" + RIGHT + ")");
+    assert.ok(!letGo.noShelf, "precondition: the stage has to have a side shelf");
+    checkOtherFloor({ mow: plain.dealt, release: letGo.dealt, shove: heave.dealt });
+  });
+
+test("control: at `push` rather than `shove` the machine never gets there",
+  async () => {
+    /* The honest control for "past 2.8 the deck outruns the frames it has to
+       bite with". Give the heave the escorted speed and it falls short of
+       the man below: the reach is what the number buys, and it is bought at
+       a measured cost in damage on his own floor. */
+    const off = await relArena("reese", sabotage(
+      "      release: { after: 12, shove: 4.0 },",
+      "      release: { after: 12, shove: 1.2 },"));
+    const plain = off.run(NO_PRESS + "(0)");
+    const letGo = off.run(OTHER_FLOOR + "(0)");
+    const heave = off.run(OTHER_FLOOR + "(" + RIGHT + ")");
+    expectToFail(
+      () => checkOtherFloor({ mow: plain.dealt, release: letGo.dealt, shove: heave.dealt }),
+      "a heave too slow to clear the gap should fail the other-floor test");
+  });
