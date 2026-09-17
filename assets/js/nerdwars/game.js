@@ -3059,13 +3059,50 @@ ROSTER.cobeus = {
        that can happen here: you live through an execution. It does not also
        have to pay better than eating a bullet.
 
-       AND HE GETS FATTER EVERY TIME. Eight is the number, because the ask
-       was "more than seven", and `fat` 0.04 a catch puts him at sizeMul 1.28
-       on the seventh and 1.32 on the eighth: hurtbox 11.9 by 18.5 against a
-       normal 9 by 14, which is 1.74 times the area to be hit in. That is
-       arithmetic rather than a sample, and it is the cost of the move being
-       good -- a man who keeps eating becomes a man who is easy to hit, and
-       then he lies down for three seconds and you get to do it.
+       AND HE GETS FATTER EVERY TIME, ONE DRAWN PIXEL A CATCH, and that
+       last clause is the whole of why `fat` is 0.0625 and not the 0.04 it
+       shipped as up to 2.84.
+
+       THE OLD STEP WAS SUB-PIXEL. What a player sees is not sizeMul, it is
+       drawFighter's `d = Math.round(16 * sizeMul)`, and at 0.04 that rounds
+       the nine sizes to 16, 17, 17, 18, 19, 19, 20, 20, 21 -- measured, not
+       reasoned. Three of the eight catches moved nothing on screen. The
+       first four are the ones a match actually reaches, and they are 17, 17,
+       18, 19: two of every four eats were invisible. That does not read as a
+       small gain, it reads as the growth being broken, which is what it was
+       reported as.
+
+       1/16 IS THE ONLY NUMBER THAT FIXES IT, because the cell is sixteen
+       pixels wide. `Math.round(16 * (1 + n/16))` is `16 + n` with no rounding
+       left in it at all, so the ladder is 16, 17, 18, 19, 20, 21, 22, 23, 24
+       and every one of the eight moves the picture. Eight is still the
+       number, because the ask was "more than seven": the eighth catch is
+       sizeMul 1.5, drawn twenty-four pixels against a base sixteen, hurtbox
+       13.5 by 21 against a normal 9 by 14 -- 2.25 times the area to be hit
+       in, against the 1.74 it used to be. That is arithmetic rather than a
+       sample, and it is the cost of the move being good: a man who keeps
+       eating becomes a man who is easy to hit, and then he lies down for
+       three seconds and you get to do it.
+
+       AND THE COMPOUNDING HALF, which is not obvious from this object.
+       absorbBox is relBox(mouth) padded, so the CATCHING box scales with him
+       too and eating makes him easier to eat WITH. Measured against a flat
+       shot arriving inside the open window, across a 2-pixel ladder of
+       heights: 22 of 27 swallowed at fat 0, 27 of 27 at fat 8. Both halves
+       are the mechanic and neither is compensated for.
+
+       WHAT THE BIGGER NUMBER DOES NOT CHANGE is anything he can reach. `oy`
+       is a box's CENTRE, so scaling a fighter would float his boxes off the
+       floor -- the jackpot-Simon regression relBox's clamp exists because of
+       -- and measured at every fat from 0 to 8 his jab bottom holds at -4,
+       his grab at -5 and his mouth at -6, exactly where a thin man's sit.
+       Walked move by move against a grounded opponent, nothing that
+       connected at fat 0 misses at fat 8: JAB gains six pixels of reach and
+       the grab eight, and LAST CALL, FULL AUTO and DESIGNATED DRIVER are
+       identical to the frame because their spawn points are unscaled. Nor
+       does it touch his one way home -- nothing in the `mouth` case of
+       runSpecial reads sizeMul, and the recovery flight is byte-identical at
+       fat 0, at fat 8, and at either step.
 
        THE COUNTER IS A STOCK, NOT A MATCH, and it is the only per-use tally
        in this file that is reset on death, so it is written out in respawn()
@@ -3083,7 +3120,7 @@ ROSTER.cobeus = {
        not a risk, it is a nap. `guard` 0.6 is the fraction that gets
        through, the same key SLOUCH uses at 0.5, and `shrink` eases his size
        back over the last twenty frames so he gets up a normal man rather
-       than snapping twenty-one blit pixels down to sixteen on one frame.
+       than snapping twenty-four blit pixels down to sixteen on one frame.
 
        MEASURE IT BEFORE YOU BELIEVE IT, which is the same warning the
        mower's `feeds` carries: the number that decides whether this is a
@@ -3319,7 +3356,7 @@ ROSTER.cobeus = {
          his stated reason: a flat shot crosses an unpadded twenty-pixel box
          in about three frames, so the pad is what turns a coin flip into a
          read. Catching box -20..+28 by -34..+8. */
-      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },
+      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.0625, bite: 8 },
       bed: 180, guard: 0.6, shrink: 20,
       manaOverride: 14,
       damage: 0, base: 0, scale: 0,
@@ -7564,10 +7601,13 @@ class Fighter {
      never touched. One rule, two behaviours, and no second field.
 
      `shrink` is the last frames of the bed, over which he eases back to
-     normal: without it he pops from twenty-one blit pixels to sixteen on the
-     single frame he stands up. Derived from bedTimer, which is snapshotted,
-     so a rollback across the last twenty frames recomputes the same size
-     instead of restarting the ramp. */
+     normal: without it he pops from twenty-four blit pixels to sixteen on the
+     single frame he stands up. It is worth more at 0.0625 than it was at
+     0.04 for the same reason the catches are: the last twenty frames now
+     round to 24, 22, 20, 18, 16, five distinct drawn sizes, where the old
+     step gave 21, 20, 19, 17, 16. Derived from bedTimer, which is
+     snapshotted, so a rollback across the last twenty frames recomputes the
+     same size instead of restarting the ramp. */
   fatMul() {
     const m = this.specialsNow && this.specialsNow.up;
     const e = m && m.kind === 'mouth' ? m.absorb : null;
@@ -11651,7 +11691,20 @@ class Fighter {
 
        The art is still cut and still in IMG. Nothing points at it, and the
        next move that wants a man lying on the floor starts from a drawing
-       rather than from a sheet. */
+       rather than from a sheet.
+
+       2.85 IS THAT MOVE and it did start from a drawing. Cobeus is bedded for
+       three seconds after his eighth mouthful and had no pose for it, and
+       neither of the two this function knows about could be lent to him:
+       SPRITES.slouch is cut from attack_simon_slouch.png and SPRITES.sleeping
+       from move_sleep.png, and they are Simon's pixels and Squalls'.
+       CobeusSpriteSheet.png has stand, walk1, walk2 and jump and no man on
+       his back at all. So the HOOK above ports and the art does not, and what
+       he got instead is SLEEP_ROWS -- a pixelArt grid in colors he already
+       owns, in the idiom the mouth, the chicken and the bed itself are drawn
+       in. He is not routed through here: drawFighter swaps the whole body for
+       him, because a sleeper is anchored on his BACK and everything this
+       function returns is anchored on a pair of feet. */
 
     // Reese's shirtless set is his buff state, exactly as drawn.
     if (entry.shirtless && this.buffTimer > 0) set = 'shirtless';
@@ -12637,6 +12690,162 @@ const BED_ART = [
   '.dd....................dd.',
 ];
 const BED_PAL = { w: '#8a6a45', p: '#f2ece0', b: '#7c5aa8', d: '#3a2c1c' };
+
+/* AND THE MAN IN IT, which until 2.85 did not exist. drawBed painted the
+   furniture and three Zs and drawFighter blitted his ordinary standing cell on
+   top of them, so three seconds of punishment read as a man standing bolt
+   upright in the middle of a bed. The bed was never the bug. The body was.
+
+   WHY THIS IS A GRID AND NOT A SPRITE. Two idioms in this file already draw a
+   man lying down and NEITHER of them ports. Simon's SLOUCH swaps a cell inside
+   sprite() -- IMG['slouch.' + facing + '.' + stage], four stages of nodding
+   off -- and Squalls' old daydream did the same with SPRITES.sleeping. Both
+   are cut from PNGs by build.py and both are somebody else's pixels;
+   CobeusSpriteSheet.png has stand, walk1, walk2 and jump on it and no man on
+   his back. The HOOK ports and the art does not, and there is no new art.
+
+   TURNING HIS OWN CELL WAS TRIED AND THROWN AWAY, twice. A pure ninety-degree
+   transpose costs nothing and blurs nothing, and it still fails: a 24x24 man
+   turned on his side is longer than the 26-pixel bed and twice as thick as a
+   body under a blanket, he lies ON the covers rather than under them, and his
+   eyes are open. Squashing that turn to 24x9 fixes the proportions by telling
+   a lie about square pixels -- which is the argument drawMouth exists to make
+   the other way round -- and his black jacket then covers the entire mattress,
+   so there is no bed left to read.
+
+   So it is the MOUTH's idiom, which is also the chicken's, the hammer and
+   sickle's, the Star of David's and the bed's own two objects up: rows of
+   characters in colors he already owns, rasterised once by pixelArt and a
+   drawImage every frame after that.
+
+   HEAD LEFT, FEET RIGHT, and that is forced rather than chosen. drawBed passes
+   `flip = f.facing < 0`, and the UNFLIPPED BED_ART puts the pillow at source
+   columns 3 to 6 -- so unflipped means head at the low end. He has gone over
+   backwards onto it, which is also the only way a man who fell asleep
+   mid-mouthful lands. pixelArt's own `flip` mirrors this grid on the same test
+   that mirrors the bed, so the two can never disagree about which end the
+   pillow is on. */
+const SLEEP_PAL = {
+  h: '#231C03',   // his hair        (128 px on the sheet) -- the back of his head
+  H: '#433608',   // his hair, mid   ( 64 px) -- the lit side of it
+  S: '#F0E3CF',   // his skin        (238 px)
+  s: '#DAC8AB',   // his skin shadow ( 72 px) -- the shadowed jaw and the nape
+  q: '#3D320E',   // HIS PUPIL       ( 16 px) -- THE SHUT EYE, and the shut lip
+  W: '#7F7E7F',   // his shoe gray   ( 26 px) -- the one foot out of the covers
+  /* THE HOLE, and it is the same single declared exception MOUTH_PAL.H is: a
+     mouth is a hole rather than a surface. Still his -- #080420 is the darkest
+     pixel on his sheet, off his own trousers. */
+  o: '#080420',
+  /* And three straight off BED_PAL, by value rather than by reference, for the
+     reason every palette in this file is a flat literal: pixelArt takes a
+     char-to-color map and a palette assembled at load time out of another
+     object is one more thing that can be half-built. They are the bed's own
+     purple, the bed's own white and the bed's own dark, so the covers over him
+     ARE the covers, not a second purple that nearly matches. */
+  b: '#7c5aa8',   // BED_PAL.b -- the blanket
+  p: '#f2ece0',   // BED_PAL.p -- the sheet, turned back over his chest
+  d: '#3a2c1c',   // BED_PAL.d -- the fold shadow along the bottom
+};
+
+/* SIXTEEN WIDE BY FIVE TALL, and five is not arbitrary. He is only ever bedded
+   at maximum fat -- bedTimer is armed on the eighth catch and `fat` is cleared
+   on the frame it reaches zero -- so the only size this is ever drawn at is
+   sizeMul 1.5, ramping down through `shrink`. Five rows at 1.5 is eight screen
+   pixels, which is what fits between the mattress and the head rail, and
+   sixteen columns is the bed's own inside width. It is cramped and that is the
+   honest cost of drawing instead of cutting: a head needs hair, a brow, an
+   eye, a mouth and a jaw, and there are four rows to put them in.
+
+   COLUMNS 0 TO 5 ARE HIS HEAD -- the hair mass against the pillow, the
+   forehead, one shut eye in his own pupil color, the mouth, the jaw and the
+   nape going under the covers. COLUMNS 6 TO 15 ARE THE COVERS -- the sheet
+   turned back over his chest, the belly, a knee bump, and one foot with a shoe
+   on it hanging past the foot rail, because a man asleep under a blanket that
+   reaches his chin is a purple rectangle.
+
+   FOUR PHASES, TWELVE FRAMES EACH: a 48-frame breath, three and three quarters
+   of them across the hundred and eighty. THE HEAD NEVER MOVES. Only the covers
+   over his belly and the hole in his face do, and that is the whole reason the
+   covers read as a chest rather than as a shape that wobbles -- a sleeper
+   whose head bobs is a man nodding, not a man breathing. A hundred and eighty
+   frames of one still picture is exactly the mistake the mouth set was redrawn
+   to answer, and it is not being made again three seconds at a time. */
+const SLEEP_ROWS = [
+  /* 0  OUT. Covers at their lowest, mouth SHUT -- `q` as a lip line, the same
+        color and the same one-row trick MOUTH_ROWS.C1 shuts him with. */
+  ['.hhhS...........',
+   'hhHSqSS.bbb..b..',
+   'hhHSSqSpbbbbbbbS',
+   '.hhsSS..bbbbbSSW',
+   '....ss..bbbbdd..'],
+  /* 1  RISING. Two columns of belly climb into row 0 and the mouth opens. */
+  ['.hhhS..bb.......',
+   'hhHSqSS.bbbb.b..',
+   'hhHSSoSpbbbbbbbS',
+   '.hhsSS..bbbbbSSW',
+   '....ss..bbbbdd..'],
+  /* 2  IN. Covers at the top, mouth at its widest -- two columns of hole with
+        his own skin closed all the way round them. That ring is the trick the
+        open mouth is built on and it is the same trick here: a dark hole with
+        no pale border is invisible against his own hair. */
+  ['.hhhS..bbbb.....',
+   'hhHSqSS.bbbbb.b.',
+   'hhHSSooSbbbbbbbS',
+   '.hhsSSS.bbbbbSSW',
+   '....ss..bbbbdd..'],
+  /* 3  FALLING. The SAME cell as 1, drawn on the way back down: the covers
+        fall through the row they rose through, so the beat is even rather
+        than a sawtooth that snaps back to flat every twelve frames. Two
+        cache keys for one drawing is the cost, and it is a canvas. */
+  ['.hhhS..bb.......',
+   'hhHSqSS.bbbb.b..',
+   'hhHSSoSpbbbbbbbS',
+   '.hhsSS..bbbbbSSW',
+   '....ss..bbbbdd..'],
+];
+const SLEEP_W = 16, SLEEP_H = 5;
+
+/* THE BREATH, and its two inputs are chosen rather than convenient. `bed` is a
+   ROSTER number and bedTimer is a Fighter CONSTRUCTOR field, so both are in
+   every snapshot and a rollback replays the identical breath instead of
+   restarting it -- the same reason the jackpot's size ramp is derived from
+   `since` and the chew clock from attackFrame. No Math.random, no
+   battleFrames, and no new field for restoreSim to delete. */
+function sleepPhase(f, m) {
+  return (((m.bed || 0) - f.bedTimer) / 12 | 0) % 4;
+}
+
+/* HIM, ON HIS BACK, and the placement is the relBox clamp translated into
+   pixels.
+
+   drawFighter's blit pins a cell's BOTTOM to f.y and lets the top run away
+   upward, which is right for a man standing on his feet and wrong for a man
+   lying on a mattress: a grid anchored that way would drift 5 * (k - 1) pixels
+   clear of the sheets as he grew, which is the giant-Simon regression wearing
+   a blanket. So the sleeper gets an anchor of its own -- the HEAD end pinned
+   to the headboard rail and his BACK pinned to the mattress -- and growing
+   then carries him DOWN the bed and UPWARD, and never lifts him off it. At
+   sizeMul 1 he is 16 by 5 and tucked in the middle; at 1.5 he is 24 by 8,
+   running f.x - 11 to f.x + 13, two pixels past the foot rail, which is what
+   the foot pixel is there for.
+
+   `zk` and not the `k` most drawings here use, for drawBling's sake:
+   nerdwars-simon.test.js sabotages its size line BY ITS LITERAL TEXT, and a
+   second copy of that exact line anywhere in this file makes the needle
+   ambiguous and the control silently stops controlling anything. */
+function drawSleeper(g, f, m) {
+  const flip = f.facing < 0;
+  const ph = sleepPhase(f, m);
+  const art = pixelArt('sleep.' + ph + (flip ? 'L' : 'R'),
+                       SLEEP_ROWS[ph], SLEEP_PAL, flip);
+  const zk = f.sizeMul;
+  const w = Math.round(SLEEP_W * zk), h = Math.round(SLEEP_H * zk);
+  const left = flip ? Math.round(f.x) + 11 - w : Math.round(f.x) - 11;
+  // Nearest-neighbor, or a scaled sleeper arrives blurred in a game whose
+  // whole look is that the pixels are square.
+  if (w !== SLEEP_W) g.imageSmoothingEnabled = false;
+  g.drawImage(art, left, Math.round(f.y) - 5 - h, w, h);
+}
 
 /* Gym equipment. A dumbbell is two weights and a short bar; a barbell
    is the same idea with a much longer one, which is the whole joke. */
@@ -15575,47 +15784,48 @@ const MOUTH_ROWS = {
         10: '......SSSS......' },
   C0: { 7: '......bbbb......', 8: '.....SHHHHS.....',      // closing, still open
         9: '......SSSS......' },
-  /* AND THE ONE NOBODY WOULD FIND BY READING THE MOVE DATA. runSpecial's
-     mouth case does `if (bedTimer > 0) this.attackFrame = s.startup + s.active`
-     and holds him there for all 180 frames of the bed, so whatever cell that
-     frame chooses is on screen for three seconds while he lies in it. A
-     mid-close frozen for three seconds is a stutter; a man conked out with
-     his mouth hanging open is the joke, so mouthPose asks bedded() FIRST and
-     answers this cell whatever the frame says.
+  /* AND THE CELL THAT USED TO BE HERE, because its absence is a decision
+     rather than a deletion. Z0 was the conked pose -- eyes shut, mouth
+     hanging open -- and runSpecial's mouth case pins attackFrame at
+     `startup + active` for all 180 frames of the bed, so mouthPose asked
+     bedded() FIRST and answered it whatever the frame said. The cell was
+     right. What it was painted ON was wrong: drawFighter blitted his ordinary
+     STANDING cell in the middle of the bed, so Z0 was a good sleeping face on
+     a man stood bolt upright in the sheets, and rows 5 to 10 of a standing
+     cell are a hole in the air over a man lying down.
 
-     AT 2.81 THE PIN FRAME WAS ALSO THE LAST FRAME OF absorb -- 66, inside
-     [7, 66] -- and that coincidence is the only reason this cell was ever on
-     screen: drawMouth refuses to paint an open cell on a frame nothing can
-     be caught on. 2.83 shortened the move, the pin moved to 16 and the window
-     shut at 15, and without the bed exemption drawMouth now carries by name,
-     the whole three seconds would have drawn nothing at all. bedded() is
-     derived from bedTimer, which is already snapshotted, so this adds NO new
-     field for restoreSim to lose. */
-  Z0: { 5: '......S..S......', 6: '......s..s......',      // conked -- eyes shut
-        8: '.....SHHHHS.....', 9: '.....SHHHHS.....',
-        10: '......SSSS......' },
+     So the sleeping face moved to SLEEP_ROWS, where it is drawn on a head
+     that is where a head should be, and drawMouth returns on `bedded()`
+     before it reaches any of this. There is no bed cell in this set any more
+     because nothing in this set is reachable while he is asleep. */
 
   /* RECOVERY, chew clock 67 and up. Mouth CLOSED again. */
   C1: { 7: '......qbbq......', 8: '......SSSS......' },
 };
-/* The seven cells that are drawn OPEN. The gate below is asserted against
+/* The six cells that are drawn OPEN. The gate below is asserted against
    this set rather than against a comment, so the invariant cannot rot. */
-const MOUTH_OPEN = { O0: 1, H0: 1, H1: 1, H2: 1, H3: 1, C0: 1, Z0: 1 };
-/* AND THE TWO OF THE SEVEN THAT ARE OPEN WITHOUT PROMISING ANYTHING. The gate
+const MOUTH_OPEN = { O0: 1, H0: 1, H1: 1, H2: 1, H3: 1, C0: 1 };
+/* AND THE ONE OF THE SIX THAT IS OPEN WITHOUT PROMISING ANYTHING. The gate
    refuses an open cell on a frame nothing can be caught, because a mouth held
    wide when the window has shut is a lie about the one thing the player is
-   timing. Neither of these is that: C0 is the mouth SHUTTING, which says "too
-   late" rather than "now", and Z0 is a man asleep, who is promising nobody
-   anything.
+   timing. C0 is not that lie: it is the mouth SHUTTING, which says "too late"
+   rather than "now".
+
+   IT WAS TWO UNTIL 2.85. Z0 -- a man asleep, who is promising nobody anything
+   -- was the other one, and it is gone because a sleeping man has no mouth
+   drawn by this function at all now: drawMouth returns on `bedded()` and
+   SLEEP_ROWS paints his face on a body that is actually lying down. One
+   exemption and one reason for it, and it is still data rather than a `pose
+   !==` clause in the gate.
 
    It is written down because until 2.83 it did not have to be. The old
    timeline had `absorb.to` at 66, which was both the last frame of the close
    AND the frame the bed pins him on, so the gate never refused either by
-   accident. The move is twenty-eight frames now and it would have refused
-   both: measured on the built engine, 179 of the bed's 180 frames and all
-   three frames of the close drew nothing at all. Data rather than two `pose
-   !==` clauses in the gate, for the same reason MOUTH_OPEN is data. */
-const MOUTH_EXEMPT = { C0: 1, Z0: 1 };
+   accident. The move is twenty-eight frames now and it would refuse the
+   close: measured on the built engine, all three frames of it draw nothing at
+   all without this. Data rather than a `pose !==` clause in the gate, for the
+   same reason MOUTH_OPEN is data. */
+const MOUTH_EXEMPT = { C0: 1 };
 const MOUTH_HOLD = ['H0', 'H1', 'H2', 'H3'];
 
 /* THE SHEET DOES NOT MIRROR HIM, IT SLIDES HIM. standL is standR translated
@@ -15645,10 +15855,11 @@ function mouthArt(pose, shift) {
 /* THE FRAME INDEX COMES OFF attackFrame, which is snapshotted, so a rollback
    replays the identical cell. No Math.random anywhere in the choice. */
 function mouthPose(f, af) {
-  /* No frame test any more. It was belt-and-braces against a timeline whose
-     last open frame happened to be 66, and there is no frame 66 in this move
-     to be braced against. Being in bed is the whole of the question. */
-  if (f.bedded()) return 'Z0';
+  /* No frame test, and since 2.85 no bed test either. The frame test was
+     belt-and-braces against a timeline whose last open frame happened to be
+     66, and there is no frame 66 in this move to be braced against. The bed
+     test answered Z0, and a sleeping man is drawn by drawSleeper now --
+     drawMouth returns on `bedded()`, so this is never called with one. */
   if (af <= 2) return 'A0';
   if (af <= 4) return 'A1';
   if (af <= 6) return 'A2';
@@ -15710,6 +15921,15 @@ function drawMouth(g, f) {
   if (f.moveFor('special') !== s) return;
   const e = s.absorb;
   if (!e) return;
+  /* AND NOT WHILE HE IS ASLEEP. The bed pins attackFrame at `startup + active`
+     for all 180 frames, so without this line this function goes on painting a
+     mouth on the standing cell's rows -- which since 2.85 is a hole in the air
+     above a man drawn lying on his back. drawSleeper owns his face for the
+     whole of the bed: the shut eye, the breath and the mouth opening on it are
+     all in SLEEP_ROWS, on a head that is where his head actually is. bedded()
+     is derived from bedTimer, which is already snapshotted, so this costs no
+     new field for restoreSim to lose. */
+  if (f.bedded()) return;
   /* TWO CLOCKS, AND THEY ARE DELIBERATELY NOT THE SAME CLOCK. `open` is the
      REAL attackFrame, because that is the number sweepFrail asks, and the
      picture is not allowed to disagree with the catching about the one thing
@@ -15744,7 +15964,7 @@ function drawMouth(g, f) {
   const sk = f.sizeMul;
   /* THE SAME RECT THE BODY GOT. Not similar arithmetic -- the same, copied
      from the blit in drawFighter, so the overlay is rounded the way the body
-     is rounded and the mouth cannot slide off his face at sizeMul 1.32 or at
+     is rounded and the mouth cannot slide off his face at sizeMul 1.5 or at
      sizeMul 4. */
   const d = Math.round(16 * sk);
   g.drawImage(mouthArt(pose, f.facing < 0 && f.grounded),
@@ -15803,12 +16023,20 @@ function drawBed(g, f) {
   const flip = f.facing < 0;
   drawArt(g, pixelArt('bed' + (flip ? 'L' : 'R'), BED_ART, BED_PAL, flip),
           f.x, f.y - 5);
+  /* AND THE ZS COME OUT OF HIS MOUTH, WHICH HAS MOVED. They were anchored at
+     f.x + 6, a hand's width in front of a man standing up, and that is his
+     knees now that he is lying down. The head end is f.x - 11 and his mouth is
+     about f.x - 9, so that is where they start and they march away from him
+     rather than towards him. Mirrored on the SAME `flip` the bed is, because
+     `flip` is the one thing that decides which end the pillow is on and two
+     answers to that question is two things that can drift apart. */
+  const dir = flip ? 1 : -1;
   for (let i = 0; i < 3; i++) {
     const im = IMG['zzz.' + i];
     if (!im) break;
     const t = (Math.floor(battleFrames / 6) + i * 5) % 15;
     g.globalAlpha = 1 - t / 15;
-    g.drawImage(im, Math.round(f.x) + 6 + i * 3, Math.round(f.y) - 22 - t);
+    g.drawImage(im, Math.round(f.x) + dir * (9 + i * 3), Math.round(f.y) - 22 - t);
   }
   g.globalAlpha = 1;
 }
@@ -22893,9 +23121,11 @@ function sweepFrail(fighters) {
 
        Measured in unassisted CPU play, three seeds of a hundred and twenty
        matches: nine of twelve beds were extended, the worst ran 968 frames
-       instead of 180, and he reached `fat` 78 -- sizeMul 4.12, drawn 66
-       pixels tall on a 180-pixel stage, bigger than the jackpot Simon the
-       relBox clamp exists because of. The feeder is in this same release:
+       instead of 180, and he reached `fat` 78 -- which at the 0.04 step of
+       the day was sizeMul 4.12, drawn 66 pixels tall on a 180-pixel stage,
+       bigger than the jackpot Simon the relBox clamp exists because of. At
+       2.85's 0.0625 the same 78 would be sizeMul 5.88 and 94 pixels, so this
+       line is one the bigger step makes MORE expensive to lose, not less. The feeder is in this same release:
        Ladeane's shower is a hundred and sixty-two notes and an open mouth
        under it is unbounded.
 
@@ -25876,6 +26106,24 @@ function drawFighter(g, f) {
     drawChicken(g, f);
   } else if (dummy) {
     drawSandbag(g, f);
+  } else if (f.bedded()) {
+    /* ASLEEP IS A DIFFERENT BODY, and this branch is the whole of the
+       complaint it answers. The bed has been painted under him since 2.83 and
+       the man on top of it was still the ordinary standing cell, so what
+       three seconds of punishment actually looked like was a man standing
+       bolt upright in the middle of a bed.
+
+       IT REPLACES THE BLIT RATHER THAN BEING DRAWN OVER IT. Both at once is a
+       standing man inside the sheets, which is the same bug with an extra
+       drawing on it. drawMouth returns on this identical test, so his face
+       comes out of SLEEP_ROWS for the whole three seconds and nothing is left
+       painting the standing cell's rows over him.
+
+       Here rather than in sprite(): everything sprite() can return is a 16x16
+       cell anchored on a pair of feet, and a man on his back is anchored on
+       his BACK. drawSleeper carries that anchor, which is the one thing about
+       him that is not square-cell arithmetic. */
+    drawSleeper(g, f, f.bedded());
   } else {
     /* Drawn at his size, anchored on his FEET and his center -- the same two
        points hurtbox() builds from, which is what keeps the picture and the
@@ -26648,7 +26896,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'fd18de9085';
+const BUILD_ID = '15ea8e1adf';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -26659,7 +26907,7 @@ const BUILD_ID = 'fd18de9085';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.84';
+const VERSION = '2.85';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

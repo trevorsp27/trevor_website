@@ -319,8 +319,8 @@ test("negative control: Houston's cap instead of a flat heal fails the flat test
      -- same box, same pad, same window, same eighth catch -- and a rainbow is
      now worth twice a bullet. */
   const run = await arena(COBEUS, NICK, { engine: sabotage(
-    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
-    "      absorb: { pad: 14, from: 6, to: 15, cap: 15, fat: 0.04, bite: 8 },") });
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.0625, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 15, cap: 15, fat: 0.0625, bite: 8 },") });
   expectToFail(() => checkFlatHeal(mouth(run), oneCatch(run)),
     "a capped heal should fail the flat test; it passed");
 });
@@ -402,8 +402,10 @@ test("negative control: without the live() clause he eats the bread", async () =
 /* Three seconds, no `rouse` and no `lethal: false`. He is pinned on the last
    open frame of his own move for the whole of it, every button he owns is
    held down through it, his size eases back over the last twenty frames so he
-   gets up a normal man rather than snapping five blit pixels smaller on one
-   frame, and his appetite is cleared on the frame he stands up. */
+   gets up a normal man rather than snapping eight blit pixels smaller on one
+   frame, and his appetite is cleared on the frame he stands up. At the 0.0625
+   step the ramp is 24, 22, 20, 18, 16 drawn pixels where 0.04 gave
+   21, 20, 19, 17, 16. */
 const theBed = (run) => JSON.parse(run(`(function () {
   ${SETUP}
   me.fat = 7; me.health = 40;
@@ -454,7 +456,7 @@ function checkTheBed(m, r) {
   for (let i = 1; i < ramp.length; i++) {
     assert.ok(ramp[i] < ramp[i - 1],
       "and over them he eases back to normal one step at a time rather than " +
-      "popping five blit pixels smaller on one frame; the ramp read " + r.ramp);
+      "popping eight blit pixels smaller on one frame; the ramp read " + r.ramp);
   }
   assert.equal(r.fatAfter, 0,
     "he stands up hungry again -- `fat` is cleared on the frame the timer " +
@@ -666,8 +668,8 @@ test("a sleeping man is not catching, and cannot be fed back to sleep", async ()
    `active` must not be able to reopen this by arithmetic. */
 test("the window put back over the pin frame is still not a way to feed a sleeping man", async () => {
   const run = await arena(COBEUS, NICK, { engine: sabotage(
-    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
-    "      absorb: { pad: 14, from: 6, to: 16, heal: 8, fat: 0.04, bite: 8 },") });
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.0625, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 16, heal: 8, fat: 0.0625, bite: 8 },") });
   checkBedUnderFire(mouth(run), bedUnderFire(run));
 });
 
@@ -678,8 +680,8 @@ test("negative control: the window over the pin frame and no bedded() line, and 
      back UP -- which is the assertion above and is what makes this a control
      rather than a second way of saying the same thing. */
   const run = await arena(COBEUS, NICK, { engine: sabotageBoth(
-    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
-    "      absorb: { pad: 14, from: 6, to: 16, heal: 8, fat: 0.04, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.0625, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 16, heal: 8, fat: 0.0625, bite: 8 },",
     "    if (f.bedded()) return null;", "") });
   expectToFail(() => checkBedUnderFire(mouth(run), bedUnderFire(run)),
     "a bed that a thrown shot extends should fail the under-fire test; it passed");

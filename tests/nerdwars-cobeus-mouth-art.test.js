@@ -31,9 +31,13 @@
  *
  *   ROWS 4, 5 AND 6 ARE HIS. His brow, his two #FFFFFF eye whites and his two
  *   #3D320E pupils are what is left of Cobeus at sixteen pixels. Row 4 is
- *   repainted by nothing ever, row 5 only by a squint in his own skin, row 6
- *   only on the conked cell and only to his own shadow -- because a man
- *   knocked out has his eyes shut. On every other cell his pupils survive.
+ *   repainted by nothing ever, row 5 only by a squint in his own skin, and
+ *   row 6 -- his pupils -- by NOTHING AT ALL. It had one exception until
+ *   2.85: the conked cell, eyes shut, drawn for the three seconds he is in
+ *   bed. That cell is gone. He is drawn lying in the bed now instead of
+ *   standing bolt upright in it, his face comes out of SLEEP_ROWS, and
+ *   drawMouth returns on bedded() before it picks a pose -- which is its own
+ *   test below, because "paints nothing" is an assertion like any other.
  *
  *   THE HOLD MOVES. A held mouth stands still on one attackFrame for as long
  *   as his bar lasts -- up to `charge.hold`, which is forty frames -- and a
@@ -405,8 +409,11 @@ const WHOLE_MOVE = [];
 for (let af = 0; af < MOVE_LEN; af++) WHOLE_MOVE.push([af, 0, 0]);
 const THE_HOLD = [];
 for (let ct = 1; ct <= HOLD_CAP; ct++) THE_HOLD.push([STARTUP, 0, ct]);
+/* CONKED is the frame runSpecial pins him at for all 180 frames of the bed.
+   It is NOT in EVERY_FRAME, because since 2.85 drawMouth paints nothing on
+   it -- it has a test of its own, which is that sentence as an assertion. */
 const CONKED = [[STARTUP + ACTIVE, 180, 0]];
-const EVERY_FRAME = WHOLE_MOVE.concat(THE_HOLD).concat(CONKED);
+const EVERY_FRAME = WHOLE_MOVE.concat(THE_HOLD);
 
 /* Screen pixels -> cell space, by the same arithmetic drawFighter blits the
    body with. `in` is the 16 columns his body occupies; the inhale streaks are
@@ -468,9 +475,10 @@ test("the frame lists this file sweeps are the move the roster describes", async
 
 function checkOnHisFace(frames, pose) {
   const face = FACE[pose];
-  assert.equal(frames.length, MOVE_LEN + HOLD_CAP + 1,
+  assert.equal(frames.length, MOVE_LEN + HOLD_CAP,
     "precondition: the sweep is the whole move, plus every frame of a maximal " +
-    "hold, plus the conked frame; it was " + frames.length);
+    "hold. The bed is not in it: drawMouth paints nothing while he is in one, " +
+    "which test 2b asserts on its own. It was " + frames.length);
   for (const f of frames) {
     assert.ok(f.d === 16,
       "precondition: this is read at sizeMul 1, where the cell is 16 screen " +
@@ -564,9 +572,8 @@ function checkHisFaceSurvives(frames, pose) {
     "precondition: on " + pose + " his pupils sit directly under his eye " +
     "whites, in the same two columns");
 
-  let sawSquint = 0, sawShut = 0;
+  let sawSquint = 0;
   for (const f of frames) {
-    const conked = f.bed > 0;
     for (const c of cells(f)) {
       if (!inCell(c) || !ROWS_ART[c.row]) continue;
 
@@ -588,30 +595,24 @@ function checkHisFaceSurvives(frames, pose) {
       }
 
       if (c.row === 6) {
-        assert.ok(conked,
-          "ROW 6 IS HIS PUPILS, and they survive every cell of the set but " +
-          "one: the conked pose, where he is unconscious and his eyes are " +
-          "shut. attackFrame " + f.af + " is not that pose and it painted " +
+        assert.fail(
+          "ROW 6 IS HIS PUPILS AND THEY SURVIVE EVERY CELL IN THE SET. There " +
+          "was one exception until 2.85 -- the conked pose, eyes shut, drawn " +
+          "for the three seconds he is in bed -- and it is gone with the " +
+          "cell: a sleeping man is drawn lying down by drawSleeper and his " +
+          "shut eye is a SLEEP_ROWS pixel, so nothing this function paints " +
+          "closes an eye any more. attackFrame " + f.af + " painted " +
           c.color + " on row 6, col " + c.col);
-        assert.ok(face.pupils.includes(c.col),
-          "even the conked pose only closes the two pupil columns (" +
-          face.pupils.join(" and ") + "); it painted col " + c.col);
-        assert.equal(c.color.toUpperCase(), SHADOW,
-          "and it closes them in HIS OWN SHADOW (" + SHADOW + "), which is " +
-          "what a shut eye is made of here; it used " + c.color);
-        sawShut++;
       }
     }
   }
 
-  /* Both exceptions have to actually HAPPEN, or this test passes on a set
-     that never paints those rows at all and proves nothing about the rule. */
+  /* The one surviving exception has to actually HAPPEN, or this test passes
+     on a set that never paints that row at all and proves nothing about the
+     rule. */
   assert.equal(sawSquint > 0, true,
     "precondition: the hold squints at least once -- it is one of the four " +
     "things that move -- and nothing on row 5 was painted");
-  assert.equal(sawShut, 2,
-    "and the conked cell shuts exactly two eyes; it painted " + sawShut +
-    " pixels on row 6");
 }
 
 test("rows 4, 5 and 6 are his -- his pupils survive every cell", async () => {
@@ -640,6 +641,54 @@ test("negative control: a squint one row lower eats his pupils", async () => {
     paint(run, { facing: 1, grounded: true, frames: EVERY_FRAME }),
     "standR"),
     "a squint that closes over his pupils should fail the rows-4-5-6 test; " +
+    "it passed");
+});
+
+/* =====================================================================
+   2b. AND A MAN ASLEEP HAS NO MOUTH DRAWN BY THIS FUNCTION AT ALL
+
+   Until 2.85 he did. mouthPose asked bedded() FIRST and answered Z0, a conked
+   cell with the eyes shut, and drawMouth painted it over the ordinary
+   STANDING sprite for all 180 frames of the bed -- a perfectly good sleeping
+   face on a man stood bolt upright in the middle of a bed. The body is drawn
+   lying down now, and rows 5 to 10 of a standing cell are a hole in the air
+   over a man on his back, so the face went with him into SLEEP_ROWS and this
+   function returns on bedded() before it reaches a pose at all.
+
+   The assertion is one number: while he is bedded, drawMouth paints nothing.
+   Its control takes the return back out, C0 is exempt so the gate lets it
+   through, and a mouth reappears in mid-air.
+   ===================================================================== */
+
+function checkBeddedPaintsNothing(frames) {
+  assert.equal(frames.length, 1,
+    "precondition: one frame -- the one runSpecial pins him on for the whole " +
+    "bed; the sweep had " + frames.length);
+  assert.equal(frames[0].bed, 180,
+    "precondition: and he really is bedded on it; bedTimer read " +
+    frames[0].bed);
+  assert.equal(frames[0].px.length, 0,
+    "a bedded Cobeus gets his face from SLEEP_ROWS, on a head that is where " +
+    "his head actually is, so drawMouth paints NOTHING for the whole three " +
+    "seconds. The alternative is the standing cell's rows 5 to 10 painted in " +
+    "the air above a man lying on his back, which is what 2.84 shipped. It " +
+    "painted " + frames[0].px.length + " pixels");
+}
+
+test("a man asleep has no mouth drawn by drawMouth", async () => {
+  const run = await arena(COBEUS, NICK);
+  checkBeddedPaintsNothing(paint(run, { facing: 1, grounded: true,
+                                        frames: CONKED }));
+});
+
+test("negative control: without the bedded() return the mouth is painted in mid-air", async () => {
+  const run = await arena(COBEUS, NICK, { engine: sabotage(
+    "  if (f.bedded()) return;\n" +
+    "  /* TWO CLOCKS, AND THEY ARE DELIBERATELY NOT THE SAME CLOCK.",
+    "  /* TWO CLOCKS, AND THEY ARE DELIBERATELY NOT THE SAME CLOCK.") });
+  expectToFail(() => checkBeddedPaintsNothing(
+    paint(run, { facing: 1, grounded: true, frames: CONKED })),
+    "a mouth still painted over a sleeping man should fail the bedded test; " +
     "it passed");
 });
 

@@ -291,8 +291,8 @@ test("negative control: a window that starts one frame after startup is shut for
      identical -- same pin, same walk, same drain, same ten active frames --
      and the move a player holds open catches nothing while he holds it. */
   const run = await arena(COBEUS, NICK, { engine: sabotage(
-    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
-    "      absorb: { pad: 14, from: 7, to: 15, heal: 8, fat: 0.04, bite: 8 },") });
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.0625, bite: 8 },",
+    "      absorb: { pad: 14, from: 7, to: 15, heal: 8, fat: 0.0625, bite: 8 },") });
   expectToFail(() => checkHeldIsOpen(mouth(run), heldCatch(run)),
     "a mouth that is shut while it is held should fail the held-open test; " +
     "it passed");
@@ -862,19 +862,26 @@ test("negative control: at the old price a thin bar is no recovery at all", asyn
 });
 
 /* =====================================================================
-   9. A SLEEPING MAN STILL HAS A MOUTH, AND SO DOES ONE SHUTTING IT
+   9. A MOUTH SHUTTING STILL HAS A MOUTH -- AND A MAN ASLEEP HAS NONE
 
    drawMouth refuses to paint an OPEN cell on a frame nothing can be caught
    on, because a mouth held wide when the window has shut is a lie about the
-   only thing the player is timing. Two of the seven open cells are not that
-   lie -- C0 is the mouth shutting and Z0 is a man asleep -- and until 2.83
-   nobody had to say so: `absorb.to` was 66, the close ran on 64 to 66 and the
-   bed pinned him on 66, so all of it was inside the window by arithmetic.
+   only thing the player is timing. One of the six open cells is not that lie:
+   C0 is the mouth SHUTTING, which says "too late" rather than "now". Until
+   2.83 nobody had to say so -- `absorb.to` was 66 and the close ran on 64 to
+   66, so all of it was inside the window by arithmetic.
 
-   The move is twenty-eight frames now. The window shuts at 15, the pin is 16
-   and the close is 16 to 18, so every one of them is outside it -- and
-   measured on the built engine without MOUTH_EXEMPT, 179 of the bed's 180
-   frames and all three frames of the close draw nothing at all.
+   IT WAS TWO EXEMPTIONS UNTIL 2.85. Z0, a man asleep, was the other, and it
+   is gone: he is drawn lying in the bed now rather than standing bolt upright
+   in it, his face comes out of SLEEP_ROWS, and drawMouth returns on bedded()
+   before it picks a pose at all. So the bed's assertion here flips from "it
+   paints" to "it paints nothing", and the frame the pin lands on stops being
+   a special case -- with Z0 gone it falls out as the first frame of the close.
+
+   The move is twenty-eight frames. The window shuts at 15, the pin is 16 and
+   the close is 16 to 18, so all of them are outside it -- and measured on the
+   built engine without MOUTH_EXEMPT, all three frames of the close draw
+   nothing at all.
    ===================================================================== */
 
 const everyFrameDraws = (run) => JSON.parse(run(`(function () {
@@ -924,28 +931,45 @@ function checkNothingGoesDark(r) {
   assert.equal(r.heldBlank, 0,
     "and a held mouth paints on every frame of the hold; " + r.heldBlank +
     " of them were blank");
-  assert.equal(r.bedPose, "Z0",
-    "the bed draws the conked cell; it drew " + r.bedPose);
-  assert.ok(r.bedOps > 0,
-    "and it actually draws it. The bed pins him one frame past `absorb.to`, " +
-    "so a sleeping man is outside the catching window by construction -- and " +
-    "nobody is timing a shot against somebody who is asleep. Without the " +
-    "exemption all three seconds of it are a man with no mouth; it painted " +
+  assert.equal(r.bedPose, "C0",
+    "the frame the bed pins him on is not a special case any more: Z0 is " +
+    "gone, so `startup + active` falls out as the first frame of the close. " +
+    "It chose " + r.bedPose);
+  assert.equal(r.bedOps, 0,
+    "and NOTHING is painted on it, whichever pose that is. A bedded Cobeus " +
+    "is drawn lying on his back by drawSleeper and his face -- the shut eye, " +
+    "the breath, the mouth opening on it -- comes out of SLEEP_ROWS, so a " +
+    "mouth built from the STANDING cell's rows 5 to 10 would be a hole in " +
+    "the air above him. That is exactly what 2.84 drew. It painted " +
     r.bedOps + " times");
 }
 
-test("nothing the mouth draws goes dark: the close and the bed are both painted", async () => {
+test("nothing the mouth draws goes dark, and the bed draws nothing at all", async () => {
   const run = await arena(COBEUS, NICK);
   checkNothingGoesDark(everyFrameDraws(run));
 });
 
-test("negative control: without MOUTH_EXEMPT the close and the bed draw nothing", async () => {
+test("negative control: without MOUTH_EXEMPT the close draws nothing", async () => {
   const run = await arena(COBEUS, NICK, { engine: sabotage(
     "  if (MOUTH_OPEN[pose] && !open && !MOUTH_EXEMPT[pose]) return;",
     "  if (MOUTH_OPEN[pose] && !open) return;") });
   expectToFail(() => checkNothingGoesDark(everyFrameDraws(run)),
     "a move with three blank frames in the middle of it should fail the " +
     "nothing-goes-dark test; it passed");
+});
+
+test("negative control: without the bedded() return the bed paints again", async () => {
+  /* The other half, and it has to be its own control: the close and the bed
+     used to be one clause and they are two rules now. Take the return out and
+     drawMouth reaches a pose on the pin frame, C0 is exempt, and a mouth is
+     painted in the air above a man lying on his back -- 2.84 exactly. */
+  const run = await arena(COBEUS, NICK, { engine: sabotage(
+    "  if (f.bedded()) return;\n" +
+    "  /* TWO CLOCKS, AND THEY ARE DELIBERATELY NOT THE SAME CLOCK.",
+    "  /* TWO CLOCKS, AND THEY ARE DELIBERATELY NOT THE SAME CLOCK.") });
+  expectToFail(() => checkNothingGoesDark(everyFrameDraws(run)),
+    "a mouth still painted over a sleeping man should fail the bed clause; " +
+    "it passed");
 });
 
 /* =====================================================================
