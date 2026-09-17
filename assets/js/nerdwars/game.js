@@ -3112,13 +3112,15 @@ ROSTER.cobeus = {
        ago, and the eighth catch is supposed to be a thing he did to himself
        just now.
 
-       THE BED IS A PUNISHMENT AND NOT A PROP. There is no `rouse` -- SLOUCH
-       can be woken by thirty damage because it is a six-hundred-frame ult he
-       CHOSE, and a punishment the opponent can shorten by hitting you is one
-       they are incentivised not to deliver. `lethal` is left undefined,
-       which means true: he can be killed in it. A sleep you cannot die in is
-       not a risk, it is a nap. `guard` 0.6 is the fraction that gets
-       through, the same key SLOUCH uses at 0.5, and `shrink` eases his size
+       THE BED IS A PUNISHMENT AND NOT A PROP. There is no `drain` -- SLOUCH
+       spends damage on its own remaining frames because it is a
+       six-hundred-frame ult Simon CHOSE, and a punishment the opponent can
+       shorten by hitting you is one they are incentivised not to deliver.
+       Here the damage goes where damage goes. He can be killed in it, too:
+       a sleep you cannot die in is not a risk, it is a nap, and that is
+       exactly the trade SLOUCH makes and this does not. `guard` 0.6 is the
+       fraction that gets through -- the last move in the file that uses the
+       key, since SLOUCH gave its half up -- and `shrink` eases his size
        back over the last twenty frames so he gets up a normal man rather
        than snapping twenty-four blit pixels down to sixteen on one frame.
 
@@ -3702,47 +3704,66 @@ ROSTER.simon = {
      calls it the slouch. So: he falls asleep on the spot.
 
      The startup is him nodding off -- the four drawn stages, eyes drooping to
-     slumped -- and the active phase is the sleep: five seconds in which he
-     cannot move or act and CANNOT BE WOKEN. Fully invulnerable, healing a
-     quarter of his bar and refilling his mana, Zzz drifting up while the
-     party carries on around him. Anyone who comes near gets sleepy: slowed
-     inside the aura, and after a second and a half in it they drop off too,
-     stunned until he wakes. Only on the ground -- you can jump over him.
-     When he wakes he stretches, a small ring of knockback to clear space.
+     slumped -- and the active phase is the sleep: ten seconds in which he
+     cannot move or act, his mana costs nothing, the soul climbs out and
+     throws hands, and NOTHING CAN TOUCH HIS HEALTH. Anyone who comes near
+     gets sleepy: slowed inside the aura, and after a second and a half in it
+     they drop off too, stunned until he wakes. Only on the ground -- you can
+     jump over him. When he wakes he stretches, a small ring of knockback to
+     clear space.
 
-     The cost is the five seconds. That is a long time to hand somebody the
-     whole stage. */
+     AND IT IS A TIMER SOMEBODY ELSE CAN SHORTEN, which is the whole of what
+     this move is now. He heals nothing -- he used to heal forty and that is
+     gone -- and he cannot be hurt, so the only thing a blow can take off him
+     is TIME. Every point of damage anybody lands on the sleeping body costs
+     him ten frames of the ten seconds, and when the window is empty he gets
+     up. Sixty damage ends it outright.
+
+     The bar draws itself: `manaFree` and the sleep are the same six hundred
+     frames and move together to the frame, and the glowing stretch on the
+     mana bar has always been that number. So the picture the player is
+     watching IS the clock, and a hit visibly knocks a piece off it. There is
+     nothing to keep in sync because there is only one number.
+
+     The cost is still the ten seconds -- he is rooted, mute and harmless
+     except for the ghost -- and the cost is now something the other player
+     can make cheaper by spending their attention on a man who is asleep next
+     to an aura that puts them to sleep. */
   ult: {
     kind: 'slouch', label: 'SIMON SLOUCH',
     /* 600, not 300. The sleep and the free-mana window are the same ten
-       seconds now and start on the same frame, so the bar running out IS the
-       ult ending -- one clock, one animation, and nothing left over. It used
-       to be five seconds of sleep inside ten seconds of free specials, which
-       meant the second half was a countdown to nothing anybody could see. */
+       seconds and start on the same frame, so the bar running out IS the ult
+       ending -- one clock, one animation, and nothing left over. It used to
+       be five seconds of sleep inside ten seconds of free specials, which
+       meant the second half was a countdown to nothing anybody could see.
+
+       THEY ARE THE SAME NUMBER BECAUSE THEY ARE THE SAME CLOCK. `drain`
+       moves both by the same amount on every hit, so `manaFree` is exactly
+       `startup + active - attackFrame` on every frame of the sleep --
+       measured over 130,606 nap frames of CPU play, zero frames where it was
+       not. It did not hold before this release: `rouse` moved the sleep and
+       left the bar running, and a Simon woken early at frame 32 kept a
+       glowing, marching meter for another 592 frames with no ult behind it.
+       A picture that outlives what it is a picture of is worse than no
+       picture. */
     startup: 24, active: 600, recovery: 18,
     // Cast in the air it was a five-second invulnerable glide that ended
     // in the blast zone with the meter spent.
     groundOnly: true,
-    /* FORTY, up from 25, and it is the price of the body being hittable.
+    /* THERE IS NO `heal` HERE ANY MORE, and its absence is the change.
 
-       The sleep used to buy five things: invulnerability, the heal, the free
-       specials, the aura and the soul. The first of those is gone -- see
-       `rouse` -- and it was by a distance the biggest, so something had to
-       be paid back or the ult stops being worth lying down for. The heal is
-       the right thing to raise, because it is the one payment the sleep
-       makes that you can watch happening on the bar, and it is now in a
-       race with whatever the other player is doing to him: forty over six
-       hundred frames against a `guard` of a half means he comes out ahead
-       only if they land less than eighty damage worth of swings on him.
+       It was 25, then 40, and the forty was priced as compensation for the
+       body being hittable: forty over six hundred frames against a `guard`
+       of a half meant he came out ahead unless somebody landed eighty
+       damage of swings on him. Measured on the shipped 2.85 build over three
+       seeds of sixty CPU matches, he did come out ahead -- about 28 health
+       credited per nap against 5 to 16 taken, because a quarter of the forty
+       was thrown away against the 100 cap and almost nobody paid the eighty.
+       So the ult healed him for lying down and the sleep was free.
 
-       Measured, three seeds of 1200 CPU matches an arm, every arm on the
-       same engine: taking the invulnerability off drops his CPU win rate
-       from 29.2% to 19.2%. `guard` and the no-kill floor put back half of
-       that; this number is what returns the other half, landing him at
-       28.7% -- where he started, which is the point. He is still the
-       weakest character on the roster and this release does not pretend to
-       fix that. */
-    heal: 40,
+       It is gone because it was asked for, and nothing is put back in its
+       place. What the sleep buys now is the ten seconds themselves: he is
+       untouchable in them, and untouchable is not the same as ahead. */
     /* TEN seconds of specials that cost nothing, started the moment he nods
        off -- so the first five are spent asleep and the second five are his
        again when he wakes up. That split is the whole point of the number.
@@ -3821,59 +3842,46 @@ ROSTER.simon = {
       },
     },
     wake: { damage: 6, radius: 26, base: 3.0, scale: 4.0, angle: 70, kx: 0.34202014332566882, ky: 0.93969262078590832 },
-    /* AND YOU CAN SHAKE HIM AWAKE. Thirty damage into the sleeping body ends
-       the sleep on the spot -- he gets the stretch and the ring exactly as if
-       the ten seconds had run out, and the soul goes back in with him.
+    /* TEN FRAMES A POINT, AND IT IS THE WHOLE OF THE ULT NOW.
 
-       This is the half of the change that costs him, and it costs him twice,
-       because it is only reachable at all now that THE BODY CAN BE HIT.
-       Before this the sleep pinned `invuln` at 2 every frame: measured, fifty
-       jabs landed on him over the 600 frames for zero damage, so a
-       thirty-damage rule would have been a number that could never be
-       reached. He is now an ordinary target lying on the floor.
+       He cannot be hurt in his sleep -- see takeSlouch, which is where the
+       invincibility actually lives -- so every point of damage that would
+       have come off his health comes off THE CLOCK instead. Six hundred
+       frames at ten a point is sixty damage to end the nap outright.
 
-       What he keeps is that being hit does not, by itself, interrupt
-       anything: see applyHit, where a sleeping man takes the damage and
-       none of the launch. Thirty is the whole of the interrupt, so waking him
-       is a bill somebody has to pay rather than a single poke -- and the
-       aura is what makes paying it awkward, since standing next to him for
-       ninety frames puts YOU to sleep. It is a third of a health bar, against
-       the 25 he heals: land less than that and you have paid for his nap.
+       SIXTY IS NOT A NEW NUMBER. `rouse` was thirty through a `guard` of a
+       half, which is sixty swung, and the paragraph that argued for it
+       argued from the aura and from the rooting -- both unchanged. What
+       changes is that the sixty now arrives a hit at a time instead of as a
+       cliff, so every blow is worth something. It fired on 4.3% of sleeps
+       before this and it is spent on every one of them now: measured across
+       three seeds of sixty CPU matches, full six-hundred-frame sleeps fall
+       from 91-99% to 24-30% and the mean nap from about 580 frames to about
+       478. That is the shape of the change and not a verdict on it; the
+       ladder measures whether anything broke.
 
-       The tally is `slouchDamage`, a Fighter constructor field zeroed on the
-       frame the eyes close, so it is per-sleep and a rollback carries it. */
-    rouse: 30,
-    /* HALF. What fraction of a hit actually reaches a man asleep on the
-       floor -- the same idea as the `knockbackTakenMul` on Remy's nap,
-       applied to the damage instead of the launch, and for the same reason:
-       a slack body does not take a blow the way a braced one does.
+       TEN, because it is a number you can do in your head while you are
+       playing: one damage is a sixth of a second, a four-damage jab is forty
+       frames, and six hundred is sixty times ten exactly so nothing rounds.
 
-       The tally counts what GETS THROUGH, so "thirty damage wakes him" is
-       thirty damage he really took -- sixty swung. That is the number that
-       makes `rouse` a decision rather than a formality: sixty is three
-       seconds of somebody's full attention, spent standing next to an aura
-       that puts them to sleep in ninety frames. Without it the thirty
-       arrived almost incidentally and the ult was over before the soul had
-       finished climbing out. */
-    guard: 0.5,
-    /* AND YOU CANNOT KILL HIM IN HIS SLEEP. A blow that would take him below
-       zero floors him at one instead: he wakes at one point of health, with
-       nothing left and somebody standing over him, which is punishment
-       enough for a ten-second commitment.
+       It is per point of RAW damage, which is why `guard` is gone rather
+       than kept at a half with this at twenty. Two multipliers on one number
+       are two knobs that do the same thing, and the raw number is the one
+       the player can read off the move list. `guard` itself stays in
+       applyHit, because Cobeus' bed still has one and still takes the damage
+       on the chin.
 
-       The file already has this idea -- a busted reel is
-       `Math.max(1, health - bust.damage)`, an embarrassment that cannot take
-       a stock -- and the alternative is worse than it sounds. Without it the
-       ult becomes uncastable below about forty health, which is exactly the
-       situation a ten-second heal exists for: a comeback move you may not
-       use while behind is not a comeback move.
+       And there is no `lethal` here either, which used to floor him at one
+       point of health instead of killing him. It guarded exactly one
+       subtraction and that subtraction is gone: a man who cannot be damaged
+       does not need a rule about being damaged to death. A branch on a flag
+       nothing writes is a branch that comes true by accident, which is the
+       argument that took buffStats.hold out.
 
-       It is about BLOWS, not about every way a number can fall. A poison or
-       a burn he was already carrying when he lay down goes on ticking in
-       update() and can still finish him there, because that clock was
-       started before the sleep was and nothing about lying down should
-       stop it. */
-    lethal: false,
+       The ledger is `slouchDamage`, a Fighter constructor field zeroed on
+       the frame the eyes close, so it is per-sleep and a rollback carries
+       it. The clock is a pure function of it. */
+    drain: 10,
     damage: 0, base: 0, scale: 0,
   },
 };
@@ -4837,14 +4845,18 @@ ROSTER.houston = {
          engine does: cast, walk, and read the puddle's own `t` on the first
          frame his health moves.)
 
-         WHY THE RECIPROCAL IS A WHOLE NUMBER, because it is load-bearing
-         twice over. One over 0.0625 is exactly 16, and 16 is the droplet
-         cadence in Puddle.update -- one drop for each point the HUD counts
-         up, by construction rather than by being tuned to look like it. And
-         0.0625 is the LARGEST rate with that property that still sits under
-         SLOUCH's 0.0667: an ult that roots him for six hundred frames at
-         half guard restores 0.0667 a frame, and a side effect of a neutral
-         special may not out-heal it. Both caps land on the same number.
+         WHY THE RECIPROCAL IS A WHOLE NUMBER. One over 0.0625 is exactly 16,
+         and 16 is the droplet cadence in Puddle.update -- one drop for each
+         point the HUD counts up, by construction rather than by being tuned
+         to look like it. That is the whole of the reason now.
+
+         It used to be load-bearing twice: 0.0625 was also the largest rate
+         with that property that still sat under SLOUCH's 0.0667, because a
+         side effect of a neutral special may not out-heal an ult that roots
+         him for six hundred frames. SLOUCH heals nothing since 2.86, so the
+         second cap is gone and this is the only healing rate left in the
+         file. It does not move: the number was right for the droplet and the
+         droplet is why it is a sixteenth.
 
          Against the poison on the other half, 0.045 for a hundred and ten,
          the two ends of this object are still very nearly equal and
@@ -7309,9 +7321,13 @@ class Fighter {
        saveSim sweeps it up reflectively and restoreSim, which deletes any key
        it does not find in the snapshot, puts it back. */
     this.aimDown = false;
-    /* How much damage this slouch has taken, for the thirty that ends it
-       early. Zeroed on the frame the eyes close rather than at the end of
-       the last sleep, so it is always about the sleep that is running.
+    /* How much damage this sleep has absorbed. It used to be a tally against
+       a threshold; it is now the LEDGER THE CLOCK IS COMPUTED OFF -- see
+       takeSlouch, which rounds the running total rather than each tick, so a
+       burn ticking a sixteenth of a point a frame costs exactly what a
+       single blow of the same size would. Zeroed on the frame the eyes close
+       rather than at the end of the last sleep, so it is always about the
+       sleep that is running.
 
        In the CONSTRUCTOR like everything else the simulation owns: restoreSim
        deletes any key it cannot find in a snapshot, so a tally first written
@@ -7319,6 +7335,13 @@ class Fighter {
        and a Simon who woke up on one machine and slept on for four more
        seconds on the other is the worst desync this file could produce. */
     this.slouchDamage = 0;
+    /* And how big the last chunk was, in frames, so the HUD can draw the
+       piece that was just knocked off the bar. Written only by applyHit, so
+       a burn ticking a fraction of a frame off underneath cannot overwrite
+       the punch the picture is still showing.
+
+       In the constructor for the reason the line above it is. */
+    this.slouchBite = 0;
     /* And which way a BELCH was aimed: 'level', 'up' or 'down'. Its own
        field rather than a second reading of aimDown, because it is not the
        same question -- aimDown is "is down held right now", this is "which
@@ -7622,8 +7645,8 @@ class Fighter {
      he is not. Shaped like slouching() above deliberately: applyHit asks the
      two of them with one `||`, and forty proven lines there already know
      what to do with a sleeping man. It returns the MOVE because the caller
-     wants what THAT sleep says -- `guard`, and the absent `rouse` and
-     `lethal` that make this one a punishment rather than an ult. */
+     wants what THAT sleep says -- `guard`, and the absent `drain` that makes
+     this one a punishment he can die in rather than an ult he cannot. */
   bedded() {
     if (!(this.bedTimer > 0)) return null;
     const m = this.specialsNow && this.specialsNow.up;
@@ -8255,9 +8278,17 @@ class Fighter {
 
     // Damage over time. Ticks through everything except being dead, so it
     // keeps working while the victim is in hitstun or shielding.
+    /* AND A SLEEPING SIMON PAYS FOR THESE IN TIME LIKE EVERYTHING ELSE.
+       takeSlouch returns false for everybody else and for every other nap,
+       so both clocks below read exactly as they always did. He is not
+       cleansed and the counter is not paused: a poison he lay down carrying
+       goes on ticking, it just spends itself on the rest of his ult. It used
+       to kill him outright -- caught happening in live CPU play, twice --
+       which is the hole that stopped "invulnerable" being true even when the
+       move claimed it. */
     if (this.poison > 0) {
       this.poison--;
-      this.health -= this.poisonDps;
+      if (!this.takeSlouch(this.poisonDps)) this.health -= this.poisonDps;
       /* Once every twenty frames, not every frame. Keyed off the counter
          itself so it stays deterministic and every machine ticks on the same
          frames -- and off the counter DOWN rather than a separate timer, so
@@ -8277,7 +8308,8 @@ class Fighter {
        burn credits nobody. */
     if (this.burn > 0) {
       this.burn--;
-      this.health -= this.burnDps;
+      // Same rule as the poison above, and for the same reason.
+      if (!this.takeSlouch(this.burnDps)) this.health -= this.burnDps;
       // Same throttle as the poison above, and for the same reason.
       if (this.burn % 20 === 0) cue('burn', { slot: this.slot, x: this.x });
       if (this.health <= 0) { this.knockOut(); return; }
@@ -8727,17 +8759,64 @@ class Fighter {
     return this.specialsNow[want] ? want : 'neutral';
   }
 
+  /* EVERY POINT OF DAMAGE HE WOULD HAVE TAKEN, SPENT ON THE CLOCK.
+
+     Returns true when it swallowed the damage, so each of the three places
+     that can hurt a man reads the same way: offer it here first, and only
+     take it off the health bar if it says no. A nap with no `drain` -- which
+     is every nap in the game except Simon's, Cobeus' bed included -- gets a
+     false back and nothing changes for it. That is the whole of the
+     invincibility: there is no `invuln` pin, no `invulnerable` getter, no
+     armor. The damage is real, it is measured, and it is spent on time.
+
+     THE COST COMES OFF THE LEDGER, NOT OFF THE HIT. A burn ticks a sixteenth
+     of a point a frame, which is 0.625 frames: rounding each tick would have
+     made a fifteen-damage burn worth two hundred and forty frames instead of
+     a hundred and fifty. Rounding the RUNNING TOTAL and taking the difference
+     costs the same integer frames however the damage is chopped up, and
+     lands on exactly `drain` times the damage -- measured to the frame over
+     forty-four driven runs.
+
+     AND THE BAR MOVES BY THE SAME DELTA RATHER THAN BEING ASSIGNED. This is
+     called from two different points in a frame -- from update(), where the
+     poison and burn clocks live and attackFrame has not been incremented
+     yet, and from resolveCombat, where it has -- so `manaFree = end -
+     attackFrame` is right from one of them and one frame out from the other.
+     Measured: a Simon who lay down burning ran the whole ten seconds with the
+     bar reading a frame high, on every frame of it. Moving both by the same
+     amount is right from anywhere in the frame, which is the only reason the
+     picture and the ult can be the same number.
+
+     `end - 1` and not `end`, because updateAttack increments attackFrame
+     before runSpecial looks at it -- landing ON the end frame would skip the
+     wake ring and the frame the soul dies on, which is the trap the old
+     `rouse` jump was written around and the reason this keeps its shape. */
+  takeSlouch(dmg) {
+    const u = this.slouching();
+    if (!u || !u.drain) return false;
+    const end = u.startup + u.active;
+    const left = end - this.attackFrame;
+    const before = Math.round(this.slouchDamage * u.drain);
+    this.slouchDamage += dmg;
+    const cost = Math.round(this.slouchDamage * u.drain) - before;
+    const was = this.attackFrame;
+    this.attackFrame = Math.min(end - 1, was + cost);
+    this.manaFree = Math.max(0, this.manaFree - (this.attackFrame - was));
+    if (left > 1 && this.attackFrame >= end - 1) announce('WAKE UP', '#8fd6ff');
+    return true;
+  }
+
   /* ASLEEP IN A SLOUCH, and the ult spec if he is -- null if he is not.
 
-     ONE definition, asked by four places that must never disagree about it:
-     the damage tally and the early wake in applyHit, the soul, which dies the
-     instant the body stops sleeping, the hazard floor, and the drawing. The
-     window used to be spelled out three separate times from attackFrame, and
-     three copies of a frame range is three chances for the ghost to outlive
-     the man by a frame.
+     ONE definition, asked by five places that must never disagree about it:
+     takeSlouch above, the branch in applyHit that routes a blow into it, the
+     soul, which dies the instant the body stops sleeping, the hazard floor,
+     and the drawing. The window used to be spelled out three separate times
+     from attackFrame, and three copies of a frame range is three chances for
+     the ghost to outlive the man by a frame.
 
      It returns the MOVE rather than a boolean because the callers want what
-     that particular sleep says -- `rouse`, `startup`, `active`. There was a
+     that particular sleep says -- `drain`, `startup`, `active`. There was a
      napping() beside it that did the same for Remy's daydream and it went
      with the daydream in 2.83; this is the last one of its shape, and it
      asks after an ult rather than after a `kind`, which is why it is. */
@@ -9644,11 +9723,14 @@ class Fighter {
            is how you know the ult is over. */
         if (this.attackFrame === s.startup) {
           if (s.manaFree) this.manaFree = s.manaFree;
-          /* Zero on the frame the eyes close, so thirty damage means thirty
+          /* Zero on the frame the eyes close, so sixty damage means sixty
              damage into THIS nap. Reset here rather than when he wakes up:
-             the sleep has several ways to end -- the clock, the thirty, a
-             KO, the blast zone -- and only one way to begin. */
+             the sleep has several ways to end -- the clock running out, the
+             clock being drained out, a KO, the blast zone -- and only one way
+             to begin. The bite goes with it so the HUD does not open a fresh
+             nap still drawing the chunk somebody took off the last one. */
           this.slouchDamage = 0;
+          this.slouchBite = 0;
         }
         const asleep = this.attackFrame >= s.startup &&
                        this.attackFrame < s.startup + s.active;
@@ -9657,34 +9739,39 @@ class Fighter {
           projectiles.push(new Soul(this, s.soul));
         }
         if (asleep) {
-          /* HE IS NOT INVULNERABLE ANY MORE. This used to pin `invuln` at 2
-             every frame so that nothing could run it out, which made the
-             five seconds genuinely untouchable -- and made `rouse` above a
-             threshold nothing in the game could ever reach. Measured on the
-             old build: fifty jabs landed into the sleeping body over the 600
-             frames for exactly zero damage.
+          /* AND NOTHING HAPPENS TO HIM HERE, which is worth saying because
+             two things used to.
 
-             So the guard is gone and the body is an ordinary target. What
-             replaces it is not armor, it is INERTIA: applyHit gives a
-             sleeping man the damage and none of the launch, so hitting him
-             moves nothing, interrupts nothing and stuns nothing until the
-             thirty is paid. The aura is the rest of the defense -- ninety
-             frames beside him and you are asleep too. */
-          this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);
+             There was an `invuln` pin, which made the sleep untouchable by
+             running the ordinary i-frame counter -- and that made every blow
+             a MISS, so nothing could be measured and the wake threshold was
+             a number the game could not reach. There was then a heal, forty
+             over six hundred frames, which is gone with the pin's
+             replacement.
 
-          /* Everybody at the party gets sleepy. +2 in the aura against the -1
-             every fighter loses per frame in update(), so it climbs inside
+             What he has instead is in takeSlouch: the blows LAND, they are
+             counted, and what they cost him is the rest of this sleep rather
+             than any of his health. He is still deliberately not
+             `invulnerable` -- the getter says false while he is down -- so
+             the ring-type AoEs that skip i-frames still reach him, because a
+             hit that does not land cannot shorten anything. The aura is the
+             rest of the defense: ninety frames beside him and you are asleep
+             too.
+
+             Everybody at the party gets sleepy. +2 in the aura against the
+             -1 every fighter loses per frame in update(), so it climbs inside
              and drains outside. At `doze` they drop off: written into
              hitstun, which stateHash covers, for the reason LEG DAY's pin is.
              Grounded only -- you can jump over a sleeping man.
 
              Re-pinned EVERY FRAME, two frames at a time, rather than written
              once for the rest of the sleep. A pin written once outlives the
-             sleep if the sleep ends early -- a poison tick or the blast zone
-             takes him out of the ult, runSpecial stops, and everyone he put
-             down would stand there for the rest of the five seconds with no
-             aura around them. Two: one to survive this frame's countdown,
-             one to still be under on the wake frame. */
+             sleep if the sleep ends early -- and the sleep ends early far
+             more often now that damage buys frames off it, so a blast zone,
+             a KO or sixty damage of anybody's attention stops runSpecial and
+             everyone he put down would stand there for the rest of the ten
+             seconds with no aura around them. Two: one to survive this
+             frame's countdown, one to still be under on the wake frame. */
           const r2 = s.aura.radius * s.aura.radius;
           for (const other of fighters) {
             if (other === this || other.eliminated) continue;
@@ -11219,11 +11306,12 @@ class Fighter {
     if (this.hazardCd > 0) { this.hazardCd--; return; }
     if (this.y < hz.y || this.x < 0 || this.x > VW) return;
     if (this.invuln > 0) return;
-    /* And a sleeping man is not burned by the floor. Not a favor: the slouch
-       used to pin `invuln` and this line was already skipping him, so leaving
-       it out would have been a silent second change riding along with the one
-       that took the guard off. A hazard tick sets hitstun and launches, which
-       would end the ult from a source no `rouse` tally can see. */
+    /* And a sleeping man is not burned by the floor. Not a favor, and not
+       the same rule as takeSlouch: a hazard tick sets hitstun and LAUNCHES,
+       which would end the ult outright from a source the ledger never sees.
+       Spending it on the clock instead would mean a Simon who lay down in
+       lava paid for it twice, once in frames and once in being moved. The
+       floor simply does not reach him. */
     if (this.slouching()) return;
 
     this.health -= hz.damage;
@@ -15828,28 +15916,34 @@ const MOUTH_OPEN = { O0: 1, H0: 1, H1: 1, H2: 1, H3: 1, C0: 1 };
 const MOUTH_EXEMPT = { C0: 1 };
 const MOUTH_HOLD = ['H0', 'H1', 'H2', 'H3'];
 
-/* THE SHEET DOES NOT MIRROR HIM, IT SLIDES HIM. standL is standR translated
-   +2 with ZERO differing pixels -- his eye whites sit at cols 6 and 9 facing
-   right and at 8 and 11 facing left -- so a FLIPPED overlay lands two columns
-   off his face and eats his cheek. jumpL is the opposite case: it IS an exact
-   mirror of jumpR, and because mirroring maps col 6 to col 9 its eyes stay at
-   6 and 9. The art above is symmetric about col 7.5, so mirror(art) == art
-   and jumpL wants the overlay UNSHIFTED. Hence: shift only when he is facing
-   left AND grounded, which is the same test sprite() uses to choose stand
-   over jump. He can turn around now, grounded and open, which is exactly the
-   case this rule was written for and the reason standL is authored. What he
-   cannot do is walk in a walking pose: sprite() keys walk frames off state,
-   and he is in 'special'. He slides at a pixel and a half a frame standing
-   up, the same way a man used to slide forty-one pixels standing up while he
-   thought about bread. It is a debt, it is inherited, and it is not paid
-   here. */
-function mouthArt(pose, shift) {
+/* AND THE SHEET MIRRORS HIM NOW, WHICH IS WHY THIS IS SHORTER THAN IT WAS.
+
+   Until 2.86 standL was standR TRANSLATED two columns -- pixel for pixel
+   identical, never flipped at all -- so his eye whites sat at cols 6 and 9
+   facing right and at 8 and 11 facing left, and this overlay had to slide two
+   columns with them or it ate his cheek. That is also why he faced RIGHT
+   whenever he stood still and only when he stood still: standing is the one
+   pose that uses the cell. build.py repairs it in memory now, the way it has
+   always repaired Ladeane's missing alpha and for the same reason, so all
+   four of his left cells are exact flips of their right partners and every
+   one of them puts his pupils back at 6 and 9.
+
+   The art above is symmetric about col 7.5, so mirror(art) == art: ONE
+   unshifted, unflipped overlay is correct on all four cells, and the `shift`
+   argument this function used to take has no true case left anywhere. It is
+   removed rather than left false at the call site, because a parameter
+   nothing can pass is a branch that will be true again by accident one day --
+   the same argument that took buffStats.hold out.
+
+   What he still cannot do is walk in a walking pose: sprite() keys walk
+   frames off state, and he is in 'special' for the whole of OPEN WIDE. He
+   slides at a pixel and a half a frame standing up, the same way a man used
+   to slide forty-one pixels standing up while he thought about bread. It is a
+   debt, it is inherited, and it is not paid here either. */
+function mouthArt(pose) {
   const src = MOUTH_ROWS[pose], rows = [];
-  for (let y = 0; y < 16; y++) {
-    const r = src[y];
-    rows.push(!r ? MOUTH_BLANK : shift ? '..' + r.slice(0, 14) : r);
-  }
-  return pixelArt('mouth.' + pose + (shift ? 'L' : 'R'), rows, MOUTH_PAL, false);
+  for (let y = 0; y < 16; y++) rows.push(src[y] || MOUTH_BLANK);
+  return pixelArt('mouth.' + pose, rows, MOUTH_PAL, false);
 }
 
 /* THE FRAME INDEX COMES OFF attackFrame, which is snapshotted, so a rollback
@@ -15967,7 +16061,7 @@ function drawMouth(g, f) {
      is rounded and the mouth cannot slide off his face at sizeMul 1.5 or at
      sizeMul 4. */
   const d = Math.round(16 * sk);
-  g.drawImage(mouthArt(pose, f.facing < 0 && f.grounded),
+  g.drawImage(mouthArt(pose),
               Math.round(f.x - 8) + 8 - (d >> 1),
               Math.round(f.y - 16) + 16 - d, d, d);
   if (!open) return;
@@ -22622,53 +22716,65 @@ function applyHit(attacker, defender, move, sourceX, scale) {
      tally is then the ONLY thing that reaches him and there is no second
      path by which he can quietly lose the ult.
 
-     The KO is the exception that has to stay: thirty is an interrupt, but
-     a health bar reaching zero is a stock, and a sleeping man is now
-     killable. That is the real cost of taking the guard off.
+     AND FOR SIMON THE DAMAGE NEVER ARRIVES AT ALL. takeSlouch takes it and
+     spends it on the rest of his ult; his health is not touched by anything
+     that comes through here, at any size, so there is no KO to check for and
+     the clause that used to floor him at one point of health is gone with the
+     `lethal` that drove it. Cobeus' bed has no `drain`, falls through, and
+     keeps every sentence above including the stock.
 
-     `dmg` is what the tally counts -- the buffed, scaled number that actually
-     came off the bar -- so thirty damage means thirty damage. */
+     `dmg` is what the ledger counts -- the buffed, scaled number that would
+     have come off the bar -- so sixty damage is sixty frames' worth of
+     somebody's real output and not sixty swung at a guard. */
   /* AND THE SAME FORTY LINES ANSWER THE BED. Cobeus' eighth catch lays him
-     out for three seconds with no `rouse` and no `lethal: false`, so every
-     sentence above is already true of him: he takes the damage scaled by
-     `guard`, he does not flinch, he cannot be grabbed or poisoned or
-     shield-broken, and a bar reaching zero still takes his stock. The pin
-     in runSpecial keeps holding him and the hundred and eighty frames run
-     down whatever anybody does to him. One `||` rather than a second copy of
-     this block, because two copies is two things that can drift. */
+     out for three seconds with no `drain`, so the second half of this block
+     is his unchanged: he takes the damage scaled by `guard`, he does not
+     flinch, he cannot be grabbed or poisoned or shield-broken, and a bar
+     reaching zero still takes his stock. The pin in runSpecial keeps holding
+     him and the hundred and eighty frames run down whatever anybody does to
+     him. One `||` rather than a second copy of this block, because two
+     copies is two things that can drift -- and the one line that differs
+     between the two sleeps is a key lookup rather than a second branch. */
   const nap = defender.slouching() || defender.bedded();
   if (nap) {
     /* SOFTENED, the same way Remy's nap softens knockback and for the same
        reason: a body slack on the floor does not take a hit the way a man on
-       his feet does. `guard` is the fraction that gets through, and the tally
-       counts what GETS THROUGH -- so "thirty damage wakes him" is thirty
-       damage he actually took, not thirty swung at him. */
+       his feet does. `guard` is the fraction that gets through. It is the
+       BED's key now -- SLOUCH dropped its half, because a fraction of the
+       damage and a frames-per-point rate are two knobs turning the same
+       screw -- and it is still read from the nap rather than from a `kind`,
+       so a nap that wants one has one. */
     const dealt = dmg * (nap.guard == null ? 1 : nap.guard);
-    defender.health -= dealt;
-    defender.slouchDamage += dealt;
+    /* THE CLOCK, OR THE HEALTH BAR, AND NEVER BOTH. takeSlouch takes it if
+       this nap spends damage on time -- Simon's, and only his -- and the
+       health bar never hears about it, which is what "invincible" means here
+       and is the whole of where it is implemented. The bed has no `drain`,
+       so it falls through to the same three lines it has always run, guard
+       and stock and all. One branch, two naps, and the difference is a key
+       in the roster rather than a `kind ===` in combat code. */
+    const wasLeft = defender.manaFree;
+    if (!defender.takeSlouch(dealt)) {
+      defender.slouchDamage += dealt;
+      defender.health -= dealt;
+      /* A bar reaching zero is still a stock. There is no floor on this
+         path and there is not supposed to be one: a sleep you cannot die in
+         is not a risk. */
+      if (defender.health <= 0) { defender.knockOut(); return; }
+    } else {
+      /* What the HUD draws as the piece knocked off. Taken here rather than
+         inside takeSlouch so a poison ticking a third of a frame off
+         underneath cannot overwrite the chunk a punch is still showing. */
+      defender.slouchBite = wasLeft - defender.manaFree;
+    }
     defender.sinceHitFrames = 0;
     // He does not flinch; the attacker still feels it land.
     defender.hitstop = 0;
     attacker.hitstop = COMBAT.hitstopLight;
-    addEffect('hit', defender.x, defender.y - 7, '#ffffff');
+    /* The bar's own blue when the bar is what took it, so the flash on his
+       body and the chunk off his meter are one event rather than two. White
+       for the bed, which is still taking it on the chin. */
+    addEffect('hit', defender.x, defender.y - 7, nap.drain ? '#9fe8ff' : '#ffffff');
     cue('hit', { slot: defender.slot, x: defender.x });
-    /* KILLED IN HIS SLEEP, or not. `lethal: false` floors him at one point
-       instead: the sleep then costs him everything except the stock, and the
-       thirty is the only thing that can end it early. Which of the two is
-       right is a balance question and is answered in the roster, not here. */
-    if (defender.health <= 0) {
-      if (nap.lethal === false) { defender.health = 1; }
-      else { defender.knockOut(); return; }
-    }
-    /* UP. One frame short of the end of the sleep, because updateAttack
-       increments attackFrame before runSpecial looks at it -- so the next
-       frame lands exactly on startup + active, which is the frame the wake
-       ring already fires on and the frame the soul already dies on. Writing
-       the end frame itself would have skipped both. */
-    if (nap.rouse && defender.slouchDamage >= nap.rouse) {
-      defender.attackFrame = nap.startup + nap.active - 1;
-      announce('WAKE UP', '#8fd6ff');
-    }
     return;
   }
 
@@ -26473,6 +26579,8 @@ function drawHUD() {
        current running through it, and the lit stretch is how much of the
        ten seconds is left. It shrinks back along the bar as it runs out,
        which is the countdown a permanently full bar cannot otherwise show.
+       For the slouch it is not a picture OF the clock, it is the clock: the
+       ult ends on the frame this reaches zero, however it got there.
 
        Two fillStyle changes for the whole bar, not one per cell: this is
        the same shape of loop over the same size of rectangle as the matrix
@@ -26480,13 +26588,45 @@ function drawHUD() {
     if (f.manaFree > 0) {
       const span = (f.def.ult && f.def.ult.manaFree) || f.manaFree;
       const lit = barW * clamp(f.manaFree / span, 0, 1);
+      /* AND IT HAS TO LURCH, or a drain nobody can see is the same as no
+         drain. This bar is the slouch's clock, and since 2.86 a hit takes a
+         piece out of it -- ten frames a point -- so the picture has to show
+         the piece coming off rather than quietly being shorter next frame.
+
+         Three things, all fillRect, all off numbers that were already here:
+         the whole bar kicks one pixel left for three frames, the chunk that
+         was just taken is drawn PAST the new end, and for the first two
+         frames that chunk bites four pixels back INTO the lit stretch so the
+         break reads as a piece knocked off rather than a piece added on.
+
+         RED, not white, and it was rendered both ways before choosing. The
+         marching current is already 3px white dashes every 9px, so a white
+         chunk past the end is indistinguishable from a dash for anything
+         under about six damage. #ff6b6b is the red this same bar already
+         flashes when a special is refused, so the meter has one vocabulary
+         for "something went wrong here" and it reads at x1 against both the
+         pale lit stretch and the mid-blue track.
+
+         Keyed to sinceHitFrames, which only a BLOW zeroes. A burn drains the
+         bar quietly, and it should: it is a trickle, and a trickle that
+         flashed the bar two hundred and forty times would strobe. */
+      const hitAge = f.sinceHitFrames;
+      const kick = hitAge < 3 ? 1 : 0;
       sctx.fillStyle = '#9fe8ff';
-      sctx.fillRect(px(bx), px(manaY), px(lit), px(2));
+      sctx.fillRect(px(bx - kick), px(manaY), px(lit), px(2));
+      if (f.slouchBite > 0 && hitAge < 8) {
+        const bite = Math.min(barW * clamp(f.slouchBite / span, 0, 1), barW - lit);
+        const cap = hitAge < 2 ? Math.min(4, lit) : 0;
+        sctx.globalAlpha = 1 - hitAge / 8;
+        sctx.fillStyle = '#ff6b6b';
+        sctx.fillRect(px(bx - kick + lit - cap), px(manaY), px(bite + cap), px(2));
+        sctx.globalAlpha = 1;
+      }
       sctx.fillStyle = '#ffffff';
       const phase = (battleFrames * 0.9) % 9;
       for (let i = -9 + phase; i < lit; i += 9) {
         if (i < 0) continue;
-        sctx.fillRect(px(bx + i), px(manaY), px(Math.min(3, lit - i)), px(2));
+        sctx.fillRect(px(bx - kick + i), px(manaY), px(Math.min(3, lit - i)), px(2));
       }
     }
 
@@ -26896,7 +27036,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '15ea8e1adf';
+const BUILD_ID = '8964a388db';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -26907,7 +27047,7 @@ const BUILD_ID = '15ea8e1adf';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.85';
+const VERSION = '2.86';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

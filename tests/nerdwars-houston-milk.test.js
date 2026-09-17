@@ -1052,10 +1052,13 @@ function checkDrop(d) {
   assert.equal(Math.round(1 / d.heal), d.modulus,
     "and the cadence in Puddle.update has to BE that number. One over " +
     d.heal + " is " + Math.round(1 / d.heal) + " and the source says " + d.modulus);
-  assert.ok(d.heal < d.slouch,
-    "and the rate has to stay under SLOUCH's " + d.slouch + " a frame: an ult " +
-    "that roots him for six hundred frames at half guard restores that much, " +
-    "and a side effect of a neutral special may not out-heal it. It is " + d.heal);
+  /* THERE WAS A SECOND CEILING HERE AND IT IS GONE. 0.0625 also had to stay
+     under SLOUCH's 0.0667, because a side effect of a neutral special may not
+     out-heal an ult that roots Simon for six hundred frames. SLOUCH heals
+     nothing since 2.86 -- damage comes off its clock instead of his health --
+     so there is no other healing rate in the file to be under. The number
+     does not move: the droplet cadence above is why it is a sixteenth, and
+     that reason is untouched. */
   assert.ok(Math.abs(d.curdle * d.heal - 4) < 1e-9,
     "which lands the whole fresh spill on exactly four points of health: " +
     d.curdle + " frames at " + d.heal + " is " + (d.curdle * d.heal));
@@ -1069,9 +1072,6 @@ test("one droplet is exactly one point of health", async () => {
   checkDrop({
     heal: Number(run("SPEC.heal")),
     curdle: Number(run("SPEC.curdle")),
-    // SLOUCH's own rate, derived rather than typed: a total over the frames
-    // it is guaranteed. It is the ceiling this one has to stay under.
-    slouch: Number(run("ROSTER.simon.ult.heal / ROSTER.simon.ult.active")),
     modulus: Number(m[1]),
   });
 });
@@ -1087,7 +1087,6 @@ test("control: a rate whose reciprocal is not the cadence fails it", async () =>
   expectToFail(() => checkDrop({
     heal: Number(run("SPEC.heal")),
     curdle: Number(run("SPEC.curdle")),
-    slouch: Number(run("ROSTER.simon.ult.heal / ROSTER.simon.ult.active")),
     modulus: Number(m[1]),
   }), "a heal whose reciprocal is not the droplet cadence should fail checkDrop");
 });

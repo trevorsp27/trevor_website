@@ -1250,12 +1250,13 @@ test("negative control: a guillotine that falls at half speed fails the drop tes
 
 const SLOUCH_REC =
   "{ af: me.attackFrame, st: me.state, x: me.x, inv: me.invuln, hp: me.health, mana: me.mana," +
-  " sl: !!me.slouching(), sd: me.slouchDamage," +
+  " sl: !!me.slouching(), sd: me.slouchDamage, bite: me.slouchBite, stk: me.stocks," +
   " mf: me.manaFree, soul: countOf(Soul)," +
   " fd: foe.drowsy, fst: foe.state, fhp: foe.health, fgr: foe.grounded }";
 
-/* Health at 40 and mana at 10, so the heal and the free-mana window have
-   room to be seen; the ult meter is full. `at` is where the foe stands. */
+/* Health at 40 and mana at 10, so a health bar that moves has room to move in
+   BOTH directions and the free-mana window has room to be seen; the ult meter
+   is full. `at` is where the foe stands. */
 /* 700 by default, not 360. Ten seconds of sleep plus the 24 nodding off and
    the 18 getting up is 642 frames, and a recording that stopped at 360 ended
    mid-sleep -- every check that reads the wake frame came back undefined,
@@ -1278,13 +1279,14 @@ function checkSleep(log, S) {
   for (let f = 1; f < sleepFrom; f++) {
     assert.equal(log[f].inv, 0, "not yet untouchable while he nods off; invuln was " + log[f].inv + " on frame " + f);
   }
-  /* HE IS NOT UNTOUCHABLE ANY MORE, and that is the point of the release
-     rather than an omission. The sleep used to pin `invuln` at 2 every frame
-     so nothing could run it out; it pins nothing now, because `rouse` -- the
-     rule that thirty damage wakes him -- is unreachable against a body no
-     hit can land on. What replaces the guard is in applyHit: a sleeping man
-     takes the damage and none of the launch, so he is still rooted, still
-     asleep, and still nobody's to grab.
+  /* HE CARRIES NO I-FRAMES, AND THAT IS ON PURPOSE RATHER THAN AN OMISSION.
+
+     Nothing can take his health -- see the test below this one -- but that is
+     NOT done by pinning `invuln`, and the difference is the whole mechanic.
+     An invulnerable body is a body every blow MISSES, and a blow that misses
+     cannot pay for anything: the damage has to land and be measured before it
+     can be spent on the clock. So he is un-damageable and not invulnerable,
+     which also keeps the ring-type AoEs that skip i-frames reaching him.
 
      Asserted from BOTH sides, because "invuln is 0" alone would also be true
      of a Simon who was never in the ult at all: he is asleep by the engine's
@@ -1299,17 +1301,22 @@ function checkSleep(log, S) {
   }
   assert.ok(!log[sleepFrom - 1].sl && !log[wake].sl,
     "asleep for exactly the active window and not a frame either side");
-  assert.equal(log[sleepFrom - 1].hp, 40, "no healing before the sleep");
-  for (let f = sleepFrom; f < wake; f++) {
-    assert.ok(log[f].hp > log[f - 1].hp, "health climbs on every sleeping frame; it did not on frame " + f);
+  /* AND HIS HEALTH DOES NOT MOVE, IN EITHER DIRECTION.
+
+     It used to climb: forty over the six hundred frames, which is what the
+     ult was paid when the body stopped being invulnerable. Measured on the
+     shipped 2.85 build it returned about 28 of that forty per nap against 5
+     to 16 taken, so lying down was worth health. It is gone, and nothing is
+     put in its place -- the sleep buys the ten seconds and not a point. */
+  assert.equal(u.heal, undefined,
+    "there is no `heal` on the slouch any more and there is not supposed to " +
+    "be one; the roster says " + u.heal);
+  for (let f = 0; f < wake + u.recovery; f++) {
+    assert.equal(log[f].hp, log[0].hp,
+      "his health does not move for the whole move -- no heal going in and " +
+      "nothing takes it coming out; it went " + log[0].hp + " -> " +
+      log[f].hp + " on frame " + f);
   }
-  assert.ok(near(log[wake - 1].hp, 40 + u.heal, 1e-6),
-    "a full sleep heals " + u.heal + ": from 40 to " + (40 + u.heal) + "; he woke on " + log[wake - 1].hp);
-  assert.equal(u.heal, 40,
-    "and the heal is 40 -- retune on purpose, up from 25. It is what the ult " +
-    "was paid when the body stopped being invulnerable: forty over ten " +
-    "seconds against a `guard` of a half means he comes out ahead only if " +
-    "they land less than eighty damage worth of swings on him");
 
   /* The mana is not refilled, it is suspended: while the window runs the bar
      is simply pinned full. The pin runs at the top of update(), one frame
@@ -1344,6 +1351,17 @@ function checkSleep(log, S) {
   assert.equal(log[wake].mf, 0,
     "and empty on the wake frame exactly: the bar running out is how you know the ult is over; " +
     "manaFree read " + log[wake].mf);
+  /* ONE NUMBER, NOT TWO THAT AGREE. `manaFree` is exactly the frames left in
+     the sleep on every frame of it, which is why damage can be spent on the
+     bar and the picture cannot lie about the clock. Undisturbed this is
+     implied by the tick above; under fire it is the only thing holding the
+     two together, and it is what the drain test leans on. */
+  for (let f = sleepFrom; f < wake; f++) {
+    assert.equal(log[f].mf, u.startup + u.active - log[f].af,
+      "the free window IS the frames left in the sleep, on every frame of it: " +
+      "on frame " + f + " attackFrame was " + log[f].af + ", which leaves " +
+      (u.startup + u.active - log[f].af) + ", and manaFree read " + log[f].mf);
+  }
 
   if (u.soul) {
     // The part of him that does not sleep: out when the eyes close, gone when they open.
@@ -1397,39 +1415,52 @@ function checkWakeRing(log, S) {
 // window: 24 + 600 + 18 = 642, and the pair end together.
 const SLEEP_FRAMES = 700;
 
-test("SLOUCH: 24 frames to nod off, then ten seconds asleep -- untouchable, healing, rooted, and every special free for exactly as long", async () => {
+test("SLOUCH: 24 frames to nod off, then ten seconds asleep -- rooted, un-damageable, healing nothing, and every special free for exactly as long", async () => {
   const run = await simonVsReese();
   const S = SPEC(run);
   checkSleep(slouch(run, 30, "", SLEEP_FRAMES), S);
 });
 
-test("negative control: a sleep that goes back to being untouchable fails the sleep test", async () => {
-  /* The guard put BACK, which is the shape this control used to have upside
-     down. It matters more than a rename: an invulnerable body is a body
-     `rouse` can never reach, so a pin quietly reintroduced here would make
-     "thirty damage wakes him" a rule with no way of ever firing -- and
-     nothing else in the suite would notice, because every other assertion
-     about the sleep is about a Simon nobody is hitting. */
+test("negative control: a sleep that pins i-frames again fails the sleep test", async () => {
+  /* The old guard put BACK. It matters more than a rename: an invulnerable
+     body is a body every blow MISSES, so a pin quietly reintroduced here
+     would leave a move that says damage costs him time and a body no damage
+     can reach -- and nothing else in the suite would notice, because every
+     other assertion about the sleep is about a Simon nobody is hitting. */
   const run = await simonVsReese({ engine: sabotage(
-    "          this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);",
-    "          this.invuln = Math.max(this.invuln, 2);\n" +
-    "          this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);") });
+    "        if (asleep) {",
+    "        if (asleep) {\n          this.invuln = Math.max(this.invuln, 2);") });
   const S = SPEC(run);
   const log = slouch(run, 30, "", SLEEP_FRAMES);
   expectToFail(() => checkSleep(log, S),
-    "with the sleeping body untouchable again the sleep test should fail; it passed");
+    "with the sleeping body carrying i-frames again the sleep test should fail; it passed");
+});
+
+test("negative control: a sleep that heals again fails the sleep test", async () => {
+  /* The forty put back, at the rate it ran at in 2.85. This is the assertion
+     the release is about, so it gets the control that restores exactly what
+     was taken out rather than a nearby mutation. */
+  const run = await simonVsReese({ engine: sabotage(
+    "        if (asleep) {",
+    "        if (asleep) {\n          this.health = Math.min(COMBAT.maxHealth, this.health + 40 / s.active);") });
+  const S = SPEC(run);
+  const log = slouch(run, 30, "", SLEEP_FRAMES);
+  expectToFail(() => checkSleep(log, S),
+    "with the sleep healing him again the sleep test should fail; it passed");
 });
 
 /* =====================================================================
-   SHAKING HIM AWAKE
+   DAMAGE DRAINS THE BAR
 
-   Thirty damage into the sleeping body ends the sleep on the spot. Three
-   numbers make that rule, and each is load-bearing in a different way:
+   He cannot be hurt in his sleep and he is not healed by it. What a blow
+   takes instead is TIME: ten frames of the ten seconds for every point, so
+   sixty damage ends the nap outright and anything less shortens it by exactly
+   what it was worth. One number does it -- `drain` -- and the bar the player
+   is watching is the same clock, so the picture cannot drift from the rule.
 
-     rouse   the thirty itself
-     guard   how much of a swing reaches a man asleep on the floor (half),
-             which is what makes the thirty cost sixty
-     lethal  false -- a blow cannot take the stock, only wake him
+   Sixty is not a new number. It is `rouse` 30 behind a `guard` of a half,
+   which was sixty swung; what changed is that it now arrives a hit at a time
+   instead of as a cliff, and costs him no health on the way.
 
    Everything here drives synthetic hits through applyHit rather than
    arranging a real swing, because what is under test is the rule and not
@@ -1439,7 +1470,12 @@ test("negative control: a sleep that goes back to being untouchable fails the sl
 
 const SHAKE = (perHit, every, from, until) => ({
   mana: false,
-  pre: "if (i >= " + from + " && i < " + until + " && (i % " + every + ") === 0) {" +
+  /* `me.slouching()` guards the swing so every hit these tests count is one
+     that went into the SLEEPING body. Without it the tail of a run that woke
+     early keeps landing blows on a man who is awake, and the ledger the
+     arithmetic is checked against stops being about the nap. */
+  pre: "if (i >= " + from + " && i < " + until + " && (i % " + every + ") === 0" +
+       "    && me.slouching()) {" +
        "  applyHit(foe, me, { damage: " + perHit + ", base: 1, scale: 1," +
        "    angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476 }, foe.x);" +
        "}",
@@ -1447,48 +1483,83 @@ const SHAKE = (perHit, every, from, until) => ({
   rec: SLOUCH_REC,
 });
 
+/* THE LEDGER, ASSERTED AS ONE LINE OF ARITHMETIC.
+
+   On every frame he is still asleep, attackFrame has run ahead of the wall
+   clock by exactly ten frames for every point of damage the nap has absorbed.
+   That single equality is the whole mechanic: `af - f` is the time the sleep
+   has lost and `sd` is what was spent to lose it.
+
+   Math.round on the RUNNING TOTAL rather than per tick, which is what the
+   engine does and why a burn ticking a sixteenth of a point a frame costs the
+   same as one blow of the same size. */
+function checkDrainLedger(log, S, why) {
+  const u = S.ult;
+  let paid = 0;
+  for (let f = u.startup; f < log.length; f++) {
+    if (!log[f].sl) break;
+    assert.equal(log[f].af - f, Math.round(log[f].sd * u.drain),
+      why + ": on frame " + f + " the nap had absorbed " + log[f].sd +
+      " damage, which is " + Math.round(log[f].sd * u.drain) + " frames at " +
+      u.drain + " a point, and attackFrame had run " + (log[f].af - f) +
+      " frames ahead of the clock");
+    paid = log[f].sd;
+  }
+  return paid;
+}
+
 /* The frame the sleep stopped, whatever stopped it. */
 const endOfSleep = (log) => {
   for (let i = 1; i < log.length; i++) if (log[i - 1].sl && !log[i].sl) return i;
   return -1;
 };
 
-test("thirty damage into the sleeping body wakes him, and the soul goes in with him", async () => {
+test("every point of damage costs him ten frames of nap, and the soul goes in with him", async () => {
   const run = await simonVsReese();
   const S = SPEC(run);
-  assert.equal(S.ult.rouse, 30, "thirty damage -- retune on purpose");
-  assert.equal(S.ult.guard, 0.5,
-    "and half of every swing reaches him, so the thirty costs sixty -- retune on purpose");
+  assert.equal(S.ult.drain, 10, "ten frames a point -- retune on purpose");
+  assert.equal(S.ult.active / S.ult.drain, 60,
+    "which puts the whole nap at sixty damage: " + S.ult.active + " frames at " +
+    S.ult.drain + " a point. Sixty is what `rouse` 30 behind a `guard` of a " +
+    "half already cost, arriving a hit at a time instead of as a cliff");
+  /* The three keys this replaced. They are asserted ABSENT rather than left
+     to rot: a `guard` quietly put back would halve the rate with no other
+     symptom, and a `lethal` put back would be a branch on a flag nothing
+     writes. */
+  assert.equal(S.ult.guard, undefined,
+    "`guard` is gone from the slouch -- the drain is per point of RAW damage, " +
+    "and two multipliers on one number are two knobs doing one job");
+  assert.equal(S.ult.rouse, undefined,
+    "`rouse` is gone -- the threshold is `active` itself now");
+  assert.equal(S.ult.lethal, undefined,
+    "`lethal` is gone -- it guarded one subtraction and the subtraction is gone");
 
   const full = slouch(run, 200, "", SLEEP_FRAMES);
   const natural = endOfSleep(full);
   assert.equal(natural, S.ult.startup + S.ult.active,
     "precondition: undisturbed, the sleep runs its whole length and ends on frame " +
     (S.ult.startup + S.ult.active) + "; it ended on " + natural);
+  checkDrainLedger(full, S, "undisturbed, nothing has been spent");
 
-  // Twelve a swing, six swings: 36 through the guard, over the threshold.
+  /* Six twelve-damage swings, forty frames apart. Every one of them has to
+     cost exactly a hundred and twenty frames, which the ledger checks on
+     every single frame rather than once at the end. */
   const shaken = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
-    SHAKE(12, 40, 41, 281));
+    SHAKE(12, 40, 41, 641));
   const woke = endOfSleep(shaken);
   assert.ok(woke > 0 && woke < natural,
-    "six twelve-damage swings should end the sleep early; it ended on frame " +
+    "twelve-damage swings should shorten the sleep; it ended on frame " +
     woke + " against " + natural + " undisturbed");
-  /* Read ON the wake frame, not the one before it. The hit that pays the
-     thirty lands inside the step that also carries attackFrame over the end
-     of the sleep, so the last frame he is still asleep on is the one BEFORE
-     the tally was complete. */
-  assert.ok(shaken[woke].sd >= S.ult.rouse,
-    "and only once the tally had reached " + S.ult.rouse + "; it read " +
-    shaken[woke].sd + " on the wake frame and " + shaken[woke - 1].sd +
-    " the frame before");
+  const paid = checkDrainLedger(shaken, S, "under twelve-damage swings");
+  assert.ok(paid > 0, "precondition: the swings landed; the ledger read " + paid);
   assert.equal(shaken[woke].soul, 0,
     "the soul goes back in on the same frame; there were " + shaken[woke].soul);
   assert.equal(shaken[woke].af, S.ult.startup + S.ult.active,
-    "and it is the WAKE frame he is moved to, not some frame in the middle -- the " +
+    "and it is the WAKE frame he lands on, not some frame in the middle -- the " +
     "stretch ring and the soul both hang off that one number; attackFrame read " +
     shaken[woke].af);
   // Rooted and unflinching the whole way: a hit that moved him would end the
-  // move by a route the tally knows nothing about.
+  // move by a route the ledger knows nothing about.
   for (let f = 1; f < woke; f++) {
     assert.equal(shaken[f].x, shaken[0].x,
       "he never moves off his spot; x changed on frame " + f);
@@ -1497,21 +1568,43 @@ test("thirty damage into the sleeping body wakes him, and the soul goes in with 
   }
 });
 
-test("under the threshold he sleeps it off", async () => {
-  /* The other half of the same rule, and the half a single "it woke early"
-     test would let rot: eight a swing is 24 through the guard, four short,
-     and four short has to be worth nothing at all. */
+test("a hit too small to end it still costs exactly what it is worth", async () => {
+  /* The other half of the same rule, and the half a single "it ended early"
+     test would let rot. Eight a swing, forty frames apart, is eighty frames a
+     swing: the nap has to get shorter by exactly that much and by nothing
+     else, and it has to still end on the bar rather than on a threshold. */
   const run = await simonVsReese();
   const S = SPEC(run);
   const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
-    SHAKE(8, 40, 41, 281));
+    SHAKE(8, 40, 41, 641));
   const woke = endOfSleep(log);
-  assert.equal(woke, S.ult.startup + S.ult.active,
-    "24 damage is under the " + S.ult.rouse + " and must not end anything; the sleep " +
-    "ended on frame " + woke);
-  const paid = Math.max(...log.filter((r) => r.sl).map((r) => r.sd));
-  assert.ok(paid > 0 && paid < S.ult.rouse,
-    "the tally should have counted them and stopped short: it reached " + paid);
+  const paid = checkDrainLedger(log, S, "under eight-damage swings");
+  assert.ok(paid > 0, "precondition: the swings landed; the ledger read " + paid);
+  assert.ok(woke < S.ult.startup + S.ult.active,
+    "and enough of them do end it: the sleep ran to frame " + woke);
+  assert.equal(log[woke].mf, 0,
+    "on the bar, not on a threshold: the free window reads zero on the frame " +
+    "the sleep ends and the ult ends there because of it; it read " + log[woke].mf);
+  assert.ok(log[woke - 1].mf >= 1,
+    "and it had frames left on the frame before; it read " + log[woke - 1].mf);
+});
+
+test("negative control: one frame short per hit does not match the ledger", async () => {
+  /* The mechanism rather than the constant. `drain` is a retune-on-purpose
+     number and a control that changed it would only prove the roster was
+     read; what has to be controlled is that attackFrame really moves by
+     `drain` times the damage and not by something near it. One frame short a
+     hit is the smallest lie the ledger has to catch, and it is invisible
+     everywhere else -- the sleep just lasts six frames longer. */
+  const run = await simonVsReese({ engine: sabotage(
+    "    this.attackFrame = Math.min(end - 1, was + cost);",
+    "    this.attackFrame = Math.min(end - 1, was + cost - 1);") });
+  const S = SPEC(run);
+  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    SHAKE(12, 40, 41, 641));
+  expectToFail(() => checkDrainLedger(log, S, "under twelve-damage swings"),
+    "a drain that lands one frame short of what it charged should fail the " +
+    "ledger; it passed");
 });
 
 test("the tally is per-sleep: what he took last time does not carry into the next one", async () => {
@@ -1541,55 +1634,223 @@ test("the tally is per-sleep: what he took last time does not carry into the nex
     "the tally starts this sleep at zero; it read " + r.after);
 });
 
-test("you cannot kill a man in his sleep -- he wakes on one health instead", async () => {
+/* The worst single blow in the game plus the worst poison and the worst burn,
+   all into the same sleeping man. The DoT is armed on the first sleeping
+   frame rather than before the cast, because a status applied to a man who is
+   already asleep cannot get in through applyHit -- the nap branch returns
+   above the line that sets one -- so this is the only way a sleeping Simon
+   can be carrying one, and it is the way that used to kill him. */
+const ONSLAUGHT = {
+  mana: false,
+  p0: `i === 0 ? ${ULT} : 0`,
+  rec: SLOUCH_REC,
+  pre: "if (me.slouching()) {" +
+       "  if (me.burn === 0 && me.poison === 0) {" +
+       "    me.burn = 240; me.burnDps = 15 / 240;" +
+       "    me.poison = 150; me.poisonDps = 0.09; me.poisonBy = 1;" +
+       "  }" +
+       "  if (i % 30 === 0) {" +
+       "    applyHit(foe, me, { damage: i === 90 ? 999 : 6, base: 1, scale: 1," +
+       "      angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476 }, foe.x);" +
+       "  }" +
+       "}",
+};
+
+function checkNothingTakesHisHealth(log, S, why) {
+  const asleep = log.filter((r) => r.sl);
+  assert.ok(asleep.length > 20, "precondition: he was asleep for a while; " +
+    asleep.length + " frames");
+  const paid = Math.max(...asleep.map((r) => r.sd));
+  assert.ok(paid > 0,
+    "precondition: the blows and the clocks actually reached him -- the " +
+    "ledger has to have counted something or this test is vacuous; it read " + paid);
+  for (const r of asleep) {
+    assert.equal(r.hp, log[0].hp, why + ": his health moved from " + log[0].hp +
+      " to " + r.hp + " on a sleeping frame. Nothing takes it while he is " +
+      "down -- not a blow, not a poison, not a burn. The damage is real and " +
+      "it is spent on the clock");
+    assert.notEqual(r.st, "ko", why + ": he was KO'd in his sleep");
+    assert.equal(r.stk, log[0].stk, why + ": he lost a stock in his sleep");
+  }
+}
+
+test("nothing takes his health while he sleeps -- not a blow, not a poison, not a burn", async () => {
   const run = await simonVsReese();
   const S = SPEC(run);
-  assert.equal(S.ult.lethal, false, "the sleeping body is not lethal -- retune on purpose");
+  /* Ten health, so anything that reached him would kill him and the failure
+     would be loud. A 999-damage blow goes in on frame 90, which is the size
+     SALAMENCE carries -- the game's one guaranteed kill -- and it takes the
+     ult and not the stock. */
   const log = drive(run, "me.ultMeter = 999; me.health = 10; me.stocks = 3;",
-    400, SHAKE(60, 1, 60, 61));
-  assert.ok(log.every((r) => r.st !== "ko"),
-    "a blow far bigger than his health bar must not take the stock; he was KO'd on frame " +
-    log.findIndex((r) => r.st === "ko"));
-  assert.ok(Math.min(...log.map((r) => r.hp)) >= 1,
-    "he floors at one point of health; the lowest he reached was " +
-    Math.min(...log.map((r) => r.hp)));
+    SLEEP_FRAMES, ONSLAUGHT);
+  checkNothingTakesHisHealth(log, S, "under everything at once");
   const woke = endOfSleep(log);
   assert.ok(woke > 0 && woke < S.ult.startup + S.ult.active,
-    "and sixty through the guard is thirty, so it wakes him; the sleep ended on frame " + woke);
+    "and 999 damage does end the nap on the spot: it ran to frame " + woke +
+    " against " + (S.ult.startup + S.ult.active) + " undisturbed");
 });
 
-test("negative control: with rouse gone, thirty damage changes nothing", async () => {
-  const run = await simonVsReese({ engine: sabotage("    rouse: 30,", "    rouse: 0,") });
-  const S = SPEC(run);
-  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
-    SHAKE(12, 40, 41, 281));
-  const woke = endOfSleep(log);
-  expectToFail(() => assert.ok(woke > 0 && woke < S.ult.startup + S.ult.active,
-    "without a threshold nothing wakes him early"),
-    "the wake test must fail when rouse is zero");
-});
-
-test("negative control: with the guard off, half as much damage wakes him", async () => {
-  /* The guard is the difference between thirty damage and sixty, and it is
-     the number that decides whether `rouse` is a decision or a formality.
-     Eight a swing is 24 taken with the guard on -- four short -- and 48
-     without it, which is comfortably over. */
-  const run = await simonVsReese({ engine: sabotage("    guard: 0.5,", "    guard: 1,") });
-  const S = SPEC(run);
-  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
-    SHAKE(8, 40, 41, 281));
-  const woke = endOfSleep(log);
-  assert.ok(woke > 0 && woke < S.ult.startup + S.ult.active,
-    "with the guard off the same swings should wake him; the sleep ended on frame " + woke);
-});
-
-test("negative control: a sleep that heals half fails the sleep test", async () => {
+test("negative control: with the blow back on the health bar he dies in his sleep", async () => {
+  /* The 2.85 path restored: a blow lands on the health bar instead of the
+     clock. Without `lethal: false` beside it -- which is gone with the rest --
+     a ten-health Simon is killed by the first six-damage poke. */
   const run = await simonVsReese({ engine: sabotage(
-    "this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active);",
-    "this.health = Math.min(COMBAT.maxHealth, this.health + s.heal / s.active / 2);") });
+    "    if (!defender.takeSlouch(dealt)) {", "    if (true) {") });
   const S = SPEC(run);
-  const log = slouch(run, 30, "", SLEEP_FRAMES);
-  expectToFail(() => checkSleep(log, S), "with the heal halved the sleep test should fail; it passed");
+  const log = drive(run, "me.ultMeter = 999; me.health = 10; me.stocks = 3;",
+    SLEEP_FRAMES, ONSLAUGHT);
+  expectToFail(() => checkNothingTakesHisHealth(log, S, "with the blow back on the bar"),
+    "a blow that reaches the health bar should fail the invincibility test; it passed");
+});
+
+test("negative control: with the burn back on the health bar it kills him in his sleep", async () => {
+  /* The half a blow cannot reach. A poison or a burn ticks in update(), not
+     through applyHit, so it is a second path with its own guard -- and it is
+     the one that was live at 2.85: the recon caught burns killing sleeping
+     Simons in CPU play. The roster used to argue for that on purpose, which
+     is why it gets a control of its own rather than sharing one. */
+  const run = await simonVsReese({ engine: sabotage(
+    "      if (!this.takeSlouch(this.burnDps)) this.health -= this.burnDps;",
+    "      this.health -= this.burnDps;") });
+  const S = SPEC(run);
+  const log = drive(run, "me.ultMeter = 999; me.health = 10; me.stocks = 3;",
+    SLEEP_FRAMES, ONSLAUGHT);
+  expectToFail(() => checkNothingTakesHisHealth(log, S, "with the burn back on the bar"),
+    "a burn that reaches the health bar should fail the invincibility test; it passed");
+});
+
+test("negative control: with the poison back on the health bar it kills him in his sleep", async () => {
+  const run = await simonVsReese({ engine: sabotage(
+    "      if (!this.takeSlouch(this.poisonDps)) this.health -= this.poisonDps;",
+    "      this.health -= this.poisonDps;") });
+  const S = SPEC(run);
+  const log = drive(run, "me.ultMeter = 999; me.health = 10; me.stocks = 3;",
+    SLEEP_FRAMES, ONSLAUGHT);
+  expectToFail(() => checkNothingTakesHisHealth(log, S, "with the poison back on the bar"),
+    "a poison that reaches the health bar should fail the invincibility test; it passed");
+});
+
+/* =====================================================================
+   THE BAR IS THE CLOCK
+
+   `manaFree` is the glowing, marching stretch on the mana bar and it is also
+   the frames left in the sleep. Damage takes the same amount off both because
+   takeSlouch moves them by the same delta rather than assigning either -- and
+   it has to be a delta, because it is called from two different points in a
+   frame: from update(), where the poison and burn clocks live and attackFrame
+   has not been incremented yet, and from resolveCombat, where it has.
+
+   This did not hold before 2.86. `rouse` moved the sleep and left the bar
+   running, so a Simon woken at frame 32 kept a glowing meter for another 592
+   frames with nothing behind it.
+   ===================================================================== */
+
+function checkBarIsTheClock(log, S, why) {
+  const u = S.ult, end = u.startup + u.active;
+  let last = -1;
+  for (let f = u.startup; f < log.length; f++) {
+    if (!log[f].sl) break;
+    assert.equal(log[f].mf, end - log[f].af,
+      why + ": on frame " + f + " the sleep had " + (end - log[f].af) +
+      " frames left and the bar read " + log[f].mf);
+    last = f;
+  }
+  assert.ok(last > u.startup, "precondition: he slept; last sleeping frame " + last);
+  assert.ok(log[last].mf >= 1,
+    why + ": the bar still had something on it on the last sleeping frame; it read " +
+    log[last].mf);
+  assert.equal(log[last + 1].mf, 0,
+    why + ": and it is empty on the frame the ult ends -- the bar running out " +
+    "IS the ult ending; it read " + log[last + 1].mf);
+}
+
+test("the bar and the clock are one number, under fire and carrying a burn", async () => {
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  checkBarIsTheClock(slouch(run, 200, "", SLEEP_FRAMES), S, "undisturbed");
+  checkBarIsTheClock(drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    SHAKE(9, 30, 41, 641)), S, "under nine-damage swings");
+  /* The burning case is the one that catches an ASSIGNMENT instead of a
+     delta. takeSlouch is called from update() there, a frame before
+     attackFrame moves, so `manaFree = end - attackFrame` is a frame out on
+     every frame of the nap and nothing else in the suite sees it. */
+  checkBarIsTheClock(drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES,
+    ONSLAUGHT), S, "carrying a poison and a burn");
+});
+
+test("negative control: a bar that is assigned rather than moved runs a frame ahead", async () => {
+  const run = await simonVsReese({ engine: sabotage(
+    "    this.manaFree = Math.max(0, this.manaFree - (this.attackFrame - was));",
+    "    this.manaFree = Math.max(0, end - this.attackFrame);") });
+  const S = SPEC(run);
+  expectToFail(() => checkBarIsTheClock(drive(run,
+    "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES, ONSLAUGHT),
+    S, "with the bar assigned"),
+    "a bar assigned from attackFrame is a frame out when the poison clock " +
+    "drains it and should fail; it passed");
+});
+
+test("negative control: a bar that is never drained outlives the ult", async () => {
+  /* The bug this release fixed, put back in its purest form: the clock moves
+     and the picture does not. */
+  const run = await simonVsReese({ engine: sabotage(
+    "    this.manaFree = Math.max(0, this.manaFree - (this.attackFrame - was));",
+    "") });
+  const S = SPEC(run);
+  expectToFail(() => checkBarIsTheClock(drive(run,
+    "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES, SHAKE(9, 30, 41, 641)),
+    S, "with the bar left running"),
+    "a bar that is not drained should fail; it passed");
+});
+
+test("the HUD's bite is the chunk the last BLOW took, and a burn underneath does not move it", async () => {
+  /* `slouchBite` is what drawHud paints past the end of the bar for eight
+     frames after a hit. It is written in applyHit rather than inside
+     takeSlouch for exactly this reason: a burn ticking a fraction of a frame
+     off underneath would otherwise overwrite the chunk the picture is still
+     showing, and the lurch would collapse to a flicker. */
+  const run = await simonVsReese();
+  const S = SPEC(run);
+  const HIT = 120;
+  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES, {
+    mana: false, p0: `i === 0 ? ${ULT} : 0`, rec: SLOUCH_REC,
+    pre: "if (me.slouching() && me.burn === 0) { me.burn = 240; me.burnDps = 15 / 240; }" +
+         "if (i === " + HIT + ") { applyHit(foe, me, { damage: 14, base: 1, scale: 1," +
+         "  angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476 }, foe.x); }",
+  });
+  assert.equal(log[HIT - 1].bite, 0,
+    "nothing is drawn before the blow, however hard the burn is ticking; it read " +
+    log[HIT - 1].bite);
+  assert.ok(log[HIT - 1].mf < log[HIT - 5].mf,
+    "precondition: the burn is draining the bar underneath; it read " +
+    log[HIT - 5].mf + " then " + log[HIT - 1].mf);
+  assert.equal(log[HIT].bite, 14 * S.ult.drain,
+    "fourteen damage is " + (14 * S.ult.drain) + " frames off the bar, and that " +
+    "is the size of the chunk the HUD draws; it read " + log[HIT].bite);
+  for (let f = HIT; f < HIT + 8; f++) {
+    assert.equal(log[f].bite, 14 * S.ult.drain,
+      "and it holds still for the eight frames the ghost is drawn over, while " +
+      "the burn goes on taking frames off underneath; on frame " + f +
+      " it read " + log[f].bite);
+  }
+});
+
+test("negative control: a bite written by the clock rather than the blow is smeared by the burn", async () => {
+  const run = await simonVsReese({ engine: sabotage(
+    "      defender.slouchBite = wasLeft - defender.manaFree;",
+    "      defender.slouchBite = wasLeft - defender.manaFree;\n" +
+    "      if (defender.burn > 0) defender.slouchBite = 1;") });
+  const S = SPEC(run);
+  const HIT = 120;
+  const log = drive(run, "me.ultMeter = 999; me.health = 90;", SLEEP_FRAMES, {
+    mana: false, p0: `i === 0 ? ${ULT} : 0`, rec: SLOUCH_REC,
+    pre: "if (me.slouching() && me.burn === 0) { me.burn = 240; me.burnDps = 15 / 240; }" +
+         "if (i === " + HIT + ") { applyHit(foe, me, { damage: 14, base: 1, scale: 1," +
+         "  angle: 45, kx: 0.7071067811865476, ky: 0.7071067811865476 }, foe.x); }",
+  });
+  expectToFail(() => assert.equal(log[HIT].bite, 14 * S.ult.drain,
+    "the bite is the chunk the blow took"),
+    "a bite a burn can overwrite should fail; it passed");
 });
 
 test("negative control: a free window that does not pin the bar fails the sleep test", async () => {

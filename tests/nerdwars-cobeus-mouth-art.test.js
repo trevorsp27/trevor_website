@@ -45,13 +45,15 @@
  *   second. The chew is indexed off chargeTimer instead, which is the whole
  *   of mouthArtFrame, and this is the test of it.
  *
- *   AND FACING LEFT LANDS ON HIS FACE TOO. The sheet does not mirror him, it
- *   SLIDES him: standL is standR translated +2 with zero differing pixels, so
- *   a flipped or unshifted overlay lands two columns off his face. jumpL is
- *   the opposite case -- an exact mirror -- and the art is symmetric, so it
- *   takes the overlay unshifted. Both halves are read off HIS OWN SHEET here
- *   rather than asserted against a number written down in this file: the
- *   mouth has to sit centered between whichever pair of eyes is on screen.
+ *   AND FACING LEFT LANDS ON HIS FACE TOO. It used to take a shift for one
+ *   cell out of four: standL was standR TRANSLATED two columns rather than
+ *   flipped, so his eyes sat at 8 and 11 there and at 6 and 9 everywhere
+ *   else. build.py mirrors that cell in memory since 2.86, so one unshifted,
+ *   unflipped overlay is right on all four -- and the test is unchanged,
+ *   because it was written against HIS OWN EYES rather than against a shift.
+ *   That is the whole reason it kept working through the repair: the mouth
+ *   has to sit centered between whichever pair of eyes is on screen, and it
+ *   never mattered here how they got there.
  *
  * HOW THE PIXELS ARE READ. The overlay is a pixelArt canvas, so "what was
  * painted" lives in the fillRects that rasterized it. Every canvas this
@@ -546,7 +548,7 @@ test("negative control: the 2.81 drawing at its f.y - 13 anchor fails the face t
      frames and the same streaks are drawn in the same air. */
   const run = await arena(COBEUS, NICK, { engine: sabotage(
     "  const d = Math.round(16 * sk);\n" +
-    "  g.drawImage(mouthArt(pose, f.facing < 0 && f.grounded),\n" +
+    "  g.drawImage(mouthArt(pose),\n" +
     "              Math.round(f.x - 8) + 8 - (d >> 1),\n" +
     "              Math.round(f.y - 16) + 16 - d, d, d);",
     "  const x = Math.round(f.x + f.facing * 2 * sk);\n" +
@@ -778,15 +780,19 @@ test("negative control: one cell held for the whole hold fails the hold test", a
    4. FACING LEFT LANDS ON HIS FACE TOO
    ===================================================================== */
 
-/* THE SHEET SLIDES HIM RATHER THAN MIRRORING HIM, and the consequence is the
-   whole of this test: the mouth must sit centered between whichever pair of
-   eyes is actually on screen. standL's eyes are at cols 8 and 11 and standR's
-   at 6 and 9 -- the SAME drawing, translated two columns -- so an overlay
-   that is not shifted for standL is two columns off his face and eats his
-   cheek. jumpL is the other case: it is an exact mirror of jumpR, its eyes
-   are back at 6 and 9, and the art is symmetric about col 7.5, so it wants
-   the overlay UNSHIFTED. One rule covers both, which is why the test is
-   written against his eyes rather than against a shift. */
+/* THE MOUTH SITS BETWEEN WHICHEVER PAIR OF EYES IS ON SCREEN, and that is the
+   whole of this test. It was written that way because the sheet used to slide
+   him rather than mirror him -- standL's eyes at 8 and 11 against standR's at
+   6 and 9, the SAME drawing translated two columns -- so the overlay had to
+   shift for that one cell and not for the other three, and asserting a shift
+   would have been asserting the workaround rather than the result.
+
+   The cell is repaired in build.py now and all four put his pupils at 6 and 9,
+   so one unshifted overlay is correct everywhere. NOT ONE LINE OF THE CHECKER
+   CHANGED across that repair: `FACE` is decoded out of the built cells, so
+   standL's center moved 9.5 -> 7.5 by itself and the assertion followed. A
+   test that had been written against the number 2 would have had to be
+   rewritten, and would have been rewritten by whoever broke it. */
 function checkCenteredOnHisFace(frames, pose) {
   const face = FACE[pose];
   let lo = 99, hi = -1, painted = 0;
@@ -808,8 +814,8 @@ function checkCenteredOnHisFace(frames, pose) {
     "the mouth is centered between HIS eyes, and on " + pose + " those are " +
     "cols " + face.pupils.join(" and ") + " -- center " + face.center + ". " +
     "The painted cell ran from col " + lo + " to col " + hi + ", center " +
-    ((lo + hi) / 2) + ". standL is standR TRANSLATED +2 rather than mirrored, " +
-    "so an unshifted or flipped overlay lands two columns off his face");
+    ((lo + hi) / 2) + ". His left cells are exact mirrors of his right ones " +
+    "since 2.86, so ONE unshifted, unflipped overlay is correct on all four");
 
   /* And it is on his face at all, which is the first test asked of the cell
      he is usually watched from and is asked again here of the other three. */
@@ -837,20 +843,120 @@ test("facing left lands on his face too", async () => {
   checkCenteredOnHisFace(paint(run, { facing: -1, grounded: false, frames: open }), "jumpL");
 });
 
-test("negative control: an unshifted overlay on standL fails the facing test", async () => {
-  /* The overlay laid on every cell at the same columns -- which is the
-     obvious thing to write, and is correct for three of the four cells. The
-     fourth is the one he spends the whole move in when he is facing left. */
+test("negative control: the old two-column shift now misses his face on every cell", async () => {
+  /* THE 2.85 RULE, LEFT STANDING AFTER THE CELL WAS REPAIRED, which is the
+     shape the mirror turned that mistake into: it used to be right on exactly
+     one of the four cells and it is now wrong on all four. Shifting is the
+     only mutation with teeth here, and that is worth writing down --
+     sabotaging pixelArt's flip argument from false to true would be a SILENT
+     NO-OP, because the art is symmetric about col 7.5 and mirror(art) == art.
+     A control that cannot fail is not a control, so this is not one. */
   const run = await arena(COBEUS, NICK, { engine: sabotage(
-    "    rows.push(!r ? MOUTH_BLANK : shift ? '..' + r.slice(0, 14) : r);",
-    "    rows.push(!r ? MOUTH_BLANK : r);") });
+    "  for (let y = 0; y < 16; y++) rows.push(src[y] || MOUTH_BLANK);",
+    "  for (let y = 0; y < 16; y++) rows.push(src[y] ? '..' + src[y].slice(0, 14) : MOUTH_BLANK);") });
   const open = WHOLE_MOVE.filter((p) => p[0] >= STARTUP && p[0] < STARTUP + ACTIVE)
                          .concat(THE_HOLD);
-  /* standR is unaffected, and that is the point of checking it here: the
-     mutant is invisible from the side the move is usually watched from. */
-  checkCenteredOnHisFace(paint(run, { facing: 1, grounded: true, frames: open }), "standR");
-  expectToFail(
-    () => checkCenteredOnHisFace(paint(run, { facing: -1, grounded: true, frames: open }), "standL"),
-    "an unshifted overlay on standL sits two columns off his face and should " +
-    "fail the facing test; it passed");
+  for (const pose of ["standR", "standL", "jumpR", "jumpL"]) {
+    expectToFail(
+      () => checkCenteredOnHisFace(
+        paint(run, { facing: pose.indexOf("R") > 0 ? 1 : -1,
+                     grounded: pose.indexOf("stand") === 0, frames: open }), pose),
+      "an overlay shifted two columns sits off his face on " + pose +
+      " and should fail the facing test; it passed");
+  }
+});
+
+/* =====================================================================
+   5. AND HE FACES LEFT WHEN HE IS IDLE
+
+   The fault this release fixed, and the thing nothing in either tree was
+   asserting: his left cells have to be his right cells flipped. Three of the
+   four always were. standL was standR SLID two columns -- pixel for pixel
+   identical, never flipped -- so the man who turned around to walk turned
+   back to face right the moment he stopped, and standing is the only pose
+   that uses that cell. walkL1 was a flip placed one column too far right, so
+   he hopped a pixel sideways turning around mid-walk.
+
+   Asserted on the BUILT cells rather than on the sheet, because the repair is
+   in build.py and what ships is what these read. And on the generated sets
+   too: pose.py grows his jab and grab arms off the base cells, so a body that
+   was wrong there was wrong in three sets rather than one.
+   ===================================================================== */
+
+function flipCell(rows) {
+  return rows.map((r) => r.slice().reverse());
+}
+
+function differs(a, b) {
+  let n = 0;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (a[y][x] !== b[y][x]) n++;
+  return n;
+}
+
+// standR slid two columns to the right, which is the cell that shipped at
+// 2.85 -- reconstructed here rather than checked in as a blob of base64.
+function slide2(rows) {
+  return rows.map((r) => [null, null].concat(r.slice(0, 14)));
+}
+
+const MIRROR_PAIRS = [["standL", "standR"], ["walkL1", "walkR1"],
+                      ["walkL2", "walkR2"], ["jumpL", "jumpR"]];
+
+test("his left cells are mirrors of his right ones, on every pose and every set", () => {
+  for (const set of ["base", "jab", "grab"]) {
+    for (const [l, r] of MIRROR_PAIRS) {
+      const left = decodePng(cellUrl("cobeus", set, l));
+      const right = decodePng(cellUrl("cobeus", set, r));
+      assert.equal(differs(left, flipCell(right)), 0,
+        "cobeus." + set + "." + l + " has to be the exact flip of " + r + ". " +
+        "Until 2.86 standL was standR slid two columns, so he faced RIGHT " +
+        "whenever he stood still and only when he stood still; build.py " +
+        "mirrors the cell in memory now, the way it repairs Ladeane's alpha");
+    }
+  }
+});
+
+test("negative control: the 2.85 cell -- standR slid two columns -- fails it", () => {
+  /* Sabotaging the DATA rather than the engine, because the repair lives in
+     build.py and this test reads the built cells. The mutant is the exact
+     bytes that shipped at 2.85: 98 of the 256 pixels differ from the mirror,
+     which is measured rather than asserted here so the control fails for the
+     reason it claims. */
+  const right = decodePng(cellUrl("cobeus", "base", "standR"));
+  const slid = slide2(right);
+  assert.equal(differs(slid, flipCell(right)), 98,
+    "precondition: standR slid two columns differs from its own mirror in 98 " +
+    "pixels, which is what build.py's SHEET_MIRROR records for this cell");
+  expectToFail(() => assert.equal(differs(slid, flipCell(right)), 0,
+    "the 2.85 cell against the mirror"),
+    "standR slid two columns is not its own mirror and should fail; it passed");
+});
+
+test("and his eyes land in the same columns whichever way he faces", () => {
+  /* The consequence a player can see, asserted as itself rather than as a
+     pixel count: the pupils do not move when he turns around, and his ink
+     does not hop sideways. 1..12 facing right is 3..14 flipped, and all four
+     left cells have to sit there -- walkL1 sat at 4..15 until 2.86. */
+  const PUPIL = "#3D320E";
+  const cols = (rows, row, want) => {
+    const out = [];
+    for (let x = 0; x < 16; x++) if (rows[row][x] === want) out.push(x);
+    return out;
+  };
+  const ink = (rows) => {
+    let lo = 99, hi = -1;
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      if (rows[y][x] !== null) { if (x < lo) lo = x; if (x > hi) hi = x; }
+    }
+    return [lo, hi];
+  };
+  for (const name of ["standR", "standL", "walkR1", "walkL1", "walkL2", "jumpL"]) {
+    const cell = decodePng(cellUrl("cobeus", "base", name));
+    assert.deepEqual(cols(cell, 6, PUPIL), [6, 9],
+      "his pupils are in cols 6 and 9 on " + name + " like every other cell; " +
+      "they were at 8 and 11 on standL and 7 and 10 on walkL1 until 2.86");
+    assert.deepEqual(ink(cell), name.indexOf("R") > 0 ? [1, 12] : [3, 14],
+      "and his ink runs 1..12 facing right, 3..14 facing left -- which is " +
+      "where a flip of 1..12 lands. " + name + " ran " + ink(cell).join(".."));
+  }
 });
