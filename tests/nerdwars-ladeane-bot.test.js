@@ -1,6 +1,7 @@
 /* BUILD-A-BOT -- the aim, as 2.80 made it read.
  *
- * The robot was never short of damage. Built in three presses for 66 mana it
+ * The robot was never short of damage. Built in three presses -- 150 mana
+ * since 2.84, 66 when this file was written -- it
  * punches for 2, 4 and 5 and the finished one carries a gun, and a tournament
  * of 60 CPU matches settled those numbers at 52.8 against 53.2 -- which is
  * inside the noise, and is what the roster's prose has always said.
@@ -469,7 +470,11 @@ function checkUntouched(d) {
     "two hits take a part off, at every tier: the stated counterplay is walk " +
     "up and swing six times, and it still is. They read " + d.hp.join(","));
   assert.equal(d.life, 480, "the battery is still eight seconds: " + d.life);
-  assert.equal(d.mana, 22, "and a press is still 22 mana: " + d.mana);
+  assert.equal(d.mana, 50,
+    "and a press is fifty mana. 2.84 took it from 22 because 22 was too "  +
+    "low, and fifty is not a tweak to a price: three presses is 150 against "  +
+    "a manaMax of 100, so a finished robot no longer comes out of one full "  +
+    "bar at all. It read " + d.mana);
   assert.equal(d.boot, 16, "and sixteen dead frames after every bolt-on: " + d.boot);
   assert.equal(d.flinch, 9, "and a stagger of nine on every hit: " + d.flinch);
 }
@@ -497,4 +502,103 @@ test("control: a hitEvery taken down with the notice fails the untouched test",
       "          { part: 'ONLINE', hp: 2, every: 36, swing: 7, hitEvery: 12,"));
     expectToFail(() => checkUntouched(run(UNTOUCHED)),
       "a shortened hitEvery should fail checkUntouched");
+  });
+
+/* =====================================================================
+   5. FIFTY A PRESS, WHICH IS A CHANGE TO THE MOVE AND NOT ONLY ITS PRICE
+   ===================================================================== */
+
+/* 2.84: "make lucas's robot move take 50 mana per build, it is too low right
+   now". 22 -> 50, and the reason this gets a test of its own rather than a
+   number bumped in checkUntouched is that it crosses a threshold. A finished
+   robot is three presses. At 22 that was 66 against a COMBAT.manaMax of 100,
+   so the whole machine came out of one bar with change. At 50 it is 150,
+   which does not fit in the bar at any point, so the third press has to wait
+   on COMBAT.manaRegen -- and that wait is the change.
+
+   The three things asserted below are the three that could go wrong, and the
+   middle one is the one nobody would have thought to check: that the BATTERY
+   outlives the wait. If it did not, fifty a press would not be an expensive
+   robot, it would be a robot that cannot be finished. */
+
+function checkPrice(d) {
+  assert.equal(d.mana, 50, "a press costs fifty: " + d.mana);
+  checkPriceBehavior(d);
+}
+
+/* Split out so the control below has something to fail ON. If the control ran
+   the whole of checkPrice it would trip the `mana === 50` line and prove only
+   that the number changed, which is not what it is named for -- it is named
+   for the BEHAVIOR that number buys, and the behavior is what it has to break. */
+function checkPriceBehavior(d) {
+  assert.ok(d.mana * 3 > d.manaMax,
+    "and three of them have to cost MORE than a full bar, which is the whole " +
+    "difference between this and a price rise: " + (d.mana * 3) + " against a " +
+    "manaMax of " + d.manaMax);
+  assert.ok(d.waited > 40,
+    "so a player starting from a full bar has to stand there waiting on regen " +
+    "before the third press is affordable. He waited " + d.waited + " frames");
+  assert.ok(d.finished > 100,
+    "and a finished robot takes over a hundred frames to reach rather than " +
+    "the sixty it took at 22. It finished on frame " + d.finished);
+  assert.equal(d.tier, 3,
+    "precondition: it does still finish. It reached tier " + d.tier);
+  assert.ok(d.battery > d.life * 0.9,
+    "AND THE BATTERY SURVIVES THE WAIT, which is the half of this that could " +
+    "have made the move unbuildable rather than expensive: any press refills " +
+    "`life`, so the robot that finally finishes has to be a fresh one and not " +
+    "one about to expire. It finished with " + d.battery + " of " + d.life);
+}
+
+const PRICE = `(function () {
+  seat();
+  var L = fighters[0];
+  L.mana = COMBAT.manaMax;
+  var cost = SPEC.mana, waited = 0, finished = -1, tier = 0, battery = -1;
+  for (var f = 0; f < 400; f++) {
+    var idle = L.state === 'idle';
+    var afford = L.mana >= cost;
+    if (idle && !afford && tier > 0 && tier < 3) waited++;
+    netplay.framePads = [bitsToPad(idle && afford && tier < 3 ? 1024 : 0), bitsToPad(0)];
+    step();
+    var bots = projectiles.filter(function (p) { return p.owner === L && p.tier; });
+    if (bots.length) {
+      tier = bots[0].tier;
+      /* Read ON the finishing frame and not at the end of the loop. The
+         battery drains every frame after the last press, so a reading taken
+         400 frames later measures how long this probe ran and not what the
+         third press was worth -- which is exactly what the first draft of
+         this test did, and it failed for that reason rather than a real one. */
+      if (tier >= 3 && finished < 0) { finished = f; battery = bots[0].life; }
+    }
+  }
+  return { mana: cost, manaMax: COMBAT.manaMax, waited: waited,
+           finished: finished, tier: tier, battery: battery, life: SPEC.life };
+})()`;
+
+test("three presses cost more than a full bar, and the battery survives the wait",
+  async () => {
+    const { run } = await arena();
+    checkPrice(run(PRICE));
+  });
+
+test("control: at the old 22 a finished robot comes straight out of one bar",
+  async () => {
+    /* The literal previous value, restored. At 66 for the whole machine there
+       is nothing to wait for, so `waited` is zero and the robot is finished
+       inside sixty frames -- which is the state this change exists to end. */
+    const { run } = await arena(sabotage("        manaOverride: 50,",
+                                         "        manaOverride: 22,"));
+    const d = run(PRICE);
+    assert.equal(d.mana, 22, "precondition: the mutant really is at 22");
+    /* checkPriceBehavior rather than checkPrice, so the failure has to come
+       from the robot arriving out of one bar and not from the price literal. */
+    expectToFail(() => checkPriceBehavior(d),
+      "twenty-two a press should fail the price test on BEHAVIOR: three of " +
+      "them fit inside one bar, so nothing ever waits on regen");
+    assert.equal(d.waited, 0,
+      "and it fails it for the stated reason -- at 22 he never waits on mana " +
+      "at all. He waited " + d.waited + " frames");
+    assert.ok(d.finished > 0 && d.finished < 100,
+      "with a finished robot inside a hundred frames; it finished on " + d.finished);
   });

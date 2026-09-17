@@ -5,8 +5,10 @@
  * constant speed, `n * stride + offset` with a small wobble bolted on. The
  * lag-1 autocorrelation of consecutive spawn positions was +0.78 and the mean
  * step between them was 20.8 px, which is the number that says "belt" out
- * loud. Forty of them at 15 damage each read as a drip. Now there are a
- * hundred and sixty-two at 6, arriving in chords of three, scattered.
+ * loud. Forty of them at 15 damage each read as a drip. 2.81 made it a
+ * hundred and sixty-two at 6 in chords of three, and 2.84 halved the density
+ * and put the damage up: EIGHTY-ONE AT 7, still in chords of three, over the
+ * same 162-frame song. The count moved, the length did not.
  *
  * THE WORD "RANDOMIZED" IS A TRAP IN A REQUEST LIKE THIS ONE, and it is the
  * reason half this file exists: these positions are HITBOXES. Every note's
@@ -18,13 +20,14 @@
  *
  * THE BAKERY'S 78-VS-80 TRAP, which this move now has its own version of.
  * `duration` has to be a whole multiple of `every`, or the song advertises a
- * note count it does not deliver. 162 = 54 x 3. It is checked here rather
- * than remembered, because the only evidence of getting it wrong is a note
- * that is not there.
+ * note count it does not deliver. 162 = 27 x 6 since 2.84, and it was 54 x 3
+ * before. It is checked here rather than remembered, because the only
+ * evidence of getting it wrong is a note that is not there -- and halving
+ * `every` is exactly the kind of edit that would have got it wrong.
  *
- * WHY THE SCATTER IS MEASURED POOLED. Lag-1 over a single 162-note cast has a
- * standard error of about 1 / sqrt(162) = 0.079, so a +-0.15 window is under
- * two sigma and roughly one cast in sixteen will step outside it by chance --
+ * WHY THE SCATTER IS MEASURED POOLED. Lag-1 over a single 81-note cast has a
+ * standard error of about 1 / sqrt(81) = 0.111, so a +-0.15 window is under
+ * two sigma and a fair share of casts will step outside it by chance --
  * measured, twelve consecutive casts of the shipping build ran -0.13 to
  * +0.20. Pooled over those twelve the same statistic is -0.0038 with a
  * standard error of 0.023, which is six sigma of headroom, and the belt it
@@ -227,12 +230,17 @@ function meanStep(a) {
 }
 
 /* ===================================================================== */
-/* 1. A HUNDRED AND SIXTY-TWO, AND IT DIVIDES                            */
+/* 1. EIGHTY-ONE, AND IT STILL DIVIDES                                   */
 /* ===================================================================== */
+
+/* 2.84: "Make ladeanes music notes half as many". Half as many was built as a
+   DENSITY -- `every` 3 -> 6 over an unchanged 162-frame `duration` -- rather
+   than as a shorter song, and both readings happen to divide, which is
+   precisely why the division has to be asserted rather than trusted. */
 
 function checkCount(r) {
   assert.equal(r.duration % r.every, 0,
-    "`duration` has to be a whole multiple of `every` -- 162 is 54 threes -- " +
+    "`duration` has to be a whole multiple of `every` -- 162 is 27 sixes -- " +
     "or the last beat of the song is cut off mid-bar and the only evidence " +
     "is a note that is not there. This is the bakery's 78-vs-80 trap wearing " +
     "a different move: " + r.duration + " over " + r.every);
@@ -240,8 +248,13 @@ function checkCount(r) {
     "and the song has to deliver exactly the count the ROSTER advertises: " +
     (r.duration / r.every) * r.per + " from duration " + r.duration +
     ", every " + r.every + ", per " + r.per + ". It delivered " + r.notes);
-  assert.equal(r.notes, 162,
-    "which is a hundred and sixty-two; it was " + r.notes);
+  assert.equal(r.notes, 81,
+    "which is eighty-one, half of the hundred and sixty-two it was; it was " +
+    r.notes);
+  assert.equal(r.duration, 162,
+    "off an unchanged 162-frame song -- the ask was half as many notes, not " +
+    "half as long a song, and the length is the thing that makes this move " +
+    "worth casting. It was " + r.duration);
   assert.equal(r.volleys, r.duration / r.every,
     "arriving in " + r.duration / r.every + " volleys; there were " + r.volleys);
   assert.equal(r.biggestVolley, r.per,
@@ -249,35 +262,76 @@ function checkCount(r) {
     "where a drip reads as a drip. The biggest was " + r.biggestVolley);
   assert.equal(r.smallestVolley, r.per,
     "and none of them short; the smallest was " + r.smallestVolley);
+  /* THE LAST VOLLEY HAS TO LAND. `rainTimer` runs `duration` frames, so
+     `rainStep` is 0..duration-1 and volleys fire on the steps divisible by
+     `every` -- the last of them at duration - every. If the division fails,
+     the final bar is a partial one and the count silently disagrees with the
+     object. Asserted off the frame the last note actually spawned rather
+     than off arithmetic, because arithmetic is the thing under test. */
+  assert.equal(r.lastVolleyStep, r.duration - r.every,
+    "and the last volley of the song has to be a whole one, fired on step " +
+    (r.duration - r.every) + " -- the final beat that divides. It fired on " +
+    r.lastVolleyStep);
+  assert.equal(r.lastVolleySize, r.per,
+    "with all " + r.per + " of its notes, not a remainder; it had " +
+    r.lastVolleySize);
 }
 
 const COUNT = "(function () {\n" +
   "  var r = song(0, 0, false);\n" +
-  "  var byFrame = {};\n" +
-  "  r.sp.forEach(function (p) { byFrame[p[5]] = (byFrame[p[5]] || 0) + 1; });\n" +
-  "  var sizes = Object.keys(byFrame).map(function (k) { return byFrame[k]; });\n" +
+  "  var byFrame = {}, frames = [];\n" +
+  "  r.sp.forEach(function (p) {\n" +
+  "    if (!byFrame[p[5]]) frames.push(p[5]);\n" +
+  "    byFrame[p[5]] = (byFrame[p[5]] || 0) + 1;\n" +
+  "  });\n" +
+  "  frames.sort(function (a, b) { return a - b; });\n" +
+  "  var sizes = frames.map(function (k) { return byFrame[k]; });\n" +
   "  return { notes: r.sp.length, volleys: sizes.length,\n" +
   "           biggestVolley: Math.max.apply(null, sizes),\n" +
   "           smallestVolley: Math.min.apply(null, sizes),\n" +
+  /* Steps rather than battleFrames: the first volley of a cast fires on
+     rainStep 0, so the offset between the two is the frame the song began. */
+  "           lastVolleyStep: frames[frames.length - 1] - frames[0],\n" +
+  "           lastVolleySize: sizes[sizes.length - 1],\n" +
   "           duration: RAIN.duration, every: RAIN.every, per: RAIN.per };\n" +
   "})()";
 
-test("a hundred and sixty-two notes, fifty-four chords of three", async () => {
-  const { run } = await arena();
-  checkCount(run(COUNT));
-});
-
-test("control: a duration that does not divide advertises a count it misses",
+test("eighty-one notes, twenty-seven chords of three, over an unchanged song",
   async () => {
-    /* 160 still spawns 54 volleys -- the last beat starts on step 159 and the
-       song ends on 159 -- so the shower LOOKS right and the ROSTER's own
-       arithmetic says 160 notes while 162 arrive. That is exactly the failure
-       mode this test exists for: nothing on screen says anything. */
-    const off = await arena(null, sabotage("      duration: 162,", "      duration: 160,"));
-    expectToFail(() => checkCount(off.run(COUNT)),
-      "a duration that is not a whole multiple of `every` should fail the " +
+    const { run } = await arena();
+    checkCount(run(COUNT));
+  });
+
+test("control: an `every` that does not divide advertises a count it misses",
+  async () => {
+    /* `every: 5` over 162 frames is the trap in its purest form. It still
+       fires a volley every five steps and the shower LOOKS entirely right,
+       but 162 / 5 is 32.4, so the object's own arithmetic says 96 notes while
+       99 arrive. Nothing on screen says anything -- which is the whole reason
+       this test exists, and the reason it is aimed at `every` now that
+       `every` is the number that moved. */
+    const off = await arena(null, sabotage(
+      "      every: 6, per: 3, margin: 6, slow: 2.0, fast: 3.6,",
+      "      every: 5, per: 3, margin: 6, slow: 2.0, fast: 3.6,"));
+    const r = off.run(COUNT);
+    assert.equal(r.every, 5, "precondition: the mutant really is at every 5");
+    assert.equal(r.notes, 99,
+      "precondition: and it really does deliver 99 while advertising " +
+      Math.floor(162 / 5) * 3 + "; it delivered " + r.notes);
+    expectToFail(() => checkCount(r),
+      "an `every` that is not a whole divisor of `duration` should fail the " +
       "count test");
   });
+
+test("control: a duration that does not divide fails it too", async () => {
+  /* The other half of the same trap, kept because `duration` is the number
+     somebody would reach for if they wanted a shorter song. 160 over every 6
+     advertises 78 and delivers 81. */
+  const off = await arena(null, sabotage("      duration: 162,", "      duration: 160,"));
+  expectToFail(() => checkCount(off.run(COUNT)),
+    "a duration that is not a whole multiple of `every` should fail the " +
+    "count test");
+});
 
 /* ===================================================================== */
 /* 2. IT IS NOT A LINE                                                   */
@@ -288,16 +342,20 @@ function checkScatter(r) {
     "consecutive notes must not know where the last one landed. Pooled over " +
     r.n + " spawns from twelve casts the lag-1 autocorrelation of spawn x is " +
     r.pooledLag.toFixed(4) + "; the belt this replaces reads +0.78. (Per " +
-    "cast the same statistic has a standard error of 0.079 and is a coin at " +
-    "this window -- see the head of this file.)");
+    "cast the same statistic has a standard error of 0.111 at 81 notes and " +
+    "is a coin at this window -- see the head of this file.)");
   assert.ok(r.pooledStep > 80,
     "and the mean step between one note and the next has to be most of the " +
     "stage rather than a stride: " + r.pooledStep.toFixed(1) + " px, against " +
     "the belt's 20.8");
-  assert.ok(r.widest < 15,
-    "and there must be nowhere to stand for the whole song: the widest empty " +
-    "strip over a single cast was " + r.widest.toFixed(1) + " px, against the " +
-    "15 a body needs");
+  /* THE WIDEST-EMPTY-LANE ASSERTION USED TO LIVE HERE AND IT HAD TO MOVE.
+     It read `widest < 15` -- "there is nowhere to stand" -- and at 81 notes
+     that is simply no longer true: a body-width lane stays open for a whole
+     song in 81% of casts, against 4% at 162. That is the direct cost of
+     halving the count and it is now measured on its own below, with its own
+     control, instead of riding along as a clause of the scatter test. The two
+     statistics above are PER-NOTE and are untouched by the count, which is
+     why they stayed. */
 }
 
 const SCATTER = "(function () {\n" +
@@ -320,6 +378,74 @@ function scatterOf(raw) {
 test("the notes do not fall in a line", async () => {
   const { run } = await arena();
   checkScatter(scatterOf(run(SCATTER)));
+});
+
+/* ===================================================================== */
+/* 2b. THE WIDEST EMPTY LANE, WHICH IS THE ONE SCATTER NUMBER THAT MOVED  */
+/* ===================================================================== */
+
+/* A gap in a sorted list of spawn positions is a function of how many
+   positions there are, and 2.84 halved them. Measured over 3,000 casts of
+   each, the widest lane a whole song leaves open runs
+
+                      min   p10   p50   p90   p99   max
+        162 notes     6.3   8.1  10.2  13.5  18.0  29.2
+         81 notes     9.6  13.8  18.0  24.1  31.6  46.0
+
+   against the 15 px a body needs. So the honest claim about this move is now
+   the median, and the median is what is asserted: it is a shower somebody can
+   sometimes stand still in, and that is the shape of the thing that was asked
+   for. The bound is deliberately two-sided. A median that climbed past the
+   top would mean the shower had thinned into a drip; one that fell under the
+   bottom would mean the count had quietly gone back up. */
+
+function checkLanes(r) {
+  assert.ok(r.median >= 12,
+    "at eighty-one notes half of all casts leave a gap of about eighteen " +
+    "pixels somewhere on a 308 px stage -- two bodies -- and a median under " +
+    "twelve would mean the note count had gone back up without this file " +
+    "noticing. Over " + r.n + " casts the median widest lane was " +
+    r.median.toFixed(1) + " px");
+  assert.ok(r.median <= 28,
+    "and a median over twenty-eight would mean the shower had thinned from a " +
+    "song into a drip: a third of the stage open for its whole length. It " +
+    "was " + r.median.toFixed(1) + " px");
+}
+
+const LANES = "(function () {\n" +
+  "  var ws = [];\n" +
+  "  for (var d = 0; d < 24; d++) {\n" +
+  "    var xs = song(0, d, false).sp.map(function (p) { return p[0]; });\n" +
+  "    xs.sort(function (a, b) { return a - b; });\n" +
+  "    var w = 0;\n" +
+  "    for (var i = 1; i < xs.length; i++)\n" +
+  "      if (xs[i] - xs[i - 1] > w) w = xs[i] - xs[i - 1];\n" +
+  "    ws.push(w);\n" +
+  "  }\n" +
+  "  ws.sort(function (a, b) { return a - b; });\n" +
+  "  return { median: ws[ws.length >> 1], n: ws.length,\n" +
+  "           lo: ws[0], hi: ws[ws.length - 1] };\n" +
+  "})()";
+
+test("the widest empty lane is a two-body gap, which is what half as many buys",
+  async () => {
+    const { run } = await arena();
+    checkLanes(run(LANES));
+  });
+
+test("control: one note a volley thins the shower into a drip", async () => {
+  /* `per` 3 -> 1 is the same knob the count was turned with, turned further,
+     and it is the failure this bound exists to catch: 27 notes over the same
+     song, with most of the stage standing empty for all of it. */
+  const off = await arena(null, sabotage(
+    "      every: 6, per: 3, margin: 6, slow: 2.0, fast: 3.6,",
+    "      every: 6, per: 1, margin: 6, slow: 2.0, fast: 3.6,"));
+  const r = off.run(LANES);
+  assert.ok(r.median > 28,
+    "precondition: twenty-seven notes really do leave a third of the stage " +
+    "open; the median was " + r.median.toFixed(1));
+  expectToFail(() => checkLanes(r),
+    "a drip of twenty-seven notes should fail the widest-lane test");
 });
 
 test("control: the belt it replaces fails the scatter test outright",
@@ -395,8 +521,10 @@ test("a rewind taken across a hit reproduces the rest of the song", async () => 
     "  return { h1: one.hash, h2: two.hash, n1: one.notes, n2: two.notes,\n" +
     "           count: JSON.parse(one.notes).length };\n" +
     "})()");
-  assert.ok(r.count > 20,
-    "precondition: the replayed stretch has to contain notes; it had " + r.count);
+  assert.ok(r.count > 10,
+    "precondition: the replayed stretch has to contain notes. Forty frames of " +
+    "an `every: 6` song is about seven volleys where it used to be thirteen, " +
+    "so this floor came down with the density. It had " + r.count);
   assert.equal(r.n2, r.n1,
     "every note spawned after the rewind has to land in the same lane at the " +
     "same speed as it did before it");
@@ -421,8 +549,8 @@ function checkSeed(r) {
     "when he is not -- same lanes, same speeds, note for note. This is the " +
     "one failure in this file that would otherwise ship silently: it looks " +
     "perfectly fine unless somebody is hitting him");
-  assert.equal(r.notes, 162,
-    "precondition: and the jolted song still delivers its whole 162; it had " +
+  assert.equal(r.notes, 81,
+    "precondition: and the jolted song still delivers its whole 81; it had " +
     r.notes);
 }
 
@@ -460,7 +588,7 @@ test("control: a seed derived from battleFrames changes every time he is hit",
 
 function checkBounds(r) {
   for (const s of r.stages) {
-    assert.equal(s.notes, 162,
+    assert.equal(s.notes, 81,
       "precondition: " + s.name + " has to get the whole song; it got " + s.notes);
     assert.ok(s.lo >= r.margin,
       "no note may spawn inside the left margin. The quaver is six pixels " +
@@ -498,23 +626,47 @@ test("control: without the margin the lanes at the walls are half off screen",
   });
 
 /* ===================================================================== */
-/* 6. SHIELDBREAK IS REALLY GONE                                         */
+/* 6. SHIELDBREAK IS BACK, AND ONE NOTE TAKES THE WHOLE BAR               */
 /* ===================================================================== */
 
+/* THIS SECTION IS THE 2.81 ONE INVERTED, and the inversion is the point.
+   2.81 deleted `shieldBreak` and this file asserted it was gone; 2.84 was
+   asked to put it back -- the notes "should still shield break" -- in the
+   same change that halves the note count, which is the one variable the
+   deletion had rested on.
+
+   WHAT HALVING DOES NOT DO IS HALVE THIS. applyHit reads
+
+       defender.shield -= move.shieldBreak ? COMBAT.shieldMax * 2 : dmg * 2.4
+
+   so with the flag set a single note empties the whole bar regardless of
+   `damage`, and the break is all-or-nothing. Measured over 120 trials of a
+   man holding shield through a whole song, the break rate is 100% at 162
+   notes and 100% at 81; what moved is the damage he eats while open, 19.1 to
+   11.8, and the share of the song he spends in break stun, which went UP,
+   34.4% to 37.2%, because fewer notes means fewer breaks cut short by the
+   hitstun that replaces them.
+
+   So the assertion is not "it breaks a bit less". It is that one note does
+   the whole job, which is what the flag means, and that a whole song finds
+   him. */
+
 function checkShield(r) {
-  assert.equal(r.shieldBreak, undefined,
-    "`shieldBreak` has to be gone from the spec entirely, not merely small. " +
-    "It took shieldMax twice over and handed a ninety-frame break stun out " +
-    "UNDER the shower: measured, holding shield broke 100% of the time and " +
-    "spent a third of the window stunned, worst unbroken stun 109 frames. At " +
-    "four times the note count that is not counterplay, it is a guaranteed " +
-    "stun. It read " + JSON.stringify(r.shieldBreak));
-  assert.ok(r.survived >= 6,
-    "a full shield has to survive at least six notes, so that hiding is a " +
-    "shield that runs out rather than one that betrays you. It broke after " +
-    r.survived);
-  assert.ok(r.perNote > 0,
-    "precondition: a note still costs the shield something: " + r.perNote);
+  assert.equal(r.shieldBreak, true,
+    "`shieldBreak` has to be ON this move: 2.84 asked for notes that still " +
+    "break a shield, and the flag is the only thing that does it. It read " +
+    JSON.stringify(r.shieldBreak));
+  assert.equal(r.survived, 0,
+    "and a full shield has to fall to the FIRST note, not the seventh -- " +
+    "shieldMax twice over is not a large number, it is an unconditional one. " +
+    "It survived " + r.survived + " notes");
+  assert.ok(r.perNote >= r.max,
+    "which means the first note alone takes at least the whole bar: it took " +
+    r.perNote + " off a shield of " + r.max);
+  assert.equal(r.broke, true,
+    "and the fighter has to actually end up in the break state, not merely " +
+    "at zero shield -- a shield on nought that nobody knocked out of it is a " +
+    "different bug. He was in state " + JSON.stringify(r.state));
 }
 
 const SHIELD = "(function () {\n" +
@@ -530,22 +682,110 @@ const SHIELD = "(function () {\n" +
   "    took++;\n" +
   "  }\n" +
   "  return { shieldBreak: RAIN.shieldBreak, survived: took, perNote: first,\n" +
-  "           max: COMBAT.shieldMax };\n" +
+  "           max: COMBAT.shieldMax, state: f.state, broke: f.state === 'break' };\n" +
   "})()";
 
-test("a full shield survives a handful of notes rather than breaking on one",
+test("one note takes a whole shield, and the man is broken out of it",
   async () => {
     const { run } = await arena();
     checkShield(run(SHIELD));
   });
 
-test("control: with shieldBreak back, one note takes the whole shield",
+test("control: without the flag a note is worth damage x 2.4 and seven of them break a bar",
+  async () => {
+    /* The 2.83 spec restored exactly -- the flag taken back off the line it
+       now sits on. A note at 7 damage takes 16.8 shield, so a full bar wants
+       six of them, and the first one leaves him standing there still holding
+       it. That is the state this change was asked to end. */
+    const off = await arena(null, sabotage(
+      "      drop: 0.02, life: 200, shape: 'note', ghost: true, shieldBreak: true,",
+      "      drop: 0.02, life: 200, shape: 'note', ghost: true,"));
+    const r = off.run(SHIELD);
+    assert.equal(r.shieldBreak, undefined,
+      "precondition: the mutant really has no flag");
+    assert.ok(r.survived >= 4,
+      "precondition: and its notes really do chip rather than break -- it " +
+      "survived " + r.survived + " of them");
+    expectToFail(() => checkShield(r),
+      "a shower whose notes only chip a shield should fail the shield test");
+  });
+
+/* AND THE SAME THING THROUGH A WHOLE SONG, which is the version a player
+   would recognize: hold shield from the cast and see what happens. The probe
+   above calls applyHit directly, so it proves what the FLAG does; this one
+   proves that the shower actually reaches a man who is hiding from it, which
+   is a different claim and the one the request was about. */
+
+function checkHeldShield(r) {
+  assert.ok(r.broke >= 5,
+    "a man who holds shield for a whole song has to be broken out of it on " +
+    "at least five of six stages -- that is what 'they should still shield " +
+    "break' asks for. He broke on " + r.broke + " of " + r.n);
+  assert.ok(r.byNote >= 5,
+    "and broken BY A NOTE rather than by the shield's own drain, which would " +
+    "have happened anyway and is not this move doing anything. A note did it " +
+    r.byNote + " times");
+  assert.ok(r.dealt > 8,
+    "and it has to cost him: once the bar is gone he is a standing target " +
+    "for the rest of the song. He took " + r.dealt.toFixed(1) + " on average");
+}
+
+const HELD = "(function () {\n" +
+  "  var broke = 0, byNote = 0, dealt = 0, n = 0;\n" +
+  "  for (var s = 0; s < STAGE_NAMES.length; s++) {\n" +
+  "    seat(s);\n" +
+  "    var T = fighters[1];\n" +
+  "    T.invuln = 0; T.stocks = 99;\n" +
+  "    var got = 0, hit = 0, real = applyHit;\n" +
+  "    applyHit = function (a, d, m, sx, sc) {\n" +
+  "      var h0 = d.health, st0 = d.state;\n" +
+  "      var out = real(a, d, m, sx, sc);\n" +
+  "      if (m === RAIN && d === T) {\n" +
+  "        if (h0 - d.health > 0.0001) got += h0 - d.health;\n" +
+  "        if (d.state === 'break' && st0 !== 'break') hit = 1;\n" +
+  "      }\n" +
+  "      return out;\n" +
+  "    };\n" +
+  "    tick(" + 256 + ", 0);\n" +
+  "    var everBroke = 0;\n" +
+  /* Past the end of the song, because the last notes cast are still in the
+     air when rainTimer hits zero. */
+  "    for (var i = 0; i < 260; i++) {\n" +
+  "      tick(0, 128);\n" +
+  "      if (T.state === 'break') everBroke = 1;\n" +
+  "    }\n" +
+  "    applyHit = real;\n" +
+  "    broke += everBroke; byNote += hit; dealt += got; n++;\n" +
+  "  }\n" +
+  "  return { broke: broke, byNote: byNote, dealt: dealt / n, n: n };\n" +
+  "})()";
+
+test("holding shield through the whole song gets you broken out of it",
+  async () => {
+    const { run } = await arena();
+    checkHeldShield(run(HELD));
+  });
+
+test("control: without the flag the song does not break a held shield",
   async () => {
     const off = await arena(null, sabotage(
-      "      drop: 0.02, life: 200, shape: 'note', ghost: true,",
-      "      drop: 0.02, life: 200, shape: 'note', ghost: true, shieldBreak: true,"));
-    expectToFail(() => checkShield(off.run(SHIELD)),
-      "a note that takes shieldMax twice over should fail the shield test");
+      "      drop: 0.02, life: 200, shape: 'note', ghost: true, shieldBreak: true,",
+      "      drop: 0.02, life: 200, shape: 'note', ghost: true,"));
+    const r = off.run(HELD);
+    expectToFail(() => checkHeldShield(r),
+      "eighty-one chipping notes should not break a held shield often enough " +
+      "to pass the held-shield test");
+    /* The discriminator is the DAMAGE and not the break count, which is the
+       thing this control taught when it was first written the other way. A
+       chipping shower does eventually break a bar -- the shield's own drain
+       and 16.8 a note get there on four stages of six -- but it gets there
+       late, so he spends most of the song safe behind it and takes about a
+       third of what the flag costs him. Measured: 11.8 with the flag against
+       4.4 without. */
+    assert.ok(r.dealt < 8,
+      "and it has to fail for the stated reason -- without the flag the break " +
+      "comes late and he is behind the shield for most of the song. He took " +
+      r.dealt.toFixed(1));
   });
 
 /* ===================================================================== */
@@ -553,8 +793,8 @@ test("control: with shieldBreak back, one note takes the whole shield",
 /* ===================================================================== */
 
 function checkTwo(r) {
-  assert.equal(r.aNotes, 162, "precondition: the first Ladeane's whole song");
-  assert.equal(r.bNotes, 162, "precondition: and the second's");
+  assert.equal(r.aNotes, 81, "precondition: the first Ladeane's whole song");
+  assert.equal(r.bNotes, 81, "precondition: and the second's");
   assert.notEqual(r.a, r.b,
     "two Ladeanes casting on the same frame have to get different showers, " +
     "or a mirror is one shower drawn twice and half the stage is safe. The " +
@@ -599,9 +839,10 @@ test("control: a seed that forgets the slot gives them one shower twice",
 /* ===================================================================== */
 
 function checkCost(r) {
-  assert.ok(r.peak > 100,
+  assert.ok(r.peak > 40,
     "precondition: both casts have to have actually run -- a single shower " +
-    "peaks around sixty. The peak was " + r.peak);
+    "peaks around thirty-four at 81 notes, where it peaked around sixty at " +
+    "162. The peak was " + r.peak);
   assert.ok(r.peak < 200,
     "TWO simultaneous casts on the LAVA PIT is the worst case in the game: a " +
     "third of the shower falls past the island instead of dying on a floor " +
@@ -610,6 +851,15 @@ function checkCost(r) {
     "eight times. Peak concurrent projectiles must stay under two hundred; " +
     "it reached " + r.peak + ". The lever if this fails is `per` 3 -> 2, not " +
     "`duration` -- cutting the song short does not lower its peak");
+  /* 2.84 HALVED THE HEADROOM PROBLEM RATHER THAN THE GUARD. Halving the
+     density halves the concurrency -- measured 119 to 67 for two casts on
+     this stage -- so this guard now has three times the room it had. The
+     bound stays at 200 because 200 is a statement about saveSim's cost and
+     not about this move; what changed is how far under it the move sits. */
+  assert.ok(r.peak < 110,
+    "and at 81 notes two casts have to sit WELL under it, around seventy, " +
+    "because the density halved: a peak near the old 119 would mean `every` " +
+    "had quietly gone back to 3. It was " + r.peak);
 }
 
 const COST = "(function () {\n" +
@@ -629,19 +879,26 @@ test("two showers at once on the lava pit stay under the projectile guard",
     const { run } = await arena(["ladeane", "ladeane"]);
     const r = run(COST);
     assert.equal(r.stage, "LAVA PIT", "precondition: the worst stage");
-    assert.equal(r.notes, 324, "precondition: both whole songs ran; " + r.notes);
+    assert.equal(r.notes, 162, "precondition: both whole songs ran; " + r.notes);
     checkCost(r);
   });
 
-test("control: six notes a volley puts the peak over the guard", async () => {
-  /* `per` is the lever the design names if this guard ever fails, and this
-     is the same knob turned the wrong way -- which makes it the control that
-     proves the guard can fail at all. */
+test("control: ten notes a volley puts the peak over the guard", async () => {
+  /* `per` is the lever the design names if this guard ever fails, and this is
+     the same knob turned the wrong way -- which makes it the control that
+     proves the guard can fail at all. It has to go further than it used to:
+     at `every: 6` a volley is half as frequent, so seven a volley no longer
+     reaches two hundred and ten is the honest number for this control. That
+     is the guard's new headroom made visible rather than a weaker test. */
   const off = await arena(["ladeane", "ladeane"], sabotage(
-    "      every: 3, per: 3, margin: 6, slow: 2.4, fast: 4.2,",
-    "      every: 3, per: 7, margin: 6, slow: 2.4, fast: 4.2,"));
-  expectToFail(() => checkCost(off.run(COST)),
-    "seven notes a volley from two casts should break the projectile guard");
+    "      every: 6, per: 3, margin: 6, slow: 2.0, fast: 3.6,",
+    "      every: 6, per: 10, margin: 6, slow: 2.0, fast: 3.6,"));
+  const r = off.run(COST);
+  assert.ok(r.peak >= 200,
+    "precondition: ten a volley really does clear two hundred; it peaked at " +
+    r.peak);
+  expectToFail(() => checkCost(r),
+    "ten notes a volley from two casts should break the projectile guard");
 });
 
 /* ===================================================================== */
@@ -653,22 +910,32 @@ test("control: six notes a volley puts the peak over the guard", async () => {
    to be present for the valve to exist at all.
  
    applyHit's falloff is gated on `if (move.count && move.count > 1)`. The ult
-   carried no `count`, so the gate was false, so every one of a hundred and
-   sixty-two notes landed for a flat six -- while the ROSTER comment beside
-   `base` said, in the file's own voice, that "the volley falloff inside 40
-   frames is what makes a lot safe". The damage number was calibrated against
-   a mechanism that was not running. Measured on a pinned target through one
-   whole song, 120 trials over all six stages: 52.5 damage without the key,
-   25.6 with it, off the identical 8.5 notes that actually connect.
+   carried no `count`, so the gate was false, so every note landed for a flat
+   `damage` -- while the ROSTER comment beside `base` said, in the file's own
+   voice, that "the volley falloff inside 40 frames is what makes a lot safe".
+   The damage number was calibrated against a mechanism that was not running.
+
+   RE-MEASURED AT 81 NOTES, because the key is worth less when there are
+   fewer notes to fall off against. Pinned target, one whole song, 120 trials
+   over all six stages: 19.7 damage with the key and 26.2 without, off the
+   identical 3.7 notes that connect. At 162 notes the same probe read 26.6
+   against 47.0 off 7.8 notes -- so the key has gone from saving 44% of the
+   damage to saving 25% of it, and the chains it bites on are shorter.
+
+   WHICH IS WHY THIS PROBE NOW SWEEPS STAGES. At 162 notes one song on one
+   stage landed enough notes on a pinned man to see a chain four deep. At 81
+   it lands three or four, so a single song is not a sample -- the probe casts
+   on every stage and pools the hits, and the chain position is still read off
+   applyHit's own counter rather than assumed.
  
    The test asks for the falloff by its effect -- the damages down a chain --
    rather than by reading `count`, because reading the key back would pass on
    a key that is set to 1. */
 
 function checkFalloff(r) {
-  assert.ok(r.hits.length >= 8,
-    "precondition: the song has to land enough notes to see a chain at all. " +
-    "It landed " + r.hits.length);
+  assert.ok(r.hits.length >= 12,
+    "precondition: the pooled songs have to land enough notes to see a chain " +
+    "at all. They landed " + r.hits.length);
   const full = r.damage;
   /* Each entry is [how many notes of this move had already landed inside the
      last forty frames, what this one was worth]. Reading the CHAIN POSITION
@@ -676,9 +943,19 @@ function checkFalloff(r) {
      starts a chain: an isolated note more than forty frames after the last
      one legitimately lands for the full six, and a test that assumed
      otherwise would fail on a target the shower happens to miss for a while. */
-  const deep = r.hits.filter((h) => h[0] >= 3).length;
-  assert.ok(deep > 0,
-    "precondition: at least one note has to land four-deep into a chain, or " +
+  /* TWO DEEP, NOT FOUR, AND THAT IS A MEASUREMENT RATHER THAN A WEAKER TEST.
+     At 162 notes a pinned man routinely took a note four deep into a chain,
+     so this precondition asked for one. At 81 notes the chains are shorter --
+     pooled over all six stages the positions reached run 0, 1 and 2 and stop
+     there -- because fewer notes inside the same forty frames is exactly what
+     halving the density means. Asking for four-deep here would be asserting
+     something this move no longer does. What is asserted instead is that MORE
+     THAN ONE STEP of the curve fires: a note that lands third into a chain
+     has been multiplied by 0.5 where the second was multiplied by 0.7, and a
+     shower with the gate off reaches position 0 and nothing else. */
+  const depths = new Set(r.hits.map((h) => h[0]));
+  assert.ok(depths.has(1) && depths.has(2),
+    "precondition: notes have to land both second and third into a chain, or " +
     "there is no falloff to see. The chain positions were " +
     r.hits.map((h) => h[0]).join(","));
   for (const [k, dmg] of r.hits) {
@@ -691,19 +968,24 @@ function checkFalloff(r) {
       r.falloff[Math.min(k, r.falloff.length - 1)] + ") and it was " + dmg);
   }
   assert.ok(r.hits.some((h) => h[0] === 0 && Math.abs(h[1] - full) < 1e-6),
-    "and the FIRST note of a chain still hurts for all six, which is the " +
-    "half of this that makes the move worth casting at somebody who moves");
+    "and the FIRST note of a chain still hurts for all seven, which is the " +
+    "half of this that makes the move worth casting at somebody who moves -- " +
+    "and it is worth MORE at 81 notes than it was at 162, because a sparser " +
+    "shower lets the forty-frame window lapse more often and more of its " +
+    "notes are somebody's first");
 }
 
 const FALLOFF = "(function () {\n" +
-  "  seat(0);\n" +
+  "  var hits = [];\n" +
+  "  for (var st = 0; st < STAGE_NAMES.length; st++) {\n" +
+  "  seat(st);\n" +
   "  var L = fighters[0], T = fighters[1];\n" +
   "  T.invuln = 0; T.stocks = 99;\n" +
   /* Read off applyHit rather than off the health bar. Two notes of a chord
      can land on the SAME frame, and a per-frame health delta adds them
      together into one entry -- which reads as a chain that stopped falling
      off. The per-hit number is the thing under test. */
-  "  var hits = [], real = applyHit;\n" +
+  "  var real = applyHit;\n" +
   "  applyHit = function (a, d, m, sx, sc) {\n" +
   "    var h0 = d.health, k = (d.volleyOf === m && d.volleyBy === a.slot &&\n" +
   "                           d.volleySince <= 40) ? d.volleyHits : 0;\n" +
@@ -721,13 +1003,17 @@ const FALLOFF = "(function () {\n" +
   "    if (T.health < 40) T.health = 100;\n" +
   "  }\n" +
   "  applyHit = real;\n" +
+  "  }\n" +
   "  return { hits: hits, damage: RAIN.damage, falloff: COMBAT.volleyFalloff.slice() };\n" +
   "})()";
 
-test("a chain of notes falls off, which is what makes a hundred and sixty-two safe",
+test("a chain of notes falls off, which is what makes eighty-one at seven safe",
   async () => {
     const { run } = await arena();
-    checkFalloff(run(FALLOFF));
+    const r = run(FALLOFF);
+    assert.equal(r.damage, 7,
+      "precondition: a note is worth seven now, up from six; it read " + r.damage);
+    checkFalloff(r);
   });
 
 test("control: without `count` the falloff never fires and every note is full price",
@@ -735,8 +1021,15 @@ test("control: without `count` the falloff never fires and every note is full pr
     /* The literal defect, restored. `count: 3` is the only thing standing
        between this move and 162 flat hits. */
     const off = await arena(null, sabotage("      count: 3,\n", ""));
-    expectToFail(() => checkFalloff(off.run(FALLOFF)),
-      "with `count` gone from the ult every note must land for a flat six " +
+    const r = off.run(FALLOFF);
+    assert.ok(r.hits.length >= 12,
+      "precondition: the mutant still lands the same notes -- what changes is " +
+      "what they are worth, not how many connect. It landed " + r.hits.length);
+    assert.ok(r.hits.every((h) => Math.abs(h[1] - r.damage) < 1e-6),
+      "precondition: and every one of them really is full price without the " +
+      "key. The damages were " + r.hits.map((h) => h[1]).join(","));
+    expectToFail(() => checkFalloff(r),
+      "with `count` gone from the ult every note must land for a flat seven " +
       "and fail the falloff test");
   });
 
@@ -757,30 +1050,33 @@ test("four Ladeanes in one match still clear the projectile guard", async () => 
   r.two = run(COST).peak;
   assert.equal(r.seats, 4, "precondition: four seats; there were " + r.seats);
   assert.equal(r.stage, "LAVA PIT", "precondition: the worst stage");
-  assert.ok(r.peak > 120,
-    "precondition: four songs have to have actually run. Peak was " + r.peak);
-  /* AND IT DOES NOT CLEAR TWO HUNDRED, which is why this test exists and
-     says so rather than asserting a number it would fail. The design's guard
-     was written for TWO simultaneous casts and two is what it holds for --
-     109 in a live match, 173 with nothing intercepting. Four seats, all
-     casting, with every fighter invulnerable so that nothing is ever
-     consumed, peaks at 234.
+  assert.ok(r.peak > 90,
+    "precondition: four songs have to have actually run. At 81 notes apiece " +
+    "that is around 135 where it used to be 234. Peak was " + r.peak);
+  /* AND SINCE 2.84 IT CLEARS TWO HUNDRED COMFORTABLY, which is the one place
+     in this file where halving the note count made something strictly easier.
+     Four seats, all casting, with every fighter invulnerable so that nothing
+     is ever consumed, used to peak at 234 -- over the stated guard, and this
+     test said so rather than asserting a number it would fail. At `every: 6`
+     the same worst case peaks at 135.
 
-     That is over the stated 200 and it is NOT a reason to pull `per`. The
-     200 was only ever a proxy for the thing that actually matters, which is
-     saveSim's per-projectile clone: measured at this peak it costs about
-     1.4% of a 16.7 ms frame, inside the 2% the design named, and a rollback
-     resimulating eight frames pays roughly 1.9 ms of a 16.7 ms budget. The
-     arithmetic ceiling is four songs of 162 notes spawning over 162 frames
-     and living about 66, i.e. 4 x 3 x 22 = 264, so 260 is the real roof and
-     nothing here leaks past it.
+     The 200 was only ever a proxy for the thing that actually matters, which
+     is saveSim's per-projectile clone, and the proxy is no longer the binding
+     number for four seats. The arithmetic ceiling is four songs of 81 notes
+     spawning over 162 frames and living about 66, i.e. 4 x 3 x 11 = 132 in
+     steady state with a little slack at the start, so about 150 is the real
+     roof and nothing here leaks past it.
 
-     If this ever fails, the lever is `per` 3 -> 2 (108 notes; the scatter
+     If this ever fails, the lever is `per` 3 -> 2 (54 notes; the scatter
      statistics are per-note and are unaffected) and NOT `duration`, which
      shortens the song without lowering its peak. */
-  assert.ok(r.peak < 260,
-    "four simultaneous showers is the most this game can produce and 264 is " +
-    "the arithmetic ceiling of four songs. It peaked at " + r.peak);
+  assert.ok(r.peak < 160,
+    "four simultaneous showers is the most this game can produce and about " +
+    "150 is the arithmetic ceiling of four songs at 81 notes. It peaked at " +
+    r.peak);
+  assert.ok(r.peak < 200,
+    "and it is now UNDER the two-cast guard rather than over it, which it " +
+    "was not before the density halved: " + r.peak);
   assert.ok(r.peak < r.two * 2.2,
     "and it has to scale sub-linearly off the two-cast peak of " + r.two +
     " -- anything near four times it would mean notes are outliving their " +

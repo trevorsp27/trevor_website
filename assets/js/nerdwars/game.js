@@ -1382,7 +1382,7 @@ const ROSTER = {
 
            HOUSTON'S MOWER DELETES IT. His deck carries `shreds`, so
            sweepFrail destroys the robot the frame the two touch. Measured:
-           the deck appears on frame 10 and 66 mana of machine is gone on
+           the deck appears on frame 10 and 150 mana of machine is gone on
            frame 12, against a control robot still standing after 200. One
            pass, for nothing. If that ever needs answering it is `shreds`
            that would have to learn the difference between a shot and a thing
@@ -1425,13 +1425,41 @@ const ROSTER = {
       down: {
         kind: 'bot', label: 'BUILD-A-BOT',
         startup: 6, active: 1, recovery: 16,
-        /* By hand, because moveCost cannot see any of this. It prices
-           `damage`, and the cast's damage is zero -- he kneels down with a
-           wrench and hits nobody -- so the formula valued the whole move at
-           its floor of 6. A finished robot is three presses, 66 mana, two
-           thirds of the bar and 132 frames of regen, and it is 22 again
-           every time the battery runs out. */
-        manaOverride: 22,
+        /* FIFTY, up from 22, because 22 was too low. By hand either way,
+           because moveCost cannot see any of this: it prices `damage`, and
+           the cast's damage is zero -- he kneels down with a wrench and hits
+           nobody -- so the formula valued the whole move at its floor of 6.
+
+           THIS IS NOT ONLY A PRICE, AND THAT IS THE PART TO READ. A finished
+           robot is three presses. At 22 that was 66, two thirds of a bar, and
+           the whole machine came out of one meter with change. At 50 it is
+           150 against a `COMBAT.manaMax` of 100, so a finished robot NO
+           LONGER FITS IN A FULL BAR AT ALL -- the third press has to wait on
+           regen, which is `COMBAT.manaRegen` 0.5 a frame and does not run
+           inside a special.
+
+           Measured from a full bar with nobody interfering, which is the
+           floor and not the typical case:
+
+                          presses land on     finished     idle, waiting
+                22        frames 6, 32, 58    frame  58    0
+                50        frames 6, 32, 153   frame 153    ~97
+
+           A second of build time becomes two and a half. THE
+           BATTERY SURVIVES THE WAIT, which is the thing worth checking and
+           not assuming: the gap between the second press and the third is 121
+           frames against `life` 480, and any press refills it, so the robot
+           finishes with 479 of 480 left. The cost is 95 more frames of a
+           HALF-BUILT robot standing on the stage, not a robot that dies
+           before it is done.
+
+           Over the CPU ladder, 5 seeds x 120 matches: reaching the finished
+           tier falls from 35.2% of matches to 10.5%, and the share of
+           robot-frames spent at that tier from 15.2% to 4.6%. The 15.2% is
+           the same 13-17% the tournament paragraph above records, which is
+           how that paragraph and this one are known to be measuring the same
+           thing. */
+        manaOverride: 50,
         /* THE BATTERY, and it is the clock the whole move runs on: eight
            seconds from the last press, whatever tier it is at. Any press
            refills it, which is what makes the fourth press a recharge
@@ -1624,24 +1652,39 @@ const ROSTER = {
          lever if this move stacks too high, ahead of `duration` and well
          ahead of `per`. */
       startup: 12, active: 1, recovery: 46,
-      /* A HUNDRED AND SIXTY-TWO, AND IT DIVIDES. 162 = 54 x 3, so `every: 3`
-         goes into it exactly 54 times and 162 notes arrive.
+      /* EIGHTY-ONE NOW, AND IT STILL DIVIDES. "half as many music notes" was
+         the ask. `duration` stays 162 and `every` goes 3 to 6, so 162 / 6 is
+         27 exactly, 27 chords of three arrive, and 81 is both what this
+         object advertises and what it delivers. CHECKED after the change --
+         81 advertised, 81 delivered, 27 volleys, biggest 3 and smallest 3 --
+         because checking it is the entire purpose of this paragraph.
+
+         HALF AS MANY IS A DENSITY HERE AND NOT A WINDOW, and both readings
+         divide, so the arithmetic does not pick between them. `every: 6` over
+         162 frames and `every: 3` over 81 both give 81 notes. What picks is
+         the shape: the 81-frame version casts for 81 frames of a 158-frame
+         span and spends the other 77 with nothing coming out, half the move's
+         life waiting on leftovers, where this one casts for 162 of 236. The
+         length was not what was asked about, so the length did not move.
+         Thickness did, which is what "half as many" looks like on screen:
+         notes in the air at once peaked at 60 and now peaks at 34.
 
          WHAT THE DIVISION PROTECTS is not what an earlier draft of this
          paragraph said. It claimed the last volley lands on the last frame of
          the song; it does not -- `rainTimer` runs 162 frames so `rainStep`
-         is 0..161 and volleys fire at 0, 3, ... 159, two frames before the
+         is 0..161 and volleys fire at 0, 6, ... 156, five frames before the
          end. What breaks when the division fails is that the count this
          object ADVERTISES stops matching the count it delivers: at
-         `duration: 160` this object still says 160 while 162 notes arrive,
-         and the only evidence is a number that is wrong in a document. Check
-         it every single time either number moves; there is a test that does.
+         `every: 5` this object says 96 while 99 notes arrive, and the only
+         evidence is a number that is wrong in a document. Check it every
+         single time either number moves; there is a test that does.
 
-         FEWER-AND-HARDER WAS TRIED TWICE; THIS IS THE THIRD TRADE AND IT
-         GOES THE OTHER WAY. A hundred notes at 9 read as static. Forty at 15
-         read as a drip, and a drip is not music. A hundred and sixty-two
-         arriving in CHORDS OF THREE, at 6 apiece, is the first version of
-         this that sounds like the thing it is named after.
+         FEWER-AND-HARDER WAS TRIED TWICE AND HAS NOW BEEN ASKED FOR. A
+         hundred notes at 9 read as static. Forty at 15 read as a drip, and a
+         drip is not music. A hundred and sixty-two at 6, in CHORDS OF THREE,
+         was the first version that sounded like the thing it is named after;
+         eighty-one at 7 is that same song with every other chord taken out.
+         Thinner, not shorter, and still in chords.
 
          "RANDOMIZED" IS A TRAP IN A REQUEST LIKE THIS ONE, because these
          positions are HITBOXES. Every note's lane, its height off the ceiling
@@ -1657,37 +1700,52 @@ const ROSTER = {
          positions is -0.006 where the belt's was +0.78, and the mean step
          between them is 102.6 px where the belt's was 20.8.
 
-         THE WIDEST EMPTY LANE IS A DISTRIBUTION AND NOT A BOUND, which an
-         earlier draft got wrong by quoting its own p10 and p90 as if they
-         were limits. Over those same 3,000 casts it runs
+         THE WIDEST EMPTY LANE IS THE ONE SCATTER NUMBER THAT MOVED WITH THE
+         COUNT, and it moved a long way. The two statistics above are per-note
+         and are untouched -- pooled lag-1 reads -0.003 at 81 notes against
+         -0.002 at 162, mean step 102.9 px against 103.1 -- but a gap in a
+         sorted list of spawn positions is a function of how many positions
+         there are, and there are now half as many. Over 3,000 casts of each:
 
-              min 6.3   p10 8.7   p50 10.5   p90 14.1   p99 18.3   max 25.6
+                           min   p10   p50   p90   p99   max
+              162 notes    6.3   8.1  10.2  13.5  18.0  29.2
+               81 notes    9.6  13.8  18.0  24.1  31.6  46.0
 
-         against the 15 px a body needs, and 6.6% of casts do leave one lane
-         at least that wide for the whole song. So "there is nowhere to stand"
-         is true nineteen times in twenty and not always, and the honest claim
-         is the median: half of all casts leave no gap bigger than ten and a
-         half pixels anywhere on a 308-pixel stage. The belt left 25.
+         Against the 15 px a body needs, a lane that wide stayed open for a
+         whole song in 4.3% of casts at 162 notes and does in 81.1% at 81. So
+         the claim this paragraph used to make -- "there is nowhere to stand",
+         true nineteen times in twenty -- IS NO LONGER TRUE, and it is not
+         true four times in five. The honest claim is the median: half of all
+         casts now leave a gap of eighteen pixels somewhere on a 308-pixel
+         stage, which is two bodies. That is the direct and intended cost of
+         halving the note count, it is measured here rather than discovered
+         later, and the test that used to assert the old bound asserts the
+         distribution instead. The belt this all replaced left 25.
 
          Zero repeated opening sequences, and two Ladeanes casting on the same
          frame get different showers. */
       duration: 162,
-      every: 3, per: 3, margin: 6, slow: 2.4, fast: 4.2,
+      every: 6, per: 3, margin: 6, slow: 2.0, fast: 3.6,
       /* THREE, AND IT IS NOT A SECOND NOTE COUNT. `count` is applyHit's gate
          for the volley falloff -- `if (move.count && move.count > 1)` -- and
          it is the whole reason a chord of three is safe: a target being hit
          over and over by the same move inside forty frames takes 1, 0.7,
          0.5, 0.35, 0.25 then 0.2 of it. Without this key the gate is false
-         and every one of a hundred and sixty-two notes lands for a flat six.
-         Measured on a pinned target through one whole song, a hundred and
-         twenty trials over all six stages: 52.5 damage with the key absent
-         against 25.6 with it, off the identical 8.5 notes that actually
-         connect -- so the key is worth a factor of two on the number this
-         move was calibrated by, and the comment below has been claiming the
-         falloff was doing that work since the day it was written. Read this
-         paragraph and the `base` one together before touching `per`. */
+         and every note lands for a flat `damage`.
+
+         RE-MEASURED AT 81 NOTES, because the old figures here were taken at
+         162 and the key is worth less when there are fewer notes to fall off
+         against. Pinned target, one whole song, 120 trials over all six
+         stages: 19.7 damage with the key against 26.2 without, off the
+         identical 3.7 notes that actually connect. At 162 notes the same
+         probe read 26.6 against 47.0 off 7.8 notes -- so the key has gone
+         from saving 44% of the damage to saving 25% of it, which is the
+         falloff having fewer chains deep enough to bite. It is still the
+         difference between a chord and a flat multiplier, and it is still
+         the reason `per: 3` is safe. Read this paragraph and the `base` one
+         together before touching `per`. */
       count: 3,
-      drop: 0.02, life: 200, shape: 'note', ghost: true,
+      drop: 0.02, life: 200, shape: 'note', ghost: true, shieldBreak: true,
       tints: ['#b06cf0', '#d9a6ff', '#8f4fd0'],
       /* `margin` is 6 because the quaver is 6 px wide drawn centred, so six
          keeps every note wholly on screen and leaves no lane at the wall.
@@ -1696,72 +1754,145 @@ const ROSTER = {
          warning time is a property of the STAGE. Measured from the spawn row
          to the top of a standing hurtbox, across all six stages:
 
-              a main floor       33-40 frames at `slow`, 22-27 at `fast`
-              a mid platform     19-27 / 13-18
-              THE MATRIX's top        4 / 4
+              a main floor       35-46 frames at `slow`, 22-29 at `fast`
+              a mid platform     20-31 / 11-19
+              THE MATRIX's top      1-5 / 1-3
 
-         Four frames is not reactable and this comment is not going to pretend
-         otherwise -- the answer on the high ground is positional, which is to
-         drop through, and dropping through is instant. The ult takes the high
-         ground away; it does not ask you to read it up there.
+         `slow` AND `fast` CAME DOWN, 2.4 to 2.0 and 4.2 to 3.6, because "a
+         little slower on the descent" was asked for. That is what the table
+         above already has in it; at the old speeds the same probe read 31-40
+         / 19-25 on a main floor, 17-27 / 10-16 on a mid platform and 1-4 /
+         0-2 on THE MATRIX's top. Every cell is a range because the spawn row
+         carries 0-7 px of jitter, and the gain is about an eighth everywhere
+         -- a main floor goes from a bit over half a second of warning to
+         about two thirds.
+
+         IT BUYS WARNING TIME AND NOTHING ELSE. A pinned man takes the same
+         damage at both speeds to two decimal places; slower notes are longer
+         in the air and land no harder.
+
+         One to five frames is not reactable and this comment is not going to
+         pretend otherwise -- the answer on the high ground is positional,
+         which is to drop through, and dropping through is instant. The ult
+         takes the high ground away; it does not ask you to read it up there.
 
          `ghost` STAYS TRUE and it is load-bearing. Without it, standing under
          a platform is immunity, and which spots were safe differed on all six
          stages. */
-      /* SIX, AND THE FALLOFF ABOVE IS HALF OF WHAT MAKES IT SIX -- read
-         `count` before this paragraph. Every point of the buff is aimed at
-         the target who MOVES, and the measured table says it landed there:
+      /* SEVEN, UP FROM SIX, because "a little more damage" was asked for in
+         the same breath as half the notes. The falloff above is still half of
+         what makes seven safe -- read `count` before this paragraph. The
+         per-hit ladder is now 7 / 4.9 / 3.5 / 2.45 / 1.75 / 1.4.
 
-           120 trials, 6 stages x 20 start positions, one whole song each,
-           no health resets and no pinning; the dodger is an oracle that
-           steps away from the nearest note above it, which is the best a
-           reading player could do.
+         THE WHOLE TABLE WAS RE-RUN RATHER THAN SCALED, because halving the
+         note count changes WHICH BEHAVIORS ARE ANSWERS and not just what they
+         cost. Both columns below come off one probe so they are comparable to
+         each other: 120 trials, 6 stages x 20 start positions, one whole song
+         each, no health resets and no pinning; the dodger is an oracle that
+         steps away from the nearest note above it, which is the best a
+         reading player could do.
 
-                                          2.80          2.81
-            stand still                   34.6          26.3
-            walk one way blind             7.0          21.4
-            dodge, reading the shower      4.3          22.1
-            hold shield the whole song    13.6           7.5
+                                        162 at 6      81 at 7
+            stand still                   25.5          19.6
+            walk one way blind            15.7          12.4
+            dodge, reading the shower     18.6           2.1
+            hold shield the whole song     7.5          11.8
 
-         Dodging used to take 88% off and now takes 36% off. THAT is the
-         payoff: two and a half seconds in which the other player is playing a
-         different game and reading it is worth a quarter of what it was.
-         Walking one way blind is worse than standing still now and it was
-         much better before -- and it is worse again for a reason the table
-         cannot show, which is that a man holding one direction for a whole
-         song walks off the stage in 75 of 120 trials.
+         (The 2.80 and 2.81 columns this table used to carry came off a
+         different oracle and are not comparable to these, so they are not
+         reprinted. The two cells both probes agree on -- about 26 standing
+         and 7.5 shielding at 162 notes -- are why this one is trusted.)
 
-         A TARGET THAT STANDS STILL TAKES A FIFTH LESS THAN IT DID, not the
-         parity an earlier draft predicted, and that is the falloff doing its
-         work: eight or nine notes land on a man who never moves and after the
-         first they are worth 0.7, 0.5, 0.35, 0.25 and 0.2 of six. A single
-         note on somebody who is dodging is still worth all six.
+         A TARGET THAT STANDS STILL TAKES A QUARTER LESS, which is the buff
+         and the cut landing on the same man: 3.7 notes connect where 7.8 did,
+         and the early ones are worth 7 rather than 6.
 
-         `base` IS 1.2 AND IT IS THE SAFETY NUMBER. A hundred and sixty-two
-         near-vertical pops is exactly where a juggle lock would come from.
-         Measured worst unbroken hitstun 48 frames over 480 trials, against 35
-         today: no lock exists. The volley falloff inside 40 frames is the
-         other half of that, and it is also why adding MORE notes from here
-         would buy pressure and almost no damage. It only runs because `count`
-         is set; without that key every one of the 162 lands for a flat six
-         and a standing man takes 52.5 instead of 26.3.
+         DODGING IS AN ANSWER AGAIN, AND THAT IS THE PRICE OF THE COUNT. It
+         took 27% off at 162 notes and takes 89% off at 81. Sparser notes
+         leave room to step, which is the widest-empty-lane table above seen
+         from the other side, and 2.81's proudest claim about this move --
+         that reading the shower was worth a quarter of what it used to be --
+         does not survive halving it. That is recorded here, not argued with:
+         half as many notes is what was asked for.
 
-         `shieldBreak` IS GONE, and that is required rather than a taste. It
-         took shieldMax x 2 and handed a 90-frame break stun out UNDER the
-         shower: measured, holding shield broke 100% of the time, 33% of the
-         window was spent stunned, worst unbroken stun 109 frames. At four
-         times the note count, hiding was not counterplay, it was a guaranteed
-         stun. Without it a note takes 14.4 shield and seven break a full one,
-         which is a shield that runs out rather than one that betrays you.
+         `base` IS 1.2 AND IT IS THE SAFETY NUMBER. Eighty-one near-vertical
+         pops is still exactly where a juggle lock would come from, and fewer
+         notes is not obviously safer -- a slower shower interrupts its own
+         hitstun less often. Re-measured: worst unbroken hitstun 46 frames,
+         against 48 at 162 notes. No lock exists either way. The volley
+         falloff inside 40 frames is the other half of that.
+
+         `shieldBreak` IS BACK BECAUSE IT WAS ASKED FOR -- the notes "should
+         still shield break". The paragraph that stood here said its removal
+         in 2.81 was "required rather than a taste", and that argument rested
+         on exactly one variable: the note count, which this same change
+         halves. So it has been RE-RUN rather than repeated, and it does not
+         land where the old paragraph would have predicted.
+
+         ONE NOTE STILL EMPTIES THE WHOLE BAR, and that is the thing that does
+         not halve with everything else. applyHit takes `COMBAT.shieldMax * 2`
+         off a shield when this flag is set, so the break is all-or-nothing
+         and independent of `damage`. A man who holds shield through a whole
+         song, 120 trials over 6 stages x 20 spots, watched until the last
+         note has landed. The percentages divide by the 162 frames of the
+         SONG, and the worst-run row is measured inside that same window --
+         both the way the old paragraph's "33% of the window" and "109" were:
+
+                                      2.81 spec   2.83 shipped   2.84
+            his shield broke at all      100%         100%        100%
+            broken BY A NOTE             100%        38.3%       97.5%
+            of the song in break stun   34.4%         5.0%       37.2%
+            worst run unable to act       112           37         101
+            damage taken                 19.1          7.5        11.8
+
+         Against the three numbers the old paragraph quoted -- 100%, 33% and
+         109 -- the first two reproduce and this probe reads 112 for the third
+         on the same spec, so the instrument agrees with the record before it
+         is asked anything new.
+
+         COUNTED OVER THE WHOLE SPAN INSTEAD, notes still in the air after the
+         song ends included, the worst run reads 127 / 93 / 124. Which window
+         a run is measured in is worth stating because it is the one place
+         these figures are sensitive to it: 2.84 lands more of its notes after
+         `rainTimer` has run out, so the two windows disagree about the
+         DIRECTION of that row and about nothing else.
+
+         AND ONE OF THEM GOES THE WRONG WAY. Time spent in break stun is
+         HIGHER at 81 notes than at 162, 37.2% against 34.4%, which is the
+         opposite of what "at four times the note count" predicts. The
+         mechanism is applyHit: a broken fighter is not shielding, so the next
+         note deals damage and calls setState('hitstun'), which REPLACES the
+         break and caps at `hitstunCap` 30. At 162 notes the 90-frame break
+         was constantly being cut short by the next note; at 81 slower notes
+         far fewer breaks are interrupted, so he serves more of the full
+         ninety. Total time unable to act does fall, 56.9% of the song to
+         47.5%, and the worst single run falls from 112 to 101 -- but the
+         break stun itself lengthens, and a comment that claimed hiding got
+         safer in every way would be wrong.
+
+         What roughly halves is what it costs him: 19.1 damage while open at
+         162 notes against 11.8 at 81. Against what 2.83 actually shipped,
+         with no flag at all, a shielding man goes from 7.5 damage and 5% of
+         the song stunned to 11.8 and 37%.
+
+         IT REPRICES NOTHING, checked rather than assumed, because this flag
+         does cost 8 power in moveCost. `ult` is a SIBLING of `specials` and
+         the pricing loop walks `def.specials`, so it never reaches this
+         object; `noMeter` is true and this move carries no `mana`. moveCost
+         would return 40 with the flag and 30 without, and nothing calls it
+         here.
 
          THE SHOWER OUTLIVES A KO AND A CHICKEN TRANSFORMATION, and that is
          noted here rather than fixed. Neither respawn() nor becomeChicken()
          clears `rainTimer`, and the rain block in Fighter.update sits below
-         the `eliminated` return: measured, 47 notes still spawning 40 frames
-         after he is knocked out. It is the rule becomeChicken already states
-         -- what you started keeps running -- but with forty notes nobody
-         could see it and with a hundred and sixty-two they will. */
-      damage: 6, base: 1.2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
+         the `eliminated` return: measured, knock him out 40 frames into the
+         song and 15 more notes arrive over the next 40 frames and 66 over the
+         rest of it, against 27 and 132 at the old density. Anything probing
+         this has to reach past the freeze -- about twelve frames after
+         knockOut() nobody updates at all. It is the rule becomeChicken
+         already states, which is that what you started keeps running, and
+         halving the count did not make it any harder to see. */
+      damage: 7, base: 1.2, scale: 5.6, angle: 74, kx: 0.27563735581699916, ky: 0.96126169593831889,
     },
   },
 
@@ -2507,10 +2638,13 @@ const ROSTER = {
         // long before it computes any. Present because the throws below are
         // where the force actually is.
         damage: 0, base: 0, scale: 0,
-        // Farther than anyone else throws. Against BASIC_GRAB's 2.8/5.6 this
-        // is half again as much launch, which past mid-health is the
-        // difference between a throw that resets the exchange and one that
-        // takes the stock.
+        // Farther than anyone else throws, and still farther after 2.84 put
+        // +0.4 on everybody's. Knockback is (base + damage x 0.14) scaled by
+        // weight, so against BASIC_GRAB's 3.2 and 8 this is 6.28 against
+        // 4.32 -- about 45% more launch, where before the shared throws moved
+        // it was 60%. It is still the difference between a throw that resets
+        // the exchange and one that takes the stock; it is a little less of a
+        // difference than it was, because the floor came up under it.
         throwFwd: { damage: 12, base: 4.6, scale: 9.6, angle: 32,
                     kx: 0.84804809615642596, ky: 0.52991926423320490 },
         throwUp: { damage: 10, base: 4.4, scale: 10.2, angle: 84,
@@ -5892,11 +6026,70 @@ const BASIC_GRAB = {
   // Never read for knockback: applyHit returns at the grab branch long before
   // it computes any. The force lives in the throws.
   damage: 0, base: 0, scale: 0,
-  throwFwd: { damage: 8, base: 2.8, scale: 5.6, angle: 32,
+  /* A BIT FARTHER, WHICH IS +0.4 ON `base` AND NOTHING ELSE. "make everyones
+     throw from grab a bit farther" -- and this is the one object every
+     character's grab reads, so it is all ten of them at once.
+
+     TWO THINGS THE OBVIOUS READING GETS WRONG, both probed rather than
+     reasoned about:
+
+       `scale` IS DEAD ON A THROW. applyHit's own header says `scale`
+       multiplies the damage and nothing else, and that `scale` is the
+       FUNCTION PARAMETER rather than `move.scale`. `move.scale` is read in
+       exactly two places in this file and both are inside moveCost -- and
+       BASIC_GRAB is a const outside ROSTER, so the pricing loop never walks
+       it. Measured: with throwFwd.scale at 0, at 5.6 and at 11.2 the thrown
+       distance is 27.458 px all three times, identical to three decimals,
+       while base 2.8 -> 3.0 -> 3.2 moves it 22.529 -> 25.515 -> 27.458.
+       Moving `scale` here would change NerdWars-moves.txt and not one pixel
+       of the game, so it did not move.
+
+       KNOCKBACK DOES NOT SCALE WITH THE VICTIM'S DAMAGE. The formula is
+       (base + damage x 0.14) x (100 / weight) x kbTakenMul, and kbTakenMul is
+       1 unless the victim is buffed. Measured at 100, 60, 20 and 10 health
+       left: 27.458 px every time. This is a 100-down-to-0 health bar and not
+       a Smash percent, so ONE number is the whole answer and what varies is
+       WEIGHT.
+
+     WHAT IT BOUGHT, in pixels traveled from the throw to landing, no DI and
+     no inputs, on THE MATRIX's main floor, across all eleven weights:
+
+                          before             after
+        throwFwd   dx     18.3 - 24.4        22.5 - 29.6      +23%
+        throwUp    peak   13.2 - 17.0        16.5 - 21.2      +24%
+        throwDown  dx      9.4 - 13.9        13.5 - 15.5      +24%
+
+     About five pixels forward, four up and three down: a fifth again on all
+     three, and just over half a body, since HURT_W is 9. An up-throw's
+     horizontal drift is 0.2 px before and after -- its "farther" is the
+     middle row, which is height.
+
+     WHY +0.4 AND NOT LESS, since "a bit" invites less. Landing is quantized
+     to whole airframes, so a smaller step is invisible at the heavy end.
+     Mean throwDown distance across the roster at +0.0 through +0.4 runs
+     11.63, 11.98, 13.12, 14.03, 14.42 -- and the heaviest characters do not
+     change their landing frame AT ALL until +0.3 (9.37, 9.64, 9.92, then
+     13.16). +0.4 is the smallest uniform step that reads as the same fifth
+     again on every throw at every weight.
+
+     IT IS NOT A KILL FROM CENTER STAGE and it was not close before: from the
+     middle of any stage the nearest ledge is 96 to 160 px away and a forward
+     throw carries 27.5. What IS new is the band in FRONT of the ledge -- the
+     deepest spot inside the edge from which a forward throw still puts
+     somebody past it moves out by the five pixels the throw gained, about
+     half a body. Up-throw peak is 21 px against a top blast zone far above
+     that, so nothing new goes up and out.
+
+     NO ANGLE MOVED, which is why there is no new trig here. kx and ky are
+     baked literals that build.py verifies to 1e-12, "farther" lives in
+     `base`, and changing an angle would have changed the DIRECTION of a
+     throw, which is not what was asked for. Hitstun handed out goes 15/14/15
+     to 16/15/16 against a `hitstunCap` of 30; nothing is near it. */
+  throwFwd: { damage: 8, base: 3.2, scale: 5.6, angle: 32,
               kx: 0.84804809615642596, ky: 0.52991926423320490 },
-  throwUp: { damage: 7, base: 2.7, scale: 6.0, angle: 84,
+  throwUp: { damage: 7, base: 3.1, scale: 6.0, angle: 84,
              kx: 0.10452846326765346, ky: 0.99452189536827329 },
-  throwDown: { damage: 9, base: 2.6, scale: 4.6, angle: 12,
+  throwDown: { damage: 9, base: 3.0, scale: 4.6, angle: 12,
                kx: 0.97814760073380569, ky: 0.20791169081775934 },
 };
 
@@ -26455,7 +26648,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = '00fb170d91';
+const BUILD_ID = 'fd18de9085';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -26466,7 +26659,7 @@ const BUILD_ID = '00fb170d91';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.83';
+const VERSION = '2.84';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it
