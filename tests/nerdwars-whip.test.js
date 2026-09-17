@@ -320,13 +320,13 @@ const whipSpec = (run) =>
    ===================================================================== */
 
 /* Six casts through the real input path, and what each of them painted.
-   Squalls throws the star, stands in the bakery, swings the whip, dreams up
+   Squalls throws the star, throws the banana, swings the whip, dreams up
    the dragon and jabs; Reese, who has an up special that is not a whip, casts
    his. Only one of those six is allowed to put a whip on the screen. */
 const everyMove = (run) => ({
   whip: whipTrace(run, SP_UP, 1, 0),
   star: whipTrace(run, SP_NEUTRAL, 1, 0),
-  bakery: whipTrace(run, SP_DOWN, 1, 0),
+  banana: whipTrace(run, SP_DOWN, 1, 0),
   dragon: whipTrace(run, ULT, 1, 0),
   jab: whipTrace(run, ATTACK, 1, 0),
   foeUp: whipTrace(run, SP_UP, 1, 1),
@@ -359,12 +359,12 @@ function checkOnlyForTheWhip(run, t) {
   /* And nothing else. This is the one that matters, and it is not a
      hypothetical: Christian's axe drew itself over his cookie, his frogs and
      his ult, because the guard asked whether he was holding an axe rather
-     than whether he was swinging one, and it shipped. A whip over the bakery
+     than whether he was swinging one, and it shipped. A whip over the banana
      is the same bug wearing a different hat -- the move still works, the
      damage is still right, and the only thing wrong with it is that he is
-     standing there daydreaming about bread with a bullwhip cracking out of
-     his hip. */
-  for (const [what, rows] of [["the star", t.star], ["the bakery", t.bakery],
+     lobbing a banana over his own head with a bullwhip cracking out of his
+     hip. */
+  for (const [what, rows] of [["the star", t.star], ["the banana", t.banana],
                               ["the dragon", t.dragon], ["his jab", t.jab],
                               ["somebody else's up special", t.foeUp]]) {
     assert.ok(rows.length > 0,
@@ -388,7 +388,7 @@ test("negative control: without the moveFor guard the whip draws over his other 
      it is, so the whip still only belongs to a man whose up special is a
      whip -- what goes is the question of whether the special he is CASTING is
      that one. Squalls then swings a whip through the star and through the
-     whole four seconds of the bakery.
+     banana.
 
      Anchored on the line above it because the whip's two guards are word for
      word the axe's two guards, and the moveFor line on its own matches twice. */

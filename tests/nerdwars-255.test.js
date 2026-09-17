@@ -157,6 +157,21 @@ function sabotage(needle, replacement) {
   return src.slice(0, at) + replacement + src.slice(at + needle.length);
 }
 
+/* Two lines, when one of them alone would prove something other than what
+   the control claims. The pierce control below is the case: `pierce` without
+   its per-frame decrement bites once and then never again, which looks like
+   a pass for the wrong reason. Both needles are asserted the same way, and
+   the second is applied to the already-mutated copy rather than to the file,
+   which is why this cannot be two calls to sabotage(). */
+function sabotageBoth(n1, r1, n2, r2) {
+  const src = sabotage(n1, r1);
+  const at = src.indexOf(n2);
+  assert.ok(at >= 0, "second sabotage needle not found: " + JSON.stringify(n2));
+  assert.equal(src.indexOf(n2, at + 1), -1,
+    "second sabotage needle is not unique: " + JSON.stringify(n2));
+  return src.slice(0, at) + r2 + src.slice(at + n2.length);
+}
+
 /* The other half of a negative control: the SAME checker the real test ran,
    and it has to throw an assertion. Anything else thrown is a broken checker
    rather than a failed test, and is let through so it shows up as itself. */
@@ -271,12 +286,17 @@ test("negative control: a bone worth half of that fails the bone test", async ()
    twenty-six frames had you stuck in it, hopping, unable to walk out. Broken
    glass does not hold people. `graze` is the fix and it is a GENERAL flag in
    applyHit: health comes off and the function returns before a single line of
-   the launch below it. `pierce` went at the same time, so the pane breaks on
-   the first person to find it the way any other shot does.
+   the launch below it. `pierce` went at the same time, and 2.83 did not put
+   it back: what it added is a BUDGET of two steps with thirty frames of
+   nothing in between, which is a different mechanism with a different
+   failure mode.
 
-   Which makes the measurement one step rather than three: park the foe on
-   the pane, take the one hit, and then keep him standing there for the rest
-   of the pane's life to prove nothing else ever happens.
+   Which makes the measurement two steps rather than one or three: park the
+   foe on the pane and leave him there for the rest of its four seconds, and
+   read the whole trace. Exactly two bites, thirty frames apart at the very
+   least, nothing at all in between, and the pane gone on the second one --
+   a ceiling of five, against the nine bites and twenty-two and a half that
+   2.55 collected off a man standing still.
 
    He is held out of reach and untouchable until the glass exists, because
    the bottle that leaves it is itself a hit -- a foe who catches the bottle
@@ -286,7 +306,8 @@ const glassStep = (run) => run(`(function () {
   foe.x = main.x + main.w - 12; foe.invuln = 9999;
   var sawGlass = false, bornAt = -1, took = 0, at = -1, ticks = 0;
   var vy = 0, vx = 0, state = '', stun = -1, stop = -1, grounded = true;
-  var aliveAfter = 0, lifeLeft = -1;
+  var aliveAfter = 0, lifeLeft = -1, bites = [], armedBetween = 0;
+  var before = foe.health;
   netplay.active = true;
   for (var i = 0; i < 320; i++) {
     me.hitstop = 0; me.mana = 999;
@@ -301,13 +322,27 @@ const glassStep = (run) => run(`(function () {
         foe.x = g.x; foe.y = main.y; foe.vx = 0; foe.vy = 0;
         foe.grounded = true; foe.setState('idle');
       }
-      if (at >= 0) aliveAfter++;
+      /* Frames the pane was still on the stage after the LAST bite so far,
+         reset on every bite -- so what survives to the end is the wait it
+         made him sit through after the one that finished it. */
+      if (bites.length) aliveAfter++;
     }
     netplay.framePads = [bitsToPad(i === 0 ? ${SP_NEUTRAL} : 0), bitsToPad(0)];
     var h0 = foe.health;
+    /* Read BEFORE the step, which is the only place a test can see it: the
+       pane decrements its re-arm counter in its own update() and
+       resolveCombat runs after that, so the frame a re-armed pane bites on
+       already reads as unarmed from out here, and so does every frame of the
+       gap. The bite frames are excluded below, so what this counts is frames
+       on which the pane called itself a hitbox while it was settling.
+       (No backticks in here: this whole probe is a template literal and one
+       of them silently ends the string.) */
+    var armed = g ? (g.live ? (g.live() ? 1 : 0) : 1) : 0;
     step();
     if (g && foe.health < h0) {
       ticks++;
+      bites.push(i);
+      aliveAfter = 0;
       if (at < 0) {
         /* Read on the frame it happened. A graze returns BEFORE the launch,
            so what is being collected here is everything applyHit would have
@@ -317,12 +352,16 @@ const glassStep = (run) => run(`(function () {
         state = foe.state; stun = foe.hitstun; stop = foe.hitstop;
         grounded = foe.grounded;
       }
+    } else if (bites.length === 1 && armed) {
+      armedBetween++;
     }
   }
   netplay.active = false; netplay.framePads = null;
   return { sawGlass: sawGlass, took: took, at: at, ticks: ticks, vy: vy,
            vx: vx, state: state, stun: stun, stop: stop, grounded: grounded,
-           aliveAfter: aliveAfter, lifeLeft: lifeLeft };
+           aliveAfter: aliveAfter, lifeLeft: lifeLeft, bites: bites,
+           armedBetween: armedBetween,
+           lost: +(before - foe.health).toFixed(3) };
 })()`);
 
 function checkGlass(run, g) {
@@ -333,9 +372,17 @@ function checkGlass(run, g) {
     "that carries the whole behavior, so it is read off the spec before " +
     "anything is measured");
   assert.equal(glass.hitEvery, undefined,
-    "and it no longer re-arms, because there is nothing left for it to " +
-    "re-arm ON -- the pane breaks on the first person through it; " +
-    "`hitEvery` is " + glass.hitEvery);
+    "and `hitEvery` is still gone, because what 2.83 gave it back is not a " +
+    "tax on a clock: `rearm` is a window in which it is not a hitbox at " +
+    "all, which is the opposite thing. `hitEvery` is " + glass.hitEvery);
+  assert.equal(glass.hits, 2,
+    "and the budget is two steps, read off the spec before anything is " +
+    "measured; `hits` is " + glass.hits);
+  assert.ok(glass.rearm >= 21,
+    "and the gap has to outlast one crossing. A walking fighter is inside " +
+    "a 22-pixel pane for twenty frames, so anything shorter than that " +
+    "spends both bites under a foot that never made a second decision; " +
+    "`rearm` is " + glass.rearm);
   assert.equal(glass.base, 0, "and it launches nobody: `base` is " + glass.base);
   assert.equal(glass.scale, 0, "nor scales with damage: `scale` is " + glass.scale);
 
@@ -362,15 +409,32 @@ function checkGlass(run, g) {
   assert.equal(g.vx, 0, "or shove him sideways; his vx was " + g.vx);
   assert.ok(g.grounded, "he should still have his feet on the ground");
 
-  /* And it is SPENT. One patch, one victim: the denial is that it was there,
-     not that it keeps collecting. `aliveAfter` counts frames the pane was
-     still on the stage with him standing on it, which under `pierce` was
-     hundreds and is now none. */
-  assert.equal(g.ticks, 1,
-    "one victim, one bite; it bit " + g.ticks + " times");
+  /* And it is SPENT, in two steps and no more. `aliveAfter` counts frames
+     the pane was still on the stage after the last bite it took, which under
+     `pierce` was hundreds and is now none. */
+  assert.equal(g.ticks, 2,
+    "two steps, and exactly two -- the budget is on the pane; it bit " +
+    g.ticks + " times");
+  assert.equal(g.bites.length, 2,
+    "and the trace has to show both of them as separate frames rather than " +
+    "one frame counted twice; it has " + g.bites.length);
+  assert.ok(g.bites[1] - g.bites[0] >= glass.rearm,
+    "and the second one cannot land until the pane has re-armed. A walking " +
+    "fighter is inside a 22-pixel pane for twenty frames, so anything " +
+    "shorter than `rearm` (" + glass.rearm + ") spends both bites on one " +
+    "crossing, which is one hit with an extra sound rather than two hits; " +
+    "the gap was " + (g.bites[1] - g.bites[0]));
+  assert.equal(g.armedBetween, 0,
+    "and it must cost nothing at all in between: for the thirty frames it " +
+    "is settling the pane is not a hitbox, and a man standing on it takes " +
+    "nothing. It called itself a hitbox on " + g.armedBetween + " of them");
+  assert.equal(g.lost, +(glass.damage * glass.hits).toFixed(3),
+    "so the CEILING on one pane and one man standing still in it is " +
+    (glass.damage * glass.hits) + ", against the nine bites and twenty-two " +
+    "and a half that 2.55 collected; he lost " + g.lost);
   assert.equal(g.aliveAfter, 0,
-    "and the pane breaks on him rather than waiting out its four seconds; " +
-    "it was still there " + g.aliveAfter + " frames afterwards");
+    "and the pane goes on the SECOND step rather than waiting out its four " +
+    "seconds; it was still there " + g.aliveAfter + " frames afterwards");
   assert.ok(g.lifeLeft > 10,
     "which has to be the WALKING that ended it and not the clock -- it had " +
     g.lifeLeft + " frames left when he arrived");
@@ -387,24 +451,35 @@ test("negative control: glass that still launches fails the glass test", async (
      simply runs on past the return into the launch. On screen that is the
      2.55 bug -- a man hopping in a pile of glass. */
   const run = await arena(COBEUS, REESE, { engine: sabotage(
-    "               damage: 2.5, graze: true,",
-    "               damage: 2.5, graze: false,") });
+    "               damage: 2.5, graze: true, hits: 2, rearm: 30,",
+    "               damage: 2.5, graze: false, hits: 2, rearm: 30,") });
   const g = glassStep(run);
   expectToFail(() => checkGlass(run, g),
     "with the graze switched off the glass test should fail; it passed");
 });
 
 test("negative control: glass that survives its first victim fails the glass test", async () => {
-  /* The other half, put back where it was taken from: `pierce` on the class.
-     resolveCombat then keeps the pane alive through the contact and re-arms
-     it on `hitEvery || 30`, so it goes back to being a tax collected for four
-     seconds -- and a graze that costs nothing but health, over and over, is
-     still not what one careless step is supposed to cost. */
-  const run = await arena(COBEUS, REESE, { engine: sabotage(
-    "    this.hitAt = new Array(MAX_PLAYERS).fill(0);\n    this.dead = false;\n" +
-    "    // A deterministic scatter",
+  /* The other half, put back where it was taken from: `pierce` on the class,
+     with the array it needs AND the per-frame decrement that makes the array
+     mean anything -- all three went together in 2.65 and all three have to
+     come back together, or the control bites once, never re-arms, and passes
+     for a reason it is not claiming. resolveCombat then takes the piercing
+     branch instead of calling shatter(), so the pane never spends a bite,
+     never settles and never breaks: it re-arms on `hitEvery || 30` and
+     collects for the whole four seconds. That is the distinction this test
+     exists to hold -- a BUDGET of two steps with a dead window between them
+     is not a tax on a clock, and a graze that costs nothing but health, over
+     and over, is still not what one careless step is supposed to cost. */
+  const run = await arena(COBEUS, REESE, { engine: sabotageBoth(
+    "    this.hits = gs.hits == null ? 1 : gs.hits;\n    this.rearm = 0;\n" +
+    "    this.dead = false;\n    // A deterministic scatter",
     "    this.pierce = true;\n    this.hitAt = new Array(MAX_PLAYERS).fill(0);\n" +
-    "    this.dead = false;\n    // A deterministic scatter") });
+    "    this.hits = gs.hits == null ? 1 : gs.hits;\n    this.rearm = 0;\n" +
+    "    this.dead = false;\n    // A deterministic scatter",
+    "  update() {\n    if (this.rearm > 0) this.rearm--;",
+    "  update() {\n    for (let i = 0; i < this.hitAt.length; i++) {\n" +
+    "      if (this.hitAt[i] > 0) this.hitAt[i]--;\n    }\n" +
+    "    if (this.rearm > 0) this.rearm--;") });
   const g = glassStep(run);
   expectToFail(() => checkGlass(run, g),
     "with the glass piercing again the glass test should fail; it passed");
@@ -2397,6 +2472,65 @@ test("negative control: a tell that does not survive a rollback fails the tell t
 });
 
 /* =====================================================================
+   THE PIZZA'S ONE NUMBER
+
+   Asked for by name and by number -- three less -- and until 2.83 there was
+   nothing anywhere in this suite that read it. That is worth a test on its
+   own terms: it is the only damage number on the move, so a typo in it is
+   the whole move, and `mana` is DERIVED from it by moveCost, which means a
+   hand-written manaOverride appearing on this move one day would silently
+   decouple the price from the payload.
+
+   The price is deliberately not written down as a number here. moveCost owns
+   it; what this asserts is that moveCost is still the thing that owns it and
+   that the cut moved it in the right direction.
+   ===================================================================== */
+
+test("the pizza does seven, and its price follows from that rather than being written down", async () => {
+  const run = await arena(NICK, REESE);
+  const m = JSON.parse(run(`JSON.stringify((function () {
+    var n = ROSTER.autisnick.specials.neutral;
+    var heavier = Object.assign({}, n, { damage: 10 });
+    return { kind: n.kind, damage: n.damage, mana: n.mana,
+             priced: moveCost(n), wasPriced: moveCost(heavier),
+             override: n.manaOverride || null,
+             others: Object.keys(n).filter(function (k) {
+               return k === 'burst' || k === 'parts' || k === 'sweet' ||
+                      k === 'sweetSpec' || k === 'damageScale';
+             }) };
+  })())`));
+  assert.equal(m.kind, "pizza", "precondition: his neutral special is the pizza");
+  assert.equal(m.damage, 7,
+    "the pizza should do seven, three less than it did; it does " + m.damage);
+  assert.deepEqual(m.others, [],
+    "and it should still have exactly one damage number -- no burst, no " +
+    "parts, no sweet spot, no damageScale -- so that seven is the whole " +
+    "payload a player ever feels; it also carries " + m.others.join(", "));
+  assert.equal(m.override, null,
+    "its price should not be hand-written: a manaOverride here would let " +
+    "the damage and the cost come apart. It has one, of " + m.override);
+  assert.equal(m.mana, m.priced,
+    "the price should be the one moveCost computes; the move says " +
+    m.mana + " and moveCost says " + m.priced);
+  assert.ok(m.priced < m.wasPriced,
+    "and cutting the damage should have carried the price down with it, " +
+    "because moveCost prices damage; at seven it costs " + m.priced +
+    " and at ten it would have cost " + m.wasPriced);
+});
+
+test("negative control: the pizza back at ten fails its own test", async () => {
+  /* The only line in the engine that decides this, and the shape of the
+     mistake worth catching: a revert, or a merge that takes the old side. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "        damage: 7, base: 3.4, scale: 6.3, angle: 40,",
+    "        damage: 10, base: 3.4, scale: 6.3, angle: 40,") });
+  expectToFail(() => {
+    const d = run("ROSTER.autisnick.specials.neutral.damage");
+    assert.equal(d, 7, "the pizza should do seven; it does " + d);
+  }, "with the pizza back at ten its damage test should fail; it passed");
+});
+
+/* =====================================================================
    THE BURST, AS A PICTURE
 
    The rainbow's second press is the one move whose whole identity is colour,
@@ -2413,8 +2547,9 @@ test("negative control: a tell that does not survive a rollback fails the tell t
                           and you are outside the ball.
      IT RADIATES          there is a frame where it is spokes rather than a
                           ring, which is the one thing an explosion has to do.
-     IT OPENS THE WHEEL   the shot is one colour and the burst is all six of
-                          them, starting from the one the shot had reached.
+     IT IS ONE COLOUR     the shot is one colour at a time and the burst is
+                          that colour: six shades of it and a two-frame white
+                          flash, and nothing else on the wheel.
 
    The prism is separated from the sparks it throws before anything is
    measured: the motes are debris, they arc and fall, and they are not the
@@ -2441,7 +2576,6 @@ const prismFrames = (run, hue) => JSON.parse(run(`(function () {
   return JSON.stringify({
     frames: frames, kinds: kinds,
     radius: up.burst.radius,
-    wheel: up.colors.map(function (c) { return c.css; }),
     shotCss: up.tints[${hue}].css,
   });
 })()`));
@@ -2459,7 +2593,16 @@ function checkPrism(r) {
   for (let t = 0; t < r.frames.length; t++) {
     let near = Infinity, far = 0;
     for (const q of r.frames[t]) {
-      seen.add(q.c);
+      /* The ink is read AFTER the flash is gone, at the same t >= 4 the
+         radial run below uses and for a sharper version of the same
+         reason. The flash does not just sit in the middle -- on its last
+         two frames it paints in `e.color`, which is the shot's own colour
+         and arrives there without going through the ramp at all. Counting
+         those frames makes "the shot's colour is in there" true whatever
+         the ramp says, which is an assertion that cannot fail and so
+         measures nothing. From frame 4 on, every rectangle is a spoke or a
+         ring dot and every one of them came out of the wheel. */
+      if (t >= 4) seen.add(q.c);
       /* The far CORNER of the rectangle, not its origin: a pixel drawn at
          exactly the radius still covers the pixel beyond it, and a claim
          about reach that ignored that would be off by one in the forgiving
@@ -2496,21 +2639,74 @@ function checkPrism(r) {
     "a radial run at least " + (r.radius * 0.4) + " long; the longest was " +
     widest.toFixed(2));
 
-  const wheel = new Set(r.wheel);
   const colors = [...seen].filter((c) => c !== "#ffffff");
-  for (const c of colors) {
-    assert.ok(wheel.has(c),
-      "the burst should paint only out of the rainbow's own six colours; it " +
-      "used " + c);
+  const mix = colors.map((c) => shadeOf(r.shotCss, c));
+  for (let i = 0; i < colors.length; i++) {
+    assert.ok(mix[i] !== null,
+      "the burst should be the ONE colour the shot had reached (" +
+      r.shotCss + ") and shades of it; it painted " + colors[i] + ", which " +
+      "is not that colour mixed with white or with black");
   }
-  assert.equal(colors.length, r.wheel.length,
-    "and it should use ALL six -- a shot is one colour, the burst is the " +
-    "wheel it came from; it used " + colors.length + " of " + r.wheel.length);
+  /* SIX of them, and this is the assertion that stops somebody reading
+     "one colour" as "one ink". At radius 20 the twelve spokes overlap for
+     the first six pixels out of the middle, so identical ink turns that
+     overlap into a disc and the star only exists from half-radius out. The
+     shades are not decoration on top of the shape; they ARE the shape. */
+  assert.equal(colors.length, 6,
+    "and it should use six shades of it -- twelve spokes in the same ink " +
+    "overlap into a disc, and the star only exists because neighbours " +
+    "differ; it used " + colors.length + " (" + colors.join(" ") + ")");
   assert.ok(colors.includes(r.shotCss),
-    "including the colour the shot had actually reached (" + r.shotCss + ")");
+    "including the shot's own colour, untouched (" + r.shotCss + "); it " +
+    "painted " + colors.join(" "));
+  assert.ok(mix.some((t) => t > 0.01) && mix.some((t) => t < -0.01),
+    "and some of them lighter and some darker -- the pale shards are what " +
+    "carry this on a dark stage and the dark ones are what carry BLUE " +
+    "against the beach's sky; the mixes were " +
+    mix.map((t) => (t === null ? "?" : t.toFixed(2))).join(" "));
 }
 
-test("the rainbow burst opens into the whole wheel and never draws past its own radius", async () => {
+/* Is `css` the SAME HUE as `base`, with white or black mixed into it?
+
+   Every shade the burst paints is an affine step from the ball's own colour
+   toward one end or the other of the greyscale, and both directions are a
+   straight line through RGB with a known endpoint: 255 going pale, 0 going
+   dark. So fit the mix off the channel with the most room to travel -- where
+   a byte rounded to an integer costs the least precision -- and then make the
+   other two channels agree with it to within one unit of that rounding.
+
+   A DIFFERENT HUE CANNOT AGREE. Mixing a grey into a colour moves all three
+   channels the same direction by the same fraction of their own headroom;
+   any other hue on the wheel needs at least one channel to go the other way.
+   That is the whole test, and it is why ORANGE in a RED burst is caught
+   without the checker being told what the six shades are supposed to be.
+
+   It knows nothing about PRISM_LIGHT on purpose: it is a statement about the
+   picture rather than a copy of the table that drew it, so it still bites if
+   somebody edits the ramp into something that is not one colour. */
+const rgbOf = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16),
+                      parseInt(c.slice(5, 7), 16)];
+function shadeOf(baseCss, css) {
+  const b = rgbOf(baseCss), c = rgbOf(css);
+  for (const w of [255, 0]) {
+    let s = 0, span = -1;
+    for (let i = 0; i < 3; i++) {
+      const d = Math.abs(w - b[i]);
+      if (d > span) { span = d; s = (c[i] - b[i]) / (w - b[i]); }
+    }
+    // Too little headroom to fit anything off, or a mix that would have to
+    // run past white or past black to explain the pixel.
+    if (span < 8 || s < -0.002 || s > 1.002) continue;
+    let ok = true;
+    for (let i = 0; i < 3; i++) {
+      if (Math.abs(Math.round(b[i] + (w - b[i]) * s) - c[i]) > 1) ok = false;
+    }
+    if (ok) return w === 255 ? s : -s;
+  }
+  return null;
+}
+
+test("the rainbow burst is the one colour the shot had reached, and never draws past its own radius", async () => {
   const run = await arena(NICK, REESE);
   for (let hue = 0; hue < 6; hue++) checkPrism(prismFrames(run, hue));
 });
@@ -2527,16 +2723,56 @@ test("negative control: a burst drawn bigger than it is fails the picture test",
     "picture test should fail; it passed");
 });
 
-test("negative control: a burst in one colour fails the picture test", async () => {
-  /* What it looked like before: the ball went off in whatever colour the shot
-     had reached and stayed that colour, which threw away the only genuinely
-     interesting thing about the move. */
+test("negative control: a burst in one FLAT colour fails the picture test", async () => {
+  /* Six shades is not decoration on top of one colour, it is the thing that
+     keeps this a star. At radius 20 the twelve spokes overlap for the first
+     six pixels out of the middle, so identical ink turns that overlap into a
+     disc and the star only exists from half-radius out.
+
+     This is also the exact revert written into PRISM_LIGHT's own comment, so
+     anybody who reaches for it finds out here what it costs. */
   const run = await arena(NICK, REESE, { engine: sabotage(
-    "      radius: up.burst.radius, wheel, hue: i, css: c.css,",
-    "      radius: up.burst.radius, wheel: [c.css], hue: i, css: c.css,") });
+    "const PRISM_LIGHT = [0, 0.18, 0.36, 0.54, -0.36, -0.18];",
+    "const PRISM_LIGHT = [0, 0, 0, 0, 0, 0];") });
   expectToFail(() => checkPrism(prismFrames(run, 0)),
-    "with every spoke wearing the shot's colour the burst picture test " +
-    "should fail; it passed");
+    "with every spoke wearing the same ink the burst picture test should " +
+    "fail; it passed");
+});
+
+test("negative control: a burst with no dark shades fails the picture test", async () => {
+  /* The other half of the ramp, and the one that is easiest to lose: three
+     pale shades read fine in a screenshot taken on a dark stage, which is
+     where anybody tuning this would look. The two dark shades are what keep
+     BLUE legible against the beach's sky, and nothing about a still frame on
+     the wrong stage will tell you they are gone.
+
+     Six DISTINCT lighten steps, so this fails the light/dark assertion and
+     nothing else -- it still paints six shades of the one colour. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "const PRISM_LIGHT = [0, 0.18, 0.36, 0.54, -0.36, -0.18];",
+    "const PRISM_LIGHT = [0, 0.18, 0.36, 0.54, 0.24, 0.42];") });
+  expectToFail(() => checkPrism(prismFrames(run, 0)),
+    "with the ramp running only toward white the burst picture test should " +
+    "fail; it passed");
+});
+
+test("negative control: a burst that is not the shot's own colour fails the picture test", async () => {
+  /* The ramp opening on a step instead of on zero. Every shade is still a
+     shade of the right hue, there are still six of them, and there are still
+     light ones and dark ones -- the only thing wrong is that the colour the
+     ball ACTUALLY was never appears, so the explosion is a near-miss of the
+     thing the player was watching. Six pixels of difference, and it is the
+     whole point of the move.
+
+     This is also why the ink is read after frame 3: until it was, the flash
+     painted the shot's colour on frames 2 and 3 for free and this control
+     passed. */
+  const run = await arena(NICK, REESE, { engine: sabotage(
+    "const PRISM_LIGHT = [0, 0.18, 0.36, 0.54, -0.36, -0.18];",
+    "const PRISM_LIGHT = [0.06, 0.18, 0.36, 0.54, -0.36, -0.18];") });
+  expectToFail(() => checkPrism(prismFrames(run, 0)),
+    "with the ramp opening a step off the ball's own colour the burst " +
+    "picture test should fail; it passed");
 });
 
 test("negative control: a burst that is a ring from the start fails the picture test", async () => {

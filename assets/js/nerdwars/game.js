@@ -553,8 +553,95 @@ const ROSTER = {
            change, which was asked for and is defensible on its own terms --
            a bouncing four-second projectile should not out-damage a melee --
            but it is the reason he now needs something given back, and the
-           rainbow is the obvious place to give it. */
-        damage: 10, base: 3.4, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
+           rainbow is the obvious place to give it.
+
+           10 -> 7 NOW, asked for by name and by number: three less. There is
+           exactly one damage number on this move and this is it -- no burst,
+           no parts, no sweet spot, no re-arm, and `class Pizza` has no
+           damageScale, so resolveCombat passes a bite of 1 and kills the shot
+           on the first body it reaches. One connect, one payload, and what a
+           player calls "the damage" is this and nothing else.
+
+           `mana` follows on its own and nobody should read that as softening
+           it: moveCost prices damage, so 26 becomes 22 whether or not that is
+           wanted. It is the only thing handed back and it is worth about a
+           third of the cut.
+
+           WHAT IT COSTS HIM, ON THE FILE IT WAS DESIGNED AGAINST. Four
+           independent measurements on four sets of seeds, identical seeds
+           within each pair, this number the only variable, all of them taken
+           on 2.82:
+
+             720 matches an arm, six seeds     18.6% -> 13.6%    -5.0
+             360 matches an arm, three seeds   19.4% -> 10.3%    -9.2
+             2160 matches an arm               18.8% -> 14.6%    -4.2
+             1320-match full ladder            19.6% -> 15.4%    -4.2
+
+           Call it five points and do not quote it tighter than four to nine.
+           Every reading agrees on the direction and on the size of the thing:
+           this is the largest single-number swing on this character, bigger
+           than the whole worthBursting fix of 2.81 was worth. In the six-seed
+           run all six seeds favoured the old number and the two distributions
+           did not overlap.
+
+           AND THEN THE FIELD MOVED UNDER IT, BUT NOT BY AS MUCH AS ONE
+           READING SAID. The release that carries this cut also carries
+           Squalls' six-way star, his banana, and Cobeus' held mouth and
+           two-step glass, so the cut was re-measured on the FINISHED file
+           rather than trusted from the four rows above. The first attempt at
+           that used 1320 ordered matches and read -1.7, and this paragraph
+           spent a release saying the cut had turned out to be a third of what
+           it was. IT HAD NOT. 1320 matches is 240 per character and a
+           confidence band of about nine points, which cannot tell -1.7 from
+           -5.7; two independent re-runs at NINE TIMES that sample, 11,880
+           ordered matches an arm, eighteen seeds, six stages, identical
+           seeds, this number still the only variable, read:
+
+             11880 matches an arm, seed set A   16.9% -> 12.7%    -4.2
+             11880 matches an arm, seed set B   17.8% -> 12.1%    -5.7
+
+           which is the four-to-nine the 2.82 rows already said. Call it four
+           to six on the finished file and treat -1.7 as what a small sample
+           looks like.
+
+           HE IS ELEVENTH EITHER WAY, AND HE IS DETACHED. On the finished file
+           he reads 12.7 against Simon's 21.1 in tenth -- eight points, not
+           the two this paragraph used to claim -- so the floor is one
+           character on his own and not two bunched together. The other thing
+           the cut buys is roster SPREAD: the same merged file WITHOUT this
+           one literal spreads 52.6, and with it 56.4. Spec A's risk register
+           wanted 58 or under and both runs straddle it (56.4 here, 58.8 on
+           the other seed set), so that gate is not determined at this sample
+           size either -- but the direction is not in doubt and this line is
+           where it comes from.
+
+           THE ASK WAS THE ASK AND THIS IS NOT AN ARGUMENT AGAINST IT. He
+           asked for three less damage and three less damage is what the move
+           does. The bill is written here, at its real size, so that whoever
+           decides whether to pay it is deciding rather than guessing -- and
+           the lever below is the one to pull if the answer is no.
+
+           THE ONE LEVER, if it has to come back, IS THE JAB AND NOT THIS
+           NUMBER. That is the opposite of what anybody would guess, so it was
+           measured, 720 matches an arm, all of these on top of the cut:
+
+             pizza back to 8, mana 24        +0.3   which is noise
+             burst damageMul 1.1 -> 1.4      -0.9   also noise
+             jab damage 7 -> 8               +2.8
+             jab damage 7 -> 9               +8.7
+
+           Putting one point back on the pizza buys nothing measurable,
+           because the damage it restores is spread over 3.7 connects a match
+           at the far end of the stage. One point on the JAB is worth nearly
+           three, because the jab is 69% of his connections. Note how steep
+           the second point is -- worth three times the first -- so the jab is
+           a lever to move ONE notch at a time and to re-measure after.
+
+           (Those four rows are 2.82 readings too, and the lever is still
+           unfired. It is still the right lever; re-measure before pulling it,
+           because the character it would be measured against changed under
+           it the same way the cut above did.) */
+        damage: 7, base: 3.4, scale: 6.3, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
       },
       /* Their original note for this one was a joke about giving people a
          disease. Kept as the mechanic underneath it: a mark that lands, and
@@ -761,17 +848,33 @@ const ROSTER = {
              not one burst touched anybody -- a zero measured twice, at 216
              matches and again at 720.
 
-             THE REASON WAS NEVER THE ANIMATION. It paints about two hundred
-             rects in SEVEN colours on its first painted frame and peaks near
-             five hundred three frames later; across six different burst ages
-             that reads 196-202 rects and seven colours on the first painted
-             frame, 494-501 at the peak, and six colours on every frame after
-             the first, because the wheel is six wide and the seventh ink is
-             the flash. The frame it is BORN it paints two. Read those as a
-             scale rather than as constants -- they move a little with the hue
-             the ball had reached -- and note that two earlier drafts of this
-             sentence quoted 203-in-eight and 184-in-eight, and had the colour
-             count wrong in both.
+             THE REASON WAS NEVER THE ANIMATION. Off a whole-pixel position it
+             paints 14 / 196 / 376 / 496 / 344 / 132 / 60 rectangles at
+             t = 0,1,2,3,6,10,15, and 3550 across the whole twenty-frame life:
+             3358 for the star and 192 for the twelve sparks over their
+             sixteen. The frame it is BORN it paints fourteen, two of which
+             are the flash.
+
+             WHAT MOVES THOSE NUMBERS IS THE POSITION, NOT THE HUE, and every
+             earlier draft of this sentence had that backwards. Measured: all
+             six hues paint the identical count at a given spot -- 3550 at
+             every one of them -- while moving the burst by a fraction of a
+             pixel swings the total from 3528 to 3586. That is the half-pixel
+             walk below doing its job: `px`/`py` throw away a sample that
+             rounds onto the last one, and how many get thrown away depends on
+             where the middle sits between two pixels. Read the numbers as
+             belonging to a staging, not to the move. Earlier drafts quoted
+             203-in-eight, 184-in-eight and 196-202-in-seven, all with the
+             colour count wrong as well.
+
+             THE GATE ON ANY FUTURE EDIT TO THIS PICTURE is not a number in
+             this comment, then -- it is the same staging drawn twice. 2.83
+             changed the shades this is painted in, and against the 2.82 file
+             at the same position NOT ONE RECTANGLE MOVED: same x, y, w, h,
+             same alpha, same order, on all twenty frames and all six hues,
+             with only the fillStyle strings differing. The user asked to keep
+             this animation, so anything that changes a rectangle is a
+             redesign wearing a palette change's clothes.
 
              THE REASON WAS THAT THE SECOND PRESS IS `spUp`, which aiDecide
              reaches for about once every seven hundred and seventy frames,
@@ -1285,17 +1388,17 @@ const ROSTER = {
            that would have to learn the difference between a shot and a thing
            somebody built, which is a change to his move and not to this one.
 
-           AND IT ENDS A DAYDREAM. This used to read "IT WAKES SQUALLS UP",
-           which named a flag -- `wakeUp` -- that 2.81 deleted from the engine
-           entirely, and it described a move that no longer exists: SOMEDAY, A
-           BAKERY is no longer eighty frames of him rooted on the floor, it is
-           a button he HOLDS for up to a hundred and fifty and walks around
-           while he holds (`charge: { walk: true }`). What survives is the
-           interaction, which is the part that mattered: a robot standing over
-           him does not care that he is having a moment, and a hit still ends
-           the special through ordinary hitstun. It is the hitstun that does
-           it now and not a flag, so there is nothing left here for anybody to
-           go looking for.
+           AND IT INTERRUPTS SQUALLS. This used to read "IT WAKES SQUALLS
+           UP", which named a flag -- `wakeUp` -- that 2.81 deleted from the
+           engine entirely, and it described a move 2.83 then deleted after
+           it: his down slot is a banana now and there is no daydream in his
+           kit to wake him out of. What survives is the interaction, which is
+           the part that mattered: a robot standing over him does not care
+           what he is in the middle of, and a hit still ends a special through
+           ordinary hitstun. It is the hitstun that does it and not a flag, so
+           there is nothing left here for anybody to go looking for -- and the
+           same hit takes the banana out of his hands, which is applyHit's
+           business and not this move's.
 
          READ THE TOURNAMENT WITH BOTH THUMBS ON THE SCALE, in opposite
          directions. Over 60 CPU matches a robot was on the stage about 1,575
@@ -1698,7 +1801,7 @@ const ROSTER = {
 
          Each aim is a PATCH over this spec, merged into a finished one at
          load -- see the `parts` loop below ROSTER, which is the same
-         machinery the star's two triangles use. hitbox() indexes that table
+         machinery the star's six pieces use. hitbox() indexes that table
          with `belchAim` (written in updateAttack, because runSpecial is
          handed no pad) and runSpecial spawns the waves out of the same
          entry, so what is painted and what can hit you are one set of
@@ -2708,14 +2811,56 @@ ROSTER.cobeus = {
       drink: { duration: 600, damageMul: 2, speedMul: 0.5 },
       manaOverride: 34,
       damage: 6, base: 2.4, scale: 5.4, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
-      /* What it leaves behind. `hitEvery` is the re-arm, so standing in it
-         keeps costing rather than costing once -- it is glass, not a trap.
+      /* What it leaves behind. A pane of broken glass, 22 pixels of floor,
+         four seconds, and a budget of TWO steps.
 
-         2.5, halved from 5. Nothing about the mechanic moved: it lasts the
-         same four seconds, covers the same 22 pixels and re-arms on the
-         same clock. What was wrong was the price of one careless step. The
-         move is denial -- it is supposed to make you go around, not to take
-         a fifth of a stock off you for walking. */
+         2.5, halved from 5, and untouched by the change above it. Nothing
+         about the price of one careless step moved: what was wrong in 2.55
+         was that a single step took a fifth of a stock, and it still does
+         not. The move is denial -- it is supposed to make you go around.
+
+         `hits` and `rearm`, and the gap is the whole of why this is two hits
+         rather than one hit with an extra sound. A walking fighter overlaps
+         a 22-pixel pane for twenty frames, so anything shorter than that
+         spends both bites on one crossing, under a foot that never made a
+         second decision. Thirty is longer than any single walk-through: one
+         crossing costs one bite and LEAVES THE PANE STANDING, and breaking
+         it takes a second approach -- the same person coming back, or
+         somebody else. During those thirty frames the pane is not a hitbox
+         at all; see live(), and see what draw() does with it, which is to
+         stop drawing a solid object.
+
+         The budget is on the PANE, not on each victim. Whoever finds it next
+         spends the bite, which is the version that reads with three people
+         moving and two panes down.
+
+         WHAT IT IS WORTH, MEASURED ON THE FINISHED FILE. The design pass
+         took its numbers on 2.82, and 2.83 also carries Squalls' six-way
+         star, his banana and this character's own held mouth -- so the field
+         this is graded against is not the one it was designed against, and
+         it was re-run. 240 matches against the whole roster, both seats, six
+         stages, two seeds, the budget the only variable: bites 7.2 to 12.8 a
+         match, glass damage 18.1 to 32.0, panes fully broken 55% to 39%. A
+         full 1320-match ordered round robin with identical seeds in both
+         arms reads him 18.8% to 25.0%: ninth of eleven either way, but eight
+         points clear of the floor instead of level with it. Roster spread
+         56.3 to 57.9.
+
+         IT IS A DAMAGE BUFF AND MUST BE READ AS ONE. The design pass called
+         the mechanism denial and that did not replicate on independent
+         seeds: his own output went UP, 192.6 to 210.0, and the opponent's
+         went up too. The move was BUILT as denial and the 2.55 argument
+         above is still why one step costs what it costs -- but what a second
+         step adds is not more denial, it is more damage, and nobody should
+         read the paragraph above as saying otherwise.
+
+         THE LEVER, if it gave back too much, IS `rearm` AND NOT `damage`.
+         At 4 instead of 30 this is +9.2 rather than +5.4, so the number has
+         real gradient in both directions; raising it toward 45 or 60 walks
+         the buff back without touching what one step costs. Cutting `damage`
+         to 2 was measured and is a TRAP: it reads 17.9% against a baseline
+         of 20.4%, because it cheapens the first step, which was never the
+         problem. */
       /* Stepping in it costs health and NOTHING else, and then it is gone.
 
          It used to hold you: angle 78 is nearly straight up, so each tick
@@ -2725,12 +2870,16 @@ ROSTER.cobeus = {
          leave. That is not what broken glass does. `graze` is the fix and it
          is a general one: damage, no launch, no hitstun, no hitstop.
 
-         And it breaks on the first person to find it. `pierce` is gone, so
-         resolveCombat kills it on contact the way it kills any other shot --
-         one patch, one victim, and the denial is that it was THERE, not that
-         it keeps collecting. */
+         And it no longer breaks on the first person to find it, which is
+         the one sentence 2.83 rewrote in here. `pierce` is still gone; what
+         is new is that the pane answers `shatter`, so resolveCombat hands it
+         the contact exactly as before and the pane decides for itself
+         whether that was the last one. Two steps, thirty frames apart, and
+         then it goes. What is NOT back is the tax: a pane that has bitten is
+         not a hitbox at all until it re-arms, so nobody is ever charged
+         twice for standing in the same place. */
       glass: { life: 240, w: 22, h: 5,
-               damage: 2.5, graze: true,
+               damage: 2.5, graze: true, hits: 2, rearm: 30,
                base: 0, scale: 0,
                angle: 78, kx: 0.20791169081775934, ky: 0.97814760073380569 },
     },
@@ -2758,19 +2907,23 @@ ROSTER.cobeus = {
          to miss and that has not changed. */
       damage: 3, base: 2.0, scale: 4.6, angle: 18, kx: 0.95105651629515353, ky: 0.309016994374947451,
     },
-    /* OPEN WIDE. He opens his mouth for a second and swallows whatever is
-       thrown at it, and if he does it too often he falls asleep.
+    /* OPEN WIDE. He opens his mouth for as long as he holds the button,
+       swallows whatever is thrown at it, and if he does it too often he
+       falls asleep.
 
-       THE CATCH IS THE PRIZE, NOT THE MEAL. `heal` is a flat five whatever
+       THE CATCH IS THE PRIZE, NOT THE MEAL. `heal` is a flat eight whatever
        goes in, and that is the one place this deliberately parts company
        with Houston's HAMMER & SICKLE, which heals what the shot was carrying
        up to a cap. The mean damage of a projectile entering this box is
-       5.67, which is why five, but the SPREAD runs from nought to the
-       dragon's 999 -- so `min(cap, damage)` would make catching a Salamence
-       worth three times catching a pellet on a move whose whole point is the
-       read. Eating an instant kill is already the best thing that can happen
-       here: you live through an execution. It does not also have to pay
-       better than eating a bullet.
+       5.67; five was a shade under it and eight is a shade over, and the
+       reason it moved is that a press is ten frames now instead of sixty --
+       the same meal off a quarter of the commitment. What did not move is
+       that it is FLAT. The SPREAD of what enters the box runs from nought to
+       the dragon's 999, so `min(cap, damage)` would make catching a
+       Salamence worth three times catching a pellet on a move whose whole
+       point is the read. Eating an instant kill is already the best thing
+       that can happen here: you live through an execution. It does not also
+       have to pay better than eating a bullet.
 
        AND HE GETS FATTER EVERY TIME. Eight is the number, because the ask
        was "more than seven", and `fat` 0.04 a catch puts him at sizeMul 1.28
@@ -2804,7 +2957,12 @@ ROSTER.cobeus = {
        rather than of anything on this object. Over 120 unassisted CPU
        matches -- every opponent, both seats, all six stages -- counting a
        cast as a transition INTO the up special and an open frame as one
-       frame inside `absorb`'s own window:
+       frame inside `absorb`'s own window. (Taken at sixty open frames a
+       cast. 2.83 cut `active` to ten and put the rest behind a held button,
+       so the open-frames row is the one that moved: a CPU holds to
+       `hold * 0.6`, a human holds as long as his bar lasts, and neither is
+       sixty by default any more. The shape of the answer -- a read, not a
+       wall -- is what this table is for.):
 
            casts a match                     2.9
            frames a match with it open       129    (of about 7,200)
@@ -2814,11 +2972,12 @@ ROSTER.cobeus = {
 
        It is a read, not a wall, and the arithmetic to redo before anybody
        widens `pad` is that one. (This table was challenged at close-out by a
-       probe reading 25.8 casts a match, which would be a cast every seven
-       frames on a seventy-eight-frame move costing twenty-four mana -- it was
-       counting frames and calling them casts. Re-measured from scratch it
-       came back at the rows above, so the paragraph stands. If you ever get
-       an answer ten times this, count your casts.)
+       probe reading 25.8 casts a match, which would have been a cast every
+       seven frames on a move that was then seventy-eight frames long and
+       cost twenty-four mana -- it was counting frames and calling them casts.
+       Re-measured from scratch it came back at the rows above, so the
+       paragraph stands. If you ever get an answer ten times this, count your
+       casts.)
 
        AND THE LADDER CANNOT SEE THE MOVE IN EITHER DIRECTION. aiDecide holds
        him at thirteen pixels and throws bottles from there, so a CPU Cobeus
@@ -2842,6 +3001,18 @@ ROSTER.cobeus = {
        not seven and a half. Same answer, different ablation, and neither
        of them is a measurement of the mouth.
 
+       RE-RUN AT 2.83, when the mouth became a walk charge and the AI's charge
+       clause started firing on it for the first time: 240 matches, Cobeus
+       against the whole field, both seats, six stages, two seeds, identical
+       seeds both arms. 17.9% before, 17.5% after -- one match in 240, which
+       is noise, and it is the number worth having because the clause has
+       form. Teaching the CPU to hold a button took him from 18.1% to ONE AND
+       A HALF once; see the tuning table on the clause itself. `charge.ground`
+       is most of why it did not happen again, because the frames a falling
+       CPU would have spent holding are the frames it now spends recovering.
+       (This is a Cobeus-only slice, not a round robin. The release owes the
+       full ladder on the merged file.)
+
        THE ONE RIDER THAT WAS REJECTED was adding `'bottle'` to aiDecide's
        `ranged` list, which would stand a CPU Cobeus off at throwing distance
        instead of thirteen pixels. Filed rather than shipped, because it is
@@ -2850,21 +3021,48 @@ ROSTER.cobeus = {
        something to catch. Until it lands, no CPU number for this character
        means very much in either direction.
 
-       Twenty-four mana, against Houston's fifty for his eater, and the
+       FOURTEEN MANA, against Houston's fifty for his eater, and the
        difference is that his is an aimed melee swing and this one has to
-       double as the way home. Four opens a bar. A recovery he cannot afford
-       is exactly the bug the old `rise` was patched for. */
+       double as the way home. Seven opens a bar, where twenty-four opened
+       four of them. The number is not chosen against `charge.floor` but
+       WITH it: a full bar is one press, the longest hold the gate will
+       allow, and then the press that gets him home, and the three of them
+       add to a hundred exactly. A recovery he cannot afford is exactly the
+       bug the old `rise` was patched for. */
     up: {
       kind: 'mouth', label: 'OPEN WIDE',
-      /* Sixty open frames, and six of telegraph in front of them. A mouth
-         that opens instantly cannot be read, and `recovery` is the price of
-         opening it at nothing -- between them they are what make this a
-         guess the other player gets to win. */
-      startup: 6, active: 60, recovery: 12,
-      /* Grounded only, and said in DATA rather than by adding 'mouth' to
-         updateAttack's kind list: `roots` already reads as `roots &&
-         grounded`, which is exactly what the float below needs. */
-      roots: true,
+      /* TEN OPEN FRAMES, where there used to be sixty, and six of telegraph
+         still in front of them. A mouth that opens instantly cannot be read,
+         and `recovery` is the price of opening it at nothing -- between them
+         they are what make this a guess the other player gets to win.
+
+         What changed is not how long it can be open. It is that the sixty
+         were spent whether he wanted them or not: he stood in them, he could
+         not steer out of them, and he could not stop. Ten is what a PRESS
+         costs. Everything past ten is a thing he is choosing to keep paying
+         for, one frame at a time, out of the same bar the next press comes
+         out of -- see `charge`. */
+      startup: 6, active: 10, recovery: 12,
+      /* A FULL BAR IS ONE CAST, THE LONGEST LEGAL HOLD, AND THE FARE HOME:
+         14 + 40 * 1.8 + 14 is a hundred, which is COMBAT.manaMax, and none of
+         the four numbers can be retuned without the other three. 1.8 is
+         steeper than anything else in the file -- the fart is 0.8, and
+         COMBAT.manaRegen is 0.5 and does not run inside a special, so this is
+         a bar emptying at three and a half times the rate it fills. `ground`
+         and `floor` are the two rules that stop a drain being a stock; see
+         the charge gate.
+
+         `roots` WENT WITH IT, and that is not a side effect. It did one
+         thing -- skip updateAttack's friction and air-drift block -- and
+         while he is holding, `chargeWalk` supersedes it completely, so a
+         conditional `roots` would be a second flag saying the same thing on
+         the same frames and able to disagree with the first. After release
+         chargeWalk goes false and `roots` would come back, with no damping at
+         all on the tail: measured on this file, a cast entered at a walk with
+         the stick released slid 46.8 pixels, a seventh of the stage of
+         uncommanded motion in a move whose stick did nothing. Without it,
+         0.73. That glide is a large part of what "it sucks" was describing. */
+      charge: { hold: 40, walk: true, ground: true, drain: 1.8, floor: 14 },
       /* The recovery half, and it is a GLIDE rather than a hop -- which is
          not quite what this was designed as, so here is what it measures.
 
@@ -2896,9 +3094,50 @@ ROSTER.cobeus = {
          half a second of air control he did not have, so being knocked AWAY
          from the stage is now survivable where it was not, and being knocked
          straight DOWN is ten pixels worse. That is the shape of a man full
-         of air rather than a man jumping, it is a bigger envelope in total,
-         and it is the trade to re-read before anybody retunes `hang`: the
-         number to reach for is `air.active`, which is what buys the width. */
+         of air rather than a man jumping, and it is a bigger envelope in
+         total.
+
+         The width of the envelope is bought by the AIR DRIFT ARM, and
+         `mobile` is the trap: it guards that arm off and only writes vx when
+         grounded, so it deletes his air control outright. Measured from the
+         same drop, forty frames of wall clock with the stick held toward the
+         stage: 56.7 pixels of travel without it and 31.4 with it, and at
+         eighty frames he no longer survives the fall at all. `charge.walk`
+         does not do that, because chargeWalk is grounded-only and the drift
+         arm still runs underneath it.
+
+         WHAT THE SHORTER MOVE DID NOT BUY IS REACH, and the note that said it
+         would was wrong. Inside a move he steers at PHYS.airAccel * 0.5 and
+         out of one at full, so ending sooner ought to carry him further --
+         but both arms saturate at the same airDriftMax long before either
+         version is over, and over a fixed wall clock the short move goes
+         slightly LESS far: 56.7 pixels against 55.1 at forty frames, 120.7
+         against 131.1 at eighty. Do not sell this as a longer recovery. It is
+         the same recovery at a fifth of the commitment, and one he can now
+         afford twice.
+
+         RE-MEASURED AT 2.83, on the grid above, three bar levels, a press
+         made the moment he is genuinely falling and the stick held toward the
+         stage the whole way -- because the thing that is new is that a press
+         now has a price a bar can run out of:
+
+              mana at the drop      100    25    18
+              2.83, cells home       11    11    11
+              2.82, same grid        11    11     0
+
+         Eighteen is the whole of it, and the first two columns not moving is
+         the point rather than a disappointment: the envelope was not the
+         thing that was broken. Eighteen is under the OLD price, so at 2.82 a
+         quarter-bar Cobeus had no button and every one of those thirty-two
+         was a stock; at fourteen it is the same envelope as a full bar,
+         because the press that gets him home costs the same whether he held
+         the last one for forty frames or none. That is what `floor` is for.
+
+         AND THE CPU IS BETTER OFF TOO, which is the half no envelope grid
+         shows: driven by the real aiPad off the lip of six stages, six seeds,
+         432 falls, he gets home 22.0% of the time against 19.7% before -- and
+         42.8% against 29.4% on a grid drawn in closer. See the falling-CPU
+         test, which is written on the second grid for exactly that reason. */
       rise: -5.4, drift: 0.6,
       /* AND THE CPU REACHES FOR IT. aiDecide has exactly one branch that
          presses a special to get home and until this flag existed it asked
@@ -2930,15 +3169,25 @@ ROSTER.cobeus = {
          not make the move the old one. See the branch. */
       recovers: true,
       air: { hang: 0.35, active: 30 },
-      /* `from` and `to` are exactly the sixty open frames. Houston's absorb
-         spans his whole swing because his IS a swing; a held mouth must not
-         catch before it is open. `pad` is his fourteen, for his stated
-         reason: a flat shot crosses an unpadded twenty-pixel box in about
-         three frames, so the pad is what turns a coin flip into a read.
-         Catching box -20..+28 by -34..+8. */
-      absorb: { pad: 14, from: 7, to: 66, heal: 5, fat: 0.04, bite: 8 },
+      /* `from` IS `startup`, AND THAT ONE CHARACTER IS THE WHOLE MOVE. The
+         pin parks attackFrame on `startup`, so a window that began at
+         startup + 1 was a window a HELD mouth never entered -- held was shut,
+         and holding bought him a walk and an empty bar and nothing at all.
+         Measured that way round it halved the catches.
+
+         `to` is the last of the ten open frames, and it is one frame BELOW
+         the frame the bed pins him on, which used to be the same frame by
+         coincidence. drawMouth carries the one line that coincidence was
+         hiding; see the exemption there.
+
+         Houston's absorb spans his whole swing because his IS a swing; a
+         mouth must not catch before it is open. `pad` is his fourteen, for
+         his stated reason: a flat shot crosses an unpadded twenty-pixel box
+         in about three frames, so the pad is what turns a coin flip into a
+         read. Catching box -20..+28 by -34..+8. */
+      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },
       bed: 180, guard: 0.6, shrink: 20,
-      manaOverride: 24,
+      manaOverride: 14,
       damage: 0, base: 0, scale: 0,
       /* His head and his chest: relBox returns -6..+14 forward and y -20..-6,
          authored against the standing pose he is drawn in, because he has no
@@ -3504,7 +3753,7 @@ ROSTER.simon = {
 ROSTER.squalls = {
   name: 'SQUALLS',
   origin: 'sprites',
-  tag: 'DREAMS OF A BAKERY, WAKES UP A DRAGON',
+  tag: 'THROWS A BANANA, WAKES UP A DRAGON',
   drawn: true,
   /* Unchanged from the placeholder years: he was already the heavy, slow one
      and the kit that arrived suits that -- a man who has to find a quiet
@@ -3514,21 +3763,23 @@ ROSTER.squalls = {
          base: 2.4, scale: 6.6, angle: 40, kx: 0.76604444311897801, ky: 0.64278760968653925,
          ox: 2, oy: -9, w: 12, h: 10 },
   specials: {
-    /* STAR OF DAVID. Two triangles, and it can be either.
+    /* STAR OF DAVID. One star, or the six points it is made of.
 
        Thrown whole it is one six-pointed star, turning as it goes. Press the
-       button again while it is in the air and it comes APART along the seam
-       it was always drawn on: the upward triangle climbs away and the
-       downward one dives, and between them they cover two lanes the whole
+       button again while it is in the air and it comes APART into six, one
+       shard for each point, each leaving on the bearing of the point it
+       was: the piece that flies at two o'clock is the one the star lit at
+       two o'clock, and between them they cover the whole circle a single
        star never could.
 
        That is the entire move, and it is the shape of the thing itself
-       rather than an effect bolted to it -- a Star of David is two
-       overlapping triangles, so the projectile made of two overlapping
-       triangles comes apart into two triangles. The halves hit for less than
-       the whole, so splitting is a choice about coverage and not a free
-       upgrade, and WHEN you split is the skill: early sends them wide and
-       shallow, late sends them steep and close.
+       rather than an effect bolted to it -- a hexagram is a hexagon with six
+       triangles stuck to it, so the projectile made of six points comes
+       apart into six. The hexagon is not one of the six and leaves as the
+       sparks. A piece hits for half of what the star hit for, rounded down,
+       so splitting is a choice about coverage and not a free upgrade, and
+       WHEN you split is the skill: early opens the fan wide, late keeps it
+       tight.
 
        The split costs nothing and is heard in every state -- see
        splitStars -- because it is a command to a thing already in the air,
@@ -3554,117 +3805,146 @@ ROSTER.squalls = {
        been drawn as having.
 
        AND IT FEEDS THE DREAM. `dream` is what a star that CONNECTS is worth
-       on the meter the dragon is made of -- see Star.burst. The bakery is
-       still where the meter comes from in bulk; this is what stops the
-       dragon being hostage to a single button, and it is the route that is
-       open while somebody is standing on him. A half pays less than the
-       whole for the same reason it hits for less. */
+       on the meter the dragon is made of -- see Star.burst. The other source
+       is the banana on his down slot, which pays him for catching one. Both
+       of them pay for something ARRIVING, which is the whole difference from
+       the daydream 2.83 replaced: that paid him for standing still. This is
+       the route that is open while somebody is standing on him. A piece pays
+       less than the whole for the same reason it hits for less. */
     neutral: {
       kind: 'star', label: 'STAR OF DAVID',
       startup: 7, active: 1, recovery: 11, maxAlive: 2,
-      speed: 3.4, lift: -0.3, drop: 0.012, life: 190, spin: 5,
+      speed: 3.4, lift: -0.3, drop: 0.012, life: 190,
+      spin: 5,                  // dead data; the turn rate is the /5 in drawStarArt
+      off: 2, spread: 3.0,
       dream: 5,
       manaOverride: 20,
       damage: 11, base: 3.1, scale: 6.2, angle: 40,
       kx: 0.766044443118978, ky: 0.6427876096865393,
-      /* The two halves, as patches over the spec above -- `parts` is built
-         after the pricing loop the way the hotdog's are, so each half is a
-         finished spec applyHit can be handed. */
-      up: { damage: 8, base: 2.8, scale: 5.6, angle: 66,
-            kx: 0.40673664307580021, ky: 0.91354545764260087,
-            climb: -1.35, life: 110, dream: 3 },
-      down: { damage: 8, base: 2.8, scale: 5.6, angle: 16,
-              kx: 0.96126169593831889, ky: 0.27563735581699916,
-              climb: 1.55, life: 110, dream: 3 },
+      /* HALF OF ELEVEN IS FIVE AND A HALF AND ELEVEN IS ODD, SO IT ROUNDS
+         DOWN. Six is the number that rounds up, and six is 30 damage in the
+         worst case against somebody pinned in place with 24 of it on one
+         frame, which is a quarter of a bar out of one twenty-mana press. Five
+         is 25 and 20, measured over thirty-nine distances by thirty-two split
+         frames. The ladder cannot tell three from four from five apart --
+         48.6, 48.6, 51.3 -- so the argument FOR five is the rule it was asked
+         to follow and the argument against six is that one number.
+
+         One spec for all six, merged after the pricing loop the way the
+         halves were. They differ only in which way they go, and six copies of
+         six numbers is six chances to let them disagree about something a
+         player cannot see. */
+      shard: { damage: 5, base: 2.6, scale: 5.0, angle: 45,
+               kx: 0.70710678118654757, ky: 0.70710678118654746,
+               life: 26, dream: 2 },
     },
-    /* SOMEDAY, A BAKERY -- and he walks while he dreams it now.
+    /* BANANA. He throws it straight up, and then it is a thing on the floor
+       that anybody can pick up and throw at anybody.
 
-       The joke is untouched: he stops fighting to think about a shop, and
-       the daydream leaves real bread on the floor that is his for a hundred
-       and ten frames and anybody's after that. What changed is that it is a
-       button you HOLD rather than a sentence you are committed to, and that
-       he is no longer nailed to the floor while it runs.
+       THE BREAD IS GONE AND THAT IS THE WHOLE OF WHY. SOMEDAY, A BAKERY was
+       reworked once and measured hard twice, and none of that is an argument
+       against what was actually reported, which is that the IDEA is boring.
+       An idea is not a thing a tuning pass can fix. So the slot holds a
+       different KIND of move: not something he does, something he leaves.
 
-       WHY, and it is a bug rather than a preference. The old move ended
-       itself behind the player's back. `wakeUp` was written on any frame
-       jump, attack, shield or grab was down -- including during startup,
-       before the move was old enough to be cancelled -- and spent the
-       instant the guard opened on frame nineteen. So you pressed
-       down-special, kept playing for a third of a second the way you would
-       in any fight, and the move silently evaporated with thirteen dream
-       and no bread. Measured over 1259 real casts: 40.3% snapped shut that
-       way at a mean dreaming frame of 21.3, 55.8% were broken by a hit, and
-       3.9% ran the whole eighty. The bar advertised a hundred and delivered
-       19.2. The wake flag is gone entirely: the button that ends the
-       daydream is the button that started it, which is not a rule anybody
-       has to be told.
+       THE SHAPE OF IT. Eight frames of wind-up, and it goes straight up at
+       4.3 a frame against a drop of 0.28 -- it peaks 44.9 pixels over his
+       feet, which is above his own head and under a low platform, and it is
+       back at the floor on frame 35. He is free to act on frame 19. That is
+       sixteen frames in which a banana is in the air and he is committed to
+       nothing, and it is the entire reason the toss is UP rather than
+       forward: the throw is how he hands it to himself.
 
-       `active` IS ONE, and that is not a typo. The charge machinery pins
-       attackFrame at `startup` for as long as the button is down, so
-       `active` is no longer how long the move runs -- it is only what keeps
-       napping() true while pinned, which is what carries the knockback
-       softener and the sleeping pose. Anything larger is a tail he has to
-       sit through AFTER letting go: at eighty it is ninety-one frames, and
-       at the two hundred this was nearly shipped as, two hundred and
-       twelve.
+       ANY PLAYER CAN USE IT. `mine` is forty-five frames of it being his;
+       after that whoever walks over it and presses grab owns it -- including
+       the man he is fighting, and including a banana thrown AT that man that
+       missed him. `owner` is reassigned on the pickup, which nothing else in
+       this engine does. See class Banana for why it has to.
 
-       THE ARITHMETIC LANDS ON ONE NUMBER TWICE. Ten up front and six
-       tenths a frame drained against a bar that does not refill inside a
-       special is ninety over a hundred and fifty frames, which is exactly
-       the hold cap; and a loaf every thirty for five puts the last one on
-       the last held frame. One full daydream is one full mana bar and five
-       loaves, with no dead time at either end and nothing decorative.
+       AND THE MISS IS AN INTENDED OUTCOME, which is the difference between
+       an item and a bad projectile. A thrown banana that reaches nobody has
+       not whiffed. It has put a thing on the floor that both players now
+       have to have an opinion about, and the opinion is worth a great deal
+       more than four damage.
 
-       WHAT IT OWES THE DRAGON. `dream` is 0.45 rather than 1.3 because a
-       full stand no longer fills the meter -- and it never did: the live
-       figure was a fifth of what it advertised. At six casts a match held a
-       mean of thirty frames this supplies 81 dream against the 80.7 the
-       broken move actually delivered. THAT CADENCE IS AN ASSUMPTION AND THE
-       ONLY ONE IN HERE. If the real mean hold comes in nearer forty-five,
-       the supply is half again as large and the lever is `dreamSpeed` in
-       the ult, 3.0 -> 2.1, which restores parity exactly. It is not this
-       number, which is what everything else is calibrated on. */
+       WHAT IT OWES THE DRAGON. The daydream was where the meter came from in
+       bulk, and it paid him for standing still -- which is the half of it he
+       said was boring. This pays for a banana ARRIVING IN HIS HAND, whoever
+       put it there. `catchDream` is the knob and it is the only one: it is
+       what holds the supply at the hundred-odd a match `dreamSpeed` is priced
+       against, it was measured rather than guessed, and the table is on the
+       number itself. There is no second source and there must not be one. */
     down: {
-      kind: 'bakery', label: 'SOMEDAY, A BAKERY',
-      /* ONE. See the paragraph above -- this is the number most likely to be
-         read as a typo and reverted, and reverting it is the bug. `active`
-         is not the length of the daydream any more; `charge.hold` is. All
-         `active` does is keep napping() true for the frames attackFrame is
-         pinned on `startup`, and every frame of it past the first is a tail
-         he has to sit through after letting the button go. */
-      startup: 10, active: 1, recovery: 12,
-      /* `walk` is what makes it a button rather than a sentence: see the
-         chargeWalk flag in updateAttack. `drain` and `manaOverride` are one
-         piece of arithmetic written in two places -- ten up front leaves
-         ninety, and ninety at six tenths a frame is a hundred and fifty
-         frames exactly, which is this cap. One full daydream is one full
-         bar, to the frame, so neither number can be retuned without the
-         other. */
-      charge: { hold: 150, walk: true, drain: 0.6 },
-      dream: 0.45,              // per dreaming frame; a full hold banks 67.5
-      /* Thirty and five, keyed off `chargeTimer` rather than off attackFrame
-         -- see the bakery case in runSpecial, where the pin freezes
-         attackFrame and would otherwise freeze the oven with it. A loaf at
-         30, 60, 90, 120 and 150: the fifth lands on the LAST held frame, so
-         there is no dead payout time at either end, and at his walk they are
-         34.4 pixels apart -- measured, three consecutive gaps -- which is a
-         trail of bread across the stage. Not 41.4: that is how far HE walks
-         in thirty frames, and the drop point retreats seven pixels further
-         behind him with every loaf (`this.x - this.facing * (6 + (t /
-         s.every) * 7)`), so the bread lands 41.4 minus 7 apart. The test
-         asserts the derived number rather than the walk. */
-      every: 30, loaves: 5,
-      /* `mine` is how long it is HIS before it is anybody's -- see Loaf. A
-         hundred and ten frames is just under two seconds. It was derived
-         from a move that rooted him for eighty frames and it survives a move
-         that does not, because what it is really measuring is how long the
-         man standing over him gets to help himself: he is walking now, but
-         he is walking at 1.38 a step with a loaf every thirty frames landing
-         behind him, so he is never standing on a fresh one himself. */
-      loaf: { heal: 13, life: 420, w: 9, h: 6, mine: 110 },
-      knockbackTakenMul: 0.45,
-      manaOverride: 10,
-      damage: 0, base: 0, scale: 0,
+      kind: 'toss', label: 'BANANA',
+      /* Nineteen committed frames, against the hundred and forty-three a
+         match the daydream used to cost him. `active` is one because, like
+         the star, this move has no melee box of its own -- what it does is
+         put a thing in the air, and the thing is the move. */
+      /* AND `maxAlive` IS A CAP ON HIS, NOT A CAP ON THE WORLD, which is
+         true of every move in this file and only matters on this one.
+         canSpecial counts `b.owner === this && b.spec === s`, and for a star
+         or a bottle nothing can ever change who owns one, so the distinction
+         has never had to be said. Picking a banana up MOVES `owner` -- that
+         is the whole point of the move -- so the moment somebody else takes
+         his, his count is nought and he may throw another. Measured: two
+         players, a cap of one, and three bananas alive at the same time, by
+         hand-off; the construction is a loop, so three is not the ceiling.
+
+         Left as it is, deliberately. The banana in your enemy's hand is not
+         yours any more, and a world cap would mean a foe could deny the move
+         by picking one up and standing on it. But nothing said so, and the
+         movelist printed "1 can be out at once" flat, which is the opposite
+         of what happens -- so movelist.mjs now prints the per-owner rule for
+         `kind: 'toss'` and this is where the rule is written down. */
+      startup: 8, active: 1, recovery: 10, maxAlive: 1,
+      manaOverride: 12,
+      /* Lighter than a fighter's 0.40 and heavier than the bread's 0.20,
+         because it has to HANG long enough to be caught. Measured: it leaves
+         his hand on frame 8, peaks 44.9 pixels above his feet -- over his own
+         head, under a low platform -- and is back in it on frame 35, sixteen
+         frames after he is free to act. */
+      lift: -4.3, drop: 0.28,
+      life: 900, mine: 45, numb: 6, reach: 11, lift2: 14,
+      /* SIXTEEN, AND IT WAS TWELVE UNTIL IT WAS MEASURED. This is the only
+         knob on the dream supply and it exists because the daydream used to
+         be the bulk of it; what has to survive the swap is not the old move's
+         number but the DRAGON, which is priced on how full the meter is when
+         he casts it. 1440 matches an arm -- Squalls against all ten, both
+         seats, six stages, twelve seed sets, the same seeds every arm -- and
+         `banked` is the sum of every positive frame-to-frame change in his
+         meter, which is what survived the Math.min(100, ...) clamp and not
+         what was offered to it:
+
+           shipped 2.82, the daydream       108.42 banked   3.013 px/frame
+           banana at 12                      93.05          2.894
+           banana at 15                     102.59          2.982
+           banana at 16                     104.27          2.998
+
+         Twelve misses on both halves and the dragon crawls, which is a silent
+         failure: nothing breaks, he just never gets the fast one, and 1376
+         measured ults say everybody walks away from a slow one. Sixteen is
+         the first value that clears with room -- and it lands the dragon on
+         shipped parity to fifteen thousandths of a pixel a frame, which is
+         the quantity that actually matters here.
+
+         The sensitivity is about three banked dream a point, not the four and
+         a half this was first estimated at, which is why the step is four and
+         not two. IF THIS EVER HAS TO MOVE AGAIN IT IS STILL THE ONLY KNOB.
+         Do not touch `stunDream` -- half a catch, so that connecting pays and
+         pays less than the safe thing -- and do not add a second source. */
+      catchDream: 16, stunDream: 6,
+      /* TWENTY-FOUR AND NOT TWENTY-EIGHT, and the four frames are the whole
+         argument. Measured from contact: hitstop freezes frames 5 to 8 and
+         the thrower is free again on frame 21, so a stun of 28 leaves fifteen
+         free frames and the whip's twelve-frame startup is GUARANTEED; 24
+         leaves eleven and the whip misses by one. An item that hands you a
+         combo is a combo starter you happen to find on the floor. This one
+         hands you a beat of silence in which both of you know what is coming,
+         and then you have to go and get it. */
+      stun: 24,
+      damage: 4, base: 1.8, scale: 2.6, angle: 28,
+      kx: 0.88294759285892699, ky: 0.46947156278589081,
+      fwdX: 4.6, fwdY: -0.9, upX: 0.7, upY: -5.0, dnX: 2.4, dnY: 2.2,
     },
     /* THE WHIP. Long, and worth twice as much at the far end of it.
 
@@ -3743,20 +4023,20 @@ ROSTER.squalls = {
      having to commit to a jump before you have decided where you land.
 
      It was 1.5, and the reason it is 3.0 is that the meter was never full.
-     The bakery was the only thing that filled it and the bakery cancelled
-     itself on dreaming frame ten (see it above), so across 1376 real ults
-     the dragon flew at its floor speed essentially every time: the whole
-     upper half of this move was machinery nobody had ever watched run. It
-     runs now, off a bakery that finishes and off every star that lands.
+     The daydream was the only thing that filled it and it cancelled itself
+     on dreaming frame ten, so across 1376 real ults the dragon flew at its
+     floor speed essentially every time: the whole upper half of this move
+     was machinery nobody had ever watched run. It runs now, off every star
+     that lands and off every banana that arrives in a hand.
 
-     AND `dreamSpeed` IS THE BAKERY'S LEVER, not the bakery's `dream`. The
-     rework above is calibrated on an ASSUMPTION -- six casts a match held a
-     mean of thirty frames -- and it is the only unmeasured number in this
-     character. If the real mean hold comes in nearer forty-five the supply
-     is half again as large, and the correction is this number, 3.0 -> 2.1,
-     which restores parity exactly and touches nothing else. Reaching for
-     `dream` instead would re-price the loaves, the walk and the mana drain,
-     all of which are balanced against it. */
+     AND `dreamSpeed` IS THIS MOVE'S LEVER, not the banana's `catchDream`.
+     What feeds the meter is measured rather than assumed now -- total dream
+     banked a match, which is gated at a hundred and is what `catchDream` is
+     tuned to hold -- but if a later release moves the supply, the correction
+     is this number, 3.0 -> 2.1, which restores parity exactly and touches
+     nothing else. Reaching for `catchDream` instead would re-price the whole
+     item, because how far it is worth walking for one is balanced against
+     it. */
   ult: {
     kind: 'salamence', label: 'SALAMENCE',
     startup: 14, active: 1, recovery: 26,
@@ -5633,6 +5913,71 @@ for (const key in ROSTER) {
   }
 }
 
+/* THE SIX SHADES A BURST IS DRAWN IN, as offsets from the shot's own colour.
+
+   Zero first, so the colour the ball actually was is the one the star opens
+   on; then three steps toward white and two toward black. This is not a
+   gradient and it is not sorted -- it is the order the twelve spokes are
+   handed out in, and NEIGHBOURS HAVE TO DIFFER or the star closes up.
+
+   WHY SIX SHADES AND NOT ONE FLAT COLOUR. The ask was one colour and this is
+   one colour: every entry below is the same hue with white or black mixed
+   into it, and no second hue appears anywhere in the burst. But at radius 20
+   the twelve spokes overlap for the first six pixels out of the middle, so
+   twelve spokes in identical ink are a disc with a fringe rather than a star,
+   and the star only exists from half-radius out. The shades are what keeps
+   the shape the user asked to keep.
+
+   AND THE DARK END IS NOT SYMMETRY, IT IS THE BEACH. A ramp built only of
+   lighter shades is the obvious design and it is the one that fails, for a
+   reason that is specific and measurable: pale blue simply IS sky. Measured
+   in Lab against the engine's own backdrops, a blue burst lightened toward
+   white drops 47% of its ink under a just-noticeable difference on THE BEACH,
+   and what holds the star together there is the two DARKENED shards. On the
+   shipped ramp the same cell reads 31% -- still the worst of the thirty-six,
+   still legible as a star through about frame five, and the three pale shades
+   are the ones that vanish while the two dark ones and the hue itself carry
+   the shape. So if a burst is ever reported as hard to see, the lever is this
+   ramp's dark end and not the geometry. BLUE on DEEP SPACE and GREEN on the
+   SWAMP, the two cells that sound alarming, both measure 0% hidden.
+
+   MORE LIGHT THAN DARK, three to two, because the pale shards are what carry
+   this on a dark stage and the two dark ones are what carry BLUE against the
+   beach's sky.
+
+   If literally one colour is ever wanted after all, the whole revert is
+   [0, 0, 0, 0, 0, 0] and nothing else moves. Be aware of what it costs. */
+const PRISM_LIGHT = [0, 0.18, 0.36, 0.54, -0.36, -0.18];
+
+/* One shade. Positive mixes toward white, negative toward black, and both are
+   the same affine step -- c + (255 - c) * t one way, c * (1 + t) the other --
+   so a shade is always the SAME hue and never a different one. That is the
+   property the whole item rests on, and it is checkable from the output
+   alone: two channels fit the mix and the third has to agree with it.
+
+   Hex in, hex out, because that is what a fillStyle is here and what the six
+   colours on the move are written as. Six strings built once at load is
+   cheaper than any per-frame arithmetic and, much more to the point, it is
+   ordinary data by the time the draw loop sees it: nothing in the burst
+   computes a colour while the game is running. */
+function prismShade(css, t) {
+  let out = '#';
+  for (let i = 1; i < 7; i += 2) {
+    const c = parseInt(css.slice(i, i + 2), 16);
+    const v = Math.round(t >= 0 ? c + (255 - c) * t : c * (1 + t));
+    out += (v < 16 ? '0' : '') + v.toString(16);
+  }
+  return out;
+}
+
+/* The whole ramp for one colour, in PRISM_LIGHT's order.
+
+   Declared HERE, textually above the load loop that calls it, and not beside
+   the rest of the prism constants twenty thousand lines down: `const` does
+   not hoist, so an arrow declared below the loop is in its temporal dead zone
+   when the loop runs and the file throws on load. */
+const prismRamp = (css) => PRISM_LIGHT.map((t) => prismShade(css, t));
+
 /* One finished spec per colour, built once at load.
 
    applyHit is handed `shot.spec` and reads the payload straight off it, so
@@ -5663,9 +6008,8 @@ for (const key in ROSTER) {
     }));
     /* And the six again as PICTURES, which is a third thing and not a fourth
        copy of the first two. What drawEffects needs to paint a burst is the
-       reach, the whole colour wheel, and which spoke of it the shot had got
-       to -- and it needs them off ONE object, because addEffect carries a
-       single `spec` reference.
+       reach and the six shades to draw it in -- and it needs them off ONE
+       object, because addEffect carries a single `spec` reference.
 
        Built here, at load, for the same two reasons the tints above are: an
        object made inside detonate() would be allocated again on every
@@ -5673,11 +6017,20 @@ for (const key in ROSTER) {
        simFrozen has walked it. simFrozen walks ROSTER, and these hang off
        the move.
 
-       `wheel` is the SAME array in all six, not six copies of it: they differ
-       only in where the colour starts. */
-    const wheel = up.colors.map((c) => c.css);
-    up.burstFx = up.colors.map((c, i) => ({
-      radius: up.burst.radius, wheel, hue: i, css: c.css,
+       `wheel` is SIX DIFFERENT ARRAYS now, one per colour, and that is the
+       whole of the 2.83 change. Each is that colour's own ramp -- itself,
+       three steps toward white, two toward black -- so a burst is drawn in
+       the hue the ball had reached and in nothing else. It used to be ONE
+       shared array of all six HUES plus a `hue` index saying where to start
+       reading it, which is exactly why the old burst opened into the whole
+       spectrum.
+
+       `hue` went with it. Nothing indexes a wheel by the shot's colour any
+       more: burstFx is still indexed by it, one entry per colour, and by the
+       time drawEffects is holding the entry that question is already
+       answered. */
+    up.burstFx = up.colors.map((c) => ({
+      radius: up.burst.radius, wheel: prismRamp(c.css), css: c.css,
     }));
   }
 }
@@ -5703,16 +6056,19 @@ for (const key in ROSTER) {
   }
 }
 
-// And the star's two triangles, which come apart the same way for the same
-// reason -- the shape is literally two triangles, so the projectile is too.
+// And the star's six points, which come apart the same way for the same
+// reason -- the shape is a hexagon with six triangles on it, so the
+// projectile is too. One merged spec, six keys pointing at it: they differ
+// only in the bearing split() hands them, and that is not spec data.
 for (const key in ROSTER) {
   const n = ROSTER[key].specials.neutral;
   if (!n || n.kind !== 'star') continue;
-  n.parts = { up: Object.assign({}, n, n.up),
-              down: Object.assign({}, n, n.down) };
+  const shard = Object.assign({}, n, n.shard);
+  n.parts = { p0: shard, p1: shard, p2: shard, p3: shard,
+              p4: shard, p5: shard };
 }
 
-/* And the belch's three aims -- same shape as the star's halves above, same
+/* And the belch's three aims -- same shape as the star's pieces above, same
    place, and for the same reason: hitbox() and runSpecial are both handed
    ONE spec and neither should be doing arithmetic on a patch.
 
@@ -6591,6 +6947,22 @@ class Fighter {
        want. Said out loud rather than left to be rediscovered, because a
        reader who reorders this constructor needs to know it is here. */
     this.jumpsLeft = this.airJumpMax();
+    /* ONE LIFT PER TRIP THROUGH THE AIR, and this boolean is the whole of
+       it. runSpecial used to key the mouth's rise off `attackFrame ===
+       startup`, and the charge pin IS attackFrame = startup, so held in the
+       air that line fired every single frame: measured, he climbed 5.0 a
+       frame and left through the ceiling in fifty. The lift moved to
+       `startup - 1`, which is the one frame of that move guaranteed to
+       happen exactly once however long it is held, and this stops a second
+       cast in the same fall buying a second one.
+
+       Written only when a lift is actually spent, so a grounded cast leaves
+       it alone -- a man who walks off a ledge has not had his lift yet.
+       Cleared by the floor, in collidePlatforms, beside the jumps. Declared
+       here because restoreSim deletes any key it does not find in a
+       snapshot, and a boolean that vanished on a rewind would hand him a
+       free second rise on exactly the frames a rollback is busiest. */
+    this.mouthLift = false;
     this.state = 'idle';        // idle walk air attack special shield roll dodge hitstun ko break
     this.timer = 0;
     this.hitstun = 0;
@@ -6677,9 +7049,11 @@ class Fighter {
        dream meter that came back empty after a rewind would change what his
        dragon is made of on one machine and not the other.
 
-       There was a `wakeUp` beside it and it is gone: see the bakery case in
-       runSpecial. A sticky flag written by four buttons and read a dozen
-       frames later ended two casts in five behind the player's back. */
+       There was a `wakeUp` beside it and it is gone, and so is the daydream
+       it belonged to. A sticky flag written by four buttons and read a dozen
+       frames later ended two casts in five behind the player's back, and that
+       is why the banana that replaced the move reads the pad on the frame it
+       spends it and remembers nothing. */
     this.dream = 0;
     // Frames spent in somebody's slouch. Grows inside the aura, decays out.
     this.drowsy = 0;
@@ -7022,6 +7396,20 @@ class Fighter {
     const m = this.specialsNow && this.specialsNow.up;
     return m && m.kind === 'mouth' ? m : null;
   }
+  /* Real elapsed frames, held or not. While pinned attackFrame is frozen on
+     `startup` and chargeTimer counts the frames it was frozen for; after
+     release chargeTimer stops and attackFrame takes over, so the SUM is wall
+     clock in both halves. This is the one mechanism that makes a pin safe on
+     a move whose payload is TIMED rather than counted -- the mouth's float is
+     thirty frames of hang time and it has to be thirty frames whatever the
+     player does with the button, or holding it would be free altitude.
+
+     A prototype method and not a field, so restoreSim's key-deletion pass
+     never sees it and there is nothing to snapshot: both numbers it adds are
+     already carried. */
+  moveAge() {
+    return this.attackFrame + this.chargeTimer;
+  }
   buffSize() {
     const b = this.buffTimer > 0 ? this.buffStats : null;
     if (!b || !b.sizeMul) return 1;
@@ -7068,15 +7456,17 @@ class Fighter {
     return this.chicken ? CHICKEN.specials : this.def.specials;
   }
   get kbTakenMul() {
-    /* A body flat on the floor is harder to throw than one on its feet.
-       Folded into the ONE getter applyHit reads rather than special-cased
-       at the hit, so every way of launching him -- a jab, a throw, a
-       hazard, a dragon -- agrees about how far he goes. */
-    const nap = this.napping();
-    const lying = nap && nap.knockbackTakenMul ? nap.knockbackTakenMul : 1;
+    /* ONE getter applyHit reads, rather than a special case at the hit, so
+       every way of launching him -- a jab, a throw, a hazard, a dragon --
+       agrees about how far he goes.
+
+       There was a second term above this one, for a body flat on the floor,
+       and it went with napping() and the daydream in 2.83. Nothing in the
+       file is lying down inside a move any more; a slouch is somebody else's
+       ult and reads `guard`, not this. */
     const buffed = this.buffTimer > 0 && this.buffStats
       ? this.buffStats.knockbackTakenMul : 1;
-    return lying * buffed;
+    return buffed;
   }
   get busy() {
     return this.state === 'attack' || this.state === 'special' ||
@@ -7146,6 +7536,51 @@ class Fighter {
      the answer is right on both machines on every frame of a rollback for
      nothing. */
   airJumpMax() { return this.chicken ? PHYS.airJumps - 1 : PHYS.airJumps; }
+
+  /* ---- the banana, and it costs the Fighter not one byte ----
+
+     FOUND BY WALKING THE PROJECTILES rather than kept in a field a rollback
+     would have to carry. That is the rule updateAttack states for Simon's
+     soul, and here it is the whole reason this move adds nothing to the
+     constructor: who is holding what lives on the BANANA, so there is no key
+     for restoreSim to delete and nothing for a snapshot to get wrong. Three
+     methods, and a prototype method is not an own key. */
+  heldBanana() {
+    for (const b of projectiles) {
+      if (b instanceof Banana && !b.dead && b.heldBy === this.slot) return b;
+    }
+    return null;
+  }
+
+  /* Hands, and a man in a state to use them. `hitstun` is in the list
+     because being hit is exactly what makes you DROP one -- see applyHit --
+     and a catch on the frame you are launched would hand it straight back. */
+  canCatch() {
+    return !this.eliminated && this.state !== 'ko' && !this.chicken &&
+           this.hitstun <= 0 && this.heldBanana() === null;
+  }
+
+  /* AND THE OWNER MOVES WITH IT, which is the line no other object in this
+     engine has. `owner` is who a shot may not hit, so a banana that never
+     changed hands could never be thrown back at the man who threw it, and an
+     item you cannot throw back is not an item.
+
+     `auto` is the free self-catch out of his own toss and costs no lag,
+     because throwing it to himself is the thing the move is FOR. A pickup off
+     the floor costs four frames of not being able to start anything, which is
+     the landLag every landing already spends -- no new field, and already in
+     the snapshot. */
+  catchBanana(b, auto) {
+    b.heldBy = this.slot;
+    b.owner = this;
+    b.grounded = false;
+    b.vx = 0; b.vy = 0;
+    const d = b.spec.catchDream || 0;
+    if (d) this.dream = Math.min(100, this.dream + d);
+    addEffect('ring', b.x, b.y - 4, '#f2d24a');
+    cue('grab', { slot: this.slot, x: this.x, gain: 0.5 });
+    this.landLag = auto ? 0 : 4;
+  }
 
   /* AND NO, A BIRD CANNOT GET ROUND THIS. Three moves hand a jump back with
      `jumpsLeft = Math.max(jumpsLeft, 1)` -- SIDEARM's kick, Reese's dash and
@@ -7253,7 +7688,7 @@ class Fighter {
           s.kind === 'rainbow' || s.kind === 'scatter' ||
           s.kind === 'hotdog' || s.kind === 'slots' || s.kind === 'slouch' ||
           s.kind === 'cookie' || s.kind === 'frogs' || s.kind === 'plague' ||
-          s.kind === 'star' || s.kind === 'bakery' || s.kind === 'salamence' ||
+          s.kind === 'star' || s.kind === 'toss' || s.kind === 'salamence' ||
           s.kind === 'pie' ||
           s.kind === 'ball' || s.kind === 'knight' || s.kind === 'rain' ||
           s.kind === 'pawn' || s.kind === 'bottle' || s.kind === 'car' ||
@@ -7697,6 +8132,66 @@ class Fighter {
 
        Being grabbed is untouched: that is the other fighter's code, and a
        chicken is caught, held and thrown exactly as a person is. */
+    /* THE BANANA, AND IT IS THE SAME BUTTON EITHER WAY: a full hand throws,
+       an empty one picks up. Resolved HERE, in updateFree, where the pad is
+       actually in hand -- which is why this move needs no latched aim field
+       of the kind throwAim, belchAim and aimDown all are. Those three exist
+       because runSpecial is handed no pad and has to be told afterwards which
+       way the stick was; this reads the direction and spends it on the same
+       frame, so there is nothing to remember.
+
+       ABOVE the grab branch, because a hand with a banana in it cannot grab
+       anybody anyway -- a throw can never be taking a grab away from him.
+       PICKING ONE UP CAN, and that is the one thing this block is careful
+       about: a man in front of you outranks fruit on the floor. Without that
+       clause any character standing on a banana loses his grab, which is a
+       real cost to ten characters who did not ask for one.
+
+       `pad.grab` is an EDGE -- readPad builds it with anyTap -- so holding
+       the button is one throw and not sixty. */
+    if (pad.grab && this.landLag <= 0 && this.grabbing < 0 && !this.chicken) {
+      const held = this.heldBanana();
+      if (held) {
+        const bs = held.spec;
+        const aimUp = !!pad.up, aimDn = !!pad.down && !aimUp;
+        held.loose(0, 0);
+        held.owner = this;
+        held.x = this.x + this.facing * 5;
+        held.y = this.y - 15;
+        held.vx = (aimUp ? bs.upX : aimDn ? bs.dnX : bs.fwdX) * this.facing;
+        held.vy = aimUp ? bs.upY : aimDn ? bs.dnY : bs.fwdY;
+        this.landLag = 8;
+        cue('throw', { slot: this.slot, x: this.x });
+        return;
+      }
+      /* An empty hand, on the floor, and nobody standing in the grab box.
+         `reach` is eleven columns and `lift2` fourteen rows, measured from
+         his feet the way the bread's nine and fourteen were -- two columns
+         wider than the bread because a banana is picked up by somebody
+         moving and bread was stood on. That width IS the skill in the move:
+         a short walk off your own toss still reaches it and a long one does
+         not. */
+      if (this.grounded) {
+        const gb = this.relBox(BASIC_GRAB);
+        let somebodyThere = false;
+        for (const o of fighters) {
+          if (o === this || o.eliminated || o.state === 'ko') continue;
+          if (overlap(gb, o.hurtbox())) { somebodyThere = true; break; }
+        }
+        if (!somebodyThere) {
+          for (const b of projectiles) {
+            if (!(b instanceof Banana) || b.dead) continue;
+            if (b.heldBy >= 0 || b.numb > 0) continue;
+            if (b.t < b.mine && b.owner !== this) continue;
+            if (Math.abs(b.x - this.x) > b.spec.reach) continue;
+            if (Math.abs(b.y - this.y) > b.spec.lift2) continue;
+            this.catchBanana(b, false);
+            return;
+          }
+        }
+      }
+    }
+
     if (pad.grab && this.grounded && this.landLag <= 0 && this.grabbing < 0 &&
         !this.chicken) {
       this.startAttack('grab', pad);
@@ -8009,8 +8504,10 @@ class Fighter {
      the man by a frame.
 
      It returns the MOVE rather than a boolean because the callers want what
-     that particular sleep says -- `rouse`, `startup`, `active` -- the same
-     way napping() hands back Remy's dream. */
+     that particular sleep says -- `rouse`, `startup`, `active`. There was a
+     napping() beside it that did the same for Remy's daydream and it went
+     with the daydream in 2.83; this is the last one of its shape, and it
+     asks after an ult rather than after a `kind`, which is why it is. */
   slouching() {
     if (this.state !== 'ult') return null;
     const u = this.def.ult;
@@ -8035,25 +8532,20 @@ class Fighter {
     return !!this.slouching();
   }
 
-  /* Off in a daydream, which is a whole posture rather than a state. Asked by
-     sprite() and by the knockback getter, so the picture and the physics
-     cannot disagree about whether he is standing there dreaming. Returns the
-     MOVE rather than a boolean, because the caller wants what that particular
-     dream says about knockback.
+  /* napping() USED TO BE HERE and it went with the daydream in 2.83. Its own
+     comment is the reason it could not stay: it dispatched on `kind ===
+     'bakery'`, and it had already been caught once reading a kind no ROSTER
+     entry carried any more -- a silent no-op that let a move advertise a
+     `knockbackTakenMul` the physics never saw. Once the bakery went, that is
+     exactly what it became again: no entry in this file holds `kind: 'toss'`
+     and a knockbackTakenMul both, so it could only ever return null, and the
+     two readers it had -- kbTakenMul and sprite() -- were asking a question
+     with one answer. Leaving it would have been the same bug, wearing the
+     write-up for it as a hat.
 
-     It reads `bakery`, not `sleep`. It used to say `sleep`, which was the nap
-     the bakery replaced -- and a kind check against a kind no ROSTER entry
-     has any more is a silent no-op: the move went on advertising a
-     `knockbackTakenMul` that never reached the physics, and the sleeping pose
-     below could never draw. That is the whole failure mode of dispatching on
-     a string, and it costs nothing at the point it happens. */
-  napping() {
-    if (this.state !== 'special' && this.state !== 'ult') return null;
-    const m = this.moveFor(this.state);
-    if (!m || m.kind !== 'bakery') return null;
-    return this.attackFrame >= m.startup &&
-           this.attackFrame < m.startup + m.active ? m : null;
-  }
+     The sleeping and yawning drawings are still cut and still loaded; see
+     the grabs beside the sprite sets. Nothing draws them, and the next move
+     that wants a man lying on the floor has the art waiting. */
 
   moveFor(state) {
     return state === 'grab' ? BASIC_GRAB
@@ -8448,7 +8940,8 @@ class Fighter {
        already do this in two presses in the air -- cast, land, cast -- and
        all the carry saves him is twenty-two frames; a rule the player cannot
        see refusing a press the player can see is the exact failure mode the
-       vent above and the bakery's wake flag are both written up for.
+       vent above is written up for, and the one the daydream's wake flag was
+       deleted over before the daydream itself was.
 
        WHERE IT LANDS IS THE CLOUD'S OWN BUSINESS, and no code here. Cloud's
        constructor reads owner.x + owner.facing * ahead and gives itself
@@ -8605,22 +9098,88 @@ class Fighter {
 
        GROUNDED ONLY, on purpose. The `walk` flag is a licence to keep
        playing the game while the meter fills, not a licence to fill it
-       somewhere else -- and the only move that carries it is a cloud dropped
-       at his feet, which in the air would become a charged cloud dropped
-       from wherever he had drifted to. An airborne charge behaves exactly as
-       it did before this existed. */
+       somewhere else -- the first move to carry it is a cloud dropped at his
+       feet, which in the air would become a charged cloud dropped from
+       wherever he had drifted to. An airborne charge behaves exactly as it
+       did before this existed. Note what this flag is and is not: it is
+       about WALKING, and not about charging at all. The fart still pins in
+       the air, it simply does not steer while it does. `ground` below is the
+       stronger rule, and it is the one a recovery needed.
+
+       `ground` and `floor` are the two things a charge learns when its
+       payload is a way home. `ground` says the hold only runs on the floor,
+       so "I held my mouth open and now I cannot recover" is not a mistake you
+       are allowed to make in the air -- there is nothing to hold. `floor`
+       says that on the floor the drain stops at the price of the next cast,
+       so it is not a mistake you are allowed to make on the ground either.
+       Both are absent from every other charge, and absent they are the line
+       that was here before.
+
+       AND NOT AFTER THE PIN HAS LET GO. `specialSpawned` is what closes
+       this gate on the other three charges: each of them puts a thing in the
+       world on one frame and that flag goes up with it, so a bottle or a
+       cloud on its way out cannot start charging again. The mouth spawns
+       NOTHING -- it is a window, not a projectile -- so nothing ever set the
+       flag and nothing ever closed the gate, and a second press on any frame
+       of the cast, RECOVERY INCLUDED, pulled attackFrame back to `startup`
+       and re-opened the catching box for free. Measured before the fix: press,
+       release, press again on frame 27 (deep inside the twelve frames of
+       recovery) and the move ran 88 frames instead of 28 with 59 open frames
+       instead of 10 -- and the second press paid no second cast. That is
+       exactly the thing the recovery exists to sell: the punish window could
+       be deferred and split at will.
+
+       Bounded here rather than by faking `specialSpawned` on the mouth,
+       because the flag means "the payload is out" and the mouth has no
+       payload.
+
+       AND THE CEILING IS `startup + 1`, WHICH IS NOT THE OBVIOUS NUMBER.
+       The obvious number is `startup`: the pin writes attackFrame back to
+       startup, so surely a pinned move sits at startup. It does not. The pin
+       is written here and the counter is advanced elsewhere, so a charge that
+       is holding alternates startup, startup+1, startup, startup+1 -- and
+       `=== m.startup` therefore lets a charge pin for exactly ONE frame and
+       then abandons it. Measured, and it is why this is written down: under
+       that form Reese's cap fell from 72 pinned frames to 1, the bottle's
+       from 120 to 1 and the mouth's from 40 to 1, silently, with all three
+       moves still firing. `startup + active` works too but buys the mouth a
+       needless ten-frame window to re-grip inside. One is the smallest number
+       that admits a continuous hold and refuses everything else: let go for a
+       single frame and the counter reaches startup+2, which this clause will
+       not take back.
+
+       Measured inert for the other three: Reese's CROP DUST, Trev's PAWN and
+       Cobeus' own bottle trace byte-identical to the pre-change file on all
+       nine arms -- tap, hold 20, hold 200, holding while walking, while
+       turning, in the air, at three starting bars, and releasing at 30.
+       Measured on the mouth: a re-grip on frames 10, 14, 16, 18, 20, 24 and
+       27 now all give the same 28-frame move with 10 open frames, and a
+       genuine held cast still reaches 40 pinned frames and ends on 14.000.
+
+       AND NOT IN BED, which is the one of the three that is not merely inert
+       for everybody else. No other charged move can be asleep, so `bedded()`
+       answers null for the bottle, the pawn and the fart on every frame they
+       exist. The mouth's own bed is different: it pins attackFrame at
+       `startup + active` with `specialSpawned` still false, which is every
+       other clause here satisfied. Without this line, holding up through the
+       nap re-pins him back on `startup` and empties seventy-two mana while
+       he lies there -- measured, 86.0 down to 14.0 across a bed he did not
+       choose to be in. The shipped bed test cannot see it: its probe presses
+       with bitsToPad(2048), and that sets `holdUp` false. */
     let chargeWalk = false;
     if (m.charge && !this.specialSpawned && this.attackFrame >= m.startup &&
+        this.attackFrame <= m.startup + 1 &&
         pad && pad[HOLD_FOR_SLOT[this.chargeKey] || 'holdNeutral'] &&
+        !this.bedded() && !(m.charge.ground && !this.grounded) &&
         !(m.charge.hold && this.chargeTimer >= m.charge.hold) &&
-        !(m.charge.drain && this.mana <= 0)) {
+        !(m.charge.drain && this.mana <= (m.charge.floor || 0))) {
       this.attackFrame = m.startup;
       chargeWalk = !!m.charge.walk && this.grounded;
       this.chargeTimer++;
-      /* A charge that also costs meter while it runs. Optional, and only the
-         fart uses it: the pieces and the bottle are paid for in standing
-         still and nothing else, and adding a drain to those would be
-         re-pricing two moves nobody asked about.
+      /* A charge that also costs meter while it runs. Optional, and two
+         moves carry it: the fart, and Cobeus' mouth. The pieces and the
+         bottle are paid for in standing still and nothing else, and adding a
+         drain to those would be re-pricing two moves nobody asked about.
 
          Note what this is competing with, which is nothing: the refill is in
          updateFree and a fighter in the middle of a special never gets there,
@@ -8629,11 +9188,24 @@ class Fighter {
          not "60% slower", it is a bar emptying at 0.8 a frame.
 
          Drained AFTER the pin so the frame that spends the mana is the frame
-         that counts, and clamped at zero so the bar cannot go negative and
-         strand him. Running out is not an error -- the condition above stops
-         pinning him, attackFrame advances, and the move fires at whatever
-         step he had managed to pay for. */
-      if (m.charge.drain) this.mana = Math.max(0, this.mana - m.charge.drain);
+         that counts, and clamped at `floor` -- which for a move that does not
+         ask for one is zero, so the bar still cannot go negative and strand
+         him. Running out is not an error: the condition above stops pinning
+         him, attackFrame advances, and the move fires at whatever step he had
+         managed to pay for.
+
+         THE CLAMP IS THE FLOOR AND NOT ZERO, and it shipped as zero. The
+         condition above refuses to pin once the bar is at or below `floor`,
+         but the drain on the last frame it DOES pin was free to overshoot
+         past it -- so `floor: 14` did not leave 14, it left somewhere between
+         12.2 and 14. Swept every starting bar from 30.0 to 100.0 in tenths,
+         one held cast each: 683 of 701 finished below the floor, worst case
+         12.2 off a bar of 52.7, and only a literally full bar landed on
+         14.000, and that because the 40-frame hold cap stopped him first
+         rather than because the floor did. Two comments in this file call
+         that floor the fare home; now it is. */
+      if (m.charge.drain)
+        this.mana = Math.max(m.charge.floor || 0, this.mana - m.charge.drain);
       if (m.charge.swapEvery && this.chargeTimer >= m.charge.swapEvery) {
         this.chargeTimer = 0;
         this.chargePiece = (this.chargePiece + 1) % CHESS_PIECES.length;
@@ -9814,71 +10386,21 @@ class Fighter {
         }
         break;
 
-      case 'bakery': {
-        /* The charge counter belongs to this cast and nothing else. Every
-           other charged move in the file zeroes it on its own first frame
-           for the same reason: startAttack does not, so a bakery cast out of
-           the same fighter as a half-wound fart would start its oven
-           wherever the fart had got to. */
-        if (this.attackFrame === 1) this.chargeTimer = 0;
-        const dreaming = this.attackFrame >= s.startup &&
-                         this.attackFrame < s.startup + s.active;
-        /* HIS vx IS NOT PINNED HERE ANY MORE, and that is the walk. There
-           was a `this.vx = 0` on this line for every frame of the move.
-           `charge.walk` is read in updateAttack, which sets chargeWalk and
-           hands him the ordinary walking arm for the frames the button is
-           down -- and that block runs AFTER this one, so a zero written here
-           would be overwritten by a fraction of a walk every frame and he
-           would lean across the stage at a crawl. The startup and the tail
-           are damped by the same friction arm every other committed move
-           uses. */
-        if (dreaming) {
-          this.dream = Math.min(100, this.dream + s.dream);
-          /* A loaf every `every` frames, up to `loaves`, KEYED ON THE CHARGE
-             COUNTER and not on attackFrame. attackFrame is pinned at
-             `startup` for the whole hold -- that is what the pin IS -- so
-             counting off it bakes one loaf at most and then nothing.
-             chargeTimer is 0 on the cast and 1..150 while pinned, which is
-             why the `t > 0` guard below is still here and is now load-bearing
-             for a different reason: without it a loaf drops on the frame of
-             the cast, before he has dreamed anything. Both are snapshotted,
-             so a rollback bakes the same bread on the same frames. */
-          const t = this.chargeTimer;
-          if (t > 0 && t % s.every === 0 && t / s.every <= s.loaves) {
-            /* BEHIND him, and the minus sign is the whole of it. It used
-               to be `+ this.facing`, which put every loaf on the opponent's
-               side of him -- thirteen to thirty-four pixels toward the man
-               he was fighting -- and across 480 measured matches the
-               opponent ate twice as many as he did. The bread is still
-               anybody's; he is just standing between it and them now, which
-               is the only version of that joke he can afford to keep
-               telling. */
-            projectiles.push(new Loaf(this, s.loaf,
-                                      this.x - this.facing * (6 + (t / s.every) * 7),
-                                      this.y));
-            cue('land', { slot: this.slot, x: this.x, gain: 0.4 });
-          }
-          /* NOTHING ENDS THIS BUT THE BUTTON THAT STARTED IT. There was a
-             `wakeUp` flag here, written in updateAttack on any frame jump,
-             attack, shield or grab was down and read once attackFrame got
-             past startup + 8 -- and because it was sticky, a press made
-             during the startup was remembered and spent the instant the
-             guard opened. It snapped 40.3% of live casts shut on dreaming
-             frame ten, and because the wake set attackFrame to the end of
-             the window a cancelled cast read back exactly like a completed
-             one, which is why the first measurement of this move reported
-             45% running the full eighty when the true figure was 3.9%. Both
-             halves are gone and there is nothing in their place.
-
-             Keyed on chargeTimer for the same reason the oven is: the pin
-             freezes attackFrame, so sparks counted off it would have been
-             one puff at the start and nothing afterwards. */
-          if (this.chargeTimer % 20 === 0) {
-            addEffect('spark', this.x + rand(-6, 6), this.y - rand(10, 20), '#ffe4b0');
-          }
+      /* STRAIGHT UP, and out of his hand rather than out in front of him:
+         two pixels forward is a shoulder and not a throw. It inherits half
+         his own vx so a toss made on the run lands somewhere he can walk to
+         and not behind him, and the rest of the move -- catching it, putting
+         it down, picking it up again -- is in updateFree, where the pad is.
+         Nothing here knows about any of that; this is only the frame the
+         thing enters the world. */
+      case 'toss':
+        if (this.attackFrame === s.startup && !this.specialSpawned) {
+          this.specialSpawned = true;
+          projectiles.push(new Banana(this, s, this.x + this.facing * 2,
+                                      this.y - 14, this.vx * 0.5, s.lift));
+          cue('throw', { slot: this.slot, x: this.x });
         }
         break;
-      }
 
       case 'whip':
         if (this.attackFrame === s.startup) {
@@ -9914,18 +10436,22 @@ class Fighter {
       /* OPEN WIDE. Three things happen in here and none of them is the
          catching, which is sweepFrail's -- this move has no hitbox at all.
 
-         THE POP AND THE FLOAT are the recovery half. `roots` on the spec
-         keeps him still on the ground; off it he leaves at `rise` and then
-         his fall is CLAMPED at `air.hang` for `air.active` frames, which is
-         about ten pixels of sink over half a second. A man full of air does
-         not jump home, he stops coming down, and that is a different picture
-         from every other recovery in the file for a character who now has a
+         THE POP AND THE FLOAT are the recovery half. On the ground nothing
+         here moves him at all: `chargeWalk` writes his vx while he holds the
+         button and ordinary friction damps it when he does not, which is the
+         whole of what deleting `roots` bought. Off the ground he leaves at
+         `rise` and then his fall is CLAMPED at `air.hang` for `air.active`
+         frames of WALL CLOCK -- see moveAge() below -- which is about ten
+         pixels of sink over half a second. A man full of air does not jump
+         home, he stops coming down, and that is a different picture from
+         every other recovery in the file for a character who now has a
          reason to be different.
 
          THE BED is the only thing here that writes simulation state, and it
-         is three lines: pin attackFrame on the last open frame so the move
-         cannot end underneath him, spend a frame of the timer, and hand him
-         his appetite back on the frame he stands up. The pin runs whatever
+         is three lines: pin attackFrame one frame past the last open one so
+         the move cannot end underneath him and the box cannot re-open under
+         him either, spend a frame of the timer, and hand him his appetite
+         back on the frame he stands up. The pin runs whatever
          is being done to him -- applyHit's nap branch returns before it can
          touch his state -- so the hundred and eighty frames are a hundred
          and eighty frames. `fat` is cleared HERE rather than on the eighth
@@ -9933,9 +10459,14 @@ class Fighter {
          has to still be on him while he lies there.
 
          "HE CANNOT ACT" IS EXACTLY TRUE ON THE FLOOR AND NOT IN THE AIR, and
-         that is the `roots` convention doing what it says rather than an
-         oversight. Measured over forty bedded frames: on the ground, holding
-         left, right, jump or nothing all move him 0.00 px. Bedded in the air
+         it is the pin doing it rather than `roots`, which is gone: nothing
+         in updateAttack writes his vx unless `mobile` or `chargeWalk` is on,
+         and the charge gate refuses a man who is `bedded()`. Measured over
+         forty bedded frames: on the ground, holding left, right, jump or
+         nothing all move him 0.00 px. He does now SKID to a stop if he was
+         walking when the eighth one landed, where he used to stop dead --
+         that is the ordinary friction every other move in the file is damped
+         by, and it is the honest version. Bedded in the air
          -- which you reach by catching the eighth during the recovery -- he
          keeps the ordinary air-drift arm, so nothing comes OUT but he still
          steers: +60.7 px holding toward the stage, -8.2 holding away, +24 on
@@ -9951,10 +10482,32 @@ class Fighter {
          inside his own `absorb` window and every shot fired at a sleeping
          man feeds him and re-arms the whole hundred and eighty. */
       case 'mouth': {
-        if (this.attackFrame === s.startup) {
+        /* The house rule, and the fourth copy of the same line: a charge
+           starts from zero. It is load-bearing here in a way it was not for
+           the bottle or the pawn, because an abandoned hold leaves a nonzero
+           counter far more often on a move that is also a recovery -- the
+           frame he lets go of this one is usually the frame something else
+           happened to him. */
+        if (this.attackFrame === 1) this.chargeTimer = 0;
+        /* THE TELEGRAPH AND THE POP, one frame before the mouth opens.
+
+           `startup - 1` and not `startup`, and the pin is the reason. While
+           he holds, attackFrame is parked ON startup, so a line keyed to that
+           frame fires every frame of the hold: measured that way round he
+           climbed 5.0 a frame and left through the ceiling in fifty.
+           `startup - 1` is the one frame of this move guaranteed to happen
+           exactly once however long it is held.
+
+           `mouthLift` is the other half, and it is written only when a lift
+           is actually spent. A grounded cast leaves it alone on purpose: a
+           man who walks off a ledge mid-move has not had his lift yet, and
+           the flag is a record of the trip through the air rather than of the
+           press. The floor clears it. */
+        if (this.attackFrame === s.startup - 1) {
           addEffect('ring', this.x + this.facing * 6, this.y - 13, '#ffe4b0');
           cue('drink', { slot: this.slot, x: this.x });
-          if (!this.grounded) {
+          if (!this.grounded && !this.mouthLift) {
+            this.mouthLift = true;
             this.vy = s.rise || 0;
             this.vx = this.facing * (s.drift || 0);
           }
@@ -9964,10 +10517,20 @@ class Fighter {
            own comment -- so 0.35 here is 0.75 a frame on the screen, which
            is under a third of maxFall and is what half a second of hang time
            actually costs him in altitude. Thirty frames, measured at twenty
-           pixels of sink. */
+           pixels of sink.
+
+           moveAge() AND NOT attackFrame, which is what makes a pin safe on a
+           window measured in TIME rather than in steps. Held, attackFrame
+           stands still and chargeTimer counts the frames it stood still for,
+           so the sum is wall clock in both halves and thirty frames of float
+           are thirty frames whatever he does with the button. Without it a
+           hold would be free hang time. `charge.ground` forbids holding in
+           the air at all, so today the two answers agree -- this one is
+           written the way it is so that they cannot stop agreeing if `ground`
+           is ever reconsidered. */
         const air = s.air;
-        if (air && !this.grounded && this.attackFrame >= s.startup &&
-            this.attackFrame < s.startup + (air.active || 0)) {
+        if (air && !this.grounded && this.moveAge() >= s.startup &&
+            this.moveAge() < s.startup + (air.active || 0)) {
           if (this.vy > air.hang) this.vy = air.hang;
         }
         if (this.bedTimer > 0) {
@@ -10471,6 +11034,10 @@ class Fighter {
         this.vy = 0;
         this.grounded = true;
         this.jumpsLeft = this.airJumpMax();
+        /* And the mouth's one lift, for the same reason and on the same
+           line: it is spent per trip through the AIR, so the floor is what
+           gives it back. See the field in the constructor. */
+        this.mouthLift = false;
         if (!wasGrounded) {
           this.landLag = PHYS.landLag;
           addEffect('dust', this.x, this.y, '#ffffff');
@@ -10575,6 +11142,13 @@ class Fighter {
     // Whatever was happening, it is over. Both ends: he might have been
     // holding somebody, or been the one held.
     releaseGrab(this);
+    /* And the banana goes on the floor rather than off the stage with him.
+       Straight down, because a body leaving at speed did not throw anything.
+       This is the precedent a sword already sets in reverse: a thing he has
+       PUT into the world outlives him, and a thing in his hand becomes a
+       thing in the world at the moment he stops having hands. */
+    const carried = this.heldBanana();
+    if (carried) carried.loose(0, -1.4);
     if (this.grabbedBy >= 0) releaseGrab(fighters[this.grabbedBy]);
     /* The dummy pays nothing for going off the edge. It still flies, and the
        flight is worth watching -- that is the read you came to practice --
@@ -10673,6 +11247,10 @@ class Fighter {
     this.grounded = false;
     // Two, because the three lines above just made them a person again.
     this.jumpsLeft = this.airJumpMax();
+    /* And one lift. A fresh stock comes back off the floor rather than onto
+       it, so collidePlatforms will not run for him until he has already had
+       to recover once; this is the line that lets him. */
+    this.mouthLift = false;
     this.setState('air');
   }
 
@@ -10722,7 +11300,9 @@ class Fighter {
        CARRIES as against the things they have already put into the world. A
        mower still driving or a dog already out keeps going, because those
        stopped being his the moment he cast them; a sword in his hand did
-       not.
+       not, and neither did a banana. The banana is the one of these that
+       does not simply stop existing -- it falls, and whoever is standing
+       under a man being run over gets a present.
 
        The buff is the one that would have bitten. buffStats carries sizeMul
        and damageMul, so a jackpot Simon caught by a car would have got up as
@@ -10740,6 +11320,12 @@ class Fighter {
     this.buffTimer = 0;
     this.buffStats = null;
     this.chargeTimer = 0;
+    /* AND A BANANA IN HIS HAND, for the reason the paragraph above already
+       draws the line by: a chicken has no hands. It is dropped rather than
+       destroyed, because it was never his to destroy -- it is a thing on the
+       floor that happened to be off the floor for a moment. */
+    const carried = this.heldBanana();
+    if (carried) carried.loose(0, -1.4);
     /* A CARRIED FART IS CARRIED, so it goes with the rest of it. He is not
        in `special` by the time this runs -- the block below hands him back
        to idle -- so nothing would ever have released it anyway; it is
@@ -10862,31 +11448,17 @@ class Fighter {
        would read as a stutter rather than a swing. */
     if (entry.jab && this.state === 'attack') set = 'jab';
     if (entry.grab && this.state === 'grab') set = 'grab';
-    /* Mid-yawn, which he was drawn doing. Its own set rather than a pose in
-       his attack sheet, so the open mouth belongs to one moment instead of to
-       every swing he throws.
+    /* THE YAWN AND THE SLEEPING POSE WERE READ HERE, and both branches went
+       with the daydream in 2.83. Neither was deleted for being wrong: they
+       asked napping(), and napping() asked for a `kind` no ROSTER entry
+       carries any more, so each was a test that could only answer no. That
+       is the second time this exact shape has been caught in this function --
+       the yawn art outlived a YAWN move once already -- and a branch that
+       cannot fire is worse than no branch, because it reads as coverage.
 
-       That moment is the START of the daydream -- he yawns, and then he is
-       gone, which is the sleeping pose below. Two drawings, one move,
-       in the order a person actually drifts off in. It used to belong to a
-       YAWN move that no longer exists, which left eight frames of art in the
-       build that nothing on earth could draw. */
-    if (this.state === 'special' && SPRITES.yawning) {
-      const m = this.moveFor('special');
-      if (m && m.kind === 'bakery' && this.attackFrame < m.startup) {
-        const im = IMG['yawning.' + (this.facing < 0 ? 'L' : 'R')];
-        if (im) return im;
-      }
-    }
-
-    /* Asleep on the floor, which is a whole different silhouette -- 15 by 9
-       rather than 10 by 14 -- and so is its own picture rather than a pose
-       in the sheet. */
-    const nap = this.napping();
-    if (nap && SPRITES.sleeping) {
-      const im = IMG['sleeping.' + (this.facing < 0 ? 'L' : 'R')];
-      if (im) return im;
-    }
+       The art is still cut and still in IMG. Nothing points at it, and the
+       next move that wants a man lying on the floor starts from a drawing
+       rather than from a sheet. */
 
     // Reese's shirtless set is his buff state, exactly as drawn.
     if (entry.shirtless && this.buffTimer > 0) set = 'shirtless';
@@ -11847,7 +12419,7 @@ const HAMMER_SICKLE_ART = [
    down because the two obvious upgrades are both traps.
 
    NOT A PLATFORM. platformsNow() is read by every projectile's floor test,
-   by dashLandingAhead, groundAhead and floorBeneath, by the loaf's landing,
+   by dashLandingAhead, groundAhead and floorBeneath, by the banana's landing,
    by the puddle's floorUnder and by the mower's kerb rule -- so a piece of
    stage geometry that appears for three seconds and vanishes is something
    the AI, the rollback snapshot and six separate physics tests would all
@@ -13325,19 +13897,31 @@ class Rainbow {
 
        This used to be 'ring' -- the generic shockwave seventeen other things
        in this file spawn -- plus fourteen one-pixel sparks, all of them the
-       one colour the shot happened to be. Three things were wrong with that
-       and they compound. It was the same picture as everybody else's, so the
-       signature move of the character whose whole identity is a rainbow went
-       off looking like a pawn promoting. It was MONOCHROME, which threw away
-       the one genuinely interesting thing about this move: six colours, and
-       the ball goes off in whichever one it had reached. And the ring grew
-       to a radius of 30 whatever the burst's radius actually was, so the
-       picture claimed half again the reach the hitbox has -- a lie that got
-       worse every time the radius was cut, and it has now been cut twice.
+       one colour the shot happened to be. Two things were wrong with that.
+       It was the same picture as everybody else's, so the signature move of
+       the character whose whole identity is a rainbow went off looking like a
+       pawn promoting. And the ring grew to a radius of 30 whatever the
+       burst's radius actually was, so the picture claimed half again the
+       reach the hitbox has -- a lie that got worse every time the radius was
+       cut, and it has now been cut twice.
 
-       The prism fixes all three: it is its own shape, it opens the shot's
-       colour into the whole wheel starting from that colour, and it stops
-       exactly at `radius`, so what you see is what it hit. */
+       The prism fixes both: it is its own shape, and it stops exactly at
+       `radius`, so what you see is what it hit.
+
+       WHAT IT IS NOT ANY MORE is the whole wheel. The first prism opened the
+       shot's colour into all six hues, and the note here used to argue for
+       that: it called the old ring MONOCHROME and said the interesting thing
+       about this move was six colours. That had it backwards. The ball is
+       ONE colour at a time and the press is a decision about WHICH one -- so
+       an explosion that ends in all six answers the decision for you, and
+       makes RED and BLUE look alike at the one moment the difference is
+       actually on screen.
+
+       It goes off in the colour it WAS: six shades of that hue and a
+       two-frame white core, and nothing else. The shape, the reach, the
+       easing, the twelve spokes, the ring, the sparks and the cue are all
+       untouched -- this is a palette change, and the rectangle count is
+       identical on every frame of it. */
     const fx = this.base.burstFx ? this.base.burstFx[this.hue] : null;
     addEffect('prism', this.x, this.y, css, 1, fx);
     /* The shower, THROWN off the star rather than scattered in a square
@@ -13346,6 +13930,12 @@ class Rainbow {
        star and then fall out of it -- which is a firework. The fourteen the
        old line spawned appeared all over a square, all in one colour, and did
        nothing but drift: they read as grit that happened to be nearby.
+
+       That spoke's colour is a SHADE of the ball's own hue now rather than
+       the next hue along, for the same reason the star is: the debris off a
+       red explosion is red. `this.hue` has dropped out of the index because
+       the wheel handed over is already this shot's own ramp, so the twelve
+       motes are the six shades twice round.
 
        The speed is chosen against the reach, not by feel. A spark lives 16
        frames, so 1.1 a frame carries it about as far as the ring and no
@@ -13362,7 +13952,7 @@ class Rainbow {
     for (let i = 0; i < PRISM_SPOKES; i++) {
       const u = PRISM_DIRS[i * (PRISM_DIRS.length / PRISM_SPOKES)];
       const mote = addEffect('spark', this.x + u[0] * 3, this.y + u[1] * 3,
-                             wheel[(this.hue + i) % wheel.length]);
+                             wheel[i % wheel.length]);
       if (mote) {
         mote.vx = u[0] * 1.1 + rand(-0.25, 0.25);
         mote.vy = u[1] * 1.1 + rand(-0.25, 0.25);
@@ -14677,7 +15267,7 @@ function drawWhipArt(g, ax, ay, facing, k, s) {
 
    Same two guards the axe above uses and for the same reasons: it is asked
    whether he is DOING the move rather than whether he owns it -- otherwise
-   the whip came out over the star and the bakery as well -- and it asks
+   the whip came out over the star and the banana as well -- and it asks
    moveFor rather than reading specialSlot, because specialSlot is assigned
    in startAttack and is not one of the constructor's fields, so restoreSim
    is entitled to delete it on a rewind past his first special of the match.
@@ -14765,7 +15355,10 @@ const MOUTH_PAL = {
    value-distinct AND move. */
 const MOUTH_BLANK = '................';
 const MOUTH_ROWS = {
-  /* STARTUP, attackFrames 0..6. Mouth CLOSED -- see the gate below. */
+  /* STARTUP, chew clock 0..6, which is attackFrame 0..6 on any cast. Mouth
+     CLOSED -- see the gate below. The number every one of these labels is
+     indexed by is mouthArtFrame's, not the move's; they are the same thing
+     until he holds the button. */
   A0: { 7: '.......qq.......' },
   A1: { 7: '......qbbq......' },
   /* The clamp: ONE dark bar with a PALE one under it, and both below his
@@ -14773,7 +15366,8 @@ const MOUTH_ROWS = {
      what the first draft of this cell was and why it was thrown away. */
   A2: { 7: '......bbbb......', 8: '......SSSS......' },
 
-  /* OPEN, attackFrames 7..66 -- exactly absorb [from, to]. */
+  /* OPEN, chew clock 7..66: 7 to 9 is the snap and the gulp, 10 to 63 is the
+     chew, 64 to 66 is the close. */
   O0: { 8: '.....SrrrrS.....', 9: '....SHHHHHHS....',      // the SNAP. Teeth:
         10: '....SSHHHHSS....', 11: '......SSSS......' },  // no other cell has them.
   H0: { 8: '.....SHHHHS.....', 9: '.....SHHHHS.....',      // draw   -- jaw up
@@ -14790,22 +15384,45 @@ const MOUTH_ROWS = {
         9: '......SSSS......' },
   /* AND THE ONE NOBODY WOULD FIND BY READING THE MOVE DATA. runSpecial's
      mouth case does `if (bedTimer > 0) this.attackFrame = s.startup + s.active`
-     -- 66 -- which is INSIDE absorb [7,66]. So after the eighth catch this
-     function keeps firing on a PINNED frame 66 for all 180 frames of the bed:
-     one cell, held for three seconds, while he lies there. A mid-close frozen
-     for three seconds is a stutter; a man conked out with his mouth hanging
-     open is the joke. bedded() is derived from bedTimer, which is already
-     snapshotted, so this adds NO new field for restoreSim to lose. */
+     and holds him there for all 180 frames of the bed, so whatever cell that
+     frame chooses is on screen for three seconds while he lies in it. A
+     mid-close frozen for three seconds is a stutter; a man conked out with
+     his mouth hanging open is the joke, so mouthPose asks bedded() FIRST and
+     answers this cell whatever the frame says.
+
+     AT 2.81 THE PIN FRAME WAS ALSO THE LAST FRAME OF absorb -- 66, inside
+     [7, 66] -- and that coincidence is the only reason this cell was ever on
+     screen: drawMouth refuses to paint an open cell on a frame nothing can
+     be caught on. 2.83 shortened the move, the pin moved to 16 and the window
+     shut at 15, and without the bed exemption drawMouth now carries by name,
+     the whole three seconds would have drawn nothing at all. bedded() is
+     derived from bedTimer, which is already snapshotted, so this adds NO new
+     field for restoreSim to lose. */
   Z0: { 5: '......S..S......', 6: '......s..s......',      // conked -- eyes shut
         8: '.....SHHHHS.....', 9: '.....SHHHHS.....',
         10: '......SSSS......' },
 
-  /* RECOVERY, attackFrames 67..77. Mouth CLOSED again. */
+  /* RECOVERY, chew clock 67 and up. Mouth CLOSED again. */
   C1: { 7: '......qbbq......', 8: '......SSSS......' },
 };
 /* The seven cells that are drawn OPEN. The gate below is asserted against
    this set rather than against a comment, so the invariant cannot rot. */
 const MOUTH_OPEN = { O0: 1, H0: 1, H1: 1, H2: 1, H3: 1, C0: 1, Z0: 1 };
+/* AND THE TWO OF THE SEVEN THAT ARE OPEN WITHOUT PROMISING ANYTHING. The gate
+   refuses an open cell on a frame nothing can be caught, because a mouth held
+   wide when the window has shut is a lie about the one thing the player is
+   timing. Neither of these is that: C0 is the mouth SHUTTING, which says "too
+   late" rather than "now", and Z0 is a man asleep, who is promising nobody
+   anything.
+
+   It is written down because until 2.83 it did not have to be. The old
+   timeline had `absorb.to` at 66, which was both the last frame of the close
+   AND the frame the bed pins him on, so the gate never refused either by
+   accident. The move is twenty-eight frames now and it would have refused
+   both: measured on the built engine, 179 of the bed's 180 frames and all
+   three frames of the close drew nothing at all. Data rather than two `pose
+   !==` clauses in the gate, for the same reason MOUTH_OPEN is data. */
+const MOUTH_EXEMPT = { C0: 1, Z0: 1 };
 const MOUTH_HOLD = ['H0', 'H1', 'H2', 'H3'];
 
 /* THE SHEET DOES NOT MIRROR HIM, IT SLIDES HIM. standL is standR translated
@@ -14816,7 +15433,13 @@ const MOUTH_HOLD = ['H0', 'H1', 'H2', 'H3'];
    6 and 9. The art above is symmetric about col 7.5, so mirror(art) == art
    and jumpL wants the overlay UNSHIFTED. Hence: shift only when he is facing
    left AND grounded, which is the same test sprite() uses to choose stand
-   over jump. walkL1/walkL2 never arrive -- the move is roots + grounded. */
+   over jump. He can turn around now, grounded and open, which is exactly the
+   case this rule was written for and the reason standL is authored. What he
+   cannot do is walk in a walking pose: sprite() keys walk frames off state,
+   and he is in 'special'. He slides at a pixel and a half a frame standing
+   up, the same way a man used to slide forty-one pixels standing up while he
+   thought about bread. It is a debt, it is inherited, and it is not paid
+   here. */
 function mouthArt(pose, shift) {
   const src = MOUTH_ROWS[pose], rows = [];
   for (let y = 0; y < 16; y++) {
@@ -14829,19 +15452,62 @@ function mouthArt(pose, shift) {
 /* THE FRAME INDEX COMES OFF attackFrame, which is snapshotted, so a rollback
    replays the identical cell. No Math.random anywhere in the choice. */
 function mouthPose(f, af) {
-  if (af >= 66 && f.bedded()) return 'Z0';
+  /* No frame test any more. It was belt-and-braces against a timeline whose
+     last open frame happened to be 66, and there is no frame 66 in this move
+     to be braced against. Being in bed is the whole of the question. */
+  if (f.bedded()) return 'Z0';
   if (af <= 2) return 'A0';
   if (af <= 4) return 'A1';
   if (af <= 6) return 'A2';
   if (af <= 9) return 'O0';
-  /* FIFTY-FOUR FRAMES IS NEARLY A SECOND and a hold that does not move over a
-     second is the complaint this rewrite exists to answer. Four cells, six
-     frames each: the jaw drops a row and comes back, the tongue travels two
-     rows, the ring widens two columns, and he squints once a cycle. Two and
-     a quarter cycles across the hold. */
+  /* FOUR CELLS, SIX FRAMES EACH: the jaw drops a row and comes back, the
+     tongue travels two rows, the ring widens two columns, and he squints once
+     a cycle. Fifty-four is the length of the CYCLE and not of the hold -- the
+     number that arrives here is mouthArtFrame's chew clock, which runs off
+     chargeTimer while he holds the button and off attackFrame when he does
+     not, so the beat is the same beat either way and it does not restart on
+     the frame he lets go. A bare press spends six frames in here; a hold to
+     the mana floor spends forty, a cycle and a sixth. A picture that does not
+     move over a second is the complaint this set exists to answer, and the
+     held mouth is the case that would otherwise have frozen solid. */
   if (af <= 63) return MOUTH_HOLD[(((af - 10) / 6) | 0) % 4];
   if (af <= 66) return 'C0';
   return 'C1';
+}
+
+/* THE CHEW CLOCK. Two numbers in -- attackFrame and chargeTimer -- and one
+   out, and every cell this drawing picks is picked with it.
+
+   HELD, attackFrame is pinned on `startup` and chargeTimer is the only thing
+   moving, so the hold cells are indexed off chargeTimer and he chews
+   continuously on the authored six-frame beat for as long as the bar lasts.
+   That is the fix for the freeze a naive pin would have produced: a cell
+   chosen off a counter that is standing still is a photograph, and forty
+   frames of photograph is the complaint the whole set was redrawn to answer.
+
+   LET GO and attackFrame takes over, carrying chargeTimer as an OFFSET so the
+   beat continues from where the hold left it instead of snapping back to the
+   first cell. The three frames in between fall out of `af <= 9` returning af,
+   which mouthPose reads as O0 -- the widest cell in the set and the only one
+   with teeth. It costs nothing and it reads as a gulp.
+
+   ONE FRAME IS HONEST AND LOOKS ODD, and it is written down so nobody files
+   it: on a cast where the button was let go before the mouth opened -- a
+   one-frame tap, which only netplay bits can really produce, since a real
+   press holds `holdUp` down while it is down -- attackFrame reaches `startup`
+   with chargeTimer still nought, and `af <= 9` answers with the clamped A2
+   while `open` is already true, so the intake streaks are drawn in front of a
+   shut mouth. It under-promises rather than over-promises, which is the safe
+   direction for this gate, and it lasts one frame.
+
+   No Math.random, no battleFrames. Both inputs are snapshotted, so a rollback
+   replays the identical cell. */
+function mouthArtFrame(f, s) {
+  const af = f.attackFrame, ct = f.chargeTimer;
+  if (ct > 0 && af === s.startup) return 10 + (ct % 54);
+  if (af <= 9) return af;
+  if (af < s.startup + s.active) return 10 + ((af - 10 + ct) % 54);
+  return 64 + (af - (s.startup + s.active));
 }
 
 function drawMouth(g, f) {
@@ -14851,10 +15517,18 @@ function drawMouth(g, f) {
   if (f.moveFor('special') !== s) return;
   const e = s.absorb;
   if (!e) return;
+  /* TWO CLOCKS, AND THEY ARE DELIBERATELY NOT THE SAME CLOCK. `open` is the
+     REAL attackFrame, because that is the number sweepFrail asks, and the
+     picture is not allowed to disagree with the catching about the one thing
+     the player is timing. `ma` is what the DRAWING runs on: held, attackFrame
+     stands still on `startup`, and a cell keyed to it would be a photograph
+     for as long as his bar lasts. mouthArtFrame is the single place the two
+     are reconciled, and nothing else in here may read one for the other. */
   const af = f.attackFrame;
   const from = e.from || 1, to = e.to || 9e9;
   const open = af >= from && af <= to;
-  const pose = mouthPose(f, af);
+  const ma = mouthArtFrame(f, s);
+  const pose = mouthPose(f, ma);
   /* THE CATCHING WINDOW, not the move's -- unchanged in spirit from what this
      replaced, and now enforced rather than promised. `absorb.from` and
      `absorb.to` are what sweepFrail asks, so they are what the picture has to
@@ -14862,7 +15536,13 @@ function drawMouth(g, f) {
      frame nothing can go into it is a lie about the only thing the player is
      timing. The closed cells either side are not that lie -- a shut mouth
      claims nothing -- so the startup and the recovery get to be drawn. */
-  if (MOUTH_OPEN[pose] && !open) return;
+  /* AND THE TWO EXEMPTIONS A COINCIDENCE USED TO HIDE; see MOUTH_EXEMPT,
+     which is where the argument for them is. Both of them are outside the
+     window now by construction rather than inside it by luck: the bed pins
+     him one frame PAST `absorb.to`, and the close runs on the three frames
+     after that. Take this clause out and the man has no mouth for the three
+     seconds he is asleep and for the three frames it takes him to shut it. */
+  if (MOUTH_OPEN[pose] && !open && !MOUTH_EXEMPT[pose]) return;
   /* `sk` rather than the `k` every other drawing here uses, and only because
      nerdwars-simon.test.js sabotages drawBling's size line BY ITS LITERAL
      TEXT, to prove the chain is sized off the man rather than off the buff.
@@ -14890,14 +15570,17 @@ function drawMouth(g, f) {
      that matters rather than the tidier one: a streak never lands on a pixel
      of HIM. His body on those rows starts at column 4 facing left and the
      strays are at column 1 or less. Both colors are his -- #DAC8AB off his own
-     shading, #231C03 off his hair. Phased on attackFrame, which is
+     shading, #231C03 off his hair. Phased on the SAME chew clock the cell is,
+     which is what keeps them marching while he holds -- phased on attackFrame
+     they would have stood still on the pin, and nine frozen dashes in front
+     of a chewing mouth is worse than no dashes. Both halves of that clock are
      snapshotted and hashed, so a rollback replays the identical stream
      instead of re-rolling it. */
   const dir = f.facing;
   const th = Math.max(1, Math.round(sk));
   const len = Math.max(2, Math.round(3 * sk));
   for (let i = 0; i < 9; i++) {
-    const dd = 18 - ((af * 2 + i * 4) % 18);
+    const dd = 18 - ((ma * 2 + i * 4) % 18);
     if (dd < 3) continue;
     const lane = (i % 3) - 1;
     const row = 9 + Math.floor((lane * 5 * dd + 9) / 18);
@@ -15211,16 +15894,18 @@ function drawSleep(g, f) {
 }
 
 /* =====================================================================
-   STAR OF DAVID - two triangles that can stop being one star.
+   STAR OF DAVID - a hexagram that can stop being one, six ways.
 
-   Whole, it turns slowly on a flat arc. Split, it stops existing and two
-   triangles carry on in its place: the upward one climbs away, the downward
-   one dives, and each is its own finished spec out of `parts` so applyHit
+   Whole, it turns slowly on a flat arc. Split, it stops existing and six
+   shards carry on in its place, one for each point and each on that point's
+   own bearing, and each is its own finished spec out of `parts` so applyHit
    never has to know a star came apart.
 
-   The seam it splits along is the one it was drawn on, which is the whole
-   reason the move is this shape. Six points is two triangles whichever way
-   you look at it; this just stops pretending otherwise on demand.
+   The seams it splits along are the ones it was drawn on, which is the whole
+   reason the move is this shape. A hexagram is a hexagon with six triangles
+   on it whichever way you look at it; this just stops pretending otherwise
+   on demand -- and the hexagon is the one piece that does not fly. It leaves
+   as the sparks.
    ===================================================================== */
 
 const STAR_BLUE = '#0038b8';    // the flag's blue, not a guess at it
@@ -15235,65 +15920,145 @@ const STAR_FIELD = '#eaf1ff';
    reads against both, and against the flag blue it is drawn on top of. */
 const STAR_SPARK = '#3fa9e8';
 
-/* THE STAR OF DAVID, drawn the way the flag draws it: two triangle OUTLINES
-   crossing, hollow points, hollow middle. The version before this was two
-   solid triangles stacked, which at this size is a pale rhombus with a
-   stripe across it and never once read as a star.
+/* THE STAR OF DAVID, and this is the third attempt. The first was two solid
+   triangles stacked, which at this size is a pale rhombus with a stripe
+   across it. The second was two triangle OUTLINES crossing, hollow points
+   and all, with edges of slope one half, because the honest 0.577
+   rasterizes to a run of two, a run of two, then a run of ONE and the eye
+   reads that stutter as a dent. That second one shipped. Rendered and
+   looked at, it is a box with a spike above and below: slope one half is
+   steep enough to buy a nine-column box, and what it buys it with is the
+   four SIDE points, which end in flat vertical walls and do not exist.
 
-   Hand-placed rather than walked out of a line routine, because at eleven
-   pixels the rounding IS the art -- every radius that gave a clean one-pixel
-   top point gave a two-pixel smear on the left one. Both triangles have
-   edges of slope one half, a hair steeper than an equilateral's, because
-   that is the only nearby slope whose stair is even: the honest angle
-   rasterizes to a run of two, a run of two, then a run of ONE, and the eye
-   reads that stutter as a dent in the star.
+   So the constraint was real and the trade was taken the wrong way round.
+   Three numbers now, and nothing else in here is a decision.
 
-   '#' is the upward triangle, '=' the downward one, 'X' where the two cross,
-   '+' the white inside a point, 'o' the white in the middle, '.' nothing.
-   The whole is 9x11 inside an 11x11 hitbox and each half is 9x9 inside a
-   9x9 one, so neither ever claims reach it does not have. */
+   NINE WIDE BY ELEVEN TALL, and the note that asked for thirteen had the
+   proportion upside down. A point-up hexagram is TALLER than it is wide:
+   height is 2R, width is R root three, so the ratio is 0.866 and eleven
+   tall wants 9.53 across. The 1.155 the other way belongs to the inner
+   HEXAGON, which is where the confusion lives. Nine is half a pixel narrow.
+   Thirteen would have been fifteen per cent wide and would have dragged
+   box()'s radius from five to six, which is a hitbox change dressed up as
+   an art change.
+
+   EVERY EDGE RUNS ONE COLUMN PER ROW. Not one per two -- that is the wall
+   above -- and not the honest 0.577, whose stair stutters. Slope one is the
+   only nearby slope whose stair is even, and it gets away with lying about
+   the angle because every edge in this figure is one to three rows long.
+   The bounding box carries the proportion; the edges only have to not
+   stutter.
+
+   THE WAIST IS BITTEN IN TWO COLUMNS, NOT ONE. Rasterize the honest star
+   and the side point protrudes 1.59 pixels over a run of 2.75. That rounds
+   to one column with a three-row flat either side of it, which is a wall
+   with a nick in it, which is what shipped. Two columns on one row is a
+   BITE, and a bite is the only thing at eleven pixels that reads as a
+   point.
+
+   WHAT THAT COSTS, SAID OUT LOUD: the pale middle is not a regular hexagon
+   any more, and it cannot be. The honest inner hexagon is 6.35 across at
+   the waist and the waist after a two-column bite is five, so the hexagon
+   and the bite do not both fit inside nine columns. The bite is the fault
+   somebody actually reported; the hexagon is a fault nobody has ever
+   noticed at this size. The middle now pinches where the star pinches,
+   which at least agrees with itself.
+
+   '#' is the upward triangle, '=' the downward one, 'X' where the two
+   cross -- and the six X cells turned out to be exactly the six corners of
+   the middle, which fell out of drawing it honestly rather than being
+   arranged. 'o' is the middle, '.' nothing. The whole is nine by eleven
+   inside an eleven-square hitbox, and every piece fits three pixels either
+   way inside a six-square one, so neither ever claims reach it does not
+   have. */
 const STAR_ART = {
   whole: [
     '.....#.....',
-    '....#+#....',
-    '.===X=X===.',
-    '.=+#ooo#+=.',
-    '..=#ooo#=..',
-    '..XoooooX..',
-    '..#=ooo=#..',
-    '.#+=ooo=+#.',
-    '.###X#X###.',
-    '....=+=....',
+    '....###....',
+    '...#####...',
+    '.==XoooX==.',
+    '..=ooooo=..',
+    '...XoooX...',
+    '..#ooooo#..',
+    '.##XoooX##.',
+    '...=====...',
+    '....===....',
     '.....=.....',
   ],
-  /* Each half is its own triangle at the size it had inside the whole --
-     same slope, same nine pixels across -- so a split reads as the star
-     coming apart rather than as two new things appearing. */
-  up: [
-    '...........',
-    '.....#.....',
-    '....#+#....',
-    '....#+#....',
-    '...#+++#...',
-    '...#+++#...',
-    '..#+++++#..',
-    '..#+++++#..',
-    '.#+++++++#.',
-    '.#########.',
-    '...........',
+  /* HOW MANY OF THESE CAN BE ON SCREEN, because `maxAlive` does not answer
+     it and somebody will assume it does. `maxAlive: 2` gates the CAST and
+     shards are exempt from it -- a shard's spec is `parts.p0`, not the move,
+     so the identity test in canSpecial does not count them. Brute-forced over
+     every one of the 1024 press patterns over seventy frames, on this file
+     and on 2.82: the peak is TWELVE live Star objects, against FOUR before
+     this release. Two wholes split into twelve while two fresh wholes are
+     thrown over the top of them. A piece is seventeen cells, so twelve of
+     them is a couple of hundred rectangles against the prism burst's 485 on
+     its own worst frame -- nothing is broken by it. But any argument that
+     starts "there can only be six of them" is starting from the wrong
+     number, and two write-ups did.
+
+     THE SIX PIECES. A hexagram is a hexagon with six triangles on it, so
+     coming apart into six is the shape coming apart along its own seams --
+     and the hexagon is not one of the six, so it leaves as the sparks split()
+     already throws. Numbered clockwise from twelve, the same numbering
+     STAR_POINTS has always used, so the piece that flies at two o'clock is
+     the one the star lit at two o'clock.
+
+     Each is drawn at its own size rather than cropped out of the whole,
+     exactly as the two halves were, because a crop at eleven pixels is three
+     cells of mush. A rhombus is the same shape upside down, so six rhombi
+     rasterize to three silhouettes -- measured, 1/4 and 2/5 came back
+     byte-identical. What makes six of them distinct is the pale pip sitting
+     one cell off centre TOWARD the apex: the flag's white is in the nose of
+     each piece, so the direction reads even when the outline repeats.
+
+     ALL SIX ARE SIXTEEN CELLS AND ONE PIP, and that is the number this block
+     exists to hold. They shipped at two sizes: the four diagonals were
+     sixteen and p0 and p3 were TWENTY-TWO, thirty-five per cent more ink.
+     A rotation moves a bounding box -- five wide by seven tall against seven
+     by five is right and expected -- but it does not change how much of the
+     thing there is, and this did. Rendered, the cost was not subtle: the two
+     that fly straight up and straight down came out as fat octagonal blobs
+     while the four diagonals were two-pixel streaks, so a fan that is
+     supposed to be one object at six angles read as two objects at six
+     angles. Equal ink is the property to hold here, not equal bounding box,
+     and it is the one to re-check if these grids are ever retyped.
+
+     The vertical pair pay for it in width: three columns instead of five.
+     That is the same trade the diagonals already made -- a streak is thin
+     across and long along -- and the hitbox does not move, because the box
+     is square, a piece's radius is three, and both of them still reach three
+     rows from the middle. */
+  p0: [
+    '...........', '...........', '.....#.....', '....###....',
+    '....#+#....', '....###....', '....###....', '....###....',
+    '.....#.....', '...........', '...........',
   ],
-  down: [
-    '...........',
-    '.=========.',
-    '.=+++++++=.',
-    '..=+++++=..',
-    '..=+++++=..',
-    '...=+++=...',
-    '...=+++=...',
-    '....=+=....',
-    '....=+=....',
-    '.....=.....',
-    '...........',
+  p1: [
+    '...........', '...........', '...........', '.......==..',
+    '.....==+=..', '...=====...', '..====.....', '..==.......',
+    '...........', '...........', '...........',
+  ],
+  p2: [
+    '...........', '...........', '...........', '..##.......',
+    '..####.....', '...#####...', '.....##+#..', '.......##..',
+    '...........', '...........', '...........',
+  ],
+  p3: [
+    '...........', '...........', '.....=.....', '....===....',
+    '....===....', '....===....', '....=+=....', '....===....',
+    '.....=.....', '...........', '...........',
+  ],
+  p4: [
+    '...........', '...........', '...........', '.......##..',
+    '.....####..', '...#####...', '..##+#.....', '..##.......',
+    '...........', '...........', '...........',
+  ],
+  p5: [
+    '...........', '...........', '...........', '..==.......',
+    '..=+==.....', '...=====...', '.....====..', '.......==..',
+    '...........', '...........', '...........',
   ],
 };
 
@@ -15302,45 +16067,66 @@ const STAR_ART = {
    a point costs one more scan and no more thinking about where points are. */
 const STAR_POINTS = {
   whole: [
-    '.....0.....',
-    '....0.0....',
-    '.55.....11.',
-    '.5.......1.',
-    '...........',
-    '...........',
-    '...........',
-    '.4.......2.',
-    '.44.....22.',
-    '....3.3....',
-    '.....3.....',
+    '.....0.....', '....0.0....', '...........', '.55.....11.',
+    '..5.....1..', '...........', '..4.....2..', '.44.....22.',
+    '...........', '....3.3....', '.....3.....',
   ],
-  up: [
-    '...........',
-    '.....0.....',
-    '....0.0....',
-    '...........',
-    '...........',
-    '...........',
-    '...........',
-    '...........',
-    '.2.......1.',
-    '.22.....11.',
-    '...........',
+  /* A piece numbers three BANDS rather than three tips, running from its
+     tail to its nose, so the glint travels down the shard instead of round
+     it -- which is the right thing to say about a splinter thrown off a
+     wheel. Three bands is still three, so `n` in drawStarArt is still three,
+     and a piece still comes round twice for every once the star does.
+
+     Which end is the nose is not a free choice: band 2 has to sit on the
+     apex side of centre along STAR_FAN[i], or the glint runs backwards up
+     the thing it is being thrown by. p0 and p3 are the same silhouette
+     upside down and their bands are numbered opposite ways round for
+     exactly that reason. */
+  p0: [
+    '...........', '...........', '.....2.....', '....2.2....',
+    '...........', '....111....', '...........', '....000....',
+    '...........', '...........', '...........',
   ],
-  down: [
-    '...........',
-    '.22.....00.',
-    '.2.......0.',
-    '...........',
-    '...........',
-    '...........',
-    '...........',
-    '...........',
-    '....1.1....',
-    '.....1.....',
-    '...........',
+  p1: [
+    '...........', '...........', '...........', '.......22..',
+    '......2....', '...11......', '..00.......', '..0........',
+    '...........', '...........', '...........',
+  ],
+  p2: [
+    '...........', '...........', '...........', '..00.......',
+    '..0........', '...11......', '......2....', '.......22..',
+    '...........', '...........', '...........',
+  ],
+  p3: [
+    '...........', '...........', '.....0.....', '....0.0....',
+    '...........', '....111....', '...........', '....222....',
+    '...........', '...........', '...........',
+  ],
+  p4: [
+    '...........', '...........', '...........', '.......00..',
+    '......0....', '...11......', '..22.......', '..2........',
+    '...........', '...........', '...........',
+  ],
+  p5: [
+    '...........', '...........', '...........', '..22.......',
+    '..2........', '...11......', '......0....', '.......00..',
+    '...........', '...........', '...........',
   ],
 };
+
+/* The six bearings of a hexagram, clockwise from twelve, as unit vectors --
+   a constant of the figure, not a tuning knob, which is why it is here beside
+   the grids and not in the ROSTER. Written as literals rather than built from
+   trig because build.py bans two thirds of the trig you would need and
+   because a generated table came back with 1e-16 where a zero belongs. */
+const STAR_FAN = [
+  [0, -1],
+  [0.8660254037844386, -0.5],
+  [0.8660254037844386, 0.5],
+  [0, 1],
+  [-0.8660254037844386, 0.5],
+  [-0.8660254037844386, -0.5],
+];
 
 /* One pass over a grid, emitting a rect per RUN of matching cells rather
    than per cell. A whole star is ninety-odd lit pixels and there can be four
@@ -15369,10 +16155,12 @@ function drawStarArt(g, x, y, piece, spin) {
      survive eleven pixels; this is the whole reason the sprite is drawn
      point-up and left there.
 
-     A triangle only lands on itself every 120 degrees, so a half advances
-     twice as far per step and visibly spins faster than the star it came
-     out of -- which is the right thing to say about a lighter piece that
-     was just flung off one. */
+     A piece is a rhombus, not a triangle, and it does not land on itself at
+     any turn worth drawing -- so its three numbers are bands down its length
+     rather than tips around its edge, and the glint runs to the nose. Three
+     against six still means a piece comes all the way round in fifteen
+     frames where the star takes thirty, which is the right thing to say
+     about a lighter thing that was just flung off one. */
   const step = Math.floor(spin / 5);
   const ox = x - 5, oy = y - 5;
   starBand(g, grid, '+o', STAR_FIELD, ox, oy);
@@ -15401,24 +16189,33 @@ class Star {
     this.life--;
     this.x += this.vx;
     this.y += this.vy;
-    // A whole star sags; a half climbs or dives on its own account.
-    this.vy += this.piece === 'whole' ? this.base.drop : this.spec.climb * 0.06;
+    // Star or splinter, the same sag: a piece got its whole account of where
+    // it is going on the frame it came off, and nothing steers it after.
+    this.vy += this.base.drop;
     if (this.life <= 0) this.dead = true;
     if (this.x < -16 || this.x > VW + 16 || this.y < -20 || this.y > VH + 24) {
       this.dead = true;
     }
   }
 
-  /* Comes apart where it is. Returns whether it did, so the press that split
-     something can be told from one that found nothing to split. */
+  /* Comes apart where it is, into the six points it is made of, because a
+     hexagram is a hexagon with six triangles on it and the hexagon is not one
+     of the six. The hexagon leaves as the sparks below.
+
+     `off` is two, and it is the whole reason this reads as a shape coming
+     apart rather than six new things appearing: on the frame of the press the
+     pieces sit exactly where their points were, and then they open. Returns
+     whether it did, so the press that split something can be told from one
+     that found nothing to split. */
   split() {
     if (this.dead || this.piece !== 'whole') return false;
-    const p = this.base.parts;
+    const off = this.base.off, sp = this.base.spread;
     this.dead = true;
-    for (const half of ['up', 'down']) {
-      const st = new Star(this.owner, this.base, half, this.x, this.y,
-                          this.vx, p[half].climb);
-      projectiles.push(st);
+    for (let i = 0; i < 6; i++) {
+      const f = STAR_FAN[i];
+      projectiles.push(new Star(this.owner, this.base, 'p' + i,
+                                this.x + f[0] * off, this.y + f[1] * off,
+                                this.vx + f[0] * sp, this.vy + f[1] * sp));
     }
     for (let i = 0; i < 7; i++) {
       addEffect('spark', this.x + rand(-5, 5), this.y + rand(-5, 5), '#8fd6ff');
@@ -15436,12 +16233,13 @@ class Star {
      a star reached somebody. It therefore has to do what the default branch
      would have done as well, or the star sails on through them.
 
-     Why a second source at all: the bakery is where the meter comes from in
-     bulk, and the bakery is one button that costs him eighty frames of
-     standing still. A dragon hostage to that is a dragon that flies at its
-     floor speed all match, which is exactly what 1376 measured ults did. A
-     half pays the smaller `dream` its own spec carries, for the same reason
-     it hits for less: splitting buys coverage, not value. */
+     Why a second source at all: the other one is a banana, and a banana is a
+     thing he has to go and catch. Both of them pay for CONNECTING with
+     something, which is the whole difference from the daydream this replaced
+     -- that paid him for standing still, and standing still is what he was
+     told it was boring for. A piece pays the smaller `dream` its own spec
+     carries, for the same reason it hits for less: splitting buys coverage,
+     not value. */
   burst() {
     this.dead = true;
     const d = this.spec.dream || 0;
@@ -15451,14 +16249,14 @@ class Star {
   }
 
   box() {
-    const r = this.piece === 'whole' ? 5 : 4;
+    const r = this.piece === 'whole' ? 5 : 3;
     return { x: this.x - r, y: this.y - r, w: r * 2, h: r * 2 };
   }
 
   /* Drawn rather than blitted: nobody drew a Star of David, so it is grids
      of characters up in STAR_ART, which is where the shape and the argument
-     for it both live. A half draws only its own triangle, which is the
-     entire point of the move being visible. */
+     for it both live. A piece draws only itself, at its own size, which is
+     the entire point of the move being visible. */
   draw(g) {
     drawStarArt(g, Math.round(this.x), Math.round(this.y),
                 this.piece, this.spin);
@@ -15466,108 +16264,277 @@ class Star {
 }
 
 /* =====================================================================
-   LOAF - bread, on the floor, belonging to nobody.
+   BANANA - a thing on the floor, belonging to whoever picked it up last.
 
-   Left behind by the daydream. It sits where it landed and the FIRST person
-   to walk over it eats it and is healed, which very much includes the person
-   he is fighting. It is not a projectile in any sense that matters -- it
-   never damages anybody -- so it stays out of resolveCombat entirely and
-   does its own looking.
+   Thrown straight up out of the slot the daydream used to sit in. It is
+   three different things at three moments and it never stops being the same
+   object: in the AIR it is a shot, four damage and twenty-four frames of
+   stun; on the FLOOR it is furniture; in a HAND it is luggage. `live()` is
+   the one line that says which, and resolveCombat and a catching mouth both
+   read it.
+
+   IT CHANGES HANDS, and that is the single rule in this file the move bends
+   on purpose. Nothing else in this engine has ever done it -- twenty-six
+   `owner` assignments, twenty-three of them inside a constructor and three
+   of them a shard inheriting its parent's. This one has to: resolveCombat
+   skips `f === shot.owner`, so an item nobody can re-own could never be
+   thrown back at the man who made it, which is the entire point of leaving
+   it on the floor. It is rollback-safe by construction and not by luck --
+   snapObject copies `owner`, snapValue keeps a Fighter by pointer, and
+   restoreSim puts fighters back IN PLACE -- so the pointer a snapshot holds
+   is still the right man after a rewind.
+
+   IT DOES NOT SLIDE, and that is deliberate rather than unfinished. There is
+   no friction model on it at all: a banana lying in a puddle of Houston's
+   milk sits exactly where one lying on dry stone does. `slickGrip` and
+   `slickFriction` are a rule about FEET, the whole of the milk's anti-camping
+   margin is measured against them, and a second thing on the floor that
+   answered to them would be a change to his move made inside somebody
+   else's.
    ===================================================================== */
 
-class Loaf {
-  constructor(owner, spec, x, y) {
+/* Two poses, and they are the same banana seen in two situations rather than
+   two drawings of two things. Measured off the recording canvas: the
+   airborne one inks thirteen pixels across four columns and eight rows
+   inside a five-wide grid -- the fifth column is the margin the crescent
+   leans away from -- and the one on the floor inks eleven across six by
+   three. `#` is the skin and `s` the stem, and two colours is the same
+   register the bread's three were in.
+
+   Grids rather than a run of hand-placed fillRects, because these are the
+   only two drawings this move will ever have and a drawing should be legible
+   as one. Nothing here is blitted: no sprite of a banana exists. */
+const BANANA_ART = [
+  '..s..',
+  '.##..',
+  '##...',
+  '#....',
+  '#....',
+  '##...',
+  '.##..',
+  '..##.',
+];
+const BANANA_FLAT = [
+  '.####.',
+  '######',
+  '....s.',
+];
+const BANANA_SKIN = '#f2d24a';
+const BANANA_STEM = '#8a6a1e';
+
+class Banana {
+  constructor(owner, spec, x, y, vx, vy) {
+    // Who threw it LAST, which is not always who threw it first. Reassigned
+    // in catchBanana; see the note above on why that is allowed here.
     this.owner = owner;
     this.spec = spec;
-    /* How long it is his alone. Copied onto the loaf rather than read off
-       `spec` where it is used, because that is the shape every other
-       projectile field in here has and because restoreSim deletes any key a
-       snapshot does not carry -- a field that only exists once somebody has
-       eaten one would vanish on the first rollback. */
-    this.mine = spec.mine || 0;
-    this.x = clamp(x, 8, VW - 8);
-    this.y = y;
-    this.vy = -1.4;
-    this.grounded = false;
+    this.x = x; this.y = y;
+    this.vx = vx; this.vy = vy;
     this.life = spec.life;
     this.t = 0;
+    /* A SLOT INDEX, NEVER A FIGHTER, and the grab fields in the Fighter
+       constructor say why: snapValue keeps a Fighter by pointer inside a
+       snapshot, and a stale pointer survives a rewind while a stale index is
+       merely inert. `fighters[this.heldBy]` is resolved fresh every frame and
+       never cached, so restoreSim putting the fighters back in place cannot
+       leave this one pointing at the wrong man. -1 is nobody. */
+    this.heldBy = -1;
+    this.grounded = false;
+    /* Both copied off the spec rather than read through it where they are
+       used, which is the shape every other projectile field in here has:
+       restoreSim deletes any key a snapshot does not carry, so a field that
+       only came into being once somebody had thrown one would vanish on the
+       first rollback. */
+    this.mine = spec.mine || 0;
+    this.numb = spec.numb || 0;
     this.dead = false;
   }
 
   update() {
     this.t++;
+    if (this.numb > 0) this.numb--;
+    /* Read BEFORE anything moves: was it his, and in the air, at the top of
+       this frame. The puff below is fired on the frame that stops being
+       true, whichever way it stops. */
+    const fresh = this.heldBy < 0 && !this.grounded && this.t <= this.mine;
+
+    /* IN A HAND. A carried banana does no physics and is no contact -- it is
+       parked on the carrier's shoulder HERE, before anything draws, which is
+       why not one line of drawFighter knows this move exists. It composites
+       for free on all eleven characters and on a chicken, with none of the
+       hand-written special-casing the sword needs.
+
+       A carrier who is gone, KO'd or turned into a bird drops it on the spot.
+       That is the same rule the three explicit drops elsewhere keep -- see
+       applyHit, koed and becomeChicken -- and it is here as well because a
+       fighter can stop being a carrier between two of those calls. */
+    if (this.heldBy >= 0) {
+      const carrier = fighters[this.heldBy];
+      if (!carrier || carrier.eliminated || carrier.state === 'ko' ||
+          carrier.chicken) {
+        this.loose(0, -1.4);
+      } else {
+        this.x = carrier.x + carrier.facing * 5;
+        this.y = carrier.y - 15;
+        this.vx = 0; this.vy = 0;
+        return;
+      }
+    }
+
+    /* A BANANA IN A HAND DOES NOT AGE, and that is why this line is down here
+       rather than at the top of the frame with `t`. It used to run above the
+       carried branch and the three death tests below it still ran below the
+       carried `return` -- so a banana that was picked up aged for as long as
+       it was held, could not die while it was held, and then died on the
+       FIRST FRAME IT WAS THROWN, at the pixel it left from, having travelled
+       nothing. Measured before the fix: caught at `life` 867, carried 1400
+       frames to `life` -533 with `dead` still false, thrown, gone one frame
+       later with the eight frames of landLag spent on nothing.
+
+       `t` is deliberately still counted above: `t` is the clock on whose
+       banana it is, and that one does keep running in a hand. `life` is the
+       clock on a banana lying in the world waiting for somebody to want it,
+       and the world is the only place it runs. */
     this.life--;
+
     if (!this.grounded) {
       const prevY = this.y;
-      this.vy += PHYS.gravity * 0.5;
+      this.vy += this.spec.drop;
+      if (this.vy > 5.0) this.vy = 5.0;
       this.y += this.vy;
+      this.x += this.vx;
       if (this.vy > 0) {
         for (const p of platformsNow()) {
           if (this.x < p.x || this.x > p.x + p.w) continue;
           if (prevY <= p.y && this.y >= p.y) {
-            this.y = p.y; this.vy = 0; this.grounded = true;
-            addEffect('dust', this.x, p.y, '#e8d6a8');
+            this.y = p.y; this.vy = 0; this.vx = 0; this.grounded = true;
+            addEffect('dust', this.x, p.y, BANANA_SKIN);
             break;
           }
         }
       }
-    }
-    /* Whoever gets there first, and that is still the joke: he stood in the
-       middle of a fight thinking about bread, so now there is bread in the
-       middle of the fight and it is not his until he has eaten it.
-
-       For the first `mine` frames it is his, though, and that is not a
-       softening of the joke so much as the thing that makes it survivable.
-       Measured over 480 matches with the bread landing behind him and no
-       window at all: 937 loaves baked, and the man he was fighting ate 445
-       of them to his 315. He is rooted for the eighty frames he is baking
-       and cannot reach any of it, so without a window the daydream is a
-       vending machine somebody else is standing in front of. Fresh bread is
-       the baker's; stale bread is anybody's. */
-    for (const f of fighters) {
-      if (f.eliminated || f.state === 'ko') continue;
-      /* AND NOBODY EATS BREAD THEY CANNOT USE. A loaf was consumed by
-         whoever walked over it whether or not it healed them, so a full bar
-         ate the thing and threw all thirteen away. That is not a corner
-         case: 31.7% of live casts are made at 88 health or better, and
-         across the same sample 33 loaves healed nobody at all while another
-         325 health went into the cap. Walking over bread at full health now
-         leaves it on the floor for later, which is the only reading of "it
-         is not your bread until you have eaten it" that survives being at a
-         hundred. */
-      if (f.health >= COMBAT.maxHealth) continue;
-      if (f !== this.owner && this.t < this.mine) continue;
-      if (Math.abs(f.x - this.x) > 9) continue;
-      if (Math.abs(f.y - this.y) > 14) continue;
-      f.health = Math.min(COMBAT.maxHealth, f.health + this.spec.heal);
-      addEffect('ring', this.x, this.y - 6, '#ffe4b0');
-      for (let i = 0; i < 5; i++) {
-        addEffect('spark', this.x + rand(-6, 6), this.y - rand(2, 12), '#ffe4b0');
+      /* AND THE FREE CATCH, which is the whole of "he throws it up to
+         himself" and the only thing about this move that is easier for the
+         man who threw it. No button: still in the air, still inside `mine`,
+         an owner in a state to take it gets it back for nothing. Everybody
+         else has to press grab and stand in the right place. */
+      if (!this.grounded && this.heldBy < 0 && this.numb === 0 &&
+          this.t < this.mine && this.owner.canCatch() &&
+          overlap(this.box(), this.owner.hurtbox())) {
+        this.owner.catchBanana(this, true);
+        return;
       }
-      cue('drink', { slot: f.slot, x: this.x });
-      this.dead = true;
-      return;
     }
+
+    /* THE ALARM, and it is the single best idea in the design this one beat.
+       The shipped LOAF silently stopped being its baker's with nothing on
+       screen to say so, and its own comment admitted it. One puff on the
+       frame this one stops being his -- the frame it lands, or the frame
+       `mine` runs out in the air, whichever comes first -- and both players'
+       heads turn on the same frame. The bob in draw() stops on it too. */
+    if (fresh && (this.grounded || this.t > this.mine)) {
+      addEffect('puff', this.x, this.y - 2, BANANA_SKIN);
+    }
+
     if (this.life <= 0) this.dead = true;
-    if (this.y > VH + 30) this.dead = true;
+    if (this.x < -24 || this.x > VW + 24) this.dead = true;
+    if (this.y > VH + 24) this.dead = true;
   }
 
-  /* Never dangerous, so resolveCombat is told to skip it outright rather
-     than handed a box it would have to ignore. */
-  live() { return false; }
-  box() { return { x: this.x - 4, y: this.y - 6, w: 8, h: 6 }; }
+  /* Out of a hand and back into the world, in one place rather than four.
+     A prototype method is not an own key, so restoreSim's deletion pass
+     cannot touch it and it costs the snapshot nothing.
+
+     `t` is pushed past `mine` because a banana that has left somebody's hand
+     is nobody's: the free-catch window is a thing you get once, on your own
+     throw, and not a thing being hit hands back to you. `numb` is what stops
+     it hitting on the way out of the hands it just left. */
+  loose(vx, vy) {
+    this.heldBy = -1;
+    this.grounded = false;
+    this.vx = vx;
+    this.vy = vy;
+    this.numb = this.spec.numb || 0;
+    this.t = Math.max(this.t, this.mine);
+  }
+
+  /* A hitbox only while it is in the air, nobody is holding it, and it has
+     not already been used. On the floor it is furniture, in a hand it is
+     luggage and after it has hit somebody it is rubbish, and this one line
+     is what keeps all three out of resolveCombat and out of a catching mouth
+     -- the same clause that already kept a loaf of bread out of one.
+
+     `numb` IS IN HERE AND IT IS NOT DECORATION. Without it, measured: one
+     forward throw into a man standing still hit him on EIGHT CONSECUTIVE
+     FRAMES for 32 damage and 48 dream, because a banana that survives its
+     own hit is a banana still overlapping the man it just hit. `damage` is
+     four because the stun is the payload; four eight times is a different
+     move. */
+  live() { return this.heldBy < 0 && !this.grounded && this.numb === 0; }
+
+  box() { return { x: this.x - 3.5, y: this.y - 4.5, w: 7, h: 9 }; }
+
+  /* THE RESERVED NAME, AND THIS IS THE ONE CLASS IN THE FILE THAT ACTIVELY
+     WANTS IT. resolveCombat calls burst() on a shot that has just landed IN
+     PLACE OF killing it, which is exactly what an item needs: the banana must
+     not die on the hit.
+
+     It bounces off their head and lands at their feet, cold and free, CLOSER
+     TO THEM THAN TO YOU -- and that is where the whole mind game lives.
+     Throwing it at somebody hands them the thing, in exchange for twenty-four
+     frames in which you both know it, and then you have to go and get it.
+
+     0.35 AND NOT -0.35, and the sign is the whole sentence above. Measured
+     off one forward throw, as the distance from the resting banana to each of
+     the two men: damped forward it comes to rest 10.1 pixels from the man it
+     hit and 79.8 from the man who threw it. REVERSED it reads 38.2 and 31.4 --
+     it comes back, and a throw that hits is then a hit, a stun and an item
+     kept, which is not an exchange at all. The magnitude is what makes it
+     land near him rather than on him: 0.15 stops 3.7 away, which is under his
+     feet and unreachable while he is standing there, and 0.55 overshoots to
+     23.9. */
+  burst() {
+    /* MINUS ONE, NOT `spec.numb`, AND THE SIGN IS THE RULE: a banana that has
+       hit somebody is SPENT. `numb` counts down only while it is positive, so
+       -1 never reaches zero and live() never says yes again -- it falls the
+       rest of the way as an object rather than as a shot, lands, and waits.
+       One throw is one hit, which is the whole of what the stun is for.
+
+       Six frames instead would only have spaced the eight hits out into four,
+       because the bounce carries it back up through the same chest: measured,
+       it re-entered the hurtbox on frames 17, 30 and 34 of a 24-frame stun.
+       Rearming is loose()'s job and it happens when somebody throws it again,
+       which is a decision somebody made. */
+    this.numb = -1;
+    this.vx *= 0.35;
+    this.vy = -1.8;
+    this.t = Math.max(this.t, this.mine);
+    const d = this.spec.stunDream || 0;
+    if (d) this.owner.dream = Math.min(100, this.owner.dream + d);
+  }
 
   draw(g) {
     const x = Math.round(this.x), y = Math.round(this.y);
-    // Still warm: it lifts a pixel every so often for the first second.
-    const warm = this.life > this.spec.life - 60 && (Math.floor(this.t / 8) % 2) ? 1 : 0;
-    g.fillStyle = '#c08a46';
-    g.fillRect(x - 4, y - 5 - warm, 9, 5);
-    g.fillStyle = '#e0b878';
-    g.fillRect(x - 4, y - 6 - warm, 9, 1);
-    g.fillStyle = '#8a5f36';
-    g.fillRect(x - 2, y - 5 - warm, 1, 2);
-    g.fillRect(x + 1, y - 5 - warm, 1, 2);
+    const flat = this.grounded;
+    const art = flat ? BANANA_FLAT : BANANA_ART;
+    /* STILL HIS: it lifts a pixel every eighth frame while it is in the air
+       and inside `mine`, and stops dead the moment it is not. Off the
+       banana's own age rather than off battleFrames, so two of them in the
+       air never fall into step by accident and neither one aliases with the
+       frame counter. This is the bread's `warm` bob, kept and given a job. */
+    const warm = this.heldBy < 0 && !this.grounded && this.t < this.mine &&
+                 (Math.floor(this.t / 8) % 2) ? 1 : 0;
+    const x0 = x - (flat ? 3 : 2);
+    const y0 = (flat ? y - 3 : y - 4) - warm;
+    for (let r = 0; r < art.length; r++) {
+      const row = art[r];
+      for (let c = 0; c < row.length; c++) {
+        const ch = row[c];
+        if (ch === '.') continue;
+        g.fillStyle = ch === 's' ? BANANA_STEM : BANANA_SKIN;
+        g.fillRect(x0 + c, y0 + r, 1, 1);
+      }
+    }
   }
 }
 
@@ -18228,9 +19195,16 @@ class Bottle {
 
 /* Broken glass on the floor.
 
-   Deliberately built on the same three fields the smoke and the fart use --
-   `pierce`, `hitAt` and `hitEvery` -- so resolveCombat needs no new code and
-   standing in it keeps costing rather than costing once. The box is thin and
+   Built on nothing the smoke and the fart use. It had `pierce`, `hitAt` and
+   `hitEvery` once; 2.65 took the first and the third and left the second
+   allocated and decremented and read by nobody for two releases, and it is
+   gone now too. What is here instead is a `hits` budget the pane spends and
+   a `rearm` it sits out, and the engine needs no new branch for either: the
+   method is called `shatter` because resolveCombat already calls `shatter`
+   on anything that has one, and `live` because that is this file's own word
+   for "on screen, but not a hitbox this frame" -- Simon's soul says it the
+   same way. A pane that has bitten once answers false to it for thirty
+   frames, which is what stops one walk-through from spending both bites. The box is thin and
    sits ON the platform, which is what makes it something you STEP in: a
    fighter's hurtbox reaches from their feet to 14 above, so anyone on the
    ground in it overlaps and anyone jumping over it does not. */
@@ -18245,10 +19219,22 @@ class Glass {
     this.h = gs.h;
     this.life = gs.life;
     this.born = gs.life;
-    /* NOT pierce any more. A piercing shot survives contact and re-arms on
-       `hitEvery`; this one is meant to break on the first person to walk
-       through it, which is what resolveCombat does to an ordinary shot. */
-    this.hitAt = new Array(MAX_PLAYERS).fill(0);
+    /* THE BUDGET AND THE GAP, and they are two fields rather than one
+       because they answer two different questions: `hits` is how many steps
+       are left in it, `rearm` is how long it has to sit out before the next
+       one is allowed to count. Both are on the PANE and not on the victim --
+       whoever finds it next spends the bite. A fresh pane is armed, so
+       `rearm` starts at nought. See live(), shatter(), and the three states
+       draw() puts on screen for them. */
+    /* `== null` and not `||`, on both this and `rearm` below, because zero is
+       a tuning value somebody will reach for and `||` silently swaps it for
+       the default. `rearm` is the named lever for walking this buff back, and
+       the whole argument for thirty rests on what nought would do -- so a
+       probe that writes `rearm: 0`, measures no change and concludes the gap
+       does nothing is a trap this constructor used to set. It caught a
+       verifier writing a negative control. */
+    this.hits = gs.hits == null ? 1 : gs.hits;
+    this.rearm = 0;
     this.dead = false;
     // A deterministic scatter: the shards have to be in the same place on
     // every machine, so this is derived from where it broke rather than from
@@ -18257,11 +19243,64 @@ class Glass {
   }
 
   update() {
-    for (let i = 0; i < this.hitAt.length; i++) {
-      if (this.hitAt[i] > 0) this.hitAt[i]--;
-    }
+    if (this.rearm > 0) this.rearm--;
     this.life--;
     if (this.life <= 0) this.dead = true;
+  }
+
+  live() { return this.rearm <= 0; }
+
+  shatter() {
+    if (this.dead) return;
+    this.hits--;
+    if (this.hits > 0) {
+      this.rearm = this.spec.rearm == null ? 30 : this.spec.rearm;
+      glassCrack(this.x, this.y, this.w, this.owner.slot);
+      return;
+    }
+    this.dead = true;
+    glassBreak(this.x, this.y, this.w, this.owner.slot);
+  }
+
+  /* Eaten, or shredded. resolveCombat's catching loop calls this and then
+     kills the pane outright whatever it had left, which is right -- being
+     eaten is not stepping in it -- so the whole break plays rather than a
+     crack, and the one thing that must not happen is what happened before
+     this method existed: the pane simply gone, with nothing drawn.
+
+     THE TWO CALLERS DISAGREE ABOUT `live()` AND THAT IS NOT THIS CLASS'S
+     DOING. The absorbing loop skips a victim that answers `shot.live() ===
+     false`, so a settling pane cannot be eaten by an open mouth -- measured,
+     and a shipped test. The shredder loop below it asks only whether the
+     ATTACKER is live and never asks the victim, so a mower shreds a settling
+     pane on a frame when a mouth correctly refuses the same one. That is
+     older than the two-bite budget and true of every `live()`-bearing shot in
+     the game, not just this one, so it is recorded here rather than fixed
+     here: a pane that is not a hitbox this frame is still an object in the
+     world, and "can a lawnmower destroy an object" is a different question
+     from "can a mouth swallow a hitbox". If that ever stops being the answer,
+     the change is one clause in the shredder loop and it affects far more
+     than glass. */
+  struck() {
+    if (this.dead) return;
+    this.hits = 0;
+    this.dead = true;
+    /* IT OWNS ITS OWN `dead`, the way shatter() above does. Both callers in
+       resolveCombat assign `shot.dead = true` on the very next line, so this
+       is belt as well as braces today -- but the rule this file states about
+       burst-and-shatter is that each shot decides its own death, and a method
+       that plays a whole break and then reports itself alive is a trap laid
+       for the next caller. Measured with the assignment left out and the
+       caller's removed: the pane came back `dead: false, hits: 0, live:
+       true` -- it had played its entire break and was still a hitbox -- and
+       the next shatter() took `hits` to -1, fell through to the break branch
+       and played a SECOND full break, two splinters and two cues.
+
+       Written ABOVE this comment rather than below it so that the two lines
+       `hits = 0` and `dead = true` sit together: shatter() ends with the same
+       `dead = true; glassBreak(...)` pair, and a negative control needs a
+       needle that names one of the two methods and not both. */
+    glassBreak(this.x, this.y, this.w, this.owner.slot);
   }
 
   box() {
@@ -18273,15 +19312,75 @@ class Glass {
     // The last second blinks, so nobody is caught out by glass that was
     // about to expire anyway.
     if (left < 0.25 && (this.life >> 2) % 2 === 0) return;
+    /* THREE LOOKS, AND THE MIDDLE ONE IS THE WHOLE POINT.
+
+       WHOLE is the sprite at full alpha with seven glints inside seven
+       pixels either way, which is what it has always been.
+
+       SETTLING -- the thirty frames after a bite, while live() is false --
+       draws NO SOLID OBJECT AT ALL: nine loose glints lying flat along the
+       floor, spread across the full width. This is the one state that cannot
+       hurt you and it is the only one that does not draw a thing, because
+       drawing a thing where there is no hitbox is the lie this move's own
+       comments have been arguing against since the old ring was drawn bigger
+       than its radius.
+
+       AND EACH GLINT CARRIES A DARK PIXEL UNDER IT, which is not decoration.
+       It shipped as nine `#c9e7e8` pixels at HALF alpha and nothing else,
+       and pale-on-pale is invisible: on a light stage the settling pane
+       painted nothing a player could see, so a patch of floor went empty for
+       thirty frames and then had glass on it again. That reads as the pane
+       vanishing and coming back, which is the exact bug the break animation
+       was added to kill, arriving through the other door. One pixel of
+       `#c9e7e8` and one of `#1a2226` below it means the pale one carries the
+       read on a dark stage and the dark one carries it on a pale stage, and
+       neither backdrop can hide both. It is the same two-tone trick the
+       CRACKED notch uses one-sidedly, done on both sides.
+
+       The alpha goes to 0.8 for the same reason. Half was chosen to say
+       "not solid", but what says "not solid" here is that there is no sprite
+       and the glints lie flat -- the alpha was only ever costing legibility.
+
+       CRACKED is the rest of its life: the sprite back, at 0.8 and a pixel
+       lower, with a dark three-pixel zigzag notched through its middle -- a
+       crack is a void, and white on white was invisible -- and its glints
+       thrown out to fifteen pixels instead of seven. The wider glint field
+       is the read at a glance; the notch is the confirmation. */
+    const cracked = this.hits < (this.spec.hits || 1);
+    const settling = this.rearm > 0;
     const im = IMG.glass;
-    if (im) drawArt(g, im, this.x, this.y - 3);
-    g.globalAlpha = Math.min(1, 0.45 + left);
+    if (im && !settling) {
+      g.globalAlpha = cracked ? 0.8 : 1;
+      drawArt(g, im, this.x, this.y - 3 + (cracked ? 1 : 0));
+      g.globalAlpha = 1;
+    }
+    const n = settling ? 9 : cracked ? 11 : 7;
+    const spread = (cracked || settling) ? this.w / 22 : this.w / 34;
+    g.globalAlpha = settling ? 0.8 : Math.min(1, 0.45 + left);
     g.fillStyle = '#c9e7e8';
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < n; i++) {
       const k = (this.seed + i * 17) % 31;
-      const dx = (k - 15) * (this.w / 34);
-      const dy = -((k * 5) % 4);
+      const dx = (k - 15) * spread;
+      const dy = settling ? 0 : -((k * 5) % 4);
       g.fillRect(Math.round(this.x + dx), Math.round(this.y + dy) - 1, 1, 1);
+    }
+    if (settling) {
+      // The second tone. Below the pale pixel rather than beside it, so the
+      // pair still reads as one thing lying on the floor.
+      g.globalAlpha = 0.7;
+      g.fillStyle = '#1a2226';
+      for (let i = 0; i < n; i++) {
+        const k = (this.seed + i * 17) % 31;
+        g.fillRect(Math.round(this.x + (k - 15) * spread), Math.round(this.y), 1, 1);
+      }
+    }
+    if (cracked && !settling) {
+      g.globalAlpha = 0.85;
+      g.fillStyle = '#1a2226';
+      const cx = Math.round(this.x), cy = Math.round(this.y);
+      g.fillRect(cx, cy - 4, 1, 1);
+      g.fillRect(cx - 1, cy - 3, 1, 1);
+      g.fillRect(cx, cy - 2, 1, 1);
     }
     g.globalAlpha = 1;
   }
@@ -18460,10 +19559,13 @@ class Carton {
    `curdle` has not been either for some time. If it disagrees with the
    roster again, the roster is right.)
 
-   Built on the three fields the glass and the smoke already use -- `pierce`,
-   `hitAt` and `hitEvery` -- so resolveCombat needs no new code, plus `live`,
-   which is how it says "not a hitbox yet" for the half of its life when it
-   is only slippery. The box is thin and sits ON the platform, which is what
+   Built on the three fields the SMOKE already uses -- `pierce`, `hitAt` and
+   `hitEvery` -- so resolveCombat needs no new code, plus `live`, which is how
+   it says "not a hitbox yet" for the half of its life when it is only
+   slippery. (This used to name the broken glass as the other one. 2.83 took
+   all three off the glass and gave it a `hits` budget instead, so the smoke
+   is the reference implementation for a shot that keeps costing, and the
+   glass is now the reference for one that costs a fixed number of times.) The box is thin and sits ON the platform, which is what
    makes it something you STEP in: a fighter's hurtbox reaches from their feet
    to fourteen above, so anyone on the ground in it overlaps and anyone
    jumping over it does not.
@@ -20044,6 +21146,20 @@ const AUDIO_RECIPES = {
   drink:  { osc: 'sine', f0: 210, gain: 0.20, seq: [0, -3, -7], step: 0.12,
             dur: 0.11, noise: { dur: 0.06, lp: 700 } },
 
+  /* A pane cracking, and a pane going. The crack is a dry 45ms snap. The
+     break is four notes going UP -- glass tinkles upward as the pieces get
+     smaller, and an arpeggio that falls reads as something deflating -- over
+     160ms of bright noise sweeping down.
+
+     Neither borrows `shield-break`. That one is the BOTTLE's and is
+     deliberately the loudest thing in this character's block; a pane going is
+     a smaller event and must not be allowed to compete with it. */
+  'glass-crack': { osc: 'square', f0: 1400, f1: 900, dur: 0.045, gain: 0.20,
+                   noise: { dur: 0.035, lp: 9000, lp1: 4000 } },
+  'glass-break': { osc: 'triangle', f0: 1180, gain: 0.26, seq: [0, 7, 12, 19],
+                   step: 0.035, dur: 0.05,
+                   noise: { dur: 0.16, lp: 11000, lp1: 2600 } },
+
   // Menus. Quietest things in the game: you hear them while deciding, not
   // while playing.
   'menu-move': { osc: 'square', f0: 560, dur: 0.025, gain: 0.13 },
@@ -20280,7 +21396,7 @@ function addEffect(kind, x, y, color, dir, spec) {
   const e = { kind, x, y, color, dir: dir || 1, spec, t: 0,
               life: kind === 'beam' ? 20 : kind === 'ring' ? 18
                   : kind === 'wave' ? 13 : kind === 'burp' ? 18
-                  : kind === 'prism' ? 20 : 16,
+                  : kind === 'prism' ? 20 : kind === 'splinter' ? 18 : 16,
               vx: rand(-0.7, 0.7), vy: rand(-1.2, -0.2) };
   /* Sound is AIMED, not thrown. Everything else here drifts on a random
      vector and that is right for a spark; a wave that did it would arrive
@@ -20295,12 +21411,110 @@ function addEffect(kind, x, y, color, dir, spec) {
   return e;
 }
 
+/* WHICH WAY FOURTEEN PIECES OF A PANE GO, as indices into PRISM_DIRS -- a
+   third reader of that table, and the only one that takes a SLICE of it
+   rather than the whole circle. Glass on a floor does not go off like a
+   firework: a foot is on top of it and the floor is under it, so it leaves
+   sideways and up, low and wide, in two mirrored fans. Thirteen to
+   twenty-three is the upper half of that circle read outward from the
+   vertical, and because the table is mirrored to the last digit the two fans
+   are exact mirrors for free.
+
+   Steep first and flat last, because glassSlivers pairs that ordering with
+   speed and with where along the pane a sliver starts: sixty degrees comes
+   straight up out of the middle slowly, fifteen degrees shoots off the ends
+   fast. That is what a pane crushed under one foot does. */
+const SLIVER_FAN = [20, 16, 21, 15, 22, 14, 23, 13, 22, 14, 23, 13, 23, 13];
+/* Fourteen slivers, because the pane is fourteen pixels. IMG.glass decodes to
+   eight by eight with fourteen opaque cells -- nine pale, four white and one
+   `#9c0e11`, which is the bottle's label -- so a break throws the pane apart
+   into literally every pixel it was made of, label included. Twelve entries
+   read round twice-and-a-bit for fourteen draws, which lands back on exactly
+   that nine/four/one; a crack takes the first four. The red one is the piece
+   you can follow across the floor and it is the best thing in the sequence. */
+const SLIVER_INK = ['#c9e7e8', '#ffffff', '#c9e7e8', '#c9e7e8', '#9c0e11',
+                   '#c9e7e8', '#ffffff', '#c9e7e8', '#c9e7e8', '#ffffff',
+                   '#c9e7e8', '#c9e7e8'];
+
+/* The pieces themselves, and they are INERT DECORATION and must stay that
+   way. The move is already a buff; and the moment a sliver is a hitbox it
+   becomes simulation, which costs it rand() and costs the effect system a
+   rollback contract it does not have.
+
+   Which is the other rule here and it is not negotiable: both rand() calls
+   are lexically inside `if (s)`, and `s` is addEffect's return, which is null
+   while resimulating. So a rollback replay consumes ZERO random numbers off a
+   break -- the same exception the rainbow's shower states. Move either draw
+   outside that guard and the AI, which pulls from the same stream, rolls
+   different dice on every replay.
+
+   AND THE FLOOR IS LOOKED UP, NOT INHERITED. Most panes are born in mid-air
+   on somebody's chest, and debris skidding along an invisible plane at chest
+   height is the one way this can look broken. floorUnder does the same job
+   for Houston's milk and for the same reason; the bottle never did it. */
+function glassSlivers(x, y, w, n, speed) {
+  let floor = VH + 60;
+  for (const p of platformsNow()) {
+    if (x < p.x || x > p.x + p.w) continue;
+    if (p.y >= y - 1 && p.y < floor) floor = p.y;
+  }
+  const pairs = Math.max(1, (n >> 1) - 1);
+  for (let i = 0; i < n; i++) {
+    const u = PRISM_DIRS[SLIVER_FAN[i % SLIVER_FAN.length]];
+    const out = (i >> 1) / pairs;
+    const along = ((i & 1) ? -1 : 1) * (0.1 + out * 0.9) * (w * 0.5);
+    const sp = speed * (0.75 + out * 0.45);
+    const s = addEffect('sliver', x + along, y - 2,
+                        SLIVER_INK[i % SLIVER_INK.length], i + 1, floor);
+    if (s) {
+      s.vx = u[0] * sp + rand(-0.15, 0.15);
+      s.vy = u[1] * sp + rand(-0.20, 0.05);
+    }
+  }
+}
+
+/* THE FIRST STEP AND THE SECOND, the same vocabulary at two volumes. The
+   crack is a seam opening -- one white line a third of the width, three
+   chunks, four slivers at half speed -- and it is over in three frames,
+   because what happens next is the pane's own settling draw and two
+   animations arguing over the same 22 pixels reads as neither.
+
+   Both take the pane's width rather than assuming 22, so retuning `w` cannot
+   leave the break drawing the old pane. */
+function glassCrack(x, y, w, slot) {
+  addEffect('splinter', x, y, '#ffffff', 1, { w: w, crack: 1 });
+  glassSlivers(x, y, w, 4, 1.5);
+  cue('glass-crack', { slot: slot, x: x });
+}
+
+function glassBreak(x, y, w, slot) {
+  addEffect('splinter', x, y, '#ffffff', 1, { w: w, crack: 0 });
+  glassSlivers(x, y, w, 14, 2.3);
+  cue('glass-break', { slot: slot, x: x });
+}
+
 function updateEffects() {
   for (let i = effects.length - 1; i >= 0; i--) {
     const e = effects[i];
     e.t++;
     if (e.kind === 'spark' || e.kind === 'dust' || e.kind === 'puff') {
       e.x += e.vx; e.y += e.vy; e.vy += 0.08;
+    }
+    /* Glass is heavier than milk and it SKIDS. 0.40 is five times a
+       spark's 0.08; the bounce is dead at 0.3 and is killed outright below
+       0.4 so nothing jitters in place; and the friction only bites once it
+       is down, because a piece of glass that lands slides, and then it
+       stops, and then it lies there. `e.spec` is the floor the spawner
+       looked up -- the real surface under where the pane was, never the
+       height the pane happened to be born at. */
+    if (e.kind === 'sliver') {
+      e.x += e.vx; e.y += e.vy; e.vy += 0.40;
+      if (e.spec != null && e.y >= e.spec) {
+        e.y = e.spec;
+        e.vy = -e.vy * 0.3;
+        e.vx *= 0.6;
+        if (e.vy > -0.4) e.vy = 0;
+      }
     }
     // Milk is heavier than a spark and thrown harder, so it arcs properly
     // instead of drifting.
@@ -20373,10 +21587,14 @@ const PRISM_DIRS = [
   [0.86602540378443871, -0.49999999999999994],
   [0.96592582628906831, -0.25881904510252074],
 ];
-/* Twelve spokes, which is two full turns of a six-colour wheel. Six looked
-   thin and twenty-four closed into a disc; twelve is the count where the
-   spectrum is legibly a spectrum -- you can see it repeat, so you can see it
-   is a wheel -- and the gaps between spokes are still gaps. */
+/* Twelve spokes, which is two full turns of a six-shade ramp. Six looked thin
+   and twenty-four closed into a disc; twelve is the count where the ramp is
+   legibly a ramp -- you can see it repeat, so you can see it is one colour
+   taken apart rather than a dozen accidents -- and the gaps between spokes
+   are still gaps.
+
+   It was two turns of a six-COLOUR wheel until 2.83 and the count is the
+   same for the same reason; only what fills a spoke changed. */
 const PRISM_SPOKES = 12;
 // Half-widths of the opening flash, one per frame. It swells before it
 // collapses, because a flash that only shrinks reads as something ending.
@@ -20441,6 +21659,76 @@ function drawEffects(g) {
           g.drawImage(im, -7, -3, 18, 6);
           g.restore();
         }
+        break;
+      }
+      /* A one-pixel thing that has to say it is spinning. Two by one on one
+         frame and one by two on the next, flipping every second frame on a
+         phase taken from the sliver's own index so that fourteen of them do
+         not strobe in unison. At 320 by 180 that is the only way, and it is
+         the whole difference between glass and dust -- which is why this is
+         its own kind and not a `spark` wearing a colour. */
+      case 'sliver': {
+        const sx = Math.round(e.x), sy = Math.round(e.y);
+        g.globalAlpha = Math.min(1, k * 1.7);
+        g.fillStyle = e.color;
+        if ((((e.t + e.dir) >> 1) & 1) === 0) g.fillRect(sx, sy, 2, 1);
+        else g.fillRect(sx, sy - 1, 1, 2);
+        g.globalAlpha = 1;
+        break;
+      }
+      /* THE PANE ITSELF GOING, drawn from `e.t` and constants alone -- no
+         rand anywhere in here, so it is the same break every time, which is
+         the contract the prism holds and for the same reason. updateEffects
+         increments before drawEffects, so `b` is the beat and the first
+         PAINTED frame is beat nought.
+
+         Beat nought is the entire footprint, solid white, for one frame. Not
+         a ring: the exact rectangle you have been walking around for four
+         seconds, lighting up as it gives. Then it comes apart ALONG ITS OWN
+         LENGTH -- four chunks, six, eight specks, wider and thinner and
+         dimmer each beat -- and from beat three the residue underneath.
+         Glass does not vanish off a floor. It stops being dangerous and then
+         it stops being there, and those are two different moments. */
+      case 'splinter': {
+        const sp = e.spec;
+        const W = sp ? sp.w : 22;
+        const cx = Math.round(e.x), cy = Math.round(e.y);
+        const b = e.t - 1;
+        if (sp && sp.crack) {
+          if (b < 3) {
+            g.globalAlpha = 0.9 - b * 0.28;
+            g.fillStyle = b === 0 ? '#ffffff' : '#c9e7e8';
+            const sw = Math.round(W * 0.5) + b * 3;
+            const parts = b * 2 + 1;
+            const pitch = sw / parts;
+            const cw = Math.max(1, Math.round(pitch - b));
+            for (let i = 0; i < parts; i++) {
+              g.fillRect(cx - (sw >> 1) + Math.round(i * pitch), cy - 3 + b, cw, 1);
+            }
+          }
+          g.globalAlpha = 1;
+          break;
+        }
+        if (b < 4) {
+          const hw = (W >> 1) + b * 2;
+          const hh = 5 - b;
+          const parts = b === 0 ? 1 : b * 2 + 2;
+          const pitch = (hw * 2) / parts;
+          const cw = Math.max(1, Math.round(pitch - b));
+          g.globalAlpha = b === 0 ? 1 : 0.9 - (b - 1) * 0.2;
+          g.fillStyle = b === 0 ? '#ffffff' : '#c9e7e8';
+          for (let i = 0; i < parts; i++) {
+            g.fillRect(cx - hw + Math.round(i * pitch), cy - hh, cw, hh);
+          }
+        }
+        if (b >= 3) {
+          g.globalAlpha = k * 0.85;
+          g.fillStyle = '#c9e7e8';
+          for (let i = 0; i < 9; i++) {
+            g.fillRect(cx + ((i * 37) % 23) - 11, cy - 1 - (i & 1), 1, 1);
+          }
+        }
+        g.globalAlpha = 1;
         break;
       }
       case 'dust':
@@ -20627,15 +21915,20 @@ function drawEffects(g) {
       }
       /* THE RAINBOW GOING OFF. AutisNick's up special is one colour at a
          time out of six, and the whole move is which colour it has reached
-         when you set it off. So the burst is that colour opening back into
-         the wheel it came from: it starts on the shot's own colour and rolls
-         forward through the spectrum, twice round, in three beats.
+         when you set it off. So the burst is THAT COLOUR and no other: it
+         comes apart into six shades of itself -- the ball's own, three steps
+         toward white and two toward black -- twice round, in three beats.
 
            frames 0-3   a white core swells and collapses. The instant.
            frames 0-9   twelve spokes fly out, each with a fat head, each the
-                        next colour along, decelerating into the edge.
+                        next shade along, decelerating into the edge.
            frames 9-20  the heads land on a ring and the spokes fold into it.
                         The ring HOLDS AT THE BURST'S ACTUAL RADIUS and fades.
+
+         EXACTLY TWO RECTANGLES in the whole animation are not this hue: the
+         core on frames 0 and 1, which is white and hands over to the ball's
+         own colour on frame 2. Two, against about five hundred on the peak
+         frame. Everything else, on every frame, is one of the six shades.
 
          That last line is the one that matters for play and not just for
          looks. The old ring grew to a flat 30 pixels whatever the radius was,
@@ -20656,8 +21949,13 @@ function drawEffects(g) {
       case 'prism': {
         const s = e.spec;
         const R = s ? s.radius : 20;
+        /* Six shades of one hue, off the spec. The RAINBOW fallback is seven
+           actual colours and is the wrong picture, but nothing spawns a
+           'prism' without a spec and `wheel[c % nc]` stays in bounds if
+           anything ever does. There is no `hue` any more: the entry handed
+           over IS the shot's colour taken apart, so there is nothing left to
+           offset the read by. */
         const wheel = s ? s.wheel : RAINBOW;
-        const hue = s ? s.hue : 0;
         const nc = wheel.length;
         const per = PRISM_DIRS.length / PRISM_SPOKES;
 
@@ -20708,18 +22006,18 @@ function drawEffects(g) {
              a direction lays down a SOLID line if that direction is flat or
              upright and a corner-touching staircase if it is diagonal -- so a
              one-pixel-wide star came out with two fat bars on the axes and
-             ten dotted ones between, and since the colour on the axis is
-             whatever colour the shot had reached, two of the six always
-             looked twice as strong as the other four. Every sample carries
+             ten dotted ones between, and since which shade lands on an axis
+             is fixed by which spoke it is, two of the six always looked
+             twice as strong as the other four. Every sample carries
              its neighbours on the perpendicular (-uy, ux), which fills the
              staircase in and makes all twelve read alike. The perpendicular
              rather than a 2x2 block, so a shard stays square to its own
              direction instead of leaning down and to the right. */
           const waist = tail + (head - tail) * 0.55;
           for (let c = 0; c < nc; c++) {
-            // One fillStyle per COLOUR, not per spoke: the same mistake the
+            // One fillStyle per SHADE, not per spoke: the same mistake the
             // matrix rain made cost 433 state changes a frame.
-            g.fillStyle = wheel[(hue + c) % nc];
+            g.fillStyle = wheel[c % nc];
             for (let n = c; n < PRISM_SPOKES; n += nc) {
               const u = PRISM_DIRS[n * per];
               const ux = u[0], uy = u[1];
@@ -20751,13 +22049,13 @@ function drawEffects(g) {
 
         /* The edge, once there is one to draw. Twenty-four dots, each drawn
            twice a pixel apart along the tangent, which is what turns a ring
-           of dots into a ring. Coloured by the spoke it belongs to, so the
-           ring is the same wheel in the same order as the star -- the spokes
-           do not change colour when they arrive. */
+           of dots into a ring. Shaded by the spoke it belongs to, so the ring
+           is the same ramp in the same order as the star -- the spokes do not
+           change shade when they arrive. */
         if (head > 6) {
           g.globalAlpha = Math.min(1, k * 1.6) * 0.85;
           for (let c = 0; c < nc; c++) {
-            g.fillStyle = wheel[(hue + c) % nc];
+            g.fillStyle = wheel[c % nc];
             for (let n = c; n < PRISM_SPOKES; n += nc) {
               for (let j = 0; j < per; j++) {
                 const u = PRISM_DIRS[n * per + j];
@@ -21258,6 +22556,18 @@ function applyHit(attacker, defender, move, sourceX, scale) {
     defender.hitstun = Math.max(defender.hitstun, move.stun);
   }
 
+  /* AND IT KNOCKS THE BANANA OUT OF HIS HANDS, which is the whole of the
+     anti-camping rule on that move: holding one over your head is not free,
+     and a man who gets hit while carrying one watches it pop out and land
+     where anybody can reach it. `dir` is the way he is already being thrown,
+     so it goes the same way he does and not into his face.
+
+     Not a new field on anybody. `t` is pushed past `mine` inside loose(),
+     which expires the free-catch window -- being hit does not hand you back
+     the courtesy you got for throwing it to yourself. */
+  const dropped = defender.heldBanana();
+  if (dropped) dropped.loose(dir * 1.2, -2.2);
+
   if (defender.health <= 0) {
     // The blow that takes the stock is the one place launch still runs free:
     // they should visibly go flying rather than blink out.
@@ -21374,13 +22684,19 @@ function sweepFrail(fighters) {
     /* A MAN ASLEEP IS NOT CATCHING, and without this line he is -- which was
        the worst bug in 2.81 and it was invisible on an empty stage.
 
-       The bed pins attackFrame at `startup + active`, which is 66, and the
-       mouth's absorb window is `from: 7, to: 66`. The pin therefore parks
-       him on the last frame the box is open, so every shot thrown at a
-       sleeping Cobeus was swallowed instead of landing, healed him five, and
+       The bed pins attackFrame at `startup + active`, and at 2.81 that frame
+       was 66 while the absorb window was `from: 7, to: 66` -- so the pin
+       parked him on the last frame the box was open, and every shot thrown
+       at a sleeping Cobeus was swallowed instead of landing, healed him, and
        -- because `fat` is already past `bite` -- re-armed the whole hundred
        and eighty. Shooting a helpless man was the single worst thing you
        could do to yourself.
+
+       2.83 moved the window to [6, 15] and the pin to 16, so the two no
+       longer touch. That is a coincidence going the other way and it is NOT
+       what this line is for: the rule is "a man asleep is not catching", and
+       the next person to change `active` must not be able to reopen the bug
+       by arithmetic.
 
        Measured in unassisted CPU play, three seeds of a hundred and twenty
        matches: nine of twelve beds were extended, the worst ran 968 frames
@@ -21434,10 +22750,10 @@ function sweepFrail(fighters) {
       if (!shot.frail && !(eats && !shot.shreds)) continue;
       /* AND ONLY THINGS THAT COULD HAVE HURT HIM. `live()` is this file's own
          word for "is it a hitbox right now", and without asking it a mouth
-         opened on an empty stage eats a LOAF off the floor, a stretch of
-         Houston's road, a puddle of milk that has not curdled yet and a bot
-         standing idle -- all of which answer false and none of which is
-         food. A man eating a loaf of bread with his projectile-catching
+         opened on an empty stage eats a BANANA lying on the floor, a stretch
+         of Houston's road, a puddle of milk that has not curdled yet and a
+         bot standing idle -- all of which answer false and none of which is
+         food. A man eating fruit off the ground with his projectile-catching
          mouth is a different move. One clause in the vocabulary the sweep
          below already uses, rather than a list of classes that goes stale
          the next time somebody adds one. */
@@ -21456,7 +22772,7 @@ function sweepFrail(fighters) {
          patched. */
       /* FLAT, IF THE MOVE SAYS SO. Houston's eater has a `cap` and no `heal`,
          so he keeps taking what the shot was carrying up to fifteen and
-         nothing about him moves. Cobeus' mouth names a flat five instead,
+         nothing about him moves. Cobeus' mouth names a flat eight instead,
          and the difference is the point of his move rather than a tuning
          choice: the spread of what enters a catching box runs from nought to
          the dragon's 999, so `min(cap, damage)` would pay three times as
@@ -21584,13 +22900,15 @@ function resolveCombat(fighters) {
           continue;
         }
         applyHit(shot.owner, f, shot.spec, shot.x, bite);
-        /* A pawn that reaches somebody is promoted, and a bottle that reaches
-           somebody breaks on them -- both have to happen HERE, because this
+        /* A pawn that reaches somebody is promoted, a bottle that reaches
+           somebody breaks on them, and a banana that reaches somebody bounces
+           off and keeps going -- all three have to happen HERE, because this
            is the only place that knows it connected and whatever they leave
            behind has to exist on the same frame they stop existing, or there
-           is a gap for the victim to step through. Both set `dead`
-           themselves, so the assignment below is left to the general case
-           rather than fighting them for it. */
+           is a gap for the victim to step through. Each of them decides its
+           own `dead`, so the assignment below is left to the general case
+           rather than fighting them for it -- and the banana is the one that
+           decides NOT to die, which is the whole of what makes it an item. */
         if (shot.burst) shot.burst();
         else if (shot.shatter) shot.shatter();
         else shot.dead = true;
@@ -21745,6 +23063,50 @@ function aiDecide(me, foe) {
     return pad;
   }
 
+  /* AND A CPU GOES AND GETS THE BANANA.
+
+     BELOW the offstage return on purpose, which is the same placement
+     decision the charge clause below makes and for the same reason: falling
+     to your death outranks going to fetch fruit. Above everything else,
+     because a thing on the floor is a thing you walk to, and the approach
+     below is written for walking at a person.
+
+     IT SETS `pad.grab` AND NOTHING ELSE. Never `pad.special`, so it cannot
+     come out of the far side as a cast, and it never touches `a.cooldown`, so
+     it takes no decision away from anything underneath it -- exactly the two
+     rules the rainbow's second press keeps. Walking toward one is protected
+     by aiPad's existing walkIsSafe, so a CPU still will not step off a ledge
+     for a banana.
+
+     Measured: `pad.grab` goes from ZERO of 812,275 CPU frames today to 215 of
+     27,238, which is 0.79% of them, and both CPUs use the item without either
+     one being taught what it is for. The foe picks one up 4.33 times a match.
+     That last number is the one worth having, because it is the CPU proving
+     the thing the move is for: the banana Squalls threw and missed with is
+     now the other man's.
+
+     A held banana is thrown at somebody in FRONT and roughly LEVEL, because
+     the forward throw is nearly flat and a CPU lobbing one at a man on a
+     platform above it is a CPU giving him a present. */
+  if (!me.chicken) {
+    const mine = me.heldBanana();
+    if (mine) {
+      if (adx < 90 && Math.abs(dy) < 20) pad.grab = true;
+    } else if (me.grounded) {
+      for (const b of projectiles) {
+        if (!(b instanceof Banana) || b.dead || b.heldBy >= 0) continue;
+        if (b.t < b.mine && b.owner !== me) continue;
+        const bdx = b.x - me.x;
+        if (Math.abs(bdx) <= b.spec.reach && Math.abs(b.y - me.y) <= b.spec.lift2) {
+          pad.grab = true;
+        } else if (b.grounded && Math.abs(bdx) < 70 && Math.abs(b.y - me.y) < 24) {
+          if (bdx > 0) pad.right = true; else pad.left = true;
+        }
+        break;
+      }
+    }
+  }
+
   /* A CPU CHICKEN.
 
      Its own decision, and it has to be ABOVE everything below, because
@@ -21817,9 +23179,11 @@ function aiDecide(me, foe) {
      the next -- zero held frames over 523 live bakery casts, measured. This
      is derived rather than remembered: it asks what he is already doing.
 
-     NOT gated on the kind. A string check against a kind list is the failure
-     mode napping() has a paragraph about -- it goes quietly stale and the
-     move it names stops working with nothing on screen to say so. Six tenths
+     NOT gated on the kind. A string check against a kind list goes quietly
+     stale and the move it names stops working with nothing on screen to say
+     so -- which is not a hypothetical: napping() was caught doing exactly
+     that once, and was deleted in 2.83 when the move it named went and it
+     became a test with one answer. Six tenths
      of the cap because the whole cap is a full mana bar, and because a CPU
      that held to the cap would be a CPU that has decided to stand still
      until its meter is empty.
@@ -21863,7 +23227,15 @@ function aiDecide(me, foe) {
      over 120 matches; below it, none, and it holds slightly LONGER (38.7
      frames a cast against 36.8) because the frames it gives up are the ones
      it was falling through anyway. Falling to your death outranks finishing
-     a thought. */
+     a thought.
+
+     (The `squalls` column above measured the daydream, and 2.83 replaced it
+     with a banana that does not charge. The number the clause was tuned
+     against is still the SPREAD, which is the last column and the one the
+     decision was made on. The character the gate was put there FOR is still
+     Cobeus -- whose mouth became a walk charge in the same release, so that
+     column is now his, and it is his 16.9 against an ungated 1.5 that the
+     gate is worth.) */
   if (me.state === 'special') {
     const cm = me.moveFor('special');
     if (cm && cm.charge && cm.charge.walk &&
@@ -25083,7 +26455,7 @@ function render() {
    through a floor that was solid on the other screen. The lobby now compares
    this before a match can start, because refusing to begin is the only
    honest answer -- there is no way to reconcile two engines mid-match. */
-const BUILD_ID = 'ec0aa49983';
+const BUILD_ID = '00fb170d91';
 
 /* The version people say out loud. BUILD_ID above says which exact bytes are
    running and is what the lobby compares; this says which release they belong
@@ -25094,7 +26466,7 @@ const BUILD_ID = 'ec0aa49983';
    BUMP THIS WHEN YOU SHIP. Nothing derives it and nothing checks it, so the
    only thing keeping it honest is remembering -- which is exactly why the
    gate uses the hash instead. */
-const VERSION = '2.82';
+const VERSION = '2.83';
 
 // Past frames resent in every packet. A loss burst longer than this leaves a
 // hole nothing can fill, which stops confirmedFrame permanently and with it

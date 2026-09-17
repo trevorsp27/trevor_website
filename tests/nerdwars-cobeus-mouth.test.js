@@ -1,5 +1,14 @@
 /* OPEN WIDE -- Cobeus' mouth, which is also his recovery.
  *
+ * 2.83 REWROTE HOW LONG IT IS OPEN AND NOT WHAT IT DOES. `active` went from
+ * sixty frames to ten and the rest of the open time moved behind a held
+ * button that empties his bar -- see nerdwars-cobeus-mouth-hold.test.js, which
+ * is entirely about that. Every test in THIS file is the same test it was:
+ * the flat heal, the eighth catch, the bed, the stock, the fat, the race and
+ * the CPU's recovery. What changed here is that the probes hold the button
+ * while they feed him, because ten frames is not long enough for another
+ * fighter to get a shot into the box, and `heal` reads eight rather than five.
+ *
  * Until 2.81 his up slot was the last move in this file labelled PLACEHOLDER:
  * an invisible hop with a hitbox on it, kept only because every other
  * character's `up` is how they get home and a fighter who cannot get home is
@@ -15,7 +24,7 @@
  *   pellet, on a move whose prize is the catch and not the meal.
  *
  *   IT ONLY EATS THINGS THAT COULD HAVE HURT HIM. Without one clause a mouth
- *   opened on an empty stage swallows a loaf of bread off the floor, a
+ *   opened on an empty stage swallows a banana off the floor, a
  *   stretch of Houston's road and a puddle of milk that has not curdled yet.
  *
  *   THE COUNTER IS A STOCK. Nothing else in this file counts a move's uses
@@ -162,6 +171,19 @@ function sabotage(needle, replacement) {
   return src.slice(0, at) + replacement + src.slice(at + needle.length);
 }
 
+/* TWO lines of the engine, for the one control below that genuinely needs
+   two. Both pairs are asserted the same way `sabotage` asserts its one, and
+   the second needle is looked for in the already-mutated source so a control
+   that edits the same line twice is caught rather than quietly winning. */
+function sabotageBoth(n1, r1, n2, r2) {
+  let src = sabotage(n1, r1);
+  const at = src.indexOf(n2);
+  assert.ok(at >= 0, "second sabotage needle not found: " + JSON.stringify(n2));
+  assert.equal(src.indexOf(n2, at + 1), -1,
+    "second sabotage needle is not unique: " + JSON.stringify(n2));
+  return src.slice(0, at) + r2 + src.slice(at + n2.length);
+}
+
 /* The other half of a negative control: the SAME checker the real test ran,
    and it has to throw an assertion. Anything else thrown is a broken checker
    rather than a failed test, and is let through so it shows up as itself. */
@@ -209,24 +231,37 @@ const SETUP = `
 
 const SP_NEUTRAL = 512, SP_UP = 2048, ATTACK = 32, JUMP = 16, GRAB = 64,
       SHIELD = 128, ULT = 256, RIGHT = 2;
+/* THE HOLD LEVELS ARE THEIR OWN BITS, and that is worth knowing before
+   reading any probe below: bitsToPad(SP_UP) sets `spUp` and `special` -- a
+   PRESS -- and leaves `holdUp` false. A press opens the mouth for the ten
+   frames `active` buys. Holding it open is bit 16384, which is what the
+   charge gate reads, and it is how the move is actually played. */
+const HOLD_UP = 16384;
 
 const mouth = (run) =>
   JSON.parse(run("JSON.stringify(ROSTER.cobeus.specials.up)"));
 
-/* ONE CATCH. He opens; the other man throws; the shot is parked in the
-   catching box until it is swallowed. Parking it is the honest way to ask
-   this question: the box is 20 wide with 14 of pad either side and a flat
-   shot crosses it in about three frames, so a probe that waited for the
-   geometry to line up by itself would be measuring the other man's aim. */
+/* ONE CATCH. He opens AND KEEPS IT OPEN; the other man throws; the shot is
+   parked in the catching box until it is swallowed. Parking it is the honest
+   way to ask this question: the box is 20 wide with 14 of pad either side and
+   a flat shot crosses it in about three frames, so a probe that waited for
+   the geometry to line up by itself would be measuring the other man's aim.
+
+   THE BUTTON IS HELD AFTER THE PRESS, and that is not the probe making its
+   own life easy. A press buys ten open frames; the other man's throw has its
+   own startup and the shot then has to be walked in, which takes longer than
+   ten. Holding is what a player does with this move and what the charge gate
+   exists for, so it is what every catch below is measured through. The hold
+   is capped at `charge.hold` (40), which is well inside this loop. */
 const CATCH = `
   var caught = -1, h0 = me.health;
   netplay.active = true;
-  netplay.framePads = [bitsToPad(SP_UP_BITS), bitsToPad(0)];
+  netplay.framePads = [bitsToPad(SP_UP_BITS | HOLD_BITS), bitsToPad(0)];
   step();
   for (var i = 0; i < 6; i++) {
-    netplay.framePads = [bitsToPad(0), bitsToPad(0)]; step();
+    netplay.framePads = [bitsToPad(HOLD_BITS), bitsToPad(0)]; step();
   }
-  netplay.framePads = [bitsToPad(0), bitsToPad(THROW_BITS)]; step();
+  netplay.framePads = [bitsToPad(HOLD_BITS), bitsToPad(THROW_BITS)]; step();
   for (var i = 0; i < 44; i++) {
     me.hitstop = 0; foe.hitstop = 0; foe.invuln = 9999;
     var L = projectiles.filter(function (q) {
@@ -235,7 +270,7 @@ const CATCH = `
     if (L.length) { L[0].x = me.x + 4; L[0].y = me.y - 13;
                     L[0].vx = 0; L[0].vy = 0; }
     var f0 = me.fat;
-    netplay.framePads = [bitsToPad(0), bitsToPad(0)]; step();
+    netplay.framePads = [bitsToPad(HOLD_BITS), bitsToPad(0)]; step();
     if (me.fat > f0) { caught = i; break; }
   }`;
 
@@ -245,7 +280,9 @@ const oneCatch = (run, opts) => {
   ${SETUP}
   me.fat = ${o.fat || 0};
   me.health = ${o.health === undefined ? 40 : o.health};
-  ${CATCH.replace("SP_UP_BITS", String(SP_UP)).replace("THROW_BITS", String(SP_NEUTRAL))}
+  ${CATCH.replace("SP_UP_BITS", String(SP_UP))
+         .replace(/HOLD_BITS/g, String(HOLD_UP))
+         .replace("THROW_BITS", String(SP_NEUTRAL))}
   netplay.active = false; netplay.framePads = null;
   return JSON.stringify({ caught: caught, healed: +(me.health - h0).toFixed(3),
     fat: me.fat, bed: me.bedTimer, size: +me.sizeMul.toFixed(4),
@@ -271,7 +308,7 @@ function checkFlatHeal(m, r) {
     "enters the box runs from nought to the dragon's 999");
 }
 
-test("the mouth swallows a shot and heals a flat five for it", async () => {
+test("the mouth swallows a shot and heals a flat eight for it", async () => {
   const run = await arena(COBEUS, NICK);
   checkFlatHeal(mouth(run), oneCatch(run));
 });
@@ -282,8 +319,8 @@ test("negative control: Houston's cap instead of a flat heal fails the flat test
      -- same box, same pad, same window, same eighth catch -- and a rainbow is
      now worth twice a bullet. */
   const run = await arena(COBEUS, NICK, { engine: sabotage(
-    "      absorb: { pad: 14, from: 7, to: 66, heal: 5, fat: 0.04, bite: 8 },",
-    "      absorb: { pad: 14, from: 7, to: 66, cap: 15, fat: 0.04, bite: 8 },") });
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 15, cap: 15, fat: 0.04, bite: 8 },") });
   expectToFail(() => checkFlatHeal(mouth(run), oneCatch(run)),
     "a capped heal should fail the flat test; it passed");
 });
@@ -295,20 +332,24 @@ test("negative control: Houston's cap instead of a flat heal fails the flat test
 /* `live()` is this file's own word for "is it a hitbox right now", and it is
    the whole of the rule -- one clause in the vocabulary sweepFrail already
    speaks, rather than a list of classes that goes stale the next time
-   somebody adds one. A loaf answers false. So does a fresh puddle of milk,
+   somebody adds one. A banana lying on the floor answers false. So does a
+   fresh puddle of milk,
    Houston's road and an idle bot. */
 const notFood = (run) => JSON.parse(run(`(function () {
   ${SETUP}
   me.health = 40;
   netplay.active = true;
-  netplay.framePads = [bitsToPad(${SP_UP}), bitsToPad(0)];
+  netplay.framePads = [bitsToPad(${SP_UP} | ${HOLD_UP}), bitsToPad(0)];
   step();
-  for (var i = 0; i < 6; i++) { netplay.framePads = [bitsToPad(0), bitsToPad(0)]; step(); }
+  for (var i = 0; i < 6; i++) { netplay.framePads = [bitsToPad(${HOLD_UP}), bitsToPad(0)]; step(); }
   /* One of each, put in the middle of the open mouth by hand. Constructed
      rather than cast, because the point is what they ARE and not how they
      got there -- and both of their owners are somebody else. */
-  var loaf = new Loaf(foe, ROSTER.squalls.specials.down.loaf, me.x + 4, me.y - 10);
-  loaf.grounded = true; loaf.vy = 0;
+  /* A banana, and it is on the FLOOR, which is the state that answers false.
+     An airborne one is a real shot and a mouth is entitled to eat it -- that
+     is the clause working, not failing. */
+  var loaf = new Banana(foe, ROSTER.squalls.specials.down, me.x + 4, me.y - 10, 0, 0);
+  loaf.grounded = true; loaf.vy = 0; loaf.numb = 0;
   projectiles.push(loaf);
   var milk = new Puddle(foe, ROSTER.houston.specials.neutral.puddle, me.x + 4, me.y);
   projectiles.push(milk);
@@ -317,7 +358,7 @@ const notFood = (run) => JSON.parse(run(`(function () {
     me.hitstop = 0;
     loaf.x = me.x + 4; loaf.y = me.y - 10;
     milk.x = me.x + 4;
-    netplay.framePads = [bitsToPad(0), bitsToPad(0)]; step();
+    netplay.framePads = [bitsToPad(${HOLD_UP}), bitsToPad(0)]; step();
   }
   netplay.active = false; netplay.framePads = null;
   return JSON.stringify({ loafAlive: !loaf.dead, milkAlive: !milk.dead,
@@ -327,11 +368,11 @@ const notFood = (run) => JSON.parse(run(`(function () {
 
 function checkNotFood(r) {
   assert.equal(r.loafLive, false,
-    "precondition: a loaf is not a hitbox -- live() says so");
+    "precondition: a banana on the floor is not a hitbox -- live() says so");
   assert.equal(r.milkLive, false,
     "precondition: a fresh puddle is not a hitbox either");
   assert.ok(r.loafAlive,
-    "a loaf of bread sitting in the open mouth is not food; it was eaten");
+    "a banana lying in the open mouth is not food; it was eaten");
   assert.ok(r.milkAlive,
     "and neither is a puddle of milk that has not curdled yet; it was eaten");
   assert.equal(r.fat, 0,
@@ -367,7 +408,9 @@ const theBed = (run) => JSON.parse(run(`(function () {
   ${SETUP}
   me.fat = 7; me.health = 40;
   var sizeAt7 = +me.sizeMul.toFixed(4);
-  ${CATCH.replace("SP_UP_BITS", String(SP_UP)).replace("THROW_BITS", String(SP_NEUTRAL))}
+  ${CATCH.replace("SP_UP_BITS", String(SP_UP))
+         .replace(/HOLD_BITS/g, String(HOLD_UP))
+         .replace("THROW_BITS", String(SP_NEUTRAL))}
   var bedSet = me.bedTimer, sizeAt8 = +me.sizeMul.toFixed(4);
   var ticks = 0, ramp = [], acted = [], freeAt = -1;
   var mash = ${ATTACK} | ${JUMP} | ${GRAB} | ${SHIELD} | ${ULT} | ${SP_NEUTRAL} | ${RIGHT};
@@ -451,7 +494,9 @@ test("negative control: without the pin he walks out of his own bed", async () =
 const jabTheBed = (run) => JSON.parse(run(`(function () {
   ${SETUP}
   me.fat = 7; me.health = 80;
-  ${CATCH.replace("SP_UP_BITS", String(SP_UP)).replace("THROW_BITS", String(SP_NEUTRAL))}
+  ${CATCH.replace("SP_UP_BITS", String(SP_UP))
+         .replace(/HOLD_BITS/g, String(HOLD_UP))
+         .replace("THROW_BITS", String(SP_NEUTRAL))}
   var state0 = me.state, bed0 = me.bedTimer;
   var hits = [], states = [];
   for (var i = 0; i < 80; i++) {
@@ -545,7 +590,9 @@ test("negative control: without the bedded() clause the first jab knocks him out
 const bedUnderFire = (run) => JSON.parse(run(`(function () {
   ${SETUP}
   me.fat = 7; me.health = 60;
-  ${CATCH.replace("SP_UP_BITS", String(SP_UP)).replace("THROW_BITS", String(SP_NEUTRAL))}
+  ${CATCH.replace("SP_UP_BITS", String(SP_UP))
+         .replace(/HOLD_BITS/g, String(HOLD_UP))
+         .replace("THROW_BITS", String(SP_NEUTRAL))}
   var bed0 = me.bedTimer, fat0 = me.fat;
   /* A shot every forty frames for six hundred, each one walked into the
      catching box the same way the single-catch probe walks one in. His
@@ -605,12 +652,34 @@ test("a sleeping man is not catching, and cannot be fed back to sleep", async ()
   checkBedUnderFire(mouth(run), bedUnderFire(run));
 });
 
-test("negative control: without the bedded() line in absorbBox the bed never ends", async () => {
-  /* The exact bug, restored. With the guard gone every parked shot is eaten
+/* AND THE HALF THAT SAYS WHY THE GUARD IS A GUARD AND NOT ARITHMETIC.
+
+   At 2.81 `absorb.to` was 66 and the bed pinned him on 66, so the window
+   covered the pin frame and the bug was live. 2.83's window shuts at 15 and
+   the pin is 16, so the two no longer touch -- which means removing the guard
+   on its own reproduces NOTHING, and a control that did only that would be
+   green for a reason that has nothing to do with the guard.
+
+   So: put the coincidence back, one character of `absorb.to`, and leave the
+   guard alone. The whole test still passes, and that is the assertion. The
+   rule is "a man asleep is not catching", and the next person to retune
+   `active` must not be able to reopen this by arithmetic. */
+test("the window put back over the pin frame is still not a way to feed a sleeping man", async () => {
+  const run = await arena(COBEUS, NICK, { engine: sabotage(
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 16, heal: 8, fat: 0.04, bite: 8 },") });
+  checkBedUnderFire(mouth(run), bedUnderFire(run));
+});
+
+test("negative control: the window over the pin frame and no bedded() line, and the bed never ends", async () => {
+  /* The exact 2.81 bug, restored, and it takes both halves: the window back
+     over the pin frame AND the guard gone. Then every parked shot is eaten
      off the pin frame, each one re-arms the full `bed`, and the timer walks
      back UP -- which is the assertion above and is what makes this a control
      rather than a second way of saying the same thing. */
-  const run = await arena(COBEUS, NICK, { engine: sabotage(
+  const run = await arena(COBEUS, NICK, { engine: sabotageBoth(
+    "      absorb: { pad: 14, from: 6, to: 15, heal: 8, fat: 0.04, bite: 8 },",
+    "      absorb: { pad: 14, from: 6, to: 16, heal: 8, fat: 0.04, bite: 8 },",
     "    if (f.bedded()) return null;", "") });
   expectToFail(() => checkBedUnderFire(mouth(run), bedUnderFire(run)),
     "a bed that a thrown shot extends should fail the under-fire test; it passed");
@@ -813,10 +882,13 @@ const raceForIt = (run) => JSON.parse(run(`(function () {
   fighters[2].x = main.x + 180; fighters[3].x = main.x + 200;
   netplay.active = true;
   var none = [bitsToPad(0), bitsToPad(0), bitsToPad(0), bitsToPad(0)];
-  netplay.framePads = [bitsToPad(${SP_UP}), bitsToPad(${SP_UP}), bitsToPad(0), bitsToPad(0)];
+  var hold = [bitsToPad(${HOLD_UP}), bitsToPad(${HOLD_UP}), bitsToPad(0), bitsToPad(0)];
+  netplay.framePads = [bitsToPad(${SP_UP} | ${HOLD_UP}), bitsToPad(${SP_UP} | ${HOLD_UP}),
+                       bitsToPad(0), bitsToPad(0)];
   step();
-  for (var i = 0; i < 6; i++) { netplay.framePads = none; step(); }
-  netplay.framePads = [bitsToPad(0), bitsToPad(0), bitsToPad(${SP_NEUTRAL}), bitsToPad(0)];
+  for (var i = 0; i < 6; i++) { netplay.framePads = hold; step(); }
+  netplay.framePads = [bitsToPad(${HOLD_UP}), bitsToPad(${HOLD_UP}),
+                       bitsToPad(${SP_NEUTRAL}), bitsToPad(0)];
   step();
   var h0 = fighters[0].health, h1 = fighters[1].health;
   for (var i = 0; i < 30; i++) {
@@ -826,7 +898,7 @@ const raceForIt = (run) => JSON.parse(run(`(function () {
     if (L.length) { L[0].x = fighters[0].x + 4; L[0].y = fighters[0].y - 13;
                     L[0].vx = 0; L[0].vy = 0; }
     fighters.forEach(function (f) { f.hitstop = 0; });
-    netplay.framePads = none; step();
+    netplay.framePads = hold; step();
     if (fighters[0].fat || fighters[1].fat) break;
   }
   netplay.active = false; netplay.framePads = null;
@@ -875,9 +947,9 @@ test("negative control: walking the fighters backwards hands it to the other man
    is NOT in its opt-out list, and that list is a list of moves whose reach is
    somewhere else -- a thrown carton, a mower's deck, an egg, a road. The
    mouth belongs on it and was not on it, so OPEN WIDE shipped a 20 by 14
-   swing on Cobeus' chest, live for all sixty open frames, dealing nought
-   damage and nought knockback off the same four numbers sweepFrail uses as
-   the CATCHING box.
+   swing on Cobeus' chest, live for every open frame of the move -- sixty of
+   them at the time -- dealing nought damage and nought knockback off the same
+   four numbers sweepFrail uses as the CATCHING box.
 
    Nought damage is what made it invisible. Measured over 120 CPU matches an
    arm on the same seed: with the box, 80% of his matches ran to the time cap,
@@ -968,19 +1040,32 @@ test("negative control: a mouth left out of hitbox's opt-out list swings", async
    purpose. This test is what makes that true rather than intended, and it
    is here rather than in an AI file because the flag lives on this move.  */
 
+/* THE GRID MOVED IN, and the reason is measurement rather than taste. The
+   twelve drops this used to make -- twelve to sixty pixels out, level to
+   forty down -- are recovered from about one cell of, so "he kept a stock on
+   at least one of the twelve" was a coin flip riding on one seeded stream.
+   Measured over 432 falls (six seeds, six stages) it reads 22.0% home after
+   2.83's rework and 19.7% before it, which is the right direction and no
+   margin at all for a twelve-trial tripwire. Six to thirty-six out and level
+   to twenty down reads 42.8% against 29.4% on the same 432, which is the same
+   claim with room in it.
+
+   `mouthLift` is reset with the rest of the state because it is state: one
+   lift per trip through the air, and each of these drops is a fresh trip. */
 const fallsHome = (run) => JSON.parse(run(`(function () {
   var MAIN = STAGE.platforms.find(function (p) { return p.main; });
   var presses = 0, lost = 0, n = 0;
   for (var d = 0; d < 4; d++) {
-    for (var dy = 0; dy <= 40; dy += 20) {
+    for (var dy = 0; dy <= 20; dy += 10) {
       projectiles.length = 0; effects.length = 0; freezeFrames = 0;
       fighters.forEach(function (f) {
         f.setState('idle'); f.timer = 0; f.hitstun = 0; f.hitstop = 0;
         f.landLag = 0; f.invuln = 0; f.mana = 100; f.vx = 0; f.vy = 0;
         f.stocks = 9; f.eliminated = false; f.health = 100;
+        f.mouthLift = false; f.chargeTimer = 0;
       });
       var me = fighters[0];
-      me.x = MAIN.x - (12 + d * 16); me.y = MAIN.y + dy;
+      me.x = MAIN.x - (6 + d * 10); me.y = MAIN.y + dy;
       me.grounded = false; me.vy = 0.5; me.jumpsLeft = 0; me.facing = 1;
       fighters[1].x = MAIN.x + MAIN.w / 2; fighters[1].invuln = 99999;
       netplay.active = true;
@@ -1011,7 +1096,10 @@ function checkFallsHome(m, r) {
     "when this slot stopped being an uppercut");
   assert.ok(r.lost < r.n,
     "and it has to be worth pressing: he kept a stock on at least one of " +
-    "the " + r.n + " falls and lost " + r.lost);
+    "the " + r.n + " falls and lost " + r.lost + ". On this grid, over 432 " +
+    "falls across six seeds and six stages, he gets home 42.8% of the time " +
+    "at 2.83 against 29.4% at 2.82 -- so nought out of twelve is not a hard " +
+    "grid, it is a broken recovery");
 }
 
 test("a falling CPU still reaches for the mouth to get home", async () => {

@@ -732,8 +732,8 @@ function checkAir(r) {
     "THE AIR CARRY IS LEGAL, and there is no grounded check anywhere in it. " +
     "He can already do this in two presses -- cast, land, cast -- so all the " +
     "carry saves him is twenty-two frames, and a rule the player cannot see " +
-    "refusing a press the player can see is the exact failure the bakery's " +
-    "wake flag is written up for. He ended in the " + r.slot + " slot");
+    "refusing a press the player can see is the exact failure the daydream's " +
+    "wake flag was deleted over. He ended in the " + r.slot + " slot");
   assert.ok(r.dashFart >= 0, "carrying the charge with him; it read " + r.dashFart);
 }
 

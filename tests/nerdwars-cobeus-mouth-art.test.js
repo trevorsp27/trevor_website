@@ -2,8 +2,15 @@
  *
  * 2.82 changed drawMouth and not one number of the special, so
  * nerdwars-cobeus-mouth.test.js -- which pins the catch, the flat heal, the
- * stock and the fat -- passes unedited and is the guarantee that this pass
- * was cosmetic. What it cannot see is the thing that was wrong.
+ * stock and the fat -- passed unedited and was the guarantee that that pass
+ * was cosmetic. What it could not see is the thing that was wrong.
+ *
+ * 2.83 CHANGED THE MOVE UNDERNEATH THIS FILE. `active` went from sixty frames
+ * to ten and the rest of the open time moved behind a held button, so the
+ * whole move is twenty-eight frames and the HOLD is a chargeTimer rather than
+ * a stretch of attackFrame. Every rule below is the same rule; what moved is
+ * the two frame lists and the fact that `paint` has to be able to set a
+ * chargeTimer, because without one it cannot reach the chew at all.
  *
  * WHAT WAS WRONG. drawFighter blits the 16x16 cell with its TOP-LEFT at
  * (round(f.x) - 8, round(f.y) - 16), so CELL ROW r lands on screen row
@@ -28,9 +35,11 @@
  *   only on the conked cell and only to his own shadow -- because a man
  *   knocked out has his eyes shut. On every other cell his pupils survive.
  *
- *   THE HOLD MOVES. Fifty-four frames of held mouth is nearly a second, and a
- *   picture that does not change over a second is the complaint the rewrite
- *   exists to answer.
+ *   THE HOLD MOVES. A held mouth stands still on one attackFrame for as long
+ *   as his bar lasts -- up to `charge.hold`, which is forty frames -- and a
+ *   picture keyed to that frame would be a photograph for two thirds of a
+ *   second. The chew is indexed off chargeTimer instead, which is the whole
+ *   of mouthArtFrame, and this is the test of it.
  *
  *   AND FACING LEFT LANDS ON HIS FACE TOO. The sheet does not mirror him, it
  *   SLIDES him: standL is standR translated +2 with zero differing pixels, so
@@ -313,8 +322,14 @@ const SP_UP = 2048;
    He casts the move for real -- one pad through netplay, exactly as the catch
    probe next door does it -- so `specialsNow`, `specialSlot` and `moveFor`
    are whatever the engine decided rather than something assembled here. Only
-   the frame counter is driven by hand after that, because sweeping 78 frames
-   is the whole question and stepping to each one would also move him.
+   the counters are driven by hand after that, because sweeping the whole move
+   is the question and stepping to each frame would also move him.
+
+   THREE NUMBERS PER FRAME, not two: attackFrame, bedTimer and CHARGETIMER.
+   The third is not decoration. mouthArtFrame reads attackFrame and
+   chargeTimer together, and a held mouth is attackFrame frozen on `startup`
+   with chargeTimer climbing -- so a sweep with no chargeTimer in it draws the
+   same cell forty times and would pass a hold test that proved nothing.
 
    Every pixel comes back in SCREEN space, with the body's own blit arithmetic
    beside it, so the checker converts to cell space the way drawFighter does
@@ -332,6 +347,7 @@ const paint = (run, o) => JSON.parse(run(`(function () {
   for (var n = 0; n < want.length; n++) {
     me.attackFrame = want[n][0];
     me.bedTimer = want[n][1];
+    me.chargeTimer = want[n][2] || 0;
     me.grounded = ${o.grounded ? "true" : "false"};
     var px = [], sty = '#000';
     var rec = {
@@ -357,7 +373,7 @@ const paint = (run, o) => JSON.parse(run(`(function () {
     };
     drawMouth(rec, me);
     var d = Math.round(16 * me.sizeMul);
-    out.push({ af: want[n][0], bed: want[n][1], d: d,
+    out.push({ af: want[n][0], bed: want[n][1], ct: want[n][2] || 0, d: d,
                left: Math.round(me.x - 8) + 8 - (d >> 1),
                top: Math.round(me.y - 16) + 16 - d,
                px: px });
@@ -365,12 +381,32 @@ const paint = (run, o) => JSON.parse(run(`(function () {
   return JSON.stringify(out);
 })()`));
 
-/* attackFrame 0..77 is the whole move -- startup 6, active 60, recovery 12 --
-   and then frame 66 again with the bed under him, which is the one runSpecial
-   pins him at for all 180 frames of being knocked out. */
+/* THE THREE SWEEPS, and they are three because the move has three shapes.
+
+   WHOLE_MOVE is attackFrame 0..27 -- startup 6, active 10, recovery 12 --
+   which is every frame of a cast made with a PRESS and nothing held.
+
+   THE_HOLD is the other half and it does not appear in attackFrame at all:
+   the charge gate pins attackFrame on `startup` and counts chargeTimer, so a
+   hold is one attackFrame and forty chargeTimers. Forty is `charge.hold`, the
+   longest the gate allows.
+
+   CONKED is the frame runSpecial pins him at for all 180 frames of the bed,
+   which is `startup + active` -- one frame PAST the end of the catching
+   window, where at 2.81 it was the last frame inside it.
+
+   The numbers are written out rather than read off the ROSTER on purpose:
+   they are what this file claims the move is, and the test below checks the
+   claim against the live spec so a retune cannot quietly make this sweep
+   describe a move that no longer exists. */
+const STARTUP = 6, ACTIVE = 10, RECOVERY = 12, HOLD_CAP = 40;
+const MOVE_LEN = STARTUP + ACTIVE + RECOVERY;
 const WHOLE_MOVE = [];
-for (let af = 0; af <= 77; af++) WHOLE_MOVE.push([af, 0]);
-const CONKED = [[66, 180]];
+for (let af = 0; af < MOVE_LEN; af++) WHOLE_MOVE.push([af, 0, 0]);
+const THE_HOLD = [];
+for (let ct = 1; ct <= HOLD_CAP; ct++) THE_HOLD.push([STARTUP, 0, ct]);
+const CONKED = [[STARTUP + ACTIVE, 180, 0]];
+const EVERY_FRAME = WHOLE_MOVE.concat(THE_HOLD).concat(CONKED);
 
 /* Screen pixels -> cell space, by the same arithmetic drawFighter blits the
    body with. `in` is the 16 columns his body occupies; the inhale streaks are
@@ -400,13 +436,41 @@ function isEyeClosure(c, face) {
 }
 
 /* =====================================================================
+   0. AND THE SWEEPS ABOVE ARE THE MOVE THE ROSTER DESCRIBES
+
+   The four numbers are written out rather than read off the spec so that the
+   frame lists read as a timeline rather than as arithmetic. This is the line
+   that stops them rotting: a retune of `active` that nobody propagated here
+   would leave every test in this file sweeping frames the move does not have,
+   and they would all still pass, because a mouth drawn on nothing paints
+   nothing and nothing is on his hair.
+   ===================================================================== */
+
+test("the frame lists this file sweeps are the move the roster describes", async () => {
+  const run = await arena(COBEUS, NICK);
+  const m = JSON.parse(run("JSON.stringify(ROSTER.cobeus.specials.up)"));
+  assert.equal(m.startup, STARTUP, "startup");
+  assert.equal(m.active, ACTIVE, "active");
+  assert.equal(m.recovery, RECOVERY, "recovery");
+  assert.equal(m.charge.hold, HOLD_CAP,
+    "the hold sweep is `charge.hold` frames long, because that is the longest " +
+    "the gate will let him hold it; the spec says " + m.charge.hold);
+  assert.equal(m.absorb.to, STARTUP + ACTIVE - 1,
+    "and the catching window shuts on the last ACTIVE frame, which is one " +
+    "before the frame the bed pins him on -- the two were the same number " +
+    "until 2.83, and that coincidence is what MOUTH_EXEMPT had to be written " +
+    "down to replace");
+});
+
+/* =====================================================================
    1. IT IS DRAWN ON HIS FACE, NOT ON HIS HAIR
    ===================================================================== */
 
 function checkOnHisFace(frames, pose) {
   const face = FACE[pose];
-  assert.equal(frames.length, 79,
-    "precondition: the sweep is the whole move plus the conked frame");
+  assert.equal(frames.length, MOVE_LEN + HOLD_CAP + 1,
+    "precondition: the sweep is the whole move, plus every frame of a maximal " +
+    "hold, plus the conked frame; it was " + frames.length);
   for (const f of frames) {
     assert.ok(f.d === 16,
       "precondition: this is read at sizeMul 1, where the cell is 16 screen " +
@@ -464,7 +528,7 @@ function checkOnHisFace(frames, pose) {
 test("the mouth is drawn on his face, not on his hair", async () => {
   const run = await arena(COBEUS, NICK);
   checkOnHisFace(paint(run, { facing: 1, grounded: true,
-                              frames: WHOLE_MOVE.concat(CONKED) }), "standR");
+                              frames: EVERY_FRAME }), "standR");
 });
 
 test("negative control: the 2.81 drawing at its f.y - 13 anchor fails the face test", async () => {
@@ -485,7 +549,7 @@ test("negative control: the 2.81 drawing at its f.y - 13 anchor fails the face t
     "  g.fillStyle = '#f2e6c8';\n" +
     "  g.fillRect(x - 2, y - 3, 4, 1);") });
   expectToFail(() => checkOnHisFace(paint(run, { facing: 1, grounded: true,
-                                                frames: WHOLE_MOVE.concat(CONKED) }), "standR"),
+                                                frames: EVERY_FRAME }), "standR"),
     "a mouth drawn at the f.y - 13 anchor lands on his hair and should fail " +
     "the face test; it passed");
 });
@@ -553,14 +617,14 @@ function checkHisFaceSurvives(frames, pose) {
 test("rows 4, 5 and 6 are his -- his pupils survive every cell", async () => {
   const run = await arena(COBEUS, NICK);
   checkHisFaceSurvives(
-    paint(run, { facing: 1, grounded: true, frames: WHOLE_MOVE.concat(CONKED) }),
+    paint(run, { facing: 1, grounded: true, frames: EVERY_FRAME }),
     "standR");
 });
 
 test("rows 4, 5 and 6 are his facing left too", async () => {
   const run = await arena(COBEUS, NICK);
   checkHisFaceSurvives(
-    paint(run, { facing: -1, grounded: true, frames: WHOLE_MOVE.concat(CONKED) }),
+    paint(run, { facing: -1, grounded: true, frames: EVERY_FRAME }),
     "standL");
 });
 
@@ -573,7 +637,7 @@ test("negative control: a squint one row lower eats his pupils", async () => {
     "  H2: { 5: '......S..S......',",
     "  H2: { 5: '......S..S......', 6: '......S..S......',") });
   expectToFail(() => checkHisFaceSurvives(
-    paint(run, { facing: 1, grounded: true, frames: WHOLE_MOVE.concat(CONKED) }),
+    paint(run, { facing: 1, grounded: true, frames: EVERY_FRAME }),
     "standR"),
     "a squint that closes over his pupils should fail the rows-4-5-6 test; " +
     "it passed");
@@ -593,10 +657,17 @@ function cellPrint(frame) {
 }
 
 function checkTheHoldMoves(frames) {
-  const hold = frames.filter((f) => f.bed === 0 && f.af >= 10 && f.af <= 63);
-  assert.equal(hold.length, 54,
-    "precondition: the hold is attackFrames 10 to 63, which is 54 frames -- " +
-    "nearly a second; the sweep found " + hold.length);
+  const hold = frames.filter((f) => f.bed === 0 && f.ct > 0);
+  assert.equal(hold.length, HOLD_CAP,
+    "precondition: the sweep is a maximal hold -- chargeTimer 1 to " +
+    "`charge.hold`, which is " + HOLD_CAP + " frames and two thirds of a " +
+    "second of one attackFrame; the sweep found " + hold.length);
+  for (const f of hold) {
+    assert.equal(f.af, STARTUP,
+      "precondition: and every frame of it is the SAME attackFrame, because " +
+      "that is what the charge pin does -- which is exactly why a drawing " +
+      "keyed to attackFrame would be a photograph; one read " + f.af);
+  }
 
   const prints = hold.map(cellPrint);
   const distinct = new Set(prints);
@@ -611,10 +682,11 @@ function checkTheHoldMoves(frames) {
     else len++;
   }
   runs.push(len);
-  assert.equal(changes, 8,
-    "and it changes eight times across those 54 frames -- a picture that " +
-    "holds still for nearly a second is the complaint this rewrite answers; " +
-    "it changed " + changes + " times");
+  assert.equal(changes, 6,
+    "and it changes six times across those " + HOLD_CAP + " frames, which is " +
+    "a cycle and a sixth -- a mouth that holds one shape for as long as his " +
+    "bar lasts is the freeze a naive pin would have produced and is the " +
+    "complaint this set exists to answer; it changed " + changes + " times");
   for (const r of runs) {
     assert.ok(r <= 6,
       "no single cell is held for more than six frames (a tenth of a " +
@@ -637,19 +709,19 @@ function checkTheHoldMoves(frames) {
 
 test("the hold actually changes", async () => {
   const run = await arena(COBEUS, NICK);
-  checkTheHoldMoves(paint(run, { facing: 1, grounded: true, frames: WHOLE_MOVE }));
+  checkTheHoldMoves(paint(run, { facing: 1, grounded: true, frames: THE_HOLD }));
 });
 
 test("negative control: one cell held for the whole hold fails the hold test", async () => {
   /* The obvious build: pick the open cell, draw it until the window shuts.
      Every other thing about the move is identical -- same startup cells, same
-     snap, same close, same streaks -- and the mouth is a photograph for 54
-     frames, which is what it looked like before this pass. */
+     snap, same close, same streaks -- and the mouth is a photograph for the
+     whole hold, which is what it looked like before this pass. */
   const run = await arena(COBEUS, NICK, { engine: sabotage(
     "  if (af <= 63) return MOUTH_HOLD[(((af - 10) / 6) | 0) % 4];",
     "  if (af <= 63) return MOUTH_HOLD[0];") });
   expectToFail(
-    () => checkTheHoldMoves(paint(run, { facing: 1, grounded: true, frames: WHOLE_MOVE })),
+    () => checkTheHoldMoves(paint(run, { facing: 1, grounded: true, frames: THE_HOLD })),
     "a hold that never changes cell should fail the hold test; it passed");
 });
 
@@ -701,12 +773,15 @@ function checkCenteredOnHisFace(frames, pose) {
   }
 }
 
-/* The four cells that can be under this overlay. He is rooted and grounded
-   for the whole open window, so standR and standL are what the hold is drawn
-   on; the airborne pair is reachable on the recovery, which is a glide. */
+/* The four cells that can be under this overlay. `charge.ground` means a hold
+   only ever happens on the floor, so standR and standL are what the chew is
+   drawn on; the airborne pair is reachable on a pressed cast and on the
+   glide. The sweep is every frame the catching window is open, plus the whole
+   hold, which is where the drawing spends most of its life. */
 test("facing left lands on his face too", async () => {
   const run = await arena(COBEUS, NICK);
-  const open = WHOLE_MOVE.filter((p) => p[0] >= 7 && p[0] <= 66);
+  const open = WHOLE_MOVE.filter((p) => p[0] >= STARTUP && p[0] < STARTUP + ACTIVE)
+                         .concat(THE_HOLD);
   checkCenteredOnHisFace(paint(run, { facing: 1, grounded: true, frames: open }), "standR");
   checkCenteredOnHisFace(paint(run, { facing: -1, grounded: true, frames: open }), "standL");
   checkCenteredOnHisFace(paint(run, { facing: 1, grounded: false, frames: open }), "jumpR");
@@ -720,7 +795,8 @@ test("negative control: an unshifted overlay on standL fails the facing test", a
   const run = await arena(COBEUS, NICK, { engine: sabotage(
     "    rows.push(!r ? MOUTH_BLANK : shift ? '..' + r.slice(0, 14) : r);",
     "    rows.push(!r ? MOUTH_BLANK : r);") });
-  const open = WHOLE_MOVE.filter((p) => p[0] >= 7 && p[0] <= 66);
+  const open = WHOLE_MOVE.filter((p) => p[0] >= STARTUP && p[0] < STARTUP + ACTIVE)
+                         .concat(THE_HOLD);
   /* standR is unaffected, and that is the point of checking it here: the
      mutant is invisible from the side the move is usually watched from. */
   checkCenteredOnHisFace(paint(run, { facing: 1, grounded: true, frames: open }), "standR");

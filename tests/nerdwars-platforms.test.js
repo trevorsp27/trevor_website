@@ -2000,20 +2000,24 @@ test("Cobeus is in the game, off a sprite sheet, and the select screen fits him"
     "the last character if the row is ragged; landed on " + downFromTopRight);
 });
 
-test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
-  /* The throw is only half the move. Where it breaks it leaves glass on the
-     floor, and that is the half that lasts: missing still takes a piece of
-     the stage away from the other player.
+/* The throw is only half the move. Where it breaks it leaves glass on the
+   floor, and that is the half that lasts: missing still takes a piece of the
+   stage away from the other player.
 
-     What "lasts" means is a clock and not a toll. The glass used to be built
-     on `pierce` + `hitAt` + `hitEvery`, like the smoke and the fart, so
-     standing in it kept costing -- and a pane that bit every twenty-six
-     frames with a nearly-vertical launch angle had people hopping in it,
-     stuck. It is a `graze` now: one victim, one bite, and then it breaks the
-     way any other shot does. So the four seconds are what it is worth to
-     somebody who never comes near it, and the second half of this test
-     measures them with nobody standing in it. */
-  const run = await bootEngine();
+   What "lasts" means is a clock and not a toll. The glass used to be built on
+   `pierce` + `hitAt` + `hitEvery`, like the smoke and the fart, so standing in
+   it kept costing -- and a pane that bit every twenty-six frames with a
+   nearly-vertical launch angle had people hopping in it, stuck. It is a
+   `graze` with a BUDGET now: two steps, thirty frames apart, and then it is
+   gone. So the four seconds are what it is worth to somebody who never comes
+   near it, and the middle of this test measures them with nobody standing in
+   it, while the end measures the ceiling on somebody who does.
+
+   Written as a checker rather than as a test body so that the budget can have
+   a negative control: the same measurements, the same assertions, run against
+   an engine with one line changed. */
+async function glassPane(engine) {
+  const run = await bootEngine(engine);
   run("select.cursor=[6,4]; twoPlayer=true; playerCount=2; humanCount=0;" +
       " stagePick=0; startBattle();");
   run("for (var i=0;i<130;i++) step();");
@@ -2085,8 +2089,8 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
      the denial: the ground is his, and the other player has to go round.
 
      The foe is parked at the far end and untouchable for the whole of it --
-     the pane breaks on the first person through it now, so a foe who wanders
-     in is a foe who ends the measurement. */
+     two steps break the pane now, so a foe who wanders in twice is a foe who
+     ends the measurement. */
   const alone = run(`(function () {
     ${setup}
     foe.setState('idle'); foe.stocks = 99; foe.health = 1000;
@@ -2115,9 +2119,12 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
     "and see out the `life` it was given (" + alone.born + " frames); it " +
     "lasted " + alone.lived);
 
-  /* And then the other half of the same clock: somebody walking into it ends
-     it early. One victim, one bite, and the pane is gone -- so the thing it
-     denies is the ground, not a share of your health. */
+  /* And then the other half of the same clock: somebody standing in it ends
+     it early. Two bites, thirty frames apart, and the pane is gone -- so the
+     thing it denies is still the ground and not a share of your health, and
+     the ceiling on standing in one for two hundred and twenty frames is five.
+     The probe parks him on it from frame 120, so it sees the bites at about
+     121 and about 151 and then nothing for the rest of the run. */
   const stepped = run(`(function () {
     ${setup}
     foe.setState('idle'); foe.stocks = 99; foe.health = 1000;
@@ -2149,10 +2156,13 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
              leftOver: leftOver, at: at };
   })()`);
 
-  assert.equal(stepped.hits, 1,
-    "walking into it should cost exactly once; it bit " + stepped.hits +
-    " times");
-  assert.ok(stepped.lost > 0, "and take real health; took " + stepped.lost);
+  assert.equal(stepped.hits, 2,
+    "standing in it should cost exactly twice -- the pane has a budget of " +
+    "two steps and no more, however long he stands there; it bit " +
+    stepped.hits + " times");
+  assert.equal(stepped.lost, 5,
+    "and the ceiling on one pane is two bites of 2.5. Anything above it is " +
+    "the 2.55 tax coming back; he lost " + stepped.lost);
   assert.ok(stepped.leftOver > 20,
     "precondition: he should reach it with the four seconds still running; " +
     "it had " + stepped.leftOver + " frames left");
@@ -2160,6 +2170,23 @@ test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
     "and the pane should break on him rather than see out its clock; left " +
     "alone it lived " + alone.lived + " frames and with him in it " +
     stepped.lived);
+}
+
+test("Cobeus's bottle breaks into glass that lasts four seconds", async () => {
+  await glassPane();
+});
+
+test("negative control: a pane with one step in it fails the glass-pane test", async () => {
+  /* One number, and it is the whole of what 2.83 added: a pane that spends
+     its only bite on the first step is the 2.65 pane, which is a defensible
+     thing to want and is not what ships. The rest of the move -- the arc,
+     the reach, the four seconds, the graze -- is untouched by it, which is
+     exactly why the control has to exist: nothing else in this test would
+     move. */
+  await expectToFail(() => glassPane(sabotage(
+    "               damage: 2.5, graze: true, hits: 2, rearm: 30,",
+    "               damage: 2.5, graze: true, hits: 1, rearm: 30,")),
+    "with a one-step pane the glass-pane test should fail; it passed");
 });
 
 test("Cobeus's ult drives a car across the whole stage", async () => {

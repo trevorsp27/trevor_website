@@ -8,9 +8,11 @@
  *   you press the button a second time, at which point it comes APART along
  *   its own seam into two triangles that climb and dive.
  *
- *   SOMEDAY, A BAKERY on the down, which is the old nap's job -- filling the
- *   DREAM the dragon is made of -- done standing up, and it leaves LOAVES on
- *   the floor that heal whoever reaches them first, opponent included.
+ *   BANANA on the down as of 2.83, which took over the old nap's job of
+ *   filling the DREAM the dragon is made of and does it by being CAUGHT
+ *   rather than by being stood still for. It lives in its own file,
+ *   nerdwars-squalls-banana.test.js, because it is an item rather than a
+ *   move and almost nothing about it is a frame count.
  *
  *   THE WHIP on the up, where the pole used to be. Forty pixels of box whose
  *   last eight are worth double.
@@ -40,9 +42,10 @@
  *   match -- it still swings, it still connects -- so BOTH sides of the
  *   boundary are pinned here, not just the good one.
  *
- *   And the loaves are a healing item that does not care whose side it is
- *   on. The whole balance of the move is that last part, and "heals the man
- *   who baked it" is the version anybody would write by accident.
+ *   The down slot is measured next door. What is left in here about it is
+ *   the one line that belongs with the other three: which `kind` and which
+ *   label sit in that slot, because a replaced move leaves a `kind` nobody
+ *   dispatches on and that is the wreckage worth grepping for.
  *
  * HE NO LONGER HAS A FISHING POLE. The tests that used to live here compared
  * his copy of Trev's rod against Trev's, field for field, because it had been
@@ -231,10 +234,6 @@ const SETUP = `
 // The pad bits, as netplay packs them.
 const ULT = 256;
 const SP_NEUTRAL = 512, SP_DOWN = 1024, SP_UP = 2048;
-/* And the HELD half of the down button, which the bakery is now made of: the
-   press is an edge and the hold is a level, and netplay sends them as two
-   separate bits precisely so a test can hand over one without the other. */
-const HOLD_DOWN = 8192;
 
 // Where each fighter sits in ORDER. Positions, not names, because that is
 // what select.cursor takes.
@@ -346,7 +345,7 @@ function checkDreamBuysSpeed(run, cold, full) {
   assert.equal(full.dreamAfter, 0, "precondition: and spends a full one too");
 
   /* Speed, and exactly the speed the spec offers. `dreamSpeed` is the whole
-     of what a daydream is worth now: an empty meter strolls out at `speed`
+     of what a full meter is worth now: an empty one strolls out at `speed`
      and a full one arrives at `speed` plus this, which is the difference
      between walking out of the way and having to commit to a jump. */
   assert.ok(u.dreamSpeed > 0,
@@ -369,7 +368,7 @@ function checkDreamBuysSpeed(run, cold, full) {
      move along with the behavior, and an assertion that fires on what was
      actually built cannot be talked round. */
   assert.equal(full.dmg, cold.dmg,
-    "the dragon a full daydream dreams up should hit for the same as the one " +
+    "the dragon a full meter dreams up should hit for the same as the one " +
     "a cold start does: " + cold.dmg + " against " + full.dmg);
   assert.equal(cold.dmg, u.damage,
     "and both of them for what the spec says (" + u.damage + ")");
@@ -400,7 +399,7 @@ test("negative control: a dream spent on damage as well fails the speed test", a
 test("negative control: a dragon that never reads the dream fails the speed test", async () => {
   /* The other way round, and taken out of the dragon rather than the table:
      the spec still promises 1.5 and the constructor simply stops asking for
-     it. Both dragons then leave at 2.1, the daydream buys nothing at all, and
+     it. Both dragons then leave at 2.1, the meter buys nothing at all, and
      the measurement is the only place that shows -- the ROSTER still reads
      exactly as it does today. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
@@ -544,7 +543,7 @@ test("negative control: a dragon that expires mid-screen fails the wander test",
 });
 
 /* =====================================================================
-   STAR OF DAVID -- one star, or two triangles
+   STAR OF DAVID -- one star, or the six points it is made of
    ===================================================================== */
 
 /* Cast a star, then press the same button again on frame `splitAt` and watch
@@ -571,11 +570,11 @@ const starFlight = (run, splitAt) => run(`(function () {
       return q.constructor.name === 'Star' && !q.dead;
     });
     var whole = live.filter(function (q) { return q.piece === 'whole'; });
-    var up = live.filter(function (q) { return q.piece === 'up'; })[0];
-    var down = live.filter(function (q) { return q.piece === 'down'; })[0];
-    rows.push({ i: i, whole: whole.length, halves: live.length - whole.length,
-                uy: up ? +up.y.toFixed(3) : null,
-                dy: down ? +down.y.toFixed(3) : null });
+    var bits = live.filter(function (q) { return q.piece !== 'whole'; });
+    rows.push({ i: i, whole: whole.length, pieces: bits.length,
+                at: bits.map(function (q) {
+                  return { p: q.piece, x: +q.x.toFixed(4), y: +q.y.toFixed(4) };
+                }) });
     if (i === ${splitAt}) manaBefore = +me.mana.toFixed(3);
     netplay.framePads = [bitsToPad(i === 0 || i === ${splitAt} ? ${SP_NEUTRAL} : 0),
                          bitsToPad(0)];
@@ -592,8 +591,8 @@ const starFlight = (run, splitAt) => run(`(function () {
 
 /* What each piece is worth, measured one piece at a time. The foe is parked
    out of reach and untouchable until the wanted piece exists, and is then
-   walked onto it -- x and y both, because a half that climbs or dives is not
-   at head height for long and a test that waited for one to arrive would be
+   walked onto it -- x and y both, because a shard thrown off a fan is not at
+   head height for long and a test that waited for one to arrive would be
    measuring the arc instead of the damage. */
 const starDamage = (run, splitAt, piece) => run(`(function () {
   ${SETUP}
@@ -620,122 +619,171 @@ const starDamage = (run, splitAt, piece) => run(`(function () {
   return { took: took, at: at };
 })()`);
 
-function checkSplit(run, flight, whole, up, down) {
+// The six pieces, in the order STAR_FAN numbers them: clockwise from twelve.
+const PIECES = ["p0", "p1", "p2", "p3", "p4", "p5"];
+
+function checkSplit(run, flight, whole, shards) {
   const s = JSON.parse(run("JSON.stringify(ROSTER.squalls.specials.neutral)"));
   assert.equal(s.label, "STAR OF DAVID",
     "precondition: his neutral special is the star; it is " + s.label);
   const rows = JSON.parse(flight.rows);
 
+  /* SIX BEARINGS, READ OFF THE ENGINE. The fan is a constant of the figure
+     rather than a tuning number, so it is checked as one: six of them, all
+     unit length, or the pieces are not leaving on the star's own seams. */
+  const fan = JSON.parse(run("JSON.stringify(STAR_FAN)"));
+  assert.equal(fan.length, 6,
+    "a hexagram comes apart into the six points it is made of, so there are " +
+    "six bearings to come apart along; STAR_FAN has " + fan.length);
+  for (const v of fan) {
+    assert.ok(Math.abs(Math.hypot(v[0], v[1]) - 1) < 1e-9,
+      "and every one of them is a DIRECTION, not a speed -- `spread` is where " +
+      "the speed lives; " + JSON.stringify(v) + " is " +
+      Math.hypot(v[0], v[1]).toFixed(6) + " long");
+  }
+
   // One star, whole, until somebody presses the button a second time.
   const before = rows.filter((r) => r.whole > 0);
   assert.ok(before.length > 0, "the star should have been thrown at all");
   const wasWhole = before[before.length - 1].i;
-  assert.ok(rows.filter((r) => r.i <= wasWhole).every((r) => r.halves === 0),
-    "and be one thing until it is told otherwise; a half turned up before " +
+  assert.ok(rows.filter((r) => r.i <= wasWhole).every((r) => r.pieces === 0),
+    "and be one thing until it is told otherwise; a piece turned up before " +
     "the second press");
 
-  /* TWO, and exactly two. A Star of David is two overlapping triangles, so a
-     split that yields one piece or three is not the move it is drawn as.
+  /* SIX, AND EXACTLY SIX, ON THE FRAME AFTER THE PRESS. A hexagram is a
+     hexagon with six triangles on it, so a split that yields two pieces or
+     five is not the move it is drawn as -- and the hexagon is not one of the
+     six, it leaves as the sparks.
 
-     Counted over a window rather than over the rest of the flight, because
-     the halves are SUPPOSED to leave: the diving one is off the bottom of
-     the screen about twenty-six frames after the split, and a test that
-     demanded a pair for as long as either survived would be failing the move
-     for working. The ceiling below is the one that runs the whole way. */
-  const after = rows.filter((r) => r.i > wasWhole && (r.halves > 0 || r.whole > 0));
+     Counted from the frame after the press rather than over the rest of the
+     flight, because the pieces are SUPPOSED to leave: they live twenty-six
+     frames and the ones aimed downward are off the bottom of the screen
+     before that, and a test that demanded all six for as long as any
+     survived would be failing the move for working. */
+  const after = rows.filter((r) => r.i > wasWhole && (r.pieces > 0 || r.whole > 0));
   assert.ok(after.length > 0, "the second press should have split it");
+  assert.equal(after[0].pieces, 6,
+    "the frame after the press should hold the six points the star was made " +
+    "of; it held " + after[0].pieces);
   for (const r of after) {
-    assert.ok(r.halves <= 2,
-      "a star comes apart into two triangles and no more; on frame " + r.i +
-      " there were " + r.halves);
+    assert.ok(r.pieces <= 6,
+      "a star comes apart into six and no more; on frame " + r.i +
+      " there were " + r.pieces);
     assert.equal(r.whole, 0,
       "and the whole one stops existing when it does; frame " + r.i +
       " still had " + r.whole);
   }
-  const pair = after.filter((r) => r.i <= wasWhole + 20);
-  assert.ok(pair.length > 15, "precondition: the split should leave something " +
-    "in the air for a while; it lasted " + pair.length + " frames");
-  for (const r of pair) {
-    assert.equal(r.halves, 2,
-      "and both of them should fly -- a split that yields one piece is a " +
-      "star that got smaller; on frame " + r.i + " there were " + r.halves);
+  const seen = new Set();
+  for (const p of after[0].at) seen.add(p.p);
+  assert.deepEqual([...seen].sort(), PIECES,
+    "and they are the six points by name, one each; the split made " +
+    JSON.stringify([...seen].sort()));
+
+  /* AND THEY OPEN. Measured as every PAIR getting further apart rather than
+     as six directions, because six pieces that all left on slightly different
+     headings would pass a direction test and still cover one lane between
+     them. `off` is what puts them where their points were on the frame of the
+     press; `spread` is what takes them away from each other afterwards. */
+  const full = after.filter((r) => r.pieces === 6);
+  assert.ok(full.length > 8,
+    "precondition: all six should stay up long enough to diverge; they were " +
+    "all in the air for " + full.length + " frames");
+  const at = (r, p) => r.at.find((q) => q.p === p);
+  const gap = (r, a, b) =>
+    Math.hypot(at(r, a).x - at(r, b).x, at(r, a).y - at(r, b).y);
+  const first = full[0], last = full[full.length - 1];
+  const span = last.i - first.i;
+  for (let i = 0; i < 6; i++) {
+    for (let j = i + 1; j < 6; j++) {
+      const a = PIECES[i], b = PIECES[j];
+      assert.ok(gap(last, a, b) > gap(first, a, b) + span,
+        "every pair of pieces has to get FURTHER apart -- six lanes where the " +
+        "star covered one; " + a + " and " + b + " went from " +
+        gap(first, a, b).toFixed(1) + "px to " + gap(last, a, b).toFixed(1) +
+        "px over " + span + " frames");
+    }
   }
 
-  /* And they go DIFFERENT WAYS. `up.climb` is negative and `down.climb` is
-     positive, which on a screen whose y grows downward means one leaves over
-     your head and the other under your feet. Measured as a gap that OPENS
-     rather than as two directions, because two halves that both climb at
-     slightly different rates would pass a direction test and still cover one
-     lane between them. */
-  assert.ok(s.up.climb < 0 && s.down.climb > 0,
-    "precondition: the halves are specified to climb and dive (" +
-    s.up.climb + " / " + s.down.climb + ")");
-  const both = after.filter((r) => r.uy !== null && r.dy !== null);
-  assert.ok(both.length > 5,
-    "both halves should stay up long enough to diverge; saw " + both.length +
-    " frames with the pair of them");
-  const first = both[0], last = both[both.length - 1];
-  assert.ok(last.dy - last.uy > first.dy - first.uy + 20,
-    "the gap between them has to OPEN -- that is the whole move, two lanes " +
-    "where the star covered one; it went from " +
-    (first.dy - first.uy).toFixed(1) + "px to " +
-    (last.dy - last.uy).toFixed(1) + "px apart");
-  assert.ok(last.uy < first.uy,
-    "the up half should climb; it went " + first.uy + " -> " + last.uy);
-  assert.ok(last.dy > first.dy,
-    "and the down half dive; it went " + first.dy + " -> " + last.dy);
+  /* And no two of them go the same way. Read as a bearing away from where the
+     six of them are between them, because they all inherit the star's forward
+     speed and a heading measured against the stage would say six pieces sharing
+     one direction were six pieces doing the same thing. */
+  const cx = PIECES.reduce((t, p) => t + at(last, p).x, 0) / 6;
+  const cy = PIECES.reduce((t, p) => t + at(last, p).y, 0) / 6;
+  const away = PIECES.map((p) =>
+    (Math.atan2(at(last, p).y - cy, at(last, p).x - cx) * 180 / Math.PI + 360) % 360);
+  const sorted = [...away].sort((a, b) => a - b);
+  for (let i = 0; i < 6; i++) {
+    const d = clockwiseFrom(sorted[i], sorted[(i + 1) % 6]);
+    assert.ok(d > 30,
+      "no two pieces may leave on the same bearing, or the fan is not a fan; " +
+      "two of them are " + d.toFixed(1) + " degrees apart (all six: " +
+      sorted.map((v) => v.toFixed(1)).join(", ") + ")");
+  }
 
   /* What they cost you, off the stage rather than off the table. Splitting is
-     a choice about COVERAGE: two lanes for less damage each. A half worth
-     what the whole star is worth makes the second press free, and a free
-     second press is not a decision. */
+     a choice about COVERAGE: six lanes for half the damage each. HALF OF
+     ELEVEN IS FIVE AND A HALF AND ELEVEN IS ODD, so the number the move was
+     asked for rounds DOWN -- six would be 30 damage against somebody pinned
+     in place, out of one press. A piece worth what the whole star is worth
+     makes the second press free, and a free second press is not a decision. */
   assert.ok(whole.at >= 0, "the whole star should have connected");
   assert.equal(whole.took, s.damage,
     "and hit for the spec's `damage` (" + s.damage + "); it took " + whole.took);
-  assert.ok(up.at >= 0 && down.at >= 0, "and so should each half");
-  assert.equal(up.took, s.up.damage,
-    "the climbing half hits for `up.damage` (" + s.up.damage + "); it took " +
-    up.took);
-  assert.equal(down.took, s.down.damage,
-    "and the diving one for `down.damage` (" + s.down.damage + "); it took " +
-    down.took);
-  assert.ok(up.took < whole.took && down.took < whole.took,
-    "and both of them for LESS than the whole star -- splitting buys reach, " +
-    "not damage; the whole took " + whole.took + " and the halves " +
-    up.took + " / " + down.took);
+  for (const p of PIECES) {
+    assert.ok(shards[p].at >= 0, "and so should " + p + "; it never connected");
+    assert.equal(shards[p].took, s.shard.damage,
+      p + " hits for `shard.damage` (" + s.shard.damage + "); it took " +
+      shards[p].took);
+    assert.ok(shards[p].took < whole.took,
+      "and for LESS than the whole star -- splitting buys reach, not damage; " +
+      "the whole took " + whole.took + " and " + p + " took " + shards[p].took);
+    assert.equal(shards[p].took, Math.floor(s.damage / 2),
+      "and for exactly half of it rounded down (" + Math.floor(s.damage / 2) +
+      "), which is the rule this move was asked for; " + p + " took " +
+      shards[p].took);
+  }
 }
 
-test("the star comes apart into two halves that diverge and hit for less", async () => {
+const allShards = (run, splitAt) => {
+  const out = {};
+  for (const p of PIECES) out[p] = starDamage(run, splitAt, p);
+  return out;
+};
+
+test("the star comes apart into the six points it is made of", async () => {
   const run = await arena(SQUALLS, REESE);
   checkSplit(run, starFlight(run, 25), starDamage(run, -1, "whole"),
-             starDamage(run, 25, "up"), starDamage(run, 25, "down"));
+             allShards(run, 25));
 });
 
-test("negative control: halves that hit as hard as the star fail the split test", async () => {
-  /* The upgrade nobody would notice. It still splits, it still covers two
+test("negative control: pieces that hit as hard as the star fail the split test", async () => {
+  /* The upgrade nobody would notice. It still splits, it still covers six
      lanes, it still looks exactly right -- and the second press has stopped
      costing anything, so there is no longer a reason not to press it every
-     single time. */
+     single time, six times over. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "      up: { damage: 8, base: 2.8, scale: 5.6, angle: 66,",
-    "      up: { damage: 11, base: 2.8, scale: 5.6, angle: 66,") });
+    "      shard: { damage: 5, base: 2.6, scale: 5.0, angle: 45,",
+    "      shard: { damage: 11, base: 2.6, scale: 5.0, angle: 45,") });
   expectToFail(() => checkSplit(run, starFlight(run, 25), starDamage(run, -1, "whole"),
-                                starDamage(run, 25, "up"), starDamage(run, 25, "down")),
-    "with the halves hitting for the whole star's damage the split test " +
+                                allShards(run, 25)),
+    "with the pieces hitting for the whole star's damage the split test " +
     "should fail; it passed");
 });
 
-test("negative control: halves that both climb fail the split test", async () => {
-  /* The diving half taken off its dive and handed the climbing one's, which
-     is the version that survives every count: two pieces, two triangles,
-     both on screen, both hitting for six. They simply fly in company, and
-     the move is a star that got smaller. */
+test("negative control: a fan that never opens fails the split test", async () => {
+  /* `spread` taken to nothing and nothing else touched. Six pieces still come
+     off, all six still fly, they still hit for five each -- and they travel
+     in a clump two pixels across for the whole twenty-six frames, so the move
+     covers exactly the lane the star already covered. It is the edit that
+     looks like tidying a magic number away, and on screen it is a star that
+     got blurry rather than a star that came apart. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "              climb: 1.55, life: 110, dream: 3 },",
-    "              climb: -1.35, life: 110, dream: 3 },") });
+    "      off: 2, spread: 3.0,",
+    "      off: 2, spread: 0,") });
   expectToFail(() => checkSplit(run, starFlight(run, 25), starDamage(run, -1, "whole"),
-                                starDamage(run, 25, "up"), starDamage(run, 25, "down")),
-    "with both halves climbing the split test should fail; it passed");
+                                allShards(run, 25)),
+    "with the fan never opening the split test should fail; it passed");
 });
 
 function checkSplitIsNotACast(run, flight) {
@@ -743,7 +791,7 @@ function checkSplitIsNotACast(run, flight) {
   const rows = JSON.parse(flight.rows);
   const wasWhole = rows.filter((r) => r.whole > 0).pop();
   assert.ok(wasWhole, "precondition: a whole star should have been in the air");
-  assert.ok(rows.some((r) => r.halves === 2),
+  assert.ok(rows.some((r) => r.pieces === 6),
     "precondition: and the second press should have split it");
 
   /* The bar is the honest witness. The split is a COMMAND to something
@@ -760,7 +808,7 @@ function checkSplitIsNotACast(run, flight) {
   assert.equal(flight.castAgain, false,
     "and must not put him back into a cast at all");
   assert.ok(rows.every((r) => r.i <= wasWhole.i || r.whole === 0),
-    "so no second whole star may appear behind the halves; one did");
+    "so no second whole star may appear behind the pieces; one did");
 }
 
 test("the press that splits a star does not also throw another", async () => {
@@ -796,8 +844,8 @@ test("negative control: without the guard the split press casts as well", async 
    shows is a dragon that is slower than it should be four casts later.
 
    Two arms, because the miss is the half that can go wrong invisibly. The
-   bakery fills the same meter, so a probe that only watched a star that hit
-   would pass just as happily if standing still were doing the work. */
+   banana fills the same meter, so a probe that only watched a star that hit
+   would pass just as happily if catching fruit were doing the work. */
 const starDream = (run, connect) => run(`(function () {
   ${SETUP}
   me.dream = 0;
@@ -985,283 +1033,10 @@ test("negative control: a sweet spot out past the box fails the whip test", asyn
 });
 
 /* =====================================================================
-   SOMEDAY, A BAKERY -- the meter, and the bread it leaves lying about
-   ===================================================================== */
-
-/* He stands and daydreams for four seconds, and then somebody else walks
-   over the results.
-
-   Two things are collected in one pass because they are one move: the DREAM
-   the dragon is made of, and the loaves. The foe is held out of reach and
-   untouchable for the first two hundred frames -- a foe left to his own
-   devices wanders into the bread, which is the point of the move and useless
-   for counting it -- and is then walked onto whatever is on the floor.
-
-   His health is knocked down first so the healing has somewhere to go: at a
-   hundred it is clamped, and a clamped heal is indistinguishable from no
-   heal at all. */
-/* The three frames this probe cares about, computed from the move rather
-   than written down. They were written down -- 120 and 121 for the two
-   dreaming frames, 262 for walking the foe onto the bread -- and both numbers
-   were inside a 245-frame stand that is eighty frames now. A probe with a
-   move's old length baked into it does not report that the move got shorter;
-   it reports that the meter stopped filling, which is a different bug and
-   not the one that happened. */
-const dreamProbe = (run) => {
-  const s = JSON.parse(run("JSON.stringify(ROSTER.squalls.specials.down)"));
-  /* HOW LONG THE BUTTON IS DOWN, which is the move now. `active` is 1 and is
-     only what keeps napping() true while the charge pins attackFrame on
-     `startup`; the length of the daydream is `charge.hold`. A probe that
-     went on reading `active` would hold the button for one frame, bake
-     nothing, and pass the loaf-spacing assertion vacuously. */
-  const hold = (s.charge && s.charge.hold) || s.active;
-  // Two consecutive frames from the middle of the hold, where the meter is
-  // certainly still climbing and certainly not yet done.
-  const mid = s.startup + Math.floor(hold / 2);
-  // And well after the last loaf lands, so nothing is still being baked
-  // while the eating is counted -- see the note below.
-  const eat = s.startup + hold + s.recovery + 20;
-  /* Long enough for every loaf to go stale and be eaten. `mine` is how
-     long a fresh one is his alone, and a probe that stopped before the
-     last one ripened would count it as bread nobody wanted. */
-  /* And how many frames the BUTTON is down for, which is not the same
-     number: the pin does not engage until attackFrame reaches `startup`, so
-     a probe that let go after `hold` frames would be nine frames short of
-     the cap and bank 63.45 of the 67.5 the move advertises. */
-  return { hold: hold, holdFor: s.startup + hold, mid: mid, eat: eat,
-           total: eat + (s.loaf.mine || 0) + 140 };
-};
-
-const daydream = (run) => run(`(function () {
-  ${SETUP}
-  /* Stood in the MIDDLE of the platform, not at SETUP's usual twenty-four
-     pixels in from its left edge. The bread lands behind him now, and from
-     there the third loaf lands three pixels past the edge of the floor and
-     falls off the world -- which is a real thing the move does on a ledge
-     and useless for counting who ate what. */
-  me.x = main.x + main.w / 2;
-  /* TWENTY, not forty. Five loaves at thirteen is sixty-five, and from forty
-     the last two run into the health cap -- which is a real rule (see the
-     full-health guard in Loaf.update) and would make the heal-per-loaf
-     assertion below measure the ceiling instead of the loaf. Low enough that
-     the whole batch fits, which is what is being counted. */
-  foe.invuln = 9999; foe.x = main.x + main.w - 8; foe.health = 20;
-  /* Both counts are kept BY IDENTITY -- every loaf object is remembered the
-     frame it first appears, and counted eaten when it leaves the live set.
-
-     The obvious versions of both do not work, and they fail in the same
-     direction, which is the quiet one. Counting bakes as a length
-     against a high-water mark is a running MAXIMUM: once the foe eats, the
-     live count falls, and the fourth loaf landing while three are on the
-     floor never exceeds it, so it is never counted. And counting eats
-     as the net change in that length loses any loaf eaten on the same frame
-     another is baked -- minus one plus one is nought, and the health went up
-     by eleven with nothing to show for it. Both bugs hid while the move
-     happened to bake three loaves and finish baking before the eating
-     started; the fourth loaf found them the day it arrived. */
-  var dreams = [], bakedAt = [], healed = 0, eaten = 0, known = [], freshEats = 0, freshTries = 0;
-  var hp0 = foe.health;
-  var P = ${JSON.stringify(dreamProbe(run))};
-  netplay.active = true;
-  for (var i = 0; i < P.total; i++) {
-    me.hitstop = 0; me.mana = 999;
-    var loaves = projectiles.filter(function (q) {
-      return q.constructor.name === 'Loaf' && !q.dead;
-    });
-    for (var k = 0; k < loaves.length; k++) {
-      if (known.indexOf(loaves[k]) < 0) { known.push(loaves[k]); bakedAt.push(i); }
-    }
-    /* Off to eat, once the daydream has run its COURSE -- not merely once it
-       has been going a while.
-
-       P.eat -- named without backticks, because this comment lives
-       INSIDE a template literal and a backtick in here ends the probe
-       silently -- is past the end of the whole move, and the gap matters:
-       walking him onto the bread while more is still being baked had him
-       standing seven pixels from where the next loaf was about to spawn, and
-       a loaf is eaten by Loaf.update on the same step it is pushed. It was
-       created and gone inside one step() -- never live at any point a probe
-       could look -- so it healed him for eleven that no counter here could
-       attribute to anything. Bake first, then eat; then both counts are of
-       things that were actually on the floor. */
-    if (i >= P.eat && loaves.length) {
-      foe.invuln = 0; foe.x = loaves[0].x; foe.y = loaves[0].y;
-      foe.vx = 0; foe.vy = 0; foe.grounded = true;
-    }
-    /* PRESSED ONCE AND THEN HELD, which is the whole move. The press is the
-       edge bit; every frame after it is the level bit and nothing else, so
-       the cast happens once and the daydream runs for exactly as long as the
-       button is down. He is also NOT given a direction -- the charge lets him
-       WALK now, and a held direction would take him off the platform inside a
-       hundred and fifty frames, which is a real thing the move does and
-       useless for counting who ate what. (No backticks in here: this comment
-       lives inside a template literal and one would end the probe silently,
-       which is the trap the note below already carries.) */
-    netplay.framePads = [bitsToPad(i === 0 ? ${SP_DOWN}
-                                 : i < P.holdFor ? ${HOLD_DOWN} : 0),
-                         bitsToPad(0)];
-    var h0 = foe.health;
-    /* Read off the loaf's OWN clock rather than off i, and with a frame in
-       hand: the loaf ages inside the step below, so a loaf one frame short
-       of stale here is stale by the time anybody is standing on it. */
-    var fresh = loaves.length && loaves[0].t + 1 < loaves[0].mine;
-    if (fresh && i >= P.eat) freshTries++;
-    step();
-    if (foe.health > h0) { healed += foe.health - h0; if (fresh) freshEats++; }
-    var live = projectiles.filter(function (q) {
-      return q.constructor.name === 'Loaf' && !q.dead;
-    });
-    /* Recomputed rather than accumulated, so it cannot drift. Nothing here
-       expires of old age -- a loaf lives 420 frames and the last is baked
-       around 250 -- so anything gone was eaten. */
-    eaten = 0;
-    for (var k = 0; k < known.length; k++) {
-      if (live.indexOf(known[k]) < 0) eaten++;
-    }
-    // Two consecutive dreaming frames, read off the middle of the stand.
-    if (i === P.mid || i === P.mid + 1) dreams.push(+me.dream.toFixed(4));
-  }
-  var seen = known.length;
-  netplay.active = false; netplay.framePads = null;
-  return { dreams: dreams.join(','), baked: seen, bakedAt: bakedAt.join(','),
-           freshEats: freshEats, freshTries: freshTries,
-           dream: +me.dream.toFixed(3), healed: +healed.toFixed(3),
-           eaten: eaten, hp0: hp0, foeHp: +foe.health.toFixed(3) };
-})()`);
-
-function checkBakery(run, r) {
-  const s = JSON.parse(run("JSON.stringify(ROSTER.squalls.specials.down)"));
-  const u = JSON.parse(run("JSON.stringify(ROSTER.squalls.ult)"));
-  assert.equal(s.label, "SOMEDAY, A BAKERY",
-    "precondition: his down special is the bakery; it is " + s.label);
-
-  /* The meter, per frame and against the spec. This is the only thing that
-     fills the dream and the dragon is the only thing that spends it, so a
-     daydream that quietly stops filling it takes his ult down with it and
-     says nothing on the way. */
-  const [d1, d2] = r.dreams.split(",").map(Number);
-  assert.ok(Math.abs(d2 - d1 - s.dream) < 1e-6,
-    "standing there should add `dream` (" + s.dream + ") a frame; two " +
-    "consecutive frames went " + d1 + " -> " + d2);
-  /* A FULL HOLD BANKS WHAT IT STOOD FOR, and that is no longer the whole
-     meter. It never actually was -- the old move advertised a hundred and
-     delivered 19.2 live, because a sticky wake flag shut two casts in five
-     on dreaming frame ten. 2.81 says the true number out loud instead:
-     `dream` a frame for `charge.hold` frames, which is 67.5 of the dragon's
-     hundred, so no single press fills it and the dragon is paid for in
-     bakeries plus the stars that land. Asserted against the two spec numbers
-     rather than against 67.5, so retuning either one moves this with it. */
-  const bank = s.dream * ((s.charge && s.charge.hold) || s.active);
-  assert.ok(Math.abs(r.dream - bank) < 1e-6,
-    "a full hold should bank `dream` x `charge.hold` (" + bank +
-    "); he finished on " + r.dream);
-  assert.ok(bank < u.dreamMax,
-    "and that has to be LESS than the meter the dragon reads (" + u.dreamMax +
-    "), or one press fills it again and the stars stop mattering; it banks " +
-    bank);
-
-  /* The bread. Counted rather than assumed, and spaced against `every`
-     rather than against a frame number written down here -- the interval IS
-     the move's pacing, and a loaf every ten frames is a different move.
-
-     `loaves` is a ceiling and is asserted as one rather than as an exact
-     count -- the number of loaves a stand delivers is the move's business,
-     and the property worth pinning is that it never exceeds what it
-     advertises. (It used to under-deliver: `active` was 240, and the fourth
-     loaf needs the frame counter to REACH 240, which a 240-frame window
-     never does. The window is 245 now and all four land.) */
-  const at = r.bakedAt.split(",").map(Number);
-  assert.ok(r.baked > 0, "the daydream should leave bread on the floor at all");
-  assert.ok(r.baked <= s.loaves,
-    "and never more than `loaves` (" + s.loaves + "); it left " + r.baked);
-  assert.ok(at.length > 1,
-    "more than one of them, or there is nothing to pace; it left " + r.baked);
-  for (let i = 1; i < at.length; i++) {
-    assert.equal(at[i] - at[i - 1], s.every,
-      "one every `every` frames (" + s.every + "); they landed on frames " +
-      r.bakedAt);
-  }
-
-  /* And it is not his bread. The whole balance of the move is here: he
-     stopped dead in the middle of a fight to think about a bakery, and what
-     he got for it is bread in the middle of a fight. The man he is fighting
-     eats it. */
-  /* FRESH bread is his, though, and that is the half of the joke that keeps
-     the move payable. He is rooted for the eighty frames he is baking and
-     cannot reach any of it, so with no window at all the daydream is a
-     vending machine somebody else is standing in front of: measured over 480
-     matches with the loaves already moved behind him, his opponent ate 445
-     of the 937 he baked and he got 315. The probe below walks the foe onto
-     the bread well before it goes stale and he is not allowed a crumb. */
-  assert.ok(s.loaf.mine > 0,
-    "precondition: `loaf.mine` names how long a loaf is the baker's alone");
-  assert.ok(r.freshTries > 10,
-    "precondition: the probe has to actually stand him on bread that is " +
-    "still fresh, or the count below is zero for the wrong reason; it tried " +
-    r.freshTries + " times");
-  assert.equal(r.freshEats, 0,
-    "nobody but him may eat a loaf less than `mine` (" + s.loaf.mine +
-    ") frames old; the foe got " + r.freshEats + " of them out of the oven");
-
-  assert.ok(r.eaten > 0,
-    "his opponent should be able to walk over a loaf and eat it once it has " +
-    "gone stale; nothing was picked up");
-  assert.equal(r.healed, r.eaten * s.loaf.heal,
-    "and be healed `loaf.heal` (" + s.loaf.heal + ") for each one; he ate " +
-    r.eaten + " and gained " + r.healed);
-  assert.ok(r.foeHp > r.hp0,
-    "so he leaves better off than he arrived; he went " + r.hp0 + " -> " +
-    r.foeHp);
-}
-
-test("the bakery fills the dream and leaves loaves his opponent can eat", async () => {
-  const run = await arena(SQUALLS, REESE);
-  checkBakery(run, daydream(run));
-});
-
-test("negative control: bread anybody can eat the moment it lands fails the bakery test", async () => {
-  /* The window gone and nothing else touched -- which is what the move
-     looked like before it was measured, and the reason it is measured. It
-     still bakes on the same frames, still heals for the same thirteen, still
-     fills the meter at the same rate, and there is nothing on screen that
-     says anything is wrong. What happens is that he is rooted for the eighty
-     frames he is baking and the man standing over him takes the lot. */
-  const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "      if (f !== this.owner && this.t < this.mine) continue;",
-    "      if (false && f !== this.owner && this.t < this.mine) continue;") });
-  expectToFail(() => checkBakery(run, daydream(run)),
-    "with a loaf edible the moment it lands the bakery test should fail; it passed");
-});
-
-test("negative control: bread only its baker can eat fails the bakery test", async () => {
-  /* The version anybody would write by accident, and the one that quietly
-     turns a gamble into free healing: the loaf checks whose it is before it
-     checks whether anybody is standing on it. Everything else is identical --
-     same stand, same meter, same four seconds, same bread on the floor. */
-  const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "      if (Math.abs(f.x - this.x) > 9) continue;",
-    "      if (f !== this.owner) continue;\n      if (Math.abs(f.x - this.x) > 9) continue;") });
-  expectToFail(() => checkBakery(run, daydream(run)),
-    "with the loaves reserved for their baker the bakery test should fail; it passed");
-});
-
-test("negative control: a daydream that fills nothing fails the bakery test", async () => {
-  /* The other half, taken out where it would actually go missing: the meter
-     stops climbing and everything you can see about the move is unchanged.
-     He still stands there, still bakes, still hands the other man the bread
-     -- and the dragon he is paying for never gets any faster. */
-  const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "          this.dream = Math.min(100, this.dream + s.dream);",
-    "          this.dream = Math.min(100, this.dream);") });
-  expectToFail(() => checkBakery(run, daydream(run)),
-    "with the daydream filling nothing the bakery test should fail; it passed");
-});
-
-/* =====================================================================
    AND THE MOVES THAT ARE NOT THERE ANY MORE
    ===================================================================== */
 
-test("REM SLEEP, the yawn and the nap are gone from the engine entirely", async () => {
+test("REM SLEEP, the yawn, the nap and the bakery are gone from the engine entirely", async () => {
   /* A replaced move leaves two kinds of wreckage: a label nobody reads and a
      `kind` nobody dispatches on. The second is the dangerous one -- a stale
      case in runSpecial costs nothing and says nothing, right up until a spec
@@ -1279,7 +1054,14 @@ test("REM SLEEP, the yawn and the nap are gone from the engine entirely", async 
   assert.equal(/class\s+Yawn\b/.test(src), false,
     "and the Yawn class went with the move that threw it");
 
-  for (const dead of ["yawn", "sleep"]) {
+  /* `bakery` joined them in 2.83. It is the third move to go this way and
+     the second to leave a whole class behind -- Loaf went with it, the way
+     Yawn went with the yawn -- and it is the one that proves why this test
+     greps the source instead of walking the ROSTER: napping() dispatched on
+     `kind === 'bakery'` from OUTSIDE the table, and the day no entry carried
+     that kind it became a question with one answer and nothing on screen to
+     say so. It was deleted with the move. */
+  for (const dead of ["yawn", "sleep", "bakery"]) {
     assert.equal(new RegExp("kind: '" + dead + "'").test(src), false,
       "no move may still be declared `kind: '" + dead + "'`");
     assert.equal(new RegExp("case '" + dead + "':").test(src), false,
@@ -1291,14 +1073,17 @@ test("REM SLEEP, the yawn and the nap are gone from the engine entirely", async 
   const kinds = run(`[ROSTER.squalls.ult.kind,
     ROSTER.squalls.specials.up.kind, ROSTER.squalls.specials.down.kind,
     ROSTER.squalls.specials.neutral.kind].join(',')`);
-  assert.equal(kinds, "salamence,whip,bakery,star",
-    "his four moves should be the dragon, the whip, the bakery and the star; " +
+  assert.equal(kinds, "salamence,whip,toss,star",
+    "his four moves should be the dragon, the whip, the banana and the star; " +
     "they are " + kinds);
   const labels = run(`[ROSTER.squalls.ult.label,
     ROSTER.squalls.specials.up.label, ROSTER.squalls.specials.down.label,
     ROSTER.squalls.specials.neutral.label].join(',')`);
-  assert.equal(labels, "SALAMENCE,THE WHIP,SOMEDAY, A BAKERY,STAR OF DAVID",
+  assert.equal(labels, "SALAMENCE,THE WHIP,BANANA,STAR OF DAVID",
     "and wear the names the roster screen shows; they are " + labels);
+  assert.equal(/class\s+Loaf\b/.test(src), false,
+    "and the Loaf class went with the move that baked it, the same way Yawn " +
+    "went with the yawn");
 });
 
 /* =====================================================================
@@ -1461,20 +1246,69 @@ function checkHexagram(shot) {
       "a gap in it and the shape is coming undone");
   }
 
-  /* Seven sealed holes, which is the whole shape stated as one number: six
-     points plus the middle. Five would be a point filled in, eight a point
-     split in two, one the middle alone with nothing around it -- and a point
-     that is not hollow is not a point, because at this size the hole IS the
-     tip. */
-  assert.equal(holes.length, 7,
-    "a hexagram encloses seven pale holes -- six points and the middle; this " +
-    "one encloses " + holes.length + " (sizes " +
+  /* ONE sealed patch, and it is the middle. The assertion that used to stand
+     here demanded SEVEN -- six points plus the middle -- and it passed on the
+     art the player complained about, because what it was counting in the
+     points was six one-pixel white pips buried in flat vertical walls. A
+     checker that cannot tell a point from a nick in a wall is not measuring
+     six-pointedness. The points are solid now and the only hole is the
+     middle. */
+  assert.equal(holes.length, 1,
+    "the only pale patch the star encloses is its middle; this one encloses " +
+    holes.length + " (sizes " +
     holes.map((h) => h.size).sort((a, b) => a - b).join(", ") + ")");
+  const inner = holes[0];
+  assert.ok(inner.cells.includes(shot.cx + "," + shot.cy),
+    "and it is the one the middle of the star is in");
 
-  const inner = holes.filter((h) => h.cells.includes(shot.cx + "," + shot.cy));
-  assert.equal(inner.length, 1, "exactly one of them holds the middle");
-  const points = holes.filter((h) => h !== inner[0]);
-  assert.equal(points.length, 6, "leaving six points; there are " + points.length);
+  /* SO THE SHAPE IS ASSERTED ON THE BLUE SILHOUETTE INSTEAD, and this is the
+     fault somebody actually reported. A point-up hexagram is widest at the
+     shoulders, where two points and the hexagon share a row, and it BITES
+     inward between the two o'clock point and the four o'clock one.
+     Rasterize the honest figure at eleven pixels and the side point protrudes
+     1.59px over a run of 2.75, which rounds to one column with a three-row
+     flat either side of it -- a wall with a nick in it. Two columns is a bite,
+     and a bite is the only thing at this size that reads as a point. */
+  const rowSpan = new Map();
+  for (const [k, c] of px) {
+    if (c === shot.field) continue;
+    const [x, y] = cellAt(k);
+    const e = rowSpan.get(y) || [Infinity, -Infinity];
+    rowSpan.set(y, [Math.min(e[0], x), Math.max(e[1], x)]);
+  }
+  const ys = [...rowSpan.keys()].sort((a, b) => a - b);
+  const span = (y) => rowSpan.get(y)[1] - rowSpan.get(y)[0] + 1;
+  const shoulder = Math.max(...ys.map(span));
+  const wide = ys.filter((y) => span(y) === shoulder);
+  const waist = Math.min(...ys.filter((y) => y > wide[0] && y < wide[wide.length - 1])
+                              .map(span));
+  assert.ok(waist <= shoulder - 4,
+    "the star has to bite INWARD between its two o'clock point and its " +
+    "four o'clock one, or the side of it is a wall and there are only " +
+    "two points on this star; the shoulder is " + shoulder +
+    " columns across and the waist is " + waist);
+
+  /* AND THERE ARE SIX OF THEM, read off the grid that numbers the points
+     rather than off the holes that used to stand in for them. The numbering is
+     not decoration: it is what drawStarArt lights as the star turns, and it is
+     the same numbering split() hands STAR_FAN, so the piece that flies at two
+     o'clock is the one the star lit at two o'clock. If these six stop
+     being six points around a middle, the fan is aiming at something else. */
+  const ids = [...new Set(shot.ids.split("").filter((c) => /[0-9]/.test(c)))].sort();
+  assert.equal(ids.length, 6,
+    "the star numbers six points; it numbers " + ids.length);
+  const points = ids.map(() => ({ cells: [] }));
+  for (let i = 0; i < shot.ids.length; i++) {
+    const id = shot.ids[i];
+    if (!/[0-9]/.test(id)) continue;
+    points[ids.indexOf(id)].cells.push(
+      (shot.cx - 5 + (i % 11)) + "," + (shot.cy - 5 + Math.floor(i / 11)));
+  }
+  for (let k = 0; k < points.length; k++) {
+    assert.ok(points[k].cells.length >= 2,
+      "a point is a clump rather than a speck; point " + ids[k] + " is " +
+      points[k].cells.length + " pixels");
+  }
 
   /* And they are AROUND it rather than inside it. A middle that had burst open
      and swallowed its own points could still be counted as seven patches once,
@@ -1484,7 +1318,7 @@ function checkHexagram(shot) {
     const [x, y] = cellAt(k);
     return Math.hypot(x - shot.cx, y - shot.cy);
   };
-  const innerReach = Math.max(...inner[0].cells.map(reach));
+  const innerReach = Math.max(...inner.cells.map(reach));
   for (const p of points) {
     const near = Math.min(...p.cells.map(reach));
     assert.ok(near > innerReach,
@@ -1529,118 +1363,216 @@ test("negative control: a star with its middle filled in fails the hexagram test
     "with the middle filled in the hexagram test should fail; it passed");
 });
 
-test("negative control: a star with five points fails the hexagram test", async () => {
-  /* One point solid and the other five left alone. This is the shape of edit
-     that gets made for a good reason: the top point is a single pale pixel
-     inside a one-pixel tip, and filling it is the obvious way to stop it
-     looking like a speck of dirt on the screen. It also takes the star from
-     six points to five, which nobody counts at eleven pixels across. */
+test("negative control: a star with a wall down each side fails the hexagram test", async () => {
+  /* The bite filled back in, and nothing else touched. The star is still nine
+     by eleven, still six-numbered, still hollow in the middle, still the
+     flag's blue -- and its left and right sides are flat vertical walls
+     three rows tall again, which is the art that shipped and the thing the
+     player was looking at when he said it still looked weird. This is also the
+     edit somebody would make on purpose: a straight edge is tidier than a
+     bitten one, and at eleven pixels the bite is the entire difference between
+     six points and two. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "    '.....#.....',\n    '....#+#....',\n    '.===X=X===.',",
-    "    '.....#.....',\n    '....###....',\n    '.===X=X===.',") });
+    "    '...XoooX...',",
+    "    '.==XoooX==.',") });
   expectToFail(() => checkHexagram(starShots(run, "whole", [0])),
-    "with only five hollow points the hexagram test should fail; it passed");
+    "with a flat wall down each side the hexagram test should fail; it passed");
 });
 
 /* ---------------------------------------------------------------------
-   THE HALVES ARE THE STAR'S OWN TRIANGLES
+   THE SIX PIECES ARE THE STAR'S SIX POINTS
    --------------------------------------------------------------------- */
 
-function checkHalvesAreTheStar(whole, up, down) {
-  const wInk = inkOf(whole, starPixels(whole.frames[0]));
-  const uInk = inkOf(up, starPixels(up.frames[0]));
-  const dInk = inkOf(down, starPixels(down.frames[0]));
-  assert.ok(wInk.size > 0 && uInk.size > 0 && dInk.size > 0,
-    "precondition: all three pieces should have drawn something");
-
-  /* Where a half sits inside the whole star, found rather than assumed: the
-     halves are drawn centered in their own smaller boxes, so each is offset
-     by a pixel from where its triangle sits in the whole, and which way is a
-     detail of the art an artist is allowed to change.
-
-     Searching also lets the test say something it could not otherwise say. A
-     half that fits the whole in exactly one place is a half that is PART of
-     the whole; one that fits nowhere is a new drawing, and one that fits in
-     several places is a shape too plain to be a triangle. */
-  const shiftedInto = (ink, target) => {
-    const found = [];
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dy = -3; dy <= 3; dy++) {
-        const ok = [...ink].every((k) => {
-          const [x, y] = cellAt(k);
-          return target.has((x + dx) + "," + (y + dy));
-        });
-        if (ok) found.push([dx, dy]);
-      }
-    }
-    return found;
-  };
-  const upAt = shiftedInto(uInk, wInk), downAt = shiftedInto(dInk, wInk);
-  assert.equal(upAt.length, 1,
-    "the climbing half should lie inside the whole star in exactly one place; " +
-    "it fits in " + upAt.length + " (" + JSON.stringify(upAt) + ")");
-  assert.equal(downAt.length, 1,
-    "and so should the diving one; it fits in " + downAt.length + " (" +
-    JSON.stringify(downAt) + ")");
-
-  const move = (ink, off) => new Set([...ink].map((k) => {
-    const [x, y] = cellAt(k);
-    return (x + off[0]) + "," + (y + off[1]);
-  }));
-  const u = move(uInk, upAt[0]), d = move(dInk, downAt[0]);
-
-  /* The point of the move, stated as an equality: the star IS the two halves.
-     Not merely that each half can be found somewhere inside it -- the two of
-     them together have to account for every blue pixel, with none left over.
-     When that stops being true the split stops explaining itself: two pieces
-     fly off that are not the thing that came apart, and a player who watched
-     it happen learns nothing about what he just pressed. */
-  const union = new Set([...u, ...d]);
-  assert.equal(union.size, wInk.size,
-    "the two halves laid back over one another should account for the whole " +
-    "star exactly; together they cover " + union.size + " pixels and the star " +
-    "is " + wInk.size);
-  for (const k of wInk) {
-    assert.ok(union.has(k),
-      "every pixel of the star should belong to one of its halves; " + k +
-      " belongs to neither");
+function checkPiecesAreTheStar(shots, fan) {
+  const ink = {}, pale = {};
+  for (const p of PIECES) {
+    const px = starPixels(shots[p].frames[0]);
+    ink[p] = [...px].filter((e) => e[1] !== shots[p].field).map((e) => e[0]);
+    pale[p] = [...px].filter((e) => e[1] === shots[p].field).map((e) => e[0]);
+    assert.ok(ink[p].length > 0, "precondition: " + p + " should have drawn something");
   }
 
-  /* And they CROSS. Two triangles that merely touched would also add up to
-     the star and would draw a diamond; the overlap is what makes six points
-     out of six edges, and it is the seam the move splits along. */
-  const shared = [...u].filter((k) => d.has(k));
-  assert.ok(shared.length > 0,
-    "the two triangles have to overlap -- that is what makes a hexagram " +
-    "rather than a diamond; they share no pixels at all");
+  /* SIX DRAWINGS, NOT THREE. A rhombus is the same shape upside down, so the
+     six pieces rasterize to three silhouettes and 1/4 and 2/5 come back
+     outline-for-outline identical. What makes them six is the pale pip in the
+     nose, which is why the pip is checked below and not just noted in a
+     comment: with it gone the star would come apart into three pairs of twins
+     and a player could not tell which way any of them was going. */
+  for (let i = 0; i < 6; i++) {
+    for (let j = i + 1; j < 6; j++) {
+      assert.notEqual([...ink[PIECES[i]]].sort().join("|"),
+                      [...ink[PIECES[j]]].sort().join("|"),
+        PIECES[i] + " and " + PIECES[j] + " are the same drawing, so two of " +
+        "the six pieces are indistinguishable in the air");
+    }
+  }
 
-  // Neither is the whole star on its own, or a "split" is one piece renamed.
-  assert.ok(u.size < wInk.size && d.size < wInk.size,
-    "and each half has to be less than the star it came out of; they are " +
-    u.size + " and " + d.size + " pixels against " + wInk.size);
+  for (let i = 0; i < 6; i++) {
+    const p = PIECES[i], f = fan[i], sh = shots[p];
+    const rel = ink[p].map((k) => {
+      const [x, y] = cellAt(k);
+      return [x - sh.cx, y - sh.cy];
+    });
+
+    /* IT REACHES THE EDGE OF ITS OWN BOX AND NO FURTHER. Three either way
+       inside a six-square hitbox: a piece that draws four columns out teaches
+       a reach it does not have, and one that draws two sits inside its own box
+       looking like a mistake. */
+    const far = Math.max(...rel.map((v) => Math.max(Math.abs(v[0]), Math.abs(v[1]))));
+    assert.equal(far, 3,
+      p + " should fill its three-pixel radius exactly; its ink reaches " + far);
+
+    /* AND IT IS LONGER ALONG ITS BEARING THAN IT IS ACROSS IT. That is what
+       makes it a shard thrown off a wheel rather than a chip: the thing has to
+       point where it is going. Measured against STAR_FAN, which is the bearing
+       split() actually hands it. */
+    const along = Math.max(...rel.map((v) => v[0] * f[0] + v[1] * f[1]));
+    const across = Math.max(...rel.map((v) => Math.abs(v[0] * -f[1] + v[1] * f[0])));
+    assert.ok(along > across,
+      p + " has to be longer along the bearing it leaves on than it is across " +
+      "it; it reaches " + along.toFixed(2) + " along and " + across.toFixed(2) +
+      " across");
+
+    /* THE PALE PIP IS IN THE NOSE, and it is the whole direction read. One
+       pixel of the flag's white, one cell off centre TOWARD the apex, on the
+       apex side of centre along the piece's own bearing. Put it in the tail
+       and the shard looks like it is flying backwards. */
+    assert.equal(pale[p].length, 1,
+      p + " carries exactly one pale pixel, which is its nose; it has " +
+      pale[p].length);
+    const [px0, py0] = cellAt(pale[p][0]);
+    const dot = (px0 - sh.cx) * f[0] + (py0 - sh.cy) * f[1];
+    assert.ok(dot > 0,
+      p + " should wear its pale pip on the apex side of centre along " +
+      JSON.stringify(f) + "; the pip is at " +
+      JSON.stringify([px0 - sh.cx, py0 - sh.cy]) + ", which projects to " +
+      dot.toFixed(2));
+  }
+
+  /* And the fan itself: six bearings, sixty degrees apart, IN ORDER, clockwise
+     from twelve. In order matters because the numbering is shared with
+     STAR_POINTS -- the piece that flies at two o'clock has to be the one the
+     star lit at two o'clock, or the split stops explaining itself. */
+  const deg = fan.map((v) => (Math.atan2(v[1], v[0]) * 180 / Math.PI + 450) % 360);
+  for (let i = 0; i < 6; i++) {
+    const d = clockwiseFrom(deg[i], deg[(i + 1) % 6]);
+    assert.ok(Math.abs(d - 60) < 1e-9,
+      "the six bearings should sit sixty degrees apart going clockwise from " +
+      "twelve; STAR_FAN[" + i + "] to [" + ((i + 1) % 6) + "] is " +
+      d.toFixed(4) + " degrees (all six: " +
+      deg.map((v) => v.toFixed(1)).join(", ") + ")");
+  }
 }
 
-test("each half is drawn as one of the whole star's own triangles", async () => {
+const pieceShots = (run) => {
+  const out = {};
+  for (const p of PIECES) out[p] = starShots(run, p, [0]);
+  return out;
+};
+
+test("the six pieces are the star's six points, and each knows which way it is going", async () => {
   const run = await arena(SQUALLS, REESE);
-  checkHalvesAreTheStar(starShots(run, "whole", [0]), starShots(run, "up", [0]),
-                        starShots(run, "down", [0]));
+  checkPiecesAreTheStar(pieceShots(run),
+                        JSON.parse(run("JSON.stringify(STAR_FAN)")));
 });
 
-test("negative control: two halves drawn the same fail the both-triangles test", async () => {
-  /* The diving half handed the climbing half's picture. It still splits, the
-     pieces still go two ways, they still hit for what they are worth -- and
-     what is in the air is the upward triangle twice, so the star that came
-     apart is not the star that was there a moment ago. Between them the two
-     pieces now account for half the blue, which is what the union assertion
-     is there to notice. */
+test("negative control: a piece drawn as another piece fails the six-pieces test", async () => {
+  /* The piece that dives handed the picture of the piece that climbs. It still
+     splits, all six still come off, they all still hit for five -- and two of
+     the six are now the same drawing wearing its pip in the wrong end, so the
+     one aimed at the floor reads as aimed at the sky. Between them the six no
+     longer say six things, which is what the pip is for. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
     "const grid = STAR_ART[piece], pts = STAR_POINTS[piece];",
-    "const grid = STAR_ART[piece === 'down' ? 'up' : piece], pts = STAR_POINTS[piece];") });
-  expectToFail(() => checkHalvesAreTheStar(starShots(run, "whole", [0]),
-                                           starShots(run, "up", [0]),
-                                           starShots(run, "down", [0])),
-    "with both halves drawn as the same triangle the both-triangles test " +
-    "should fail; it passed");
+    "const grid = STAR_ART[piece === 'p3' ? 'p0' : piece], pts = STAR_POINTS[piece];") });
+  expectToFail(() => checkPiecesAreTheStar(pieceShots(run),
+                                           JSON.parse(run("JSON.stringify(STAR_FAN)"))),
+    "with two pieces drawn the same the six-pieces test should fail; it passed");
+});
+
+/* ---------------------------------------------------------------------
+   EVERY LIT CELL IS A CELL THE STAR ACTUALLY DREW
+   --------------------------------------------------------------------- */
+
+/* The mechanical guard on the two hand-authored grid blocks, and the reason it
+   exists is that STAR_ART and STAR_POINTS are two separate pictures of the
+   same object typed by hand. A numbered cell that lands on a '+' lights the
+   white pip instead of the blue, and a numbered cell that lands on a '.' paints
+   a pixel the star never drew -- one dims a pose and the other grows a speck
+   outside the shape, and neither is visible in any other assertion here. */
+function checkBandsSitOnInk(run) {
+  const art = JSON.parse(run("JSON.stringify(STAR_ART)"));
+  const pts = JSON.parse(run("JSON.stringify(STAR_POINTS)"));
+  const all = ["whole"].concat(PIECES);
+  assert.deepEqual(Object.keys(art).sort(), all.slice().sort(),
+    "precondition: the star is drawn as a whole and six pieces");
+  assert.deepEqual(Object.keys(pts).sort(), all.slice().sort(),
+    "precondition: and every one of them numbers its own points");
+  for (const p of all) {
+    for (let row = 0; row < 11; row++) {
+      for (let col = 0; col < 11; col++) {
+        const id = pts[p][row][col];
+        if (id === ".") continue;
+        const c = art[p][row][col];
+        assert.ok("#=X".indexOf(c) >= 0,
+          p + " lights " + row + "," + col + ", and the star drew " +
+          (c === "." ? "nothing" : "the pale field") + " there (" + c + "). A " +
+          "lit cell has to be a cell the blue band already painted, or the " +
+          "highlight is either a speck outside the shape or a hole punched in " +
+          "the white");
+      }
+    }
+  }
+}
+
+/* The same thing again off the RENDER, which is the one that counts. The
+   silhouette is already pinned frame to frame by the turning test; what is
+   pinned here is the COLOURS: the pale set and the blue-or-lit set must both
+   be the same on every pose, because the highlight is only ever allowed to
+   re-colour blue. A band that has slipped onto a pip steals a pixel from the
+   white on the one pose that lights it. */
+function checkLitStaysOnTheBlue(shot, what) {
+  const sets = shot.frames.map((f) => {
+    const px = starPixels(f);
+    const paleSet = [], inkSet = [];
+    for (const [k, c] of px) (c === shot.field ? paleSet : inkSet).push(k);
+    return [paleSet.sort().join("|"), inkSet.sort().join("|")];
+  });
+  for (let i = 1; i < sets.length; i++) {
+    assert.equal(sets[i][0], sets[0][0],
+      what + " changes which pixels are the pale field between poses; the " +
+      "highlight is only ever allowed to re-colour the blue");
+    assert.equal(sets[i][1], sets[0][1],
+      what + " changes which pixels are ink between poses, so a lit point is " +
+      "landing somewhere the star did not draw");
+  }
+}
+
+test("every lit cell is a cell the star actually drew", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkBandsSitOnInk(run);
+  checkLitStaysOnTheBlue(starShots(run, "whole", [0, 5, 10, 15, 20, 25]),
+                         "the whole star");
+  for (const p of PIECES) {
+    checkLitStaysOnTheBlue(starShots(run, p, [0, 5, 10]), p);
+  }
+});
+
+test("negative control: a band cell on the white pip fails the lit-cell test", async () => {
+  /* One numbered cell moved one row, onto the pale pip in the nose of p0. It
+     is a single character in a grid of dots and it is the exact edit somebody
+     makes while nudging a highlight to look better centred. Nothing crashes,
+     nothing moves, the silhouette is identical -- and for five frames out of
+     fifteen the piece loses its white nose to the highlight, which is the one
+     thing telling a player which way it is going. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "    '...........', '....111....', '...........', '....000....',",
+    "    '.....1.....', '....111....', '...........', '....000....',") });
+  expectToFail(() => {
+    checkBandsSitOnInk(run);
+    checkLitStaysOnTheBlue(starShots(run, "p0", [0, 5, 10]), "p0");
+  }, "with a band cell sitting on the white pip the lit-cell test should " +
+     "fail; it passed");
 });
 
 /* ---------------------------------------------------------------------
@@ -1683,29 +1615,95 @@ function checkFitsItsHitbox(shot, what) {
     "it; the art reaches " + far + "px from the middle and the box is " + r);
 }
 
-test("neither the whole star nor a half draws outside its own hitbox", async () => {
-  const run = await arena(SQUALLS, REESE);
+function checkEveryPieceFits(run) {
   checkFitsItsHitbox(starShots(run, "whole", [0]), "the whole star");
-  checkFitsItsHitbox(starShots(run, "up", [0]), "the climbing half");
-  checkFitsItsHitbox(starShots(run, "down", [0]), "the diving half");
+  for (const p of PIECES) checkFitsItsHitbox(starShots(run, p, [0]), "piece " + p);
+}
+
+test("neither the whole star nor any of its pieces draws outside its own hitbox", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkEveryPieceFits(run);
 });
 
-test("negative control: a half drawn wider than its box fails the hitbox test", async () => {
-  /* The triangle's base run out to the full width of the grid. One character,
-     and it is the character somebody adds to make the base look like it meets
-     the points: a half is drawn in an eleven-wide grid but only ever allowed
-     to use nine of it, which reads like an off-by-one waiting to be tidied
-     away. The half then paints a pixel a whole column outside the box it
-     hits with. */
+/* ---------------------------------------------------------------------
+   SIX OF ONE THING, NOT TWO OF ONE AND FOUR OF ANOTHER
+   --------------------------------------------------------------------- */
+
+/* The split is supposed to be the star coming apart along its own seams, so
+   what leaves is one object at six angles. A rotation moves a BOUNDING BOX --
+   five wide by seven tall against seven by five is right, and the existing
+   reach test already allows it -- but a rotation does not change how much of
+   the thing there is.
+
+   It shipped changing it. p0 and p3, the two that fly straight up and
+   straight down, carried TWENTY-TWO blue cells against the four diagonals'
+   sixteen: thirty-five per cent more ink. Rendered, the two verticals came
+   out as fat octagonal blobs while the four diagonals were two-pixel streaks,
+   and a fan that should read as six of one thing read as two of one and four
+   of another. Nothing mechanical depended on it -- all six carry radius three
+   and five damage -- which is exactly why no assertion here caught it, and
+   why this one is about ink and not about anything a hitbox knows. */
+function checkSixOfOneThing(art) {
+  const count = (k) => {
+    let ink = 0, pale = 0;
+    for (const row of art[k]) {
+      for (const ch of row) {
+        if (ch === "#" || ch === "=") ink++;
+        if (ch === "+") pale++;
+      }
+    }
+    return { ink, pale };
+  };
+  const n = PIECES.map(count);
+  const ink = n.map((v) => v.ink);
+  const want = ink[0];
+  for (let i = 0; i < PIECES.length; i++) {
+    assert.equal(ink[i], want,
+      "ALL SIX PIECES ARE THE SAME AMOUNT OF STAR. " + PIECES[i] + " draws " +
+      ink[i] + " blue cells and " + PIECES[0] + " draws " + want + " (all " +
+      "six: " + PIECES.map((p, j) => p + "=" + ink[j]).join(", ") + "). The " +
+      "six are one shape at six bearings, so the bounding box may turn and " +
+      "the ink may not change: a piece a third heavier than its neighbours " +
+      "reads as a different object, and the split stops looking like one " +
+      "thing coming apart");
+    assert.equal(n[i].pale, 1,
+      PIECES[i] + " carries exactly one pale pip, which is its nose");
+  }
+}
+
+test("all six pieces are the same amount of star", async () => {
+  const run = await arena(SQUALLS, REESE);
+  checkSixOfOneThing(JSON.parse(run("JSON.stringify(STAR_ART)")));
+});
+
+test("negative control: the fat vertical shard fails the same-amount test", async () => {
+  /* p0 as it shipped: a five-wide body three rows deep instead of a
+     three-wide one, which is twenty-two cells against sixteen. Every other
+     assertion in this file is satisfied by it -- it fits its box, it reaches
+     the edge, it is longer along its bearing than across, its pip is in its
+     nose, and it is distinct from all five others. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
-    "    '.#########.',",
-    "    '##########.',") });
-  expectToFail(() => {
-    checkFitsItsHitbox(starShots(run, "whole", [0]), "the whole star");
-    checkFitsItsHitbox(starShots(run, "up", [0]), "the climbing half");
-    checkFitsItsHitbox(starShots(run, "down", [0]), "the diving half");
-  }, "with the half drawn a column wider than its box the hitbox test should " +
-     "fail; it passed");
+    "    '....#+#....', '....###....', '....###....', '....###....',",
+    "    '...##+##...', '...#####...', '...#####...', '....###....',") });
+  expectToFail(() => checkSixOfOneThing(JSON.parse(run("JSON.stringify(STAR_ART)"))),
+    "with one piece a third heavier than the others the same-amount test " +
+    "should fail; it passed");
+});
+
+test("negative control: a piece drawn wider than its box fails the hitbox test", async () => {
+  /* One of p0's rows run out toward the full width of the grid. One character,
+     and it is the character somebody adds to make a piece look like it fills
+     the space it is drawn in: a piece is drawn in an eleven-wide grid and only
+     ever allowed to use seven of it, which reads like an off-by-one waiting to
+     be tidied away. The piece then paints a pixel a whole column outside the
+     six-square box it hits with, and a player learns a reach the shard does
+     not have. */
+  const run = await arena(SQUALLS, REESE, { engine: sabotage(
+    "    '....#+#....', '....###....', '....###....', '....###....',",
+    "    '....#+#....', '.#######...', '....###....', '....###....',") });
+  expectToFail(() => checkEveryPieceFits(run),
+    "with a piece drawn a column wider than its box the hitbox test should " +
+    "fail; it passed");
 });
 
 /* ---------------------------------------------------------------------
@@ -1783,11 +1781,16 @@ test("negative control: a star drawn in the highlight blue fails the flag-blue t
    IT TURNS, AND EVERY POSE IS THE SAME STAR
    --------------------------------------------------------------------- */
 
-function checkItTurns(shot, what, flightSpins) {
-  /* How many points this piece has, counted off the grid that numbers them
-     rather than written down here: six for the star, three for a triangle.
-     Everything below is derived from that one figure, so the same checker
-     says the right thing about a whole star and about a half. */
+function checkItTurns(shot, what, flightSpins, fan) {
+  /* How many numbers this piece carries, counted off the grid that numbers
+     them rather than written down here: six for the star, three for a shard.
+     Everything below is derived from that one figure, so the same checker says
+     the right thing about a whole star and about a piece.
+
+     `fan` is the bearing the piece left on, or null for the whole star, and it
+     is what decides what "goes round" means at the bottom. The star lights six
+     TIPS and they go round it; a piece lights three BANDS down its length and
+     they run to its nose. */
   const ids = [...new Set(shot.ids.split("").filter((c) => /[0-9]/.test(c)))];
   assert.ok(ids.length >= 3,
     "precondition: " + what + " should have points to light; the grid numbers " +
@@ -1848,24 +1851,48 @@ function checkItTurns(shot, what, flightSpins) {
       i + " and frame " + (i + period) + " light different points");
   }
 
-  /* And it goes ROUND, one way, rather than hopping about. Each step is a turn
-     of 360 divided by the points it has; the band is loose either side of that
-     because a lit point is three pixels and the middle of three pixels does
-     not land exactly on the angle. */
-  const step = 360 / ids.length;
-  let total = 0;
-  for (let k = 0; k < ids.length; k++) {
-    const here = bearing(shot, distinct[k].split("|"));
-    const next = bearing(shot, distinct[(k + 1) % ids.length].split("|"));
-    const turn = clockwiseFrom(here, next);
-    assert.ok(turn > step * 0.6 && turn < step * 1.4,
-      what + " should turn about " + step + " degrees per step, always the " +
-      "same way round; one step is " + turn.toFixed(1) + " degrees");
-    total += turn;
+  if (!fan) {
+    /* And the STAR goes ROUND, one way, rather than hopping about. Each step is
+       a turn of 360 divided by the points it has; the band is loose either side
+       of that because a lit point is three pixels and the middle of three
+       pixels does not land exactly on the angle. */
+    const step = 360 / ids.length;
+    let total = 0;
+    for (let k = 0; k < ids.length; k++) {
+      const here = bearing(shot, distinct[k].split("|"));
+      const next = bearing(shot, distinct[(k + 1) % ids.length].split("|"));
+      const turn = clockwiseFrom(here, next);
+      assert.ok(turn > step * 0.6 && turn < step * 1.4,
+        what + " should turn about " + step + " degrees per step, always the " +
+        "same way round; one step is " + turn.toFixed(1) + " degrees");
+      total += turn;
+    }
+    assert.ok(Math.abs(total - 360) < 1,
+      what + " should go round exactly once per turn; it covers " +
+      total.toFixed(1) + " degrees");
+  } else {
+    /* And a PIECE runs to its nose. A rhombus does not land on itself at any
+       turn worth drawing, so its three numbers are bands down its length
+       rather than tips around its edge, and what has to be true of them is not
+       an angle but an ORDER: projected onto the bearing the piece left on,
+       band 0 then 1 then 2 must come out strictly increasing. Backwards, the
+       glint crawls up the shard toward the thing that threw it, which is the
+       one reading the eye is guaranteed to get wrong. */
+    let prev = -Infinity;
+    for (let k = 0; k < ids.length; k++) {
+      const cells = distinct[k].split("|");
+      let sx = 0, sy = 0;
+      for (const c of cells) { const [x, y] = cellAt(c); sx += x; sy += y; }
+      const proj = (sx / cells.length - shot.cx) * fan[0] +
+                   (sy / cells.length - shot.cy) * fan[1];
+      assert.ok(proj > prev,
+        what + " should light its bands tail first and nose last, so the " +
+        "glint runs the way the shard is going; band " + k + " sits at " +
+        proj.toFixed(2) + " along " + JSON.stringify(fan) + " and the one " +
+        "before it at " + (prev === -Infinity ? "nothing" : prev.toFixed(2)));
+      prev = proj;
+    }
   }
-  assert.ok(Math.abs(total - 360) < 1,
-    what + " should go round exactly once per turn; it covers " +
-    total.toFixed(1) + " degrees");
 
   /* And the counter the drawing reads has to be moving. Everything above hands
      the art a spin of the test's own choosing, so on its own it would pass
@@ -1888,21 +1915,24 @@ for (let i = 0; i < 35; i++) TURN_FRAMES.push(i);
 test("the star turns, and every pose is the same hexagram", async () => {
   const run = await arena(SQUALLS, REESE);
   const flight = starSpinsInFlight(run, 12);
-  checkItTurns(starShots(run, "whole", TURN_FRAMES), "the whole star", flight);
+  checkItTurns(starShots(run, "whole", TURN_FRAMES), "the whole star", flight, null);
 
-  /* A half turns TWICE AS FAST, and the reason is the shape rather than a
-     number somebody picked: a triangle only lands back on itself every 120
-     degrees, so each of its steps is two of the star's and a revolution is
-     half as long. It is also the right thing to say about a lighter piece
-     that has just been flung off something. */
-  checkItTurns(starShots(run, "up", TURN_FRAMES), "the climbing half", flight);
-  checkItTurns(starShots(run, "down", TURN_FRAMES), "the diving half", flight);
+  /* A piece comes round TWICE AS FAST, and the reason is the shape rather than
+     a number somebody picked: it carries three numbers against the star's six
+     and the step is five frames either way, so a revolution is half as long.
+     It is also the right thing to say about a lighter thing that has just been
+     flung off something. */
+  const fan = JSON.parse(run("JSON.stringify(STAR_FAN)"));
+  for (let i = 0; i < PIECES.length; i++) {
+    checkItTurns(starShots(run, PIECES[i], TURN_FRAMES), "piece " + PIECES[i],
+                 flight, fan[i]);
+  }
   const pointsOn = (piece) => new Set(
     run("STAR_POINTS." + piece + ".join('')").split("")
       .filter((c) => /[0-9]/.test(c))).size;
-  assert.equal(pointsOn("whole"), pointsOn("up") * 2,
-    "a half should come round twice for every once the star does; the star " +
-    "has " + pointsOn("whole") + " points and the half " + pointsOn("up"));
+  assert.equal(pointsOn("whole"), pointsOn("p0") * 2,
+    "a piece should come round twice for every once the star does; the star " +
+    "has " + pointsOn("whole") + " points and a piece " + pointsOn("p0"));
 });
 
 test("negative control: a star whose lit point never moves fails the turning test", async () => {
@@ -1915,23 +1945,24 @@ test("negative control: a star whose lit point never moves fails the turning tes
     "const step = Math.floor(spin / 5);",
     "const step = Math.floor(spin / 5) * 0;") });
   expectToFail(() => checkItTurns(starShots(run, "whole", TURN_FRAMES),
-                                  "the whole star", starSpinsInFlight(run, 12)),
+                                  "the whole star", starSpinsInFlight(run, 12), null),
     "with the lit point nailed in place the turning test should fail; it passed");
 });
 
-test("negative control: a half turning at the star's rate fails the turning test", async () => {
-  /* The halves given the star's six-step cadence over the three points a
-     triangle actually has. It is the tidy-up anybody would make -- one number
-     instead of a conditional -- and it does not stop the half turning. What it
-     does is spend half of every revolution pointing at points the triangle
-     does not have, and a step that lights nothing is a frame where the piece
-     goes flat and dead in the air. */
+test("negative control: a piece turning at the star's rate fails the turning test", async () => {
+  /* The pieces given the star's six-step cadence over the three bands a shard
+     actually has. It is the tidy-up anybody would make -- one number instead of
+     a conditional -- and it does not stop the piece turning. What it does is
+     spend half of every revolution pointing at bands the shard does not have,
+     and a step that lights nothing is a frame where the piece goes flat and
+     dead in the air. */
   const run = await arena(SQUALLS, REESE, { engine: sabotage(
     "const n = piece === 'whole' ? 6 : 3;",
     "const n = 6;") });
-  expectToFail(() => checkItTurns(starShots(run, "up", TURN_FRAMES),
-                                  "the climbing half", starSpinsInFlight(run, 12)),
-    "with a half turning at the star's rate the turning test should fail; " +
+  const fan = JSON.parse(run("JSON.stringify(STAR_FAN)"));
+  expectToFail(() => checkItTurns(starShots(run, "p0", TURN_FRAMES),
+                                  "piece p0", starSpinsInFlight(run, 12), fan[0]),
+    "with a piece turning at the star's rate the turning test should fail; " +
     "it passed");
 });
 
@@ -1944,6 +1975,6 @@ test("negative control: a star that never spins fails the turning test", async (
     "    this.spin++;\n    this.life--;\n    this.x += this.vx;",
     "    this.life--;\n    this.x += this.vx;") });
   expectToFail(() => checkItTurns(starShots(run, "whole", TURN_FRAMES),
-                                  "the whole star", starSpinsInFlight(run, 12)),
+                                  "the whole star", starSpinsInFlight(run, 12), null),
     "with the spin counter gone the turning test should fail; it passed");
 });
